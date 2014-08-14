@@ -1,0 +1,5 @@
+%{"hackney": {:git, "git://github.com/benoitc/hackney.git", "fd2158b39b0aa139bb90f0c867f246ddfec072e6", [tag: "0.13.0"]},
+  "httpoison": {:package, "0.3.2"},
+  "idna": {:git, "git://github.com/benoitc/erlang-idna.git", "21aa158b7f36bf2a000f12fe40d7f21eece9cf65", [tag: "hackney-0.11.2"]},
+  "jiffy": {:git, "git://github.com/vishnevskiy/jiffy.git", "135ed2ad3835acfd150a91016e219e726c97ec04", []},
+  "uuid": {:package, "0.1.5"}}
