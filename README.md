@@ -29,7 +29,7 @@ Setup the application environment in your config.
 
 ```elixir
 config :raven,
-  dsn: "https://public:secret@app.getsentry.com/1"
+  dsn: "https://public:secret@app.getsentry.com/1",
   tags: %{
     env: "production"
   }
