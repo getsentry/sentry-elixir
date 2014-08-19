@@ -4,7 +4,7 @@ defmodule Raven.Mixfile do
   def project do
     [
       app: :raven,
-      version: "0.0.1",
+      version: "0.0.2",
       elixir: "~> 0.15.1",
       description: "Raven is an Elixir client for Sentry",
       package: package,
@@ -13,7 +13,7 @@ defmodule Raven.Mixfile do
   end
 
   def application do
-    applications = [:httpoison, :uuid, :jsex]
+    applications = [:httpoison, :uuid, :jazz]
     if Mix.env == :test, do: applications = [:logger|applications]
     [
       applications: applications
@@ -24,7 +24,7 @@ defmodule Raven.Mixfile do
     [
       {:httpoison, "~> 0.4.0"},
       {:uuid, "~> 0.1.5"},
-      {:jsex, "~> 2.0.0"}
+      {:jazz, "~> 0.2.0"}
     ]
   end
   

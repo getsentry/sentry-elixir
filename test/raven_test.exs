@@ -54,7 +54,7 @@ defmodule RavenTest do
         last_message: ":error", 
         state: ":ok"
       }, 
-      level: :error,
+      level: "error",
       message: "(RuntimeError) oops",
       platform: "elixir", 
       stacktrace: %{
@@ -81,7 +81,7 @@ defmodule RavenTest do
         last_message: ":error", 
         state: ":ok"
       }, 
-      level: :error,
+      level: "error",
       message: "(RuntimeError) oops",
       platform: "elixir",  
       stacktrace: %{
@@ -107,7 +107,7 @@ defmodule RavenTest do
       exception: [
         %{type: "RuntimeError", value: "oops"}
       ],
-      level: :error,
+      level: "error",
       message: "(RuntimeError) oops",
       platform: "elixir", 
       stacktrace: %{
@@ -124,7 +124,7 @@ defmodule RavenTest do
     spawn fn -> "a" + 1 end
     assert %Raven.Event{
       culprit: nil,
-      level: :error,
+      level: "error",
       message: "Error in process " <> _,
       platform: "elixir", 
       stacktrace: %{
@@ -141,7 +141,7 @@ defmodule RavenTest do
 
   test "authorization" do
     {_endpoint, public_key, private_key} = Raven.parse_dsn!(@sentry_dsn)
-    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.1, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
+    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.2, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
