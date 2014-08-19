@@ -9,7 +9,7 @@ To use Raven with your projects, edit your mix.exs file and add it as a dependen
 
 ```elixir
 defp deps do
-  [{:raven, github: "vishnevskiy/raven-elixir"}]
+  [{:raven, "~> 0.0.1"}]
 end
 ```
 
