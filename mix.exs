@@ -20,8 +20,7 @@ defmodule Raven.Mixfile do
 
   defp deps do
     [
-      {:httpoison, "~> 0.3.2"},
-      {:hackney,  github: "benoitc/hackney", tag: "0.13.0"},
+      {:httpoison, "~> 0.4.0"},
       {:uuid, "~> 0.1.5"},
       {:jiffy, github: "vishnevskiy/jiffy"}
     ]
