@@ -13,7 +13,7 @@ defmodule Raven.Mixfile do
   end
 
   def application do
-    applications = [:httpoison, :hackney, :uuid, :jsex]
+    applications = [:httpoison, :uuid, :jsex]
     if Mix.env == :test, do: applications = [:logger|applications]
     [
       applications: applications
