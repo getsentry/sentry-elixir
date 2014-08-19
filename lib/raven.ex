@@ -81,13 +81,13 @@ defmodule Raven do
 
   @spec capture_exception(String.t, parsed_dsn) :: {:ok, String.t} | :error
   def capture_exception(exception, {endpoint, public_key, private_key}) do
-    body = exception |> transform |> Map.from_struct |> :jiffy.encode
+    body = exception |> transform |> JSEX.encode!
     headers = %{
       "User-Agent" => @sentry_client,
       "X-Sentry-Auth" => authorization_header(public_key, private_key),
     }
     case HTTPoison.post(endpoint, body, headers) do
-      %HTTPoison.Response{status_code: 200, body: body} -> {:ok, body |> :jiffy.decode([:return_maps]) |> Dict.get("id")}
+      %HTTPoison.Response{status_code: 200, body: body} -> {:ok, body |> JSEX.decode! |> Dict.get("id")}
       _ -> :error
     end
   end
