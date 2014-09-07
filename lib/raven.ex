@@ -187,6 +187,12 @@ defmodule Raven do
       server_name: :net_adm.localhost |> to_string}
   end
 
+  @spec transform(any, %Event{}) :: %Event{}
+  def transform(_, state) do
+    # TODO: maybe do something with this?
+    state
+  end
+
   ## Private
 
   @spec unix_timestamp :: Number.t

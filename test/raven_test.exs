@@ -133,6 +133,10 @@ defmodule RavenTest do
     } = receive_transform
   end
 
+  test "does not crash on unknown error" do
+    assert %Raven.Event{} = Raven.transform("unknown error of some kind") 
+  end
+
   @sentry_dsn "https://public:secret@app.getsentry.com/1"
 
   test "parning dsn" do
@@ -141,7 +145,7 @@ defmodule RavenTest do
 
   test "authorization" do
     {_endpoint, public_key, private_key} = Raven.parse_dsn!(@sentry_dsn)
-    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.2, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
+    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.3, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
