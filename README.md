@@ -1,7 +1,9 @@
 raven-elixir
 ============
 
-[![Build Status](https://travis-ci.org/vishnevskiy/raven-elixir.svg?branch=master)](https://travis-ci.org/vishnevskiy/raven-elixir)
+[![Build Status](https://img.shields.io/travis/vishnevskiy/raven-elixir.svg?style=flat)](https://travis-ci.org/vishnevskiy/raven-elixir)
+[![hex.pm version](https://img.shields.io/hexpm/v/raven.svg?style=flat)](https://hex.pm/packages/raven)
+
 
 # Getting Started
 
@@ -9,7 +11,7 @@ To use Raven with your projects, edit your mix.exs file and add it as a dependen
 
 ```elixir
 defp deps do
-  [{:raven, "~> 0.0.1"}]
+  [{:raven, "~> 0.0.2"}]
 end
 ```
 
