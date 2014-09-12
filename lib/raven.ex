@@ -81,13 +81,13 @@ defmodule Raven do
 
   @spec capture_exception(String.t, parsed_dsn) :: {:ok, String.t} | :error
   def capture_exception(exception, {endpoint, public_key, private_key}) do
-    body = exception |> transform |> Jazz.encode!
+    body = exception |> transform |> Poison.encode!
     headers = %{
       "User-Agent" => @sentry_client,
       "X-Sentry-Auth" => authorization_header(public_key, private_key),
     }
     case HTTPoison.post(endpoint, body, headers) do
-      %HTTPoison.Response{status_code: 200, body: body} -> {:ok, body |> Jazz.decode! |> Dict.get("id")}
+      %HTTPoison.Response{status_code: 200, body: body} -> {:ok, body |> Poison.decode! |> Dict.get("id")}
       _ -> :error
     end
   end
@@ -166,7 +166,7 @@ defmodule Raven do
       context_line: nil,
       pre_context: nil,
       post_context: nil,
-      in_app: app != "stdlib",
+      in_app: not app in ["stdlib", "elixir"],
       vars: %{},
     }])
 

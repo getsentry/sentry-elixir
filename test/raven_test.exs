@@ -87,9 +87,10 @@ defmodule RavenTest do
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
-          %{filename: "gen_event.erl", function: ":gen_event.server_call_update/3", in_app: false, lineno: 636},
-          %{filename: "gen_event.erl", function: ":gen_event.server_call/4", in_app: false, lineno: 585},
-          %{filename: "gen_event.erl", function: ":gen_event.handle_msg/5", in_app: false, lineno: 260},
+          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false, lineno: 993},
+          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call_update/4", in_app: false, lineno: 895},
+          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call/4", in_app: false, lineno: 884},
+          %{filename: "lib/gen_event.ex", function: "GenEvent.handle_msg/5", in_app: false, lineno: 600},
           %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
         ]
       }
@@ -113,7 +114,7 @@ defmodule RavenTest do
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true},
-          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: true, lineno: 70},
+          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false, lineno: 74},
           %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
         ]
       }
@@ -145,7 +146,7 @@ defmodule RavenTest do
 
   test "authorization" do
     {_endpoint, public_key, private_key} = Raven.parse_dsn!(@sentry_dsn)
-    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.3, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
+    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.4, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
