@@ -82,12 +82,16 @@ defmodule Raven do
   @spec capture_exception(String.t, parsed_dsn) :: {:ok, String.t} | :error
   def capture_exception(exception, {endpoint, public_key, private_key}) do
     body = exception |> transform |> Poison.encode!
-    headers = %{
-      "User-Agent" => @sentry_client,
-      "X-Sentry-Auth" => authorization_header(public_key, private_key),
-    }
-    case HTTPoison.post(endpoint, body, headers) do
-      %HTTPoison.Response{status_code: 200, body: body} -> {:ok, body |> Poison.decode! |> Dict.get("id")}
+    headers = [
+      {"User-Agent", @sentry_client},
+      {"X-Sentry-Auth", authorization_header(public_key, private_key)},
+    ]
+    case :hackney.request(:post, endpoint, headers, body, []) do
+      {:ok, 200, _headers, client} ->
+        case :hackney.body(client) do
+          {:ok, body} -> {:ok, body |> Poison.decode! |> Dict.get("id")}
+          _ -> :error
+        end
       _ -> :error
     end
   end
