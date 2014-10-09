@@ -33,7 +33,9 @@ defmodule Raven.Mixfile do
       files: ["lib", "LICENSE", "mix.exs", "README.md"],
       contributors: ["Stanislav Vishnevskiy"],
       licenses: ["MIT"],
-      links: [{"github", "https://github.com/vishnevskiy/raven-elixir"}]
+      links: %{
+        "github" => "https://github.com/vishnevskiy/raven-elixir"
+      }
     ]
   end
 end
