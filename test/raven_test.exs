@@ -123,12 +123,14 @@ defmodule RavenTest do
     spawn fn -> "a" + 1 end
 
     assert %Raven.Event{
-      culprit: nil,
+      culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
       level: "error",
-      message: _,
+      message: "(ArithmeticError) bad argument in arithmetic expression",
       platform: "elixir", 
       stacktrace: %{
-        frames: []
+        frames: [
+          %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}
+        ]
       }
     } = receive_transform
   end

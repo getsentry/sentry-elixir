@@ -133,9 +133,9 @@ defmodule Raven do
   end
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
-  def transform(["Process ", pid, " raised an exception\n" | t], state) do
+  def transform(["Process ", pid, " raised an exception\n" | stacktrace], state) do
     message = "Process " <> pid <> " raised an exception"
-    transform(t, %{state | message: message |> to_string})
+    transform(String.split(stacktrace, "\n"), %{state | message: message |> to_string})
   end
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
@@ -149,13 +149,32 @@ defmodule Raven do
   end
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
+  def transform(["    Args: " <> _|t], state) do
+    transform(t, state)
+  end
+
+  @spec transform([String.t | char_list], %Event{}) :: %Event{}
   def transform(["    ** " <> message|t], state) do
+    transform_first_stacktrace_line([message|t], state)
+  end
+  @spec transform([String.t | char_list], %Event{}) :: %Event{}
+  def transform(["** " <> message|t], state) do
+    transform_first_stacktrace_line([message|t], state)
+  end
+  defp transform_first_stacktrace_line([message|t], state) do
     [_, type, value] = Regex.run(~r/^\((.+?)\) (.+)$/, message)
     transform(t, %{state | message: message, exception: [%{type: type, value: value}]})
   end
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
   def transform(["        " <> frame|t], state) do
+    transform_stacktrace_line([frame|t], state)
+  end
+  @spec transform([String.t | char_list], %Event{}) :: %Event{}
+  def transform(["    " <> frame|t], state) do
+    transform_stacktrace_line([frame|t], state)
+  end
+  defp transform_stacktrace_line([frame|t], state) do
     [app, filename, lineno, function] =
       case Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
         [_, _, filename, lineno, function] -> [:unknown, filename, lineno, function]
