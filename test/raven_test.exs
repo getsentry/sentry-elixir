@@ -60,8 +60,9 @@ defmodule RavenTest do
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
-          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false, lineno: 580},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+          %{filename: "gen_server.erl", function: ":gen_server.try_handle_call/4", in_app: false},
+          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
         ]
       }
     } = receive_transform
@@ -87,11 +88,8 @@ defmodule RavenTest do
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false, lineno: 993},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call_update/4", in_app: false, lineno: 895},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call/4", in_app: false, lineno: 884},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.handle_msg/5", in_app: false, lineno: 600},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false}
+          | _
         ]
       }
     } = receive_transform
@@ -114,8 +112,8 @@ defmodule RavenTest do
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true},
-          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false, lineno: 74},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
         ]
       }
     } = receive_transform
@@ -123,10 +121,11 @@ defmodule RavenTest do
 
   test "parses function crashes" do
     spawn fn -> "a" + 1 end
+
     assert %Raven.Event{
       culprit: nil,
       level: "error",
-      message: "Error in process " <> _,
+      message: _,
       platform: "elixir", 
       stacktrace: %{
         frames: []
