@@ -51,12 +51,12 @@ defmodule RavenTest do
         %{type: "RuntimeError", value: "oops"}
       ],
       extra: %{
-        last_message: ":error", 
+        last_message: ":error",
         state: ":ok"
-      }, 
+      },
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir", 
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
@@ -79,12 +79,12 @@ defmodule RavenTest do
         %{type: "RuntimeError", value: "oops"}
       ],
       extra: %{
-        last_message: ":error", 
+        last_message: ":error",
         state: ":ok"
-      }, 
+      },
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir",  
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
@@ -108,7 +108,7 @@ defmodule RavenTest do
       ],
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir", 
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true},
@@ -126,7 +126,7 @@ defmodule RavenTest do
       culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
       level: "error",
       message: "(ArithmeticError) bad argument in arithmetic expression",
-      platform: "elixir", 
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}

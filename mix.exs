@@ -22,12 +22,12 @@ defmodule Raven.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 1.2.0"},
+      {:hackney, "~> 1.3"},
       {:uuid, "~> 1.0"},
-      {:poison, "~> 1.4.0"}
+      {:poison, "~> 1.5"}
     ]
   end
-  
+
   defp package do
     [
       files: ["lib", "LICENSE", "mix.exs", "README.md"],
