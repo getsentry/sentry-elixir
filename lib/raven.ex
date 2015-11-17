@@ -104,7 +104,7 @@ defmodule Raven do
               timestamp: nil,
               message: nil,
               tags: %{},
-              level: "error", 
+              level: "error",
               platform: "elixir",
               server_name: nil,
               exception: nil,
@@ -125,6 +125,10 @@ defmodule Raven do
   @spec transform([String.t | char_list]) :: %Event{}
   def transform(stacktrace) do
     transform(stacktrace, %Event{})
+  end
+
+  def transform(["#PID" <> _, " running ", _endpoint, " terminated\n", _request | stacktrace], state) do
+    transform(String.split(stacktrace, "\n"), state)
   end
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
@@ -209,7 +213,7 @@ defmodule Raven do
 
   @spec transform([String.t | char_list], %Event{}) :: %Event{}
   def transform([], state) do
-    %{state | 
+    %{state |
       event_id: UUID.uuid4(),
       timestamp: iso8601_timestamp,
       tags: Application.get_env(:raven, :tags, %{}),
@@ -232,12 +236,12 @@ defmodule Raven do
 
   @spec unix_timestamp :: String.t
   defp iso8601_timestamp do
-    [year, month, day, hour, minute, second] = 
-      :calendar.universal_time 
-      |> Tuple.to_list 
-      |> Enum.map(&Tuple.to_list(&1)) 
-      |> List.flatten 
-      |> Enum.map(&to_string(&1)) 
+    [year, month, day, hour, minute, second] =
+      :calendar.universal_time
+      |> Tuple.to_list
+      |> Enum.map(&Tuple.to_list(&1))
+      |> List.flatten
+      |> Enum.map(&to_string(&1))
       |> Enum.map(&String.rjust(&1, 2, ?0))
     "#{year}-#{month}-#{day}T#{hour}:#{minute}:#{second}"
   end
