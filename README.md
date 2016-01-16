@@ -15,9 +15,9 @@ defp deps do
 end
 ```
 
-# Overview 
+# Overview
 
-The goal of this project is to provide a full-feature Sentry client based on the guidelines in [Writing a Client](http://sentry.readthedocs.org/en/latest/developer/client/) on the Sentry documentation.
+The goal of this project is to provide a full-feature Sentry client based on the guidelines in [Writing a Client](https://docs.getsentry.com/hosted/clientdev/) on the Sentry documentation.
 
 However currently it only supports a `Logger` backend that will parse stacktraces and log them to Sentry.
 
