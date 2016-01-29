@@ -34,6 +34,22 @@ defmodule Raven do
 
   ## Sentry
 
+  defmodule Event do
+    defstruct event_id: nil,
+              culprit: nil,
+              timestamp: nil,
+              message: nil,
+              tags: %{},
+              level: "error",
+              platform: "elixir",
+              server_name: nil,
+              exception: nil,
+              stacktrace: %{
+                frames: []
+              },
+              extra: %{}
+  end
+
   @doc """
   Parses a Sentry DSN which is simply a URI.
   """
@@ -74,14 +90,20 @@ defmodule Raven do
   @spec capture_exception(String.t) :: {:ok, String.t} | :error
   def capture_exception(exception) do
     case Application.get_env(:raven, :dsn) do
-      dsn when is_bitstring(dsn) -> capture_exception(exception, dsn |> parse_dsn!)
-      _ -> :error
+      dsn when is_bitstring(dsn) ->
+        capture_exception(exception |> transform, dsn |> parse_dsn!)
+      _ ->
+        :error
     end
   end
 
-  @spec capture_exception(String.t, parsed_dsn) :: {:ok, String.t} | :error
-  def capture_exception(exception, {endpoint, public_key, private_key}) do
-    body = exception |> transform |> Poison.encode!
+  @spec capture_exception(%Event{}, parsed_dsn) :: {:ok, String.t} | :error
+  def capture_exception(%Event{message: nil, exception: nil}, _) do
+    {:ok, "Unable to parse as exception, ignoring..."}
+  end
+
+  def capture_exception(event, {endpoint, public_key, private_key}) do
+    body = event |> Poison.encode!
     headers = [
       {"User-Agent", @sentry_client},
       {"X-Sentry-Auth", authorization_header(public_key, private_key)},
@@ -97,22 +119,6 @@ defmodule Raven do
   end
 
   ## Transformers
-
-  defmodule Event do
-    defstruct event_id: nil,
-              culprit: nil,
-              timestamp: nil,
-              message: nil,
-              tags: %{},
-              level: "error",
-              platform: "elixir",
-              server_name: nil,
-              exception: nil,
-              stacktrace: %{
-                frames: []
-              },
-              extra: %{}
-  end
 
   @doc """
   Transforms a exception string to a Sentry event.
