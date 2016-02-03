@@ -176,7 +176,7 @@ defmodule Raven do
   @spec transform([String.t], %Event{}) :: %Event{}
   def transform([], state) do
     %{state |
-      event_id: UUID.uuid4(),
+      event_id: UUID.uuid4(:hex),
       timestamp: iso8601_timestamp,
       tags: Application.get_env(:raven, :tags, %{}),
       server_name: :net_adm.localhost |> to_string}
