@@ -45,6 +45,20 @@ defmodule RavenTest do
     {:ok, pid} = GenServer.start(MyGenServer, :ok)
     catch_exit(GenServer.call(pid, :error))
 
+    frames = case :erlang.system_info(:otp_release) do
+      '17' -> [
+          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
+          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false, lineno: 580},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+        ]
+      _ -> [
+          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
+          %{filename: "gen_server.erl", function: ":gen_server.try_handle_call/4", in_app: false},
+          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
+        ]
+    end
+
     assert %Raven.Event{
       culprit: "RavenTest.MyGenServer.handle_call/3",
       exception: [
@@ -58,12 +72,7 @@ defmodule RavenTest do
       message: "(RuntimeError) oops",
       platform: "elixir",
       stacktrace: %{
-        frames: [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
-          %{filename: "gen_server.erl", function: ":gen_server.try_handle_call/4", in_app: false},
-          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
-        ]
+        frames: frames
       }
     } = receive_transform
   end
@@ -122,17 +131,30 @@ defmodule RavenTest do
   test "parses function crashes" do
     spawn fn -> "a" + 1 end
 
-    assert %Raven.Event{
-      culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
-      level: "error",
-      message: "(ArithmeticError) bad argument in arithmetic expression",
-      platform: "elixir",
-      stacktrace: %{
-        frames: [
-          %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}
-        ]
-      }
-    } = receive_transform
+    case :erlang.system_info(:otp_release) do
+      '17' ->
+        assert %Raven.Event{
+          culprit: nil,
+          level: "error",
+          message: "Error in process " <> _,
+          platform: "elixir",
+          stacktrace: %{
+            frames: []
+          }
+        } = receive_transform
+      _ ->
+        assert %Raven.Event{
+          culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
+          level: "error",
+          message: "(ArithmeticError) bad argument in arithmetic expression",
+          platform: "elixir",
+          stacktrace: %{
+            frames: [
+              %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}
+            ]
+          }
+        } = receive_transform
+    end
   end
 
   test "does not crash on unknown error" do

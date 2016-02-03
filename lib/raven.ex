@@ -129,6 +129,11 @@ defmodule Raven do
   end
 
   @spec transform([String.t], %Event{}) :: %Event{}
+  def transform(["Error in process " <> _ = message|t], state) do
+    transform(t, %{state | message: message})
+  end
+
+  @spec transform([String.t], %Event{}) :: %Event{}
   def transform(["Last message: " <> last_message|t], state) do
     transform(t, put_in(state.extra, Map.put_new(state.extra, :last_message, last_message)))
   end
