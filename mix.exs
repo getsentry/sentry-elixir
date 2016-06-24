@@ -24,7 +24,7 @@ defmodule Raven.Mixfile do
     [
       {:hackney, "~> 1.3"},
       {:uuid, "~> 1.0"},
-      {:poison, "~> 1.5"}
+      {:poison, "~> 1.5 or ~> 2.0"}
     ]
   end
 
