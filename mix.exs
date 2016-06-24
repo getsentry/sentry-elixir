@@ -14,7 +14,7 @@ defmodule Raven.Mixfile do
 
   def application do
     applications = [:hackney, :uuid, :poison]
-    if Mix.env == :test, do: applications = [:logger|applications]
+    applications = if Mix.env == :test, do: [:logger|applications], else: applications
     [
       applications: applications
     ]
