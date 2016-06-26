@@ -58,26 +58,20 @@ defmodule RavenTest do
       message: "(RuntimeError) oops",
       platform: "elixir",
       stacktrace: %{
-        frames: frames
+        frames: [
+          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
+          %{filename: "gen_server.erl", in_app: false}
+          | _
+        ] = frames
       }
     } = receive_transform
 
-
-    case :erlang.system_info(:otp_release) do
-      '17' ->
-        assert [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
-          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false, lineno: 580},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
-        ] = frames
-      _ ->
-        assert [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
-          %{filename: "gen_server.erl", function: ":gen_server.try_handle_call/4", in_app: false},
-          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
-        ] = frames
-    end
+    Enum.each(frames, fn(f) ->
+      assert String.valid?(f.filename)
+      assert String.valid?(f.function)
+      assert is_integer(f.lineno)
+      assert is_boolean(f.in_app)
+    end)
 
   end
 
@@ -162,7 +156,7 @@ defmodule RavenTest do
   end
 
   test "does not crash on unknown error" do
-    assert %Raven.Event{} = Raven.transform("unknown error of some kind") 
+    assert %Raven.Event{} = Raven.transform("unknown error of some kind")
   end
 
   @sentry_dsn "https://public:secret@app.getsentry.com/1"
