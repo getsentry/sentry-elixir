@@ -51,20 +51,28 @@ defmodule RavenTest do
         %{type: "RuntimeError", value: "oops"}
       ],
       extra: %{
-        last_message: ":error", 
+        last_message: ":error",
         state: ":ok"
-      }, 
+      },
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir", 
+      platform: "elixir",
       stacktrace: %{
         frames: [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true},
-          %{filename: "gen_server.erl", function: ":gen_server.handle_msg/5", in_app: false, lineno: 580},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
-        ]
+          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
+          %{filename: "gen_server.erl", in_app: false}
+          | _
+        ] = frames
       }
     } = receive_transform
+
+    Enum.each(frames, fn(f) ->
+      assert String.valid?(f.filename)
+      assert String.valid?(f.function)
+      assert is_integer(f.lineno)
+      assert is_boolean(f.in_app)
+    end)
+
   end
 
   test "parses GenEvent crashes" do
@@ -78,20 +86,17 @@ defmodule RavenTest do
         %{type: "RuntimeError", value: "oops"}
       ],
       extra: %{
-        last_message: ":error", 
+        last_message: ":error",
         state: ":ok"
-      }, 
+      },
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir",  
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false, lineno: 993},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call_update/4", in_app: false, lineno: 895},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.server_call/4", in_app: false, lineno: 884},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.handle_msg/5", in_app: false, lineno: 600},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false}
+          | _
         ]
       }
     } = receive_transform
@@ -110,12 +115,12 @@ defmodule RavenTest do
       ],
       level: "error",
       message: "(RuntimeError) oops",
-      platform: "elixir", 
+      platform: "elixir",
       stacktrace: %{
         frames: [
           %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true},
-          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false, lineno: 74},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false, lineno: 239}
+          %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
         ]
       }
     } = receive_transform
@@ -123,19 +128,35 @@ defmodule RavenTest do
 
   test "parses function crashes" do
     spawn fn -> "a" + 1 end
-    assert %Raven.Event{
-      culprit: nil,
-      level: "error",
-      message: "Error in process " <> _,
-      platform: "elixir", 
-      stacktrace: %{
-        frames: []
-      }
-    } = receive_transform
+
+    case :erlang.system_info(:otp_release) do
+      '17' ->
+        assert %Raven.Event{
+          culprit: nil,
+          level: "error",
+          message: "Error in process " <> _,
+          platform: "elixir",
+          stacktrace: %{
+            frames: []
+          }
+        } = receive_transform
+      _ ->
+        assert %Raven.Event{
+          culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
+          level: "error",
+          message: "(ArithmeticError) bad argument in arithmetic expression",
+          platform: "elixir",
+          stacktrace: %{
+            frames: [
+              %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}
+            ]
+          }
+        } = receive_transform
+    end
   end
 
   test "does not crash on unknown error" do
-    assert %Raven.Event{} = Raven.transform("unknown error of some kind") 
+    assert %Raven.Event{} = Raven.transform("unknown error of some kind")
   end
 
   @sentry_dsn "https://public:secret@app.getsentry.com/1"

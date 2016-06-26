@@ -14,7 +14,7 @@ defmodule Raven.Mixfile do
 
   def application do
     applications = [:hackney, :uuid, :poison]
-    if Mix.env == :test, do: applications = [:logger|applications]
+    applications = if Mix.env == :test, do: [:logger|applications], else: applications
     [
       applications: applications
     ]
@@ -22,9 +22,9 @@ defmodule Raven.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 1.0"},
-      {:uuid, "~> 0.1.5"},
-      {:poison, ">= 1.2.0"}
+      {:hackney, "~> 1.3"},
+      {:uuid, "~> 1.0"},
+      {:poison, "~> 1.5 or ~> 2.0"}
     ]
   end
 
