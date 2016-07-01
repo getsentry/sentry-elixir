@@ -199,29 +199,34 @@ defmodule Raven do
   end
 
   defp transform_stacktrace_line([frame|t], state) do
-    [app, filename, lineno, function] =
+    match =
       case Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
         [_, _, filename, lineno, function] -> [:unknown, filename, lineno, function]
         [_, _, app, filename, lineno, function] -> [app, filename, lineno, function]
+        _ -> :no_match
       end
 
-    state = if state.culprit, do: state, else: %{state | culprit: function}
+    case match do
+      [app, filename, lineno, function] ->
+        state = if state.culprit, do: state, else: %{state | culprit: function}
 
-    state = put_in(state.stacktrace.frames, state.stacktrace.frames ++ [%{
-      filename: filename,
-      function: function,
-      module: nil,
-      lineno: String.to_integer(lineno),
-      colno: nil,
-      abs_path: nil,
-      context_line: nil,
-      pre_context: nil,
-      post_context: nil,
-      in_app: not app in ["stdlib", "elixir"],
-      vars: %{},
-    }])
+        state = put_in(state.stacktrace.frames, state.stacktrace.frames ++ [%{
+          filename: filename,
+          function: function,
+          module: nil,
+          lineno: String.to_integer(lineno),
+          colno: nil,
+          abs_path: nil,
+          context_line: nil,
+          pre_context: nil,
+          post_context: nil,
+          in_app: not app in ["stdlib", "elixir"],
+          vars: %{},
+        }])
 
-    transform(t, state)
+        transform(t, state)
+      :no_match -> transform(t, state)
+    end
   end
 
   @spec unix_timestamp :: Number.t

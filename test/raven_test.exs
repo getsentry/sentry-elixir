@@ -155,6 +155,19 @@ defmodule RavenTest do
     end
   end
 
+  test "parses undefined function errors" do
+    spawn fn -> Raven.transformm end
+
+    assert %Raven.Event{
+      culprit: nil,
+      level: "error",
+      message: message,
+      platform: "elixir"
+    } = receive_transform
+
+    assert Regex.match? ~r/\(UndefinedFunctionError\)|Error in process/, message
+  end
+
   test "does not crash on unknown error" do
     assert %Raven.Event{} = Raven.transform("unknown error of some kind")
   end
