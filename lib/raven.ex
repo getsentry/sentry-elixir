@@ -210,7 +210,7 @@ defmodule Raven do
       [app, filename, lineno, function] ->
         state = if state.culprit, do: state, else: %{state | culprit: function}
 
-        state = put_in(state.stacktrace.frames, state.stacktrace.frames ++ [%{
+        state = put_in(state.stacktrace.frames, [%{
           filename: filename,
           function: function,
           module: nil,
@@ -222,7 +222,7 @@ defmodule Raven do
           post_context: nil,
           in_app: not app in ["stdlib", "elixir"],
           vars: %{},
-        }])
+        } | state.stacktrace.frames])
 
         transform(t, state)
       :no_match -> transform(t, state)

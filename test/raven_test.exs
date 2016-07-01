@@ -58,13 +58,13 @@ defmodule RavenTest do
       message: "(RuntimeError) oops",
       platform: "elixir",
       stacktrace: %{
-        frames: [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
-          %{filename: "gen_server.erl", in_app: false}
-          | _
-        ] = frames
+        frames: frames
       }
     } = receive_transform
+    assert [
+      %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
+      %{filename: "gen_server.erl", in_app: false}
+    ] = frames |> Enum.reverse |> Enum.take(2)
 
     Enum.each(frames, fn(f) ->
       assert String.valid?(f.filename)
@@ -93,13 +93,14 @@ defmodule RavenTest do
       message: "(RuntimeError) oops",
       platform: "elixir",
       stacktrace: %{
-        frames: [
-          %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
-          %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false}
-          | _
-        ]
+        frames: frames
       }
     } = receive_transform
+
+    assert [
+      %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
+      %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false}
+    ] = frames |> Enum.reverse |> Enum.take(2)
   end
 
   test "parses Task crashes" do
@@ -118,9 +119,9 @@ defmodule RavenTest do
       platform: "elixir",
       stacktrace: %{
         frames: [
-          %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true},
+          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false},
           %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false},
-          %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false}
+          %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true}
         ]
       }
     } = receive_transform
