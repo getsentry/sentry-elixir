@@ -40,5 +40,5 @@ config :raven,
 Install the Logger backend.
 
 ```elixir
-Logger.add_backend(Raven)
+config :logger, backends: [:console, Raven]
 ```

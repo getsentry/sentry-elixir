@@ -12,7 +12,7 @@ defmodule Raven do
 
   Install the Logger backend.
 
-      Logger.add_backend(Raven)
+      config :logger, backends: [:console, Raven]
   """
 
   @type parsed_dsn :: {String.t, String.t, Integer.t}
