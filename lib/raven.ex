@@ -56,10 +56,10 @@ defmodule Raven do
   @spec parse_dsn!(String.t) :: parsed_dsn
   def parse_dsn!(dsn) do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, path: path, scheme: protocol} = URI.parse(dsn)
+    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(dsn)
     [public_key, secret_key] = userinfo |> String.split(":", parts: 2)
     {project_id, _} = path |> String.slice(1..-1) |> Integer.parse
-    endpoint = "#{protocol}://#{host}/api/#{project_id}/store/"
+    endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
     {endpoint, public_key, secret_key}
   end
 
