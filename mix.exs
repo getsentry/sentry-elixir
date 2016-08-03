@@ -1,12 +1,13 @@
-defmodule Raven.Mixfile do
+defmodule Sentry.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :raven,
+      app: :sentry,
+      name: :sentry_elixir,
       version: "0.0.5",
       elixir: "~> 1.0",
-      description: "Raven is an Elixir client for Sentry",
+      description: "An Elixir client for Sentry",
       package: package,
       deps: deps
     ]
@@ -34,7 +35,7 @@ defmodule Raven.Mixfile do
       contributors: ["Stanislav Vishnevskiy"],
       licenses: ["MIT"],
       links: %{
-        "github" => "https://github.com/vishnevskiy/raven-elixir"
+        "github" => "https://github.com/getsentry/sentry_elixir"
       }
     ]
   end

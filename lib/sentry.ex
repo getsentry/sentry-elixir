@@ -1,10 +1,10 @@
-defmodule Raven do
+defmodule Sentry do
   use GenEvent
 
   @moduledoc """
   Setup the application environment in your config.
 
-      config :raven,
+      config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1"
         tags: %{
           env: "production"
@@ -12,7 +12,7 @@ defmodule Raven do
 
   Install the Logger backend.
 
-      config :logger, backends: [:console, Raven]
+      config :logger, backends: [:console, Sentry]
   """
 
   @type parsed_dsn :: {String.t, String.t, Integer.t}
@@ -65,7 +65,7 @@ defmodule Raven do
 
   @sentry_version 5
   quote do
-    unquote(@sentry_client "raven-elixir/#{Mix.Project.config[:version]}")
+    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
 
   @doc """
@@ -87,7 +87,7 @@ defmodule Raven do
   """
   @spec capture_exception(String.t) :: {:ok, String.t} | :error
   def capture_exception(exception) do
-    case Application.get_env(:raven, :dsn) do
+    case Application.get_env(:sentry, :dsn) do
       dsn when is_bitstring(dsn) ->
         capture_exception(exception |> transform, dsn |> parse_dsn!)
       _ ->
@@ -181,7 +181,7 @@ defmodule Raven do
     %{state |
       event_id: UUID.uuid4(:hex),
       timestamp: iso8601_timestamp,
-      tags: Application.get_env(:raven, :tags, %{}),
+      tags: Application.get_env(:sentry, :tags, %{}),
       server_name: :net_adm.localhost |> to_string}
   end
 

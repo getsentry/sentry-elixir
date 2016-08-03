@@ -1,4 +1,4 @@
-defmodule RavenTest do
+defmodule SentryTest do
   use ExUnit.Case
 
   defmodule Forwarder do
@@ -45,8 +45,8 @@ defmodule RavenTest do
     {:ok, pid} = GenServer.start(MyGenServer, :ok)
     catch_exit(GenServer.call(pid, :error))
 
-    assert %Raven.Event{
-      culprit: "RavenTest.MyGenServer.handle_call/3",
+    assert %Sentry.Event{
+      culprit: "SentryTest.MyGenServer.handle_call/3",
       exception: [
         %{type: "RuntimeError", value: "oops"}
       ],
@@ -62,7 +62,7 @@ defmodule RavenTest do
       }
     } = receive_transform
     assert [
-      %{filename: "test/raven_test.exs", function: "RavenTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
+      %{filename: "test/sentry_test.exs", function: "SentryTest.MyGenServer.handle_call/3", in_app: true, lineno: 25},
       %{filename: "gen_server.erl", in_app: false}
     ] = frames |> Enum.reverse |> Enum.take(2)
 
@@ -80,8 +80,8 @@ defmodule RavenTest do
     :ok = GenEvent.add_handler(pid, MyGenEvent, :ok)
     GenEvent.call(pid, MyGenEvent, :error)
 
-    assert %Raven.Event{
-      culprit: "RavenTest.MyGenEvent.handle_call/2",
+    assert %Sentry.Event{
+      culprit: "SentryTest.MyGenEvent.handle_call/2",
       exception: [
         %{type: "RuntimeError", value: "oops"}
       ],
@@ -98,7 +98,7 @@ defmodule RavenTest do
     } = receive_transform
 
     assert [
-      %{filename: "test/raven_test.exs", function: "RavenTest.MyGenEvent.handle_call/2", in_app: true},
+      %{filename: "test/sentry_test.exs", function: "SentryTest.MyGenEvent.handle_call/2", in_app: true},
       %{filename: "lib/gen_event.ex", function: "GenEvent.do_handler/3", in_app: false}
     ] = frames |> Enum.reverse |> Enum.take(2)
   end
@@ -109,8 +109,8 @@ defmodule RavenTest do
     send(pid, :go)
     receive do: ({:DOWN, ^ref, _, _, _} -> :ok)
 
-    assert %Raven.Event{
-      culprit: "anonymous fn/0 in RavenTest.task/1",
+    assert %Sentry.Event{
+      culprit: "anonymous fn/0 in SentryTest.task/1",
       exception: [
         %{type: "RuntimeError", value: "oops"}
       ],
@@ -121,7 +121,7 @@ defmodule RavenTest do
         frames: [
           %{filename: "proc_lib.erl", function: ":proc_lib.init_p_do_apply/3", in_app: false},
           %{filename: "lib/task/supervised.ex", function: "Task.Supervised.do_apply/2", in_app: false},
-          %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.task/1", in_app: true}
+          %{filename: "test/sentry_test.exs", function: "anonymous fn/0 in SentryTest.task/1", in_app: true}
         ]
       }
     } = receive_transform
@@ -132,7 +132,7 @@ defmodule RavenTest do
 
     case :erlang.system_info(:otp_release) do
       '17' ->
-        assert %Raven.Event{
+        assert %Sentry.Event{
           culprit: nil,
           level: "error",
           message: "Error in process " <> _,
@@ -142,14 +142,14 @@ defmodule RavenTest do
           }
         } = receive_transform
       _ ->
-        assert %Raven.Event{
-          culprit: "anonymous fn/0 in RavenTest.test parses function crashes/1",
+        assert %Sentry.Event{
+          culprit: "anonymous fn/0 in SentryTest.test parses function crashes/1",
           level: "error",
           message: "(ArithmeticError) bad argument in arithmetic expression",
           platform: "elixir",
           stacktrace: %{
             frames: [
-              %{filename: "test/raven_test.exs", function: "anonymous fn/0 in RavenTest.test parses function crashes/1", in_app: true}
+              %{filename: "test/sentry_test.exs", function: "anonymous fn/0 in SentryTest.test parses function crashes/1", in_app: true}
             ]
           }
         } = receive_transform
@@ -157,9 +157,9 @@ defmodule RavenTest do
   end
 
   test "parses undefined function errors" do
-    spawn fn -> Raven.transformm end
+    spawn fn -> Sentry.transformm end
 
-    assert %Raven.Event{
+    assert %Sentry.Event{
       culprit: nil,
       level: "error",
       message: message,
@@ -170,22 +170,22 @@ defmodule RavenTest do
   end
 
   test "does not crash on unknown error" do
-    assert %Raven.Event{} = Raven.transform("unknown error of some kind")
+    assert %Sentry.Event{} = Sentry.transform("unknown error of some kind")
   end
 
   @sentry_dsn "https://public:secret@app.getsentry.com/1"
 
   test "parning dsn" do
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-      Raven.parse_dsn!("https://public:secret@app.getsentry.com/1")
+      Sentry.parse_dsn!("https://public:secret@app.getsentry.com/1")
 
     assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
-      Raven.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
+      Sentry.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
   end
 
   test "authorization" do
-    {_endpoint, public_key, private_key} = Raven.parse_dsn!(@sentry_dsn)
-    assert "Sentry sentry_version=5, sentry_client=raven-elixir/0.0.5, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Raven.authorization_header(public_key, private_key, 1)
+    {_endpoint, public_key, private_key} = Sentry.parse_dsn!(@sentry_dsn)
+    assert "Sentry sentry_version=5, sentry_client=sentry-elixir/0.0.5, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Sentry.authorization_header(public_key, private_key, 1)
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
@@ -195,7 +195,7 @@ defmodule RavenTest do
 
   defp receive_transform do
     receive do
-      exception -> Raven.transform(exception)
+      exception -> Sentry.transform(exception)
     end
   end
 end
