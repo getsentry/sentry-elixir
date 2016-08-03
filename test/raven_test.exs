@@ -162,7 +162,11 @@ defmodule RavenTest do
   @sentry_dsn "https://public:secret@app.getsentry.com/1"
 
   test "parning dsn" do
-    assert {"https://app.getsentry.com/api/1/store/", "public", "secret"} = Raven.parse_dsn!(@sentry_dsn)
+    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
+      Raven.parse_dsn!("https://public:secret@app.getsentry.com/1")
+
+    assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
+      Raven.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
   end
 
   test "authorization" do
