@@ -128,7 +128,7 @@ defmodule SentryTest do
   end
 
   test "parses function crashes" do
-    spawn fn -> "a" + 1 end
+    spawn fn -> raise RuntimeError.exception("error") end
 
     case :erlang.system_info(:otp_release) do
       '17' ->
@@ -145,7 +145,7 @@ defmodule SentryTest do
         assert %Sentry.Event{
           culprit: "anonymous fn/0 in SentryTest.test parses function crashes/1",
           level: "error",
-          message: "(ArithmeticError) bad argument in arithmetic expression",
+          message: "(RuntimeError) error",
           platform: "elixir",
           stacktrace: %{
             frames: [
