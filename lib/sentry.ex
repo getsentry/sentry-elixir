@@ -57,8 +57,9 @@ defmodule Sentry do
   def parse_dsn!(dsn) do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
     %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(dsn)
-    [public_key, secret_key] = userinfo |> String.split(":", parts: 2)
-    {project_id, _} = path |> String.slice(1..-1) |> Integer.parse
+    [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
+    {project_id, _} = String.slice(path, 1..-1)
+                      |> Integer.parse
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
     {endpoint, public_key, secret_key}
   end
@@ -68,6 +69,7 @@ defmodule Sentry do
   """
   @spec capture_exception(String.t) :: {:ok, String.t} | :error
   def capture_exception(exception) do
+    # TODO: better environment handling
     case Application.get_env(:sentry, :dsn) do
       dsn when is_bitstring(dsn) ->
         parsed_dsn = parse_dsn!(dsn)
@@ -97,7 +99,9 @@ defmodule Sentry do
   """
   @spec transform(String.t) :: %Event{}
   def transform(stacktrace) do
-    transform(stacktrace |> :erlang.iolist_to_binary |> String.split("\n"), %Event{})
+    :erlang.iolist_to_binary(stacktrace)
+    |> String.split("\n")
+    |> transform(%Event{})
   end
 
   @spec transform([String.t], %Event{}) :: %Event{}
@@ -156,7 +160,7 @@ defmodule Sentry do
       event_id: UUID.uuid4(:hex),
       timestamp: iso8601_timestamp,
       tags: Application.get_env(:sentry, :tags, %{}),
-      server_name: :net_adm.localhost |> to_string}
+      server_name: to_string(:net_adm.localhost)}
   end
 
   @spec transform(any, %Event{}) :: %Event{}

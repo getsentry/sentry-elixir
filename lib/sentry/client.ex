@@ -8,7 +8,10 @@ defmodule Sentry.Client do
     case :hackney.request(method, url, headers, body, []) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
-          {:ok, body} -> {:ok, body |> Poison.decode! |> Dict.get("id")}
+          {:ok, body} ->
+            id = Poison.decode!(body)
+                  |> Dict.get("id")
+            {:ok, id}
           _ -> :error
         end
       _ -> :error
