@@ -1,5 +1,6 @@
 defmodule Sentry do
   use GenEvent
+  alias Sentry.Client
 
   @moduledoc """
   Setup the application environment in your config.
@@ -14,8 +15,6 @@ defmodule Sentry do
 
       config :logger, backends: [:console, Sentry]
   """
-
-  @type parsed_dsn :: {String.t, String.t, Integer.t}
 
   ## Server
 
@@ -51,20 +50,6 @@ defmodule Sentry do
   end
 
   @doc """
-  Parses a Sentry DSN which is simply a URI.
-  """
-  @spec parse_dsn!(String.t) :: parsed_dsn
-  def parse_dsn!(dsn) do
-    # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(dsn)
-    [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
-    {project_id, _} = String.slice(path, 1..-1)
-                      |> Integer.parse
-    endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
-    {endpoint, public_key, secret_key}
-  end
-
-  @doc """
   Parses and submits an exception to Sentry if DSN is setup in application env.
   """
   @spec capture_exception(String.t) :: {:ok, String.t} | :error
@@ -72,7 +57,7 @@ defmodule Sentry do
     # TODO: better environment handling
     case Application.get_env(:sentry, :dsn) do
       dsn when is_bitstring(dsn) ->
-        parsed_dsn = parse_dsn!(dsn)
+        parsed_dsn = Client.parse_dsn!(dsn)
         transform(exception)
         |> capture_exception(parsed_dsn)
       _ ->
@@ -80,16 +65,15 @@ defmodule Sentry do
     end
   end
 
-  @spec capture_exception(%Event{}, parsed_dsn) :: {:ok, String.t} | :error
+  @spec capture_exception(%Event{}, Client.parsed_dsn) :: {:ok, String.t} | :error
   def capture_exception(%Event{message: nil, exception: nil}, _) do
     {:ok, "Unable to parse as exception, ignoring..."}
   end
 
   def capture_exception(event, {endpoint, public_key, private_key}) do
-    body = Poison.encode!(event)
-    auth_headers = Sentry.Client.authorization_headers(public_key, private_key)
+    auth_headers = Client.authorization_headers(public_key, private_key)
 
-    Sentry.Client.request(:post, endpoint, auth_headers, body)
+    Client.request(:post, endpoint, auth_headers, event)
   end
 
   ## Transformers

@@ -175,10 +175,10 @@ defmodule SentryTest do
 
   test "parning dsn" do
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-      Sentry.parse_dsn!("https://public:secret@app.getsentry.com/1")
+      Sentry.Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
 
     assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
-      Sentry.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
+      Sentry.Client.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
