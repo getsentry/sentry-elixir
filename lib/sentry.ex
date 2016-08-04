@@ -63,25 +63,6 @@ defmodule Sentry do
     {endpoint, public_key, secret_key}
   end
 
-  @sentry_version 5
-  quote do
-    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
-  end
-
-  @doc """
-  Generates a Sentry API authorization header.
-  """
-  @spec authorization_header(String.t, String.t, Integer.t) :: String.t
-  def authorization_header(public_key, secret_key, timestamp \\ nil) do
-    # X-Sentry-Auth: Sentry sentry_version=5,
-    # sentry_client=<client version, arbitrary>,
-    # sentry_timestamp=<current timestamp>,
-    # sentry_key=<public api key>,
-    # sentry_secret=<secret api key>
-    timestamp = if timestamp, do: timestamp, else: unix_timestamp
-    "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
-  end
-
   @doc """
   Parses and submits an exception to Sentry if DSN is setup in application env.
   """
@@ -89,7 +70,9 @@ defmodule Sentry do
   def capture_exception(exception) do
     case Application.get_env(:sentry, :dsn) do
       dsn when is_bitstring(dsn) ->
-        capture_exception(exception |> transform, dsn |> parse_dsn!)
+        parsed_dsn = parse_dsn!(dsn)
+        transform(exception)
+        |> capture_exception(parsed_dsn)
       _ ->
         :error
     end
@@ -101,19 +84,10 @@ defmodule Sentry do
   end
 
   def capture_exception(event, {endpoint, public_key, private_key}) do
-    body = event |> Poison.encode!
-    headers = [
-      {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", authorization_header(public_key, private_key)},
-    ]
-    case :hackney.request(:post, endpoint, headers, body, []) do
-      {:ok, 200, _headers, client} ->
-        case :hackney.body(client) do
-          {:ok, body} -> {:ok, body |> Poison.decode! |> Dict.get("id")}
-          _ -> :error
-        end
-      _ -> :error
-    end
+    body = Poison.encode!(event)
+    auth_headers = Sentry.Client.authorization_headers(public_key, private_key)
+
+    Sentry.Client.request(:post, endpoint, auth_headers, body)
   end
 
   ## Transformers
@@ -229,13 +203,7 @@ defmodule Sentry do
     end
   end
 
-  @spec unix_timestamp :: Number.t
-  defp unix_timestamp do
-    {mega, sec, _micro} = :os.timestamp()
-    mega * (1000000 + sec)
-  end
-
-  @spec unix_timestamp :: String.t
+  @spec iso8601_timestamp :: String.t
   defp iso8601_timestamp do
     [year, month, day, hour, minute, second] =
       :calendar.universal_time
