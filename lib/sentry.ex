@@ -193,13 +193,7 @@ defmodule Sentry do
 
   @spec iso8601_timestamp :: String.t
   defp iso8601_timestamp do
-    [year, month, day, hour, minute, second] =
-      :calendar.universal_time
-      |> Tuple.to_list
-      |> Enum.map(&Tuple.to_list(&1))
-      |> List.flatten
-      |> Enum.map(&to_string(&1))
-      |> Enum.map(&String.rjust(&1, 2, ?0))
-    "#{year}-#{month}-#{day}T#{hour}:#{minute}:#{second}"
+    DateTime.utc_now()
+    |> DateTime.to_iso8601()
   end
 end
