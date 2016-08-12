@@ -1,5 +1,6 @@
 defmodule Sentry.Client do
   alias Sentry.Event
+  require Logger
   @type parsed_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
 
@@ -27,7 +28,10 @@ defmodule Sentry.Client do
             id = Poison.decode!(body)
                   |> Map.get("id")
             {:ok, id}
-          _ -> :error
+          _ -> 
+            Logger.error(fn -> 
+              ["Failed to send sentry event.", ?\n, body]
+            end, [skip_sentry: true])
         end
       _ -> :error
     end

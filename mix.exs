@@ -14,10 +14,8 @@ defmodule Sentry.Mixfile do
   end
 
   def application do
-    applications = [:hackney, :uuid, :poison]
-    applications = if Mix.env == :test, do: [:logger|applications], else: applications
     [
-      applications: applications
+      applications: [:hackney, :uuid, :poison, :logger]
     ]
   end
 
