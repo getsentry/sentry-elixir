@@ -16,6 +16,8 @@ defmodule Sentry do
   """
   @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
   def capture_exception(exception, opts \\ []) do
+    Event.transform(message)
+    |> send_event()
   end
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
