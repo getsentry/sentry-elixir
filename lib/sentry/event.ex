@@ -1,5 +1,5 @@
 defmodule Sentry.Event do
-  alias Sentry.Event
+  alias Sentry.{Event, Util}
 
   defstruct event_id: nil,
   culprit: nil,
@@ -79,7 +79,7 @@ defmodule Sentry.Event do
   def transform([], state) do
     %{state |
      event_id: UUID.uuid4(:hex),
-     timestamp: Sentry.Util.iso8601_timestamp(),
+     timestamp: Util.iso8601_timestamp(),
      tags: Application.get_env(:sentry, :tags, %{}),
      server_name: to_string(:net_adm.localhost)}
   end
