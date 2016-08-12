@@ -128,7 +128,7 @@ defmodule SentryTest do
   end
 
   test "parses function crashes" do
-    spawn fn -> "a" + 1 end
+    spawn fn -> raise RuntimeError.exception("error") end
 
     case :erlang.system_info(:otp_release) do
       '17' ->
@@ -145,7 +145,7 @@ defmodule SentryTest do
         assert %Sentry.Event{
           culprit: "anonymous fn/0 in SentryTest.test parses function crashes/1",
           level: "error",
-          message: "(ArithmeticError) bad argument in arithmetic expression",
+          message: "(RuntimeError) error",
           platform: "elixir",
           stacktrace: %{
             frames: [
@@ -173,19 +173,12 @@ defmodule SentryTest do
     assert %Sentry.Event{} = Sentry.transform("unknown error of some kind")
   end
 
-  @sentry_dsn "https://public:secret@app.getsentry.com/1"
-
   test "parning dsn" do
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-      Sentry.parse_dsn!("https://public:secret@app.getsentry.com/1")
+      Sentry.Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
 
     assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
-      Sentry.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
-  end
-
-  test "authorization" do
-    {_endpoint, public_key, private_key} = Sentry.parse_dsn!(@sentry_dsn)
-    assert "Sentry sentry_version=5, sentry_client=sentry-elixir/0.0.5, sentry_timestamp=1, sentry_key=public, sentry_secret=secret" == Sentry.authorization_header(public_key, private_key, 1)
+      Sentry.Client.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
