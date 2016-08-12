@@ -1,4 +1,5 @@
 defmodule Sentry.Client do
+  alias Sentry.Event
   @type parsed_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
 
@@ -6,6 +7,17 @@ defmodule Sentry.Client do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
 
+  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  def send_event(%Event{} = event) do
+    {endpoint, public_key, secret_key} = Application.fetch_env!(:sentry, :dsn)
+                                          |> parse_dsn!
+
+    auth_headers = authorization_headers(public_key, secret_key)
+
+    request(:post, endpoint, auth_headers, event)
+  end
+
+  @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def request(method, url, headers, body) do
     body = Poison.encode!(body)
     case :hackney.request(method, url, headers, body, []) do
@@ -30,10 +42,10 @@ defmodule Sentry.Client do
     "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
   end
 
-  def authorization_headers(public_key, private_key) do
+  def authorization_headers(public_key, secret_key) do
     [
       {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", authorization_header(public_key, private_key)}
+      {"X-Sentry-Auth", authorization_header(public_key, secret_key)}
     ]
   end
 
@@ -45,9 +57,10 @@ defmodule Sentry.Client do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
     %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(dsn)
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
-    {project_id, _} = String.slice(path, 1..-1)
-                      |> Integer.parse
+    [_, binary_project_id] = String.split(path, "/")
+    project_id = String.to_integer(binary_project_id)
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
+
     {endpoint, public_key, secret_key}
   end
 end

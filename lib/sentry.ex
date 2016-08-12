@@ -1,5 +1,6 @@
 defmodule Sentry do
   alias Sentry.{Event, Client}
+  require Logger
 
   @doc """
   Parses and submits an exception to Sentry if current environment is in included_environments.
@@ -19,22 +20,19 @@ defmodule Sentry do
     end
   end
 
+  @spec do_capture_logger_message(String.t) :: {:ok, String.t} | :error
   def do_capture_logger_message(message) do
-    dsn = Application.fetch_env!(:sentry, :dsn)
-          |> Client.parse_dsn!
-
     Event.transform(message)
-    |> capture_logger_message(dsn)
+    |> send_event()
   end
 
-  @spec capture_logger_message(%Event{}, Client.parsed_dsn) :: {:ok, String.t} | :error
-  def capture_logger_message(%Event{message: nil, exception: nil}, _) do
+  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  def send_event(%Event{message: nil, exception: nil}) do
+    Logger.warn("unable to parse exception")
     {:ok, "Unable to parse as exception, ignoring..."}
   end
 
-  def capture_logger_message(event, {endpoint, public_key, private_key}) do
-    auth_headers = Client.authorization_headers(public_key, private_key)
-
-    Client.request(:post, endpoint, auth_headers, event)
+  def send_event(event = %Event{}) do
+    Client.send_event(event)
   end
 end

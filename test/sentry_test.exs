@@ -157,7 +157,7 @@ defmodule SentryTest do
   end
 
   test "parses undefined function errors" do
-    spawn fn -> Sentry.Event.transformm end
+    spawn fn -> Sentry.Event.not_a_function end
 
     assert %Sentry.Event{
       culprit: nil,
