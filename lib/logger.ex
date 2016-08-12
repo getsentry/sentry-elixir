@@ -19,12 +19,8 @@ defmodule Sentry.Logger do
 
   ## Server
 
-  def handle_call({:configure, _options}, state) do
-    {:ok, :ok, state}
-  end
-
   def handle_event({:error, gl, {Logger, msg, _ts, _md}}, state) when node(gl) == node() do
-    Sentry.capture_exception(msg)
+    Sentry.capture_logger_message(msg)
     {:ok, state}
   end
 
