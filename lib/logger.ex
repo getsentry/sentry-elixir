@@ -19,8 +19,11 @@ defmodule Sentry.Logger do
 
   ## Server
 
-  def handle_event({:error, gl, {Logger, msg, _ts, _md}}, state) when node(gl) == node() do
-    Sentry.capture_logger_message(msg)
+  def handle_event({:error, gl, {Logger, msg, _ts, metadata}}, state) when node(gl) == node() do
+    if !Keyword.has_key?(metadata, :skip_sentry) do
+      Sentry.capture_logger_message(msg)
+    end
+
     {:ok, state}
   end
 

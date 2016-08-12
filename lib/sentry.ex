@@ -8,6 +8,7 @@ defmodule Sentry do
   @spec capture_logger_message(String.t) :: {:ok, String.t} | :error
   def capture_logger_message(message) do
     included_environments = Application.fetch_env!(:sentry, :included_environments)
+    do_capture_logger_message(message)
     if Application.fetch_env!(:sentry, :environment_name) in included_environments do
       quote do
         do_capture_logger_message(unquote(message))
