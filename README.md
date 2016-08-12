@@ -40,5 +40,5 @@ config :sentry,
 Install the Logger backend.
 
 ```elixir
-config :logger, backends: [:console, Sentry]
+config :logger, backends: [:console, Sentry.Logger]
 ```
