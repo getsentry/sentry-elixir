@@ -1,5 +1,5 @@
 defmodule SentryTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   defmodule Forwarder do
     use GenEvent
@@ -171,21 +171,6 @@ defmodule SentryTest do
 
   test "does not crash on unknown error" do
     assert %Sentry.Event{} = Sentry.Event.transform("unknown error of some kind")
-  end
-
-  @sentry_dsn "https://public:secret@app.getsentry.com/1"
-
-  test "parning dsn" do
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-      Sentry.Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
-
-    assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
-      Sentry.Client.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
-  end
-
-  test "authorization" do
-    {_endpoint, public_key, private_key} = Sentry.Client.parse_dsn!(@sentry_dsn)
-    assert Sentry.Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/0.0.5, sentry_timestamp=\d+, sentry_key=public, sentry_secret=secret/
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
