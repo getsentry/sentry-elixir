@@ -16,67 +16,90 @@ defmodule Sentry.Event do
   extra: %{}
 
   @doc """
-  Transforms a exception string to a Sentry event.
+  Transforms an exception string to a Sentry event.
   """
-  @spec transform(String.t) :: %Event{}
-  def transform(stacktrace) do
+  @spec transform_exception(String.t, Keyword.t) :: %Event{}
+  def transform_exception(exception, opts) do
+    stacktrace = Keyword.get(opts, :stacktrace, [])
+    extra = Keyword.get(opts, :extra, %{})
+    %Event{
+    }
+    |> add_metadata()
+  end
+
+  @doc """
+  Transforms an exception string to a Sentry event.
+  """
+  @spec transform_logger_stacktrace(String.t) :: %Event{}
+  def transform_logger_stacktrace(stacktrace) do
     :erlang.iolist_to_binary(stacktrace)
     |> String.split("\n")
-    |> transform(%Event{})
+    |> transform_logger_stacktrace(%Event{})
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["Error in process " <> _ = message|t], state) do
-    transform(t, %{state | message: message})
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["Error in process " <> _ = message|t], state) do
+    transform_logger_stacktrace(t, %{state | message: message})
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["Last message: " <> last_message|t], state) do
-    transform(t, put_in(state.extra, Map.put_new(state.extra, :last_message, last_message)))
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["Last message: " <> last_message|t], state) do
+    transform_logger_stacktrace(t, put_in(state.extra, Map.put_new(state.extra, :last_message, last_message)))
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["State: " <> last_state|t], state) do
-    transform(t, put_in(state.extra, Map.put_new(state.extra, :state, last_state)))
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["State: " <> last_state|t], state) do
+    transform_logger_stacktrace(t, put_in(state.extra, Map.put_new(state.extra, :state, last_state)))
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["Function: " <> function|t], state) do
-    transform(t, put_in(state.extra, Map.put_new(state.extra, :function, function)))
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["Function: " <> function|t], state) do
+    transform_logger_stacktrace(t, put_in(state.extra, Map.put_new(state.extra, :function, function)))
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["    Args: " <> args|t], state) do
-    transform(t, put_in(state.extra, Map.put_new(state.extra, :args, args)))
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["    Args: " <> args|t], state) do
+    transform_logger_stacktrace(t, put_in(state.extra, Map.put_new(state.extra, :args, args)))
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["    ** " <> message|t], state) do
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["    ** " <> message|t], state) do
     transform_first_stacktrace_line([message|t], state)
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["** " <> message|t], state) do
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["** " <> message|t], state) do
     transform_first_stacktrace_line([message|t], state)
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["        " <> frame|t], state) do
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["        " <> frame|t], state) do
     transform_stacktrace_line([frame|t], state)
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform(["    " <> frame|t], state) do
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace(["    " <> frame|t], state) do
     transform_stacktrace_line([frame|t], state)
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform([_|t], state) do
-    transform(t, state)
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace([_|t], state) do
+    transform_logger_stacktrace(t, state)
   end
 
-  @spec transform([String.t], %Event{}) :: %Event{}
-  def transform([], state) do
+  @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
+  def transform_logger_stacktrace([], state) do
+    add_metadata(state)
+  end
+
+  @spec transform_logger_stacktrace(any, %Event{}) :: %Event{}
+  def transform_logger_stacktrace(_, state) do
+    # TODO: maybe do something with this?
+    state
+  end
+
+  @spec add_metadata(%Event{}) :: %Event{}
+  def add_metadata(state) do
     %{state |
      event_id: UUID.uuid4(:hex),
      timestamp: Util.iso8601_timestamp(),
@@ -84,17 +107,11 @@ defmodule Sentry.Event do
      server_name: to_string(:net_adm.localhost)}
   end
 
-  @spec transform(any, %Event{}) :: %Event{}
-  def transform(_, state) do
-    # TODO: maybe do something with this?
-    state
-  end
-
   ## Private
 
   defp transform_first_stacktrace_line([message|t], state) do
     [_, type, value] = Regex.run(~r/^\((.+?)\) (.+)$/, message)
-    transform(t, %{state | message: message, exception: [%{type: type, value: value}]})
+    transform_logger_stacktrace(t, %{state | message: message, exception: [%{type: type, value: value}]})
   end
 
   defp transform_stacktrace_line([frame|t], state) do
@@ -123,8 +140,8 @@ defmodule Sentry.Event do
            vars: %{},
          } | state.stacktrace.frames])
 
-     transform(t, state)
-     :no_match -> transform(t, state)
+     transform_logger_stacktrace(t, state)
+     :no_match -> transform_logger_stacktrace(t, state)
     end
   end
 end

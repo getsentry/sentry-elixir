@@ -7,15 +7,15 @@ defmodule Sentry do
   """
   @spec capture_logger_message(String.t) :: {:ok, String.t} | :error
   def capture_logger_message(message) do
-    Event.transform(message)
+    Event.transform_logger_stacktrace(message)
     |> send_event()
   end
 
   @doc """
   Parses and submits an exception to Sentry if current environment is in included_environments.
   """
-  @spec capture_exception(Exception.t) :: {:ok, String.t} | :error
-  def capture_exception(exception) do
+  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
+  def capture_exception(exception, opts \\ []) do
   end
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error

@@ -156,7 +156,7 @@ defmodule SentryTest do
   end
 
   test "does not crash on unknown error" do
-    assert %Sentry.Event{} = Sentry.Event.transform("unknown error of some kind")
+    assert %Sentry.Event{} = Sentry.Event.transform_logger_stacktrace("unknown error of some kind")
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
@@ -166,7 +166,7 @@ defmodule SentryTest do
 
   defp receive_transform do
     receive do
-      exception -> Sentry.Event.transform(exception)
+      exception -> Sentry.Event.transform_logger_stacktrace(exception)
     end
   end
 end
