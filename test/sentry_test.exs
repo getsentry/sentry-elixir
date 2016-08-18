@@ -129,31 +129,17 @@ defmodule SentryTest do
 
   test "parses function crashes" do
     spawn fn -> raise RuntimeError.exception("failure") end
-
-    case :erlang.system_info(:otp_release) do
-      '17' ->
-        assert %Sentry.Event{
-          culprit: nil,
-          level: "error",
-          message: "Error in process " <> _,
-          platform: "elixir",
-          stacktrace: %{
-            frames: []
-          }
-        } = receive_transform
-      _ ->
-        assert %Sentry.Event{
-          culprit: "anonymous fn/0 in SentryTest.test parses function crashes/1",
-          level: "error",
-          message: "(RuntimeError) failure",
-          platform: "elixir",
-          stacktrace: %{
-            frames: [
-              %{filename: "test/sentry_test.exs", function: "anonymous fn/0 in SentryTest.test parses function crashes/1", in_app: true}
-            ]
-          }
-        } = receive_transform
-    end
+    assert %Sentry.Event{
+      culprit: "anonymous fn/0 in SentryTest.test parses function crashes/1",
+      level: "error",
+      message: "(RuntimeError) failure",
+      platform: "elixir",
+      stacktrace: %{
+        frames: [
+          %{filename: "test/sentry_test.exs", function: "anonymous fn/0 in SentryTest.test parses function crashes/1", in_app: true}
+        ]
+      }
+    } = receive_transform
   end
 
   test "parses undefined function errors" do
@@ -170,7 +156,7 @@ defmodule SentryTest do
   end
 
   test "does not crash on unknown error" do
-    assert %Sentry.Event{} = Sentry.Event.transform("unknown error of some kind")
+    assert %Sentry.Event{} = Sentry.Event.transform_logger_stacktrace("unknown error of some kind")
   end
 
   def task(parent, fun \\ (fn() -> raise "oops" end)) do
@@ -180,7 +166,7 @@ defmodule SentryTest do
 
   defp receive_transform do
     receive do
-      exception -> Sentry.Event.transform(exception)
+      exception -> Sentry.Event.transform_logger_stacktrace(exception)
     end
   end
 end

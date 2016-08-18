@@ -1,5 +1,5 @@
 defmodule Sentry.Client do
-  alias Sentry.Event
+  alias Sentry.{Event, Util}
   require Logger
   @type parsed_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
@@ -42,7 +42,7 @@ defmodule Sentry.Client do
   """
   @spec authorization_header(String.t, String.t) :: String.t
   def authorization_header(public_key, secret_key) do
-    timestamp = Sentry.Util.unix_timestamp()
+    timestamp = Util.unix_timestamp()
     "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
   end
 
