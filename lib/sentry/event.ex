@@ -22,7 +22,36 @@ defmodule Sentry.Event do
   def transform_exception(exception, opts) do
     stacktrace = Keyword.get(opts, :stacktrace, [])
     extra = Keyword.get(opts, :extra, %{})
+
+    exception = Exception.normalize(:error, exception)
+    frames = Enum.map(stacktrace, fn(line) ->
+      {mod, function, arity, location} = line
+      file = Keyword.get(location, :file)
+      line_number = Keyword.get(location, :line)
+      %{
+        filename: file && to_string(file),
+        function: Exception.format_mfa(mod, function, arity),
+        module: mod,
+        lineno: line_number,
+      }
+    end)
+
+    message = Exception.format_banner(:error, exception)
+              |> String.trim("*")
+              |> String.trim
+    {m, f, a, _} = List.first(stacktrace)
+    culprit = Exception.format_mfa(m, f, a)
+
     %Event{
+      culprit: culprit,
+      message: message,
+      level: "error",
+      platform: "elixir",
+      exception: [%{type: exception.__struct__, value: Exception.message(exception)}],
+      stacktrace: %{
+        frames: frames
+      },
+      extra: extra
     }
     |> add_metadata()
   end
