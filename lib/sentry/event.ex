@@ -1,19 +1,23 @@
 defmodule Sentry.Event do
   alias Sentry.{Event, Util}
 
+  @moduledoc """
+    TODO
+  """
+
   defstruct event_id: nil,
-  culprit: nil,
-  timestamp: nil,
-  message: nil,
-  tags: %{},
-  level: "error",
-  platform: "elixir",
-  server_name: nil,
-  exception: nil,
-  stacktrace: %{
-    frames: []
-  },
-  extra: %{}
+            culprit: nil,
+            timestamp: nil,
+            message: nil,
+            tags: %{},
+            level: "error",
+            platform: "elixir",
+            server_name: nil,
+            exception: nil,
+            stacktrace: %{
+              frames: []
+            },
+            extra: %{}
 
   @doc """
   Transforms an exception string to a Sentry event.
@@ -36,9 +40,10 @@ defmodule Sentry.Event do
       }
     end)
 
-    message = Exception.format_banner(:error, exception)
-              |> String.trim("*")
-              |> String.trim
+    message = :error
+      |> Exception.format_banner(exception)
+      |> String.trim("*")
+      |> String.trim
     {m, f, a, _} = List.first(stacktrace)
     culprit = Exception.format_mfa(m, f, a)
 
@@ -61,7 +66,8 @@ defmodule Sentry.Event do
   """
   @spec transform_logger_stacktrace(String.t) :: %Event{}
   def transform_logger_stacktrace(stacktrace) do
-    :erlang.iolist_to_binary(stacktrace)
+    stacktrace
+    |> :erlang.iolist_to_binary()
     |> String.split("\n")
     |> transform_logger_stacktrace(%Event{})
   end
@@ -144,33 +150,33 @@ defmodule Sentry.Event do
   end
 
   defp transform_stacktrace_line([frame|t], state) do
-    match =
-      case Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
+    state =
+      Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
         [_, _, filename, lineno, function] -> [:unknown, filename, lineno, function]
         [_, _, app, filename, lineno, function] -> [app, filename, lineno, function]
         _ -> :no_match
       end
+      |> handle_trace_match(state)
 
-    case match do
-      [app, filename, lineno, function] ->
-        state = if state.culprit, do: state, else: %{state | culprit: function}
+    transform_logger_stacktrace(t, state)
+  end
 
-        state = put_in(state.stacktrace.frames, [%{
-           filename: filename,
-           function: function,
-           module: nil,
-           lineno: String.to_integer(lineno),
-           colno: nil,
-           abs_path: nil,
-           context_line: nil,
-           pre_context: nil,
-           post_context: nil,
-           in_app: not app in ["stdlib", "elixir"],
-           vars: %{},
-         } | state.stacktrace.frames])
+  defp handle_trace_match(:no_match, state), do: state
+  defp handle_trace_match([app, filename, lineno, function], state) do
+    state = if state.culprit, do: state, else: Map.put(state, :culprit, function)
 
-     transform_logger_stacktrace(t, state)
-     :no_match -> transform_logger_stacktrace(t, state)
-    end
+    put_in(state.stacktrace.frames,
+      [%{filename: filename,
+         function: function,
+         module: nil,
+         lineno: String.to_integer(lineno),
+         colno: nil,
+         abs_path: nil,
+         context_line: nil,
+         pre_context: nil,
+         post_context: nil,
+         in_app: not app in ["stdlib", "elixir"],
+         vars: %{},
+        } | state.stacktrace.frames])
   end
 end

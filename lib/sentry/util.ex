@@ -1,4 +1,7 @@
 defmodule Sentry.Util do
+  @moduledoc """
+    TODO
+  """
   @spec unix_timestamp :: Integer.t
   def unix_timestamp do
     :os.system_time(:seconds)

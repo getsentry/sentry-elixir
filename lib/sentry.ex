@@ -2,24 +2,43 @@ defmodule Sentry do
   alias Sentry.{Event, Client}
   require Logger
 
+
+  @moduledoc """
+    Provides the basic functionality to submit a `Sentry.Event` to the Sentry Service.
+
+    ### Configuration
+
+    ### Capturing Events
+
+    ### Setting Context
+
+    ### Configuring The `Logger` Backend
+
+  """
+
   @doc """
-  Parses and submits an exception to Sentry if current environment is in included_environments.
+    Parses and submits an exception to Sentry if current environment is in included_environments.
   """
   @spec capture_logger_message(String.t) :: {:ok, String.t} | :error
   def capture_logger_message(message) do
-    Event.transform_logger_stacktrace(message)
+    message
+    |> Event.transform_logger_stacktrace()
     |> send_event()
   end
 
   @doc """
-  Parses and submits an exception to Sentry if current environment is in included_environments.
+    Parses and submits an exception to Sentry if current environment is in included_environments.
   """
   @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
   def capture_exception(exception, opts \\ []) do
-    Event.transform_exception(exception, opts)
+    exception
+    |> Event.transform_exception(opts)
     |> send_event()
   end
 
+  @doc """
+    Sends a `Sentry.Event`
+  """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{message: nil, exception: nil}) do
     Logger.warn("unable to parse exception")

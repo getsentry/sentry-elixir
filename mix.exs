@@ -23,7 +23,9 @@ defmodule Sentry.Mixfile do
     [
       {:hackney, "~> 1.6.1"},
       {:uuid, "~> 1.0"},
-      {:poison, "~> 1.5 or ~> 2.0"}
+      {:poison, "~> 1.5 or ~> 2.0"},
+
+      {:credo, "~> 0.4", only: [:dev, :test]}
     ]
   end
 

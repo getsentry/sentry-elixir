@@ -8,10 +8,13 @@ defmodule Sentry.Client do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
 
+  @moduledoc """
+    TODO
+  """
+
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{} = event) do
-    {endpoint, public_key, secret_key} = Application.fetch_env!(:sentry, :dsn)
-                                          |> parse_dsn!
+    {endpoint, public_key, secret_key} = parse_dsn!(Application.fetch_env!(:sentry, :dsn))
 
     auth_headers = authorization_headers(public_key, secret_key)
 
@@ -25,11 +28,12 @@ defmodule Sentry.Client do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
           {:ok, body} ->
-            id = Poison.decode!(body)
-                  |> Map.get("id")
+            id = body
+              |> Poison.decode!()
+              |> Map.get("id")
             {:ok, id}
-          _ -> 
-            Logger.error(fn -> 
+          _ ->
+            Logger.error(fn ->
               ["Failed to send sentry event.", ?\n, body]
             end, [skip_sentry: true])
         end
