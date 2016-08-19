@@ -8,11 +8,25 @@ defmodule Sentry do
 
     ### Configuration
 
-    ### Capturing Events
+    Add the following to your production config
 
-    ### Setting Context
+        config :sentry,
+          dsn: "https://public:secret@app.getsentry.com/1",
+          included_environments: [:prod],
+          environment_name: :prod
+          tags: %{
+            env: "production"
+          }
+
+    ### Capturing Exceptions
+
+    Simply calling `capture_exception\2` will send the event.
+
+        Sentry.capture_exception(my_exception)
 
     ### Configuring The `Logger` Backend
+
+    See `Sentry.Logger`
 
   """
 

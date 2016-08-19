@@ -9,7 +9,7 @@ defmodule Sentry.Client do
   end
 
   @moduledoc """
-    TODO
+    Provides basic HTTP client request and response handling for the Sentry API. 
   """
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error

@@ -9,7 +9,8 @@ defmodule Sentry.Mixfile do
       elixir: "~> 1.3",
       description: "An Elixir client for Sentry",
       package: package(),
-      deps: deps()
+      deps: deps(),
+      docs: [extras: ["README.md"], main: "README"]
     ]
   end
 
@@ -25,6 +26,7 @@ defmodule Sentry.Mixfile do
       {:uuid, "~> 1.0"},
       {:poison, "~> 1.5 or ~> 2.0"},
 
+      {:ex_doc, "~> 0.13.0", only: :dev},
       {:credo, "~> 0.4", only: [:dev, :test]}
     ]
   end

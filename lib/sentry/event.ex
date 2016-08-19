@@ -2,7 +2,8 @@ defmodule Sentry.Event do
   alias Sentry.{Event, Util}
 
   @moduledoc """
-    TODO
+    Provides an Event Struct as well as transformation of Logger 
+    entries into Sentry Events.
   """
 
   defstruct event_id: nil,
@@ -151,7 +152,7 @@ defmodule Sentry.Event do
 
   defp transform_stacktrace_line([frame|t], state) do
     state =
-      Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
+      case Regex.run(~r/^(\((.+?)\) )?(.+?):(\d+): (.+)$/, frame) do
         [_, _, filename, lineno, function] -> [:unknown, filename, lineno, function]
         [_, _, app, filename, lineno, function] -> [app, filename, lineno, function]
         _ -> :no_match
