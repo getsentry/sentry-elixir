@@ -27,8 +27,10 @@ defmodule Sentry.Event do
   """
   @spec transform_exception(String.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
+    %{user: user_context, tags: tags_context, extra: extra_context} = Sentry.Context.get_all()
     stacktrace = Keyword.get(opts, :stacktrace, [])
-    extra = Keyword.get(opts, :extra, %{})
+    extra = extra_context
+            |> Map.merge(Keyword.get(opts, :extra, %{}))
     request = Keyword.get(opts, :request, %{})
 
     exception = Exception.normalize(:error, exception)
@@ -63,7 +65,9 @@ defmodule Sentry.Event do
       stacktrace: %{
         frames: frames
       },
-      extra: extra
+      extra: extra,
+      tags: tags_context,
+      user: user_context,
     }
     |> add_metadata()
     |> Map.put(:request, request)
