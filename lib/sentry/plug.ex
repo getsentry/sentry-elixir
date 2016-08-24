@@ -1,4 +1,7 @@
 defmodule Sentry.Plug do
+  @moduledoc """
+  TODO: module doc
+  """
   defmacro __using__(_env) do
     quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
