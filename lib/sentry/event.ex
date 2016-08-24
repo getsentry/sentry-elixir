@@ -19,7 +19,8 @@ defmodule Sentry.Event do
               frames: []
             },
             request: %{},
-            extra: %{}
+            extra: %{},
+            user: %{}
 
   @doc """
   Transforms an exception string to a Sentry event.
@@ -47,8 +48,11 @@ defmodule Sentry.Event do
       |> Exception.format_banner(exception)
       |> String.trim("*")
       |> String.trim
-    {m, f, a, _} = List.first(stacktrace)
-    culprit = Exception.format_mfa(m, f, a)
+
+    culprit = case List.first(stacktrace) do
+      {m, f, a, _} -> Exception.format_mfa(m, f, a)
+      nil -> nil
+    end
 
     %Event{
       culprit: culprit,
@@ -139,10 +143,12 @@ defmodule Sentry.Event do
 
   @spec add_metadata(%Event{}) :: %Event{}
   def add_metadata(state) do
+    tags = Application.get_env(:sentry, :tags, %{})
+            |> Dict.merge(state.tags)
     %{state |
      event_id: UUID.uuid4(:hex),
      timestamp: Util.iso8601_timestamp(),
-     tags: Application.get_env(:sentry, :tags, %{}),
+     tags: tags,
      server_name: to_string(:net_adm.localhost)}
   end
 
