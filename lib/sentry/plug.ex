@@ -1,13 +1,6 @@
 defmodule Sentry.Plug do
   @moduledoc """
-    Provides helper methods and Plug.ErrorHandler callback for generating
-    Sentry exception reports.
-
-    ### Configuration
-    Simply add the following to your Plug Router:
-
-    use Plug.ErrorHandler
-    use Sentry.Plug
+  TODO: module doc
   """
   defmacro __using__(_env) do
     quote do
