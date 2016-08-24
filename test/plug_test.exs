@@ -19,8 +19,11 @@ defmodule Sentry.PlugTest do
   test "exception makes call to Sentry API" do
    bypass = Bypass.open
    Bypass.expect bypass, fn conn ->
-     assert "/api/1/store/" == conn.request_path
-     assert "POST" == conn.method
+     {:ok, body, conn} = Plug.Conn.read_body(conn)
+     assert body =~ "RuntimeError"
+     assert body =~ "ExampleApp"
+     assert conn.request_path == "/api/1/store/"
+     assert conn.method == "POST"
      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
    end
    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
