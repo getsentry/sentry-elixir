@@ -13,7 +13,7 @@ defmodule Sentry do
         config :sentry,
           dsn: "https://public:secret@app.getsentry.com/1",
           included_environments: [:prod],
-          environment_name: :prod
+          environment_name: :prod,
           tags: %{
             env: "production"
           }
