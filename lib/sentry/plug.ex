@@ -1,31 +1,12 @@
 defmodule Sentry.Plug do
   defmacro __using__(_env) do
     quote do
-      def call(conn, opts) do
-        try do
-          super(conn, opts)
-        catch
-          kind, reason ->
-            Sentry.Plug.__catch__(conn, kind, reason)
-        end
+      defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
+        request = Sentry.Plug.build_request_interface_data(conn)
+        exception = Exception.normalize(kind, reason, stack)
+        Sentry.capture_exception(exception, [stacktrace: stack, request: request])
       end
     end
-  end
-
-  def __catch__(_conn, :error, %Plug.Conn.WrapperError{} = wrapper) do
-    %{conn: conn, kind: kind, reason: reason, stack: stack} = wrapper
-    __catch__(conn, kind, reason, stack)
-  end
-
-  def __catch__(conn, kind, reason) do
-    __catch__(conn, kind, reason, System.stacktrace())
-  end
-
-  def __catch__(conn, kind, reason, stack) do
-    request = Sentry.Plug.build_request_interface_data(conn)
-    exception = Exception.normalize(kind, reason, stack)
-    Sentry.capture_exception(exception, [stacktrace: stack, request: request])
-    :erlang.raise(kind, reason, stack)
   end
 
   def build_request_interface_data(%Plug.Conn{} = conn) do
