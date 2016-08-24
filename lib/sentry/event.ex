@@ -18,6 +18,7 @@ defmodule Sentry.Event do
             stacktrace: %{
               frames: []
             },
+            request: %{},
             extra: %{}
 
   @doc """
@@ -27,6 +28,7 @@ defmodule Sentry.Event do
   def transform_exception(exception, opts) do
     stacktrace = Keyword.get(opts, :stacktrace, [])
     extra = Keyword.get(opts, :extra, %{})
+    request = Keyword.get(opts, :request, %{})
 
     exception = Exception.normalize(:error, exception)
     frames = Enum.map(stacktrace, fn(line) ->
@@ -60,6 +62,7 @@ defmodule Sentry.Event do
       extra: extra
     }
     |> add_metadata()
+    |> Map.put(:request, request)
   end
 
   @doc """
