@@ -62,14 +62,9 @@ defmodule Sentry do
   def send_event(event = %Event{}) do
     included_environments = Application.fetch_env!(:sentry, :included_environments)
     if Application.fetch_env!(:sentry, :environment_name) in included_environments do
-      quote do
-        Client.send_event(unquote(event))
-      end
+      Client.send_event(event)
     else
-      quote do
-        _ = unquote(event)
-        {:ok, ""}
-      end
+      {:ok, ""}
     end
   end
 end
