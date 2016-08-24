@@ -20,7 +20,7 @@ defmodule Sentry.Plug do
         |> Map.to_list
         |> Enum.filter(fn ({key, val} -> 
           key in ~w(password passwd secret credit_card) ||
-          Regex.match?(~r(^(?:\d[ -]*?){13,16}$, val) # Matches Credit Cards
+          Regex.match?(~r/^(?:\d[ -]*?){13,16}$r/, val) # Matches Credit Cards
         end)
         |> Enum.into(%{})
       end
@@ -90,7 +90,9 @@ defmodule Sentry.Plug do
     fun.(conn)
   end
 
+  ## TODO also reject too big
+
   defp scrub_headers(data) do
-    Map.drop(data, ~w(authorization authentication)a)
+    Map.drop(data, ~w(authorization authentication))
   end
 end
