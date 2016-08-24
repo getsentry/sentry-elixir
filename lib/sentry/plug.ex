@@ -15,7 +15,7 @@ defmodule Sentry.Plug do
             |> Plug.Conn.fetch_query_params
 
     %{
-      url: conn.request_path,
+      url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
       method: conn.method,
       data: %{
       },
