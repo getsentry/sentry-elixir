@@ -16,11 +16,21 @@ defmodule Sentry.PlugTest do
     end
   end
 
-  test "exception re-raises" do
+  test "exception makes call to Sentry API" do
+   bypass = Bypass.open
+   Bypass.expect bypass, fn conn ->
+     assert "/api/1/store/" == conn.request_path
+     assert "POST" == conn.method
+     Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+   end
+   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+   Application.put_env(:sentry, :included_environments, [:test])
+   Application.put_env(:sentry, :environment_name, :test)
+
    assert_raise(RuntimeError, "Error", fn ->
-      conn(:get, "/error_route")
-      |> ExampleApp.call([])
-    end)
+     conn(:get, "/error_route")
+     |> ExampleApp.call([])
+   end)
   end
 
   test "builds request data" do
