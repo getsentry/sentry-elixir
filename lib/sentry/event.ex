@@ -19,47 +19,51 @@ defmodule Sentry.Event do
               frames: []
             },
             request: %{},
-            extra: %{}
+            extra: %{},
+            user: %{}
 
   @doc """
-  Transforms an exception string to a Sentry event.
+  Transforms an Exception to a Sentry event.
+  ## Options
+    * `:stacktrace` - a list of Exception.stacktrace()
+    * `:extra` - map of extra context
+    * `:user` - map of user context
+    * `:tags` - map of tags context
+    * `:request` - map of request context
   """
-  @spec transform_exception(String.t, Keyword.t) :: %Event{}
+  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
+    %{user: user_context, tags: tags_context, extra: extra_context} = Sentry.Context.get_all()
+
     stacktrace = Keyword.get(opts, :stacktrace, [])
-    extra = Keyword.get(opts, :extra, %{})
+    extra = extra_context
+            |> Map.merge(Keyword.get(opts, :extra, %{}))
+    user = user_context
+            |> Map.merge(Keyword.get(opts, :user, %{}))
+    tags = Application.get_env(:sentry, :tags, %{})
+            |> Dict.merge(tags_context)
+            |> Dict.merge(Keyword.get(opts, :tags, %{}))
     request = Keyword.get(opts, :request, %{})
 
     exception = Exception.normalize(:error, exception)
-    frames = Enum.map(stacktrace, fn(line) ->
-      {mod, function, arity, location} = line
-      file = Keyword.get(location, :file)
-      line_number = Keyword.get(location, :line)
-      %{
-        filename: file && to_string(file),
-        function: Exception.format_mfa(mod, function, arity),
-        module: mod,
-        lineno: line_number,
-      }
-    end)
 
     message = :error
       |> Exception.format_banner(exception)
       |> String.trim("*")
       |> String.trim
-    {m, f, a, _} = List.first(stacktrace)
-    culprit = Exception.format_mfa(m, f, a)
 
     %Event{
-      culprit: culprit,
+      culprit: culprit_from_stacktrace(stacktrace),
       message: message,
       level: "error",
       platform: "elixir",
       exception: [%{type: exception.__struct__, value: Exception.message(exception)}],
       stacktrace: %{
-        frames: frames
+        frames: stacktrace_to_frames(stacktrace)
       },
-      extra: extra
+      extra: extra,
+      tags: tags,
+      user: user,
     }
     |> add_metadata()
     |> Map.put(:request, request)
@@ -128,7 +132,8 @@ defmodule Sentry.Event do
 
   @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
   def transform_logger_stacktrace([], state) do
-    add_metadata(state)
+    %{state | tags: Application.get_env(:sentry, :tags, %{})}
+    |> add_metadata()
   end
 
   @spec transform_logger_stacktrace(any, %Event{}) :: %Event{}
@@ -142,9 +147,27 @@ defmodule Sentry.Event do
     %{state |
      event_id: UUID.uuid4(:hex),
      timestamp: Util.iso8601_timestamp(),
-     tags: Application.get_env(:sentry, :tags, %{}),
      server_name: to_string(:net_adm.localhost)}
   end
+
+  @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
+  def stacktrace_to_frames(stacktrace) do
+    Enum.map(stacktrace, fn(line) ->
+      {mod, function, arity, location} = line
+      file = Keyword.get(location, :file)
+      line_number = Keyword.get(location, :line)
+      %{
+        filename: file && to_string(file),
+        function: Exception.format_mfa(mod, function, arity),
+        module: mod,
+        lineno: line_number,
+      }
+    end)
+  end
+
+  @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil
+  def culprit_from_stacktrace([]), do: nil
+  def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
 
   ## Private
 
