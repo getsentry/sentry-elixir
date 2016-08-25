@@ -206,5 +206,4 @@ defmodule Sentry.Event do
          vars: %{},
         } | state.stacktrace.frames])
   end
-
 end
