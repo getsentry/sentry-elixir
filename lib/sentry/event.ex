@@ -46,17 +46,6 @@ defmodule Sentry.Event do
     request = Keyword.get(opts, :request, %{})
 
     exception = Exception.normalize(:error, exception)
-    frames = Enum.map(stacktrace, fn(line) ->
-      {mod, function, arity, location} = line
-      file = Keyword.get(location, :file)
-      line_number = Keyword.get(location, :line)
-      %{
-        filename: file && to_string(file),
-        function: Exception.format_mfa(mod, function, arity),
-        module: mod,
-        lineno: line_number,
-      }
-    end)
 
     message = :error
       |> Exception.format_banner(exception)
@@ -75,7 +64,7 @@ defmodule Sentry.Event do
       platform: "elixir",
       exception: [%{type: exception.__struct__, value: Exception.message(exception)}],
       stacktrace: %{
-        frames: frames
+        frames: stacktrace_to_frames(stacktrace)
       },
       extra: extra,
       tags: tags,
@@ -164,6 +153,21 @@ defmodule Sentry.Event do
      event_id: UUID.uuid4(:hex),
      timestamp: Util.iso8601_timestamp(),
      server_name: to_string(:net_adm.localhost)}
+  end
+
+  @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
+  def stacktrace_to_frames(stacktrace) do
+    Enum.map(stacktrace, fn(line) ->
+      {mod, function, arity, location} = line
+      file = Keyword.get(location, :file)
+      line_number = Keyword.get(location, :line)
+      %{
+        filename: file && to_string(file),
+        function: Exception.format_mfa(mod, function, arity),
+        module: mod,
+        lineno: line_number,
+      }
+    end)
   end
 
   ## Private
