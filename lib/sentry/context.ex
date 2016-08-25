@@ -28,6 +28,10 @@ defmodule Sentry.Context do
     |> set_context(@tags_key, map)
   end
 
+  def clear_all do
+    Process.delete(@process_dictionary_key)
+  end
+
   defp get_context do
     Process.get(@process_dictionary_key) || %{}
   end
