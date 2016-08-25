@@ -52,13 +52,8 @@ defmodule Sentry.Event do
       |> String.trim("*")
       |> String.trim
 
-    culprit = case List.first(stacktrace) do
-      {m, f, a, _} -> Exception.format_mfa(m, f, a)
-      nil -> nil
-    end
-
     %Event{
-      culprit: culprit,
+      culprit: culprit_from_stacktrace(stacktrace),
       message: message,
       level: "error",
       platform: "elixir",
@@ -170,6 +165,10 @@ defmodule Sentry.Event do
     end)
   end
 
+  @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil
+  def culprit_from_stacktrace([]), do: nil
+  def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
+
   ## Private
 
   defp transform_first_stacktrace_line([message|t], state) do
@@ -207,4 +206,5 @@ defmodule Sentry.Event do
          vars: %{},
         } | state.stacktrace.frames])
   end
+
 end
