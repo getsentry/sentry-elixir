@@ -33,6 +33,8 @@ defmodule Sentry.Plug do
 
       use Sentry.Plug, scrubber: {MyModule, :scrub_params}
 
+  *Please Note*: If your are sending large files you will want to scrub them out.
+
   ### Headers Scrubber
 
   By default we will scrub Authorization and Authentication headers from all requests before sending them. 
