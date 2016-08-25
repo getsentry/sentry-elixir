@@ -54,19 +54,13 @@ defmodule Sentry.Event do
       |> String.trim("*")
       |> String.trim
 
-    release = case Application.fetch_env(:sentry, :release) do
-      {:ok, r} -> r
-      :error -> nil
-    end
+    release = Application.get_env(:sentry, :release)
 
-    server_name = case Application.fetch_env(:sentry, :server_name) do
-      {:ok, r} -> r
-      :error -> nil
-    end
+    server_name = Application.get_env(:sentry, :server_name)
 
     env = case Application.fetch_env(:sentry, :environment_name) do
       {:ok, e} -> e
-      :error -> System.get_env("MIX_ENV")
+      :error -> System.get_env("MIX_ENV") |> String.to_existing_atom()
     end
 
     %Event{
