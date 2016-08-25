@@ -29,7 +29,6 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.0", optional: true},
       {:fuse, git: "https://github.com/jlouis/fuse.git", tag: "v2.4.0"},
 
-
       {:ex_doc, "~> 0.13.0", only: :dev},
       {:credo, "~> 0.4", only: [:dev, :test]},
       {:bypass, "~> 0.5.1", only: [:test]}
