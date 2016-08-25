@@ -18,7 +18,7 @@ defmodule Sentry.Client do
 
     auth_headers = authorization_headers(public_key, secret_key)
 
-    request(:post, endpoint, auth_headers, event)
+    request(:post, endpoint, auth_headers, Poison.encode!(event))
   end
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
@@ -27,12 +27,12 @@ defmodule Sentry.Client do
       :ok ->
         do_request(method, url, headers, body)
       :blown ->
+        log_api_error(body)
         :error
     end
   end
 
   defp do_request(method, url, headers, body) do
-    body = Poison.encode!(body)
     case :hackney.request(method, url, headers, body, []) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
