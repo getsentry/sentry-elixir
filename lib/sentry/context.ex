@@ -5,8 +5,11 @@ defmodule Sentry.Context do
     the event.
 
     Sentry.Context uses the Process Dictionary to store this state.
-    This imposes some limitations. The state will only exist within the current process,
-    and the context will die with the process.
+    This imposes some limitations. The state will only exist within 
+    the current process, and the context will die with the process.
+
+    For example, if you add context inside your controller and an 
+    error happens in a Task the context won't send.
   """
   @process_dictionary_key :sentry_context
   @user_key :user_context
