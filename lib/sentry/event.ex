@@ -23,9 +23,15 @@ defmodule Sentry.Event do
             user: %{}
 
   @doc """
-  Transforms an exception string to a Sentry event.
+  Transforms an Exception to a Sentry event.
+  ## Options
+    * `:stacktrace` - a list of Exception.stacktrace()
+    * `:extra` - map of extra context
+    * `:user` - map of user context
+    * `:tags` - map of tags context
+    * `:request` - map of request context
   """
-  @spec transform_exception(String.t, Keyword.t) :: %Event{}
+  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
     %{user: user_context, tags: tags_context, extra: extra_context} = Sentry.Context.get_all()
 
