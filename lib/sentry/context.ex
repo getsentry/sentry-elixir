@@ -1,4 +1,13 @@
 defmodule Sentry.Context do
+  @moduledoc """
+    Provides a method to store user, tags, and extra context when an
+    event is reported. The contexts will be fetched and merged into
+    the event.
+
+    Sentry.Context uses the Process Dictionary to store this state.
+    This imposes some limitations. The state will only exist within the current process,
+    and the context will die with the process.
+  """
   @process_dictionary_key :sentry_context
   @user_key :user_context
   @tags_key :tags_context
