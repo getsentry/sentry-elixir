@@ -14,7 +14,9 @@ defmodule Sentry.Event do
             level: "error",
             platform: "elixir",
             server_name: nil,
+            environment: nil,
             exception: nil,
+            release: nil,
             stacktrace: %{
               frames: []
             },
@@ -52,15 +54,33 @@ defmodule Sentry.Event do
       |> String.trim("*")
       |> String.trim
 
+    release = case Application.fetch_env(:sentry, :release) do
+      {:ok, r} -> r
+      :error -> nil
+    end
+
+    server_name = case Application.fetch_env(:sentry, :server_name) do
+      {:ok, r} -> r
+      :error -> nil
+    end
+
+    env = case Application.fetch_env(:sentry, :environment_name) do
+      {:ok, e} -> e
+      :error -> System.get_env("MIX_ENV")
+    end
+
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
       message: message,
       level: "error",
       platform: "elixir",
+      environment: env,
+      server_name: server_name,
       exception: [%{type: exception.__struct__, value: Exception.message(exception)}],
       stacktrace: %{
         frames: stacktrace_to_frames(stacktrace)
       },
+      release: release,
       extra: extra,
       tags: tags,
       user: user,

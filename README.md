@@ -51,3 +51,13 @@ Use this if you'd like to capture all Error messages that the Plug handler might
 ```elixir
 config :logger, backends: [:console, Sentry.Logger]
 ```
+
+## Configuration
+| Key           | Required         | Default      |
+| ------------- | -----------------|--------------|
+| `dsn` | True  | n/a |
+| `environment_name` | False  | `MIX_ENV` |
+| `included_environments` | False  | `~w(prod test dev)` |
+| `tags` | False  | `%{}` |
+| `release` | False  | None |
+| `server_name` | False  | None |

@@ -60,8 +60,12 @@ defmodule Sentry do
   end
 
   def send_event(event = %Event{}) do
-    included_environments = Application.fetch_env!(:sentry, :included_environments)
-    if Application.fetch_env!(:sentry, :environment_name) in included_environments do
+    included_environments = case Application.fetch_env(:sentry, :included_environments) do
+      {:ok, e} -> e
+      :error -> ~w(prod dev test)a
+    end
+
+    if event.environment in included_environments do
       Client.send_event(event)
     else
       {:ok, ""}
