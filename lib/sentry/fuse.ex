@@ -7,4 +7,8 @@ defmodule Sentry.Fuse do
   def install_fuse do
     :fuse.install(:sentry_api, {{:standard, @max_failures, @failure_period}, {:reset, @reset_period}})
   end
+
+  def api_fuse_name do
+    @api_fuse_name
+  end
 end

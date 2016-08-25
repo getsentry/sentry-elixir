@@ -9,7 +9,7 @@ defmodule Sentry.Client do
   end
 
   @moduledoc """
-    Provides basic HTTP client request and response handling for the Sentry API. 
+    Provides basic HTTP client request and response handling for the Sentry API.
   """
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
@@ -23,6 +23,15 @@ defmodule Sentry.Client do
 
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def request(method, url, headers, body) do
+    case :fuse.ask(Sentry.Fuse.api_fuse_name(), :sync) do
+      :ok ->
+        do_request(method, url, headers, body)
+      :blown ->
+        :error
+    end
+  end
+
+  defp do_request(method, url, headers, body) do
     body = Poison.encode!(body)
     case :hackney.request(method, url, headers, body, []) do
       {:ok, 200, _headers, client} ->
@@ -33,11 +42,14 @@ defmodule Sentry.Client do
               |> Map.get("id")
             {:ok, id}
           _ ->
-            Logger.error(fn ->
-              ["Failed to send sentry event.", ?\n, body]
-            end, [skip_sentry: true])
+            log_api_error(body)
         end
-      _ -> :error
+      _ ->
+        log_api_error(body)
+        Sentry.Fuse.api_fuse_name()
+        |> :fuse.melt()
+
+        :error
     end
   end
 
@@ -70,5 +82,11 @@ defmodule Sentry.Client do
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
 
     {endpoint, public_key, secret_key}
+  end
+
+  defp log_api_error(body) do
+    Logger.error(fn ->
+      ["Failed to send sentry event.", ?\n, body]
+    end, [skip_sentry: true])
   end
 end
