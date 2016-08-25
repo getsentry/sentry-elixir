@@ -7,6 +7,8 @@ defmodule Sentry.PlugTest do
     use Plug.ErrorHandler
     use Sentry.Plug
 
+
+    plug Plug.Parsers, parsers: [:multipart]
     plug :match
     plug :dispatch
 
@@ -14,6 +16,12 @@ defmodule Sentry.PlugTest do
       _ = conn
       raise RuntimeError, "Error"
     end
+
+    match "/error_route" do
+      _ = conn
+      raise RuntimeError, "Error"
+    end
+
   end
 
   test "exception makes call to Sentry API" do
@@ -41,7 +49,7 @@ defmodule Sentry.PlugTest do
     |> put_req_cookie("cookie_key", "cookie_value")
     |> put_req_header("accept-language", "en-US")
 
-    request_data = Sentry.Plug.build_request_interface_data(conn)
+    request_data = Sentry.Plug.build_request_interface_data(conn, nil)
 
     assert request_data[:url] =~ ~r/\/error_route$/
     assert request_data[:method] == "GET"
@@ -53,5 +61,30 @@ defmodule Sentry.PlugTest do
     assert is_integer(request_data[:env]["REMOTE_PORT"])
     assert is_binary(request_data[:env]["SERVER_NAME"])
     assert is_integer(request_data[:env]["SERVER_PORT"])
+  end
+
+  test "handles data scrubbing" do
+    conn = conn(:post, "/error_route", %{
+      "hello" => "world",
+      "password" => "test",
+      "cc" => "4242424242424242" })
+    |> put_req_cookie("cookie_key", "cookie_value")
+    |> put_req_header("accept-language", "en-US")
+    |> put_req_header("authorization", "ignorme")
+
+    scrubber = fn conn ->
+      conn.params
+      |> Enum.filter(fn {key, val} -> 
+        !(key in ~w(password passwd secret credit_card) ||
+        Regex.match?(~r/^(?:\d[ -]*?){13,16}$/, val)) # Matches Credit Cards
+      end)
+      |> Enum.into(%{})
+    end
+
+    request_data = Sentry.Plug.build_request_interface_data(conn, scrubber)
+    assert request_data[:method] == "POST"
+    assert request_data[:data] == %{"hello" => "world"}
+    assert request_data[:headers] == %{"cookie" => "cookie_key=cookie_value", "accept-language" => "en-US", "content-type" => "multipart/mixed; charset: utf-8"}
+    assert request_data[:cookies] == %{"cookie_key" => "cookie_value"}
   end
 end
