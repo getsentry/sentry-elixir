@@ -28,9 +28,15 @@ defmodule Sentry.Event do
   @spec transform_exception(String.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
     %{user: user_context, tags: tags_context, extra: extra_context} = Sentry.Context.get_all()
+
     stacktrace = Keyword.get(opts, :stacktrace, [])
     extra = extra_context
             |> Map.merge(Keyword.get(opts, :extra, %{}))
+    user = user_context
+            |> Map.merge(Keyword.get(opts, :user, %{}))
+    tags = Application.get_env(:sentry, :tags, %{})
+            |> Dict.merge(tags_context)
+            |> Dict.merge(Keyword.get(opts, :tags, %{}))
     request = Keyword.get(opts, :request, %{})
 
     exception = Exception.normalize(:error, exception)
@@ -66,8 +72,8 @@ defmodule Sentry.Event do
         frames: frames
       },
       extra: extra,
-      tags: tags_context,
-      user: user_context,
+      tags: tags,
+      user: user,
     }
     |> add_metadata()
     |> Map.put(:request, request)
@@ -136,7 +142,8 @@ defmodule Sentry.Event do
 
   @spec transform_logger_stacktrace([String.t], %Event{}) :: %Event{}
   def transform_logger_stacktrace([], state) do
-    add_metadata(state)
+    %{state | tags: Application.get_env(:sentry, :tags, %{})}
+    |> add_metadata()
   end
 
   @spec transform_logger_stacktrace(any, %Event{}) :: %Event{}
@@ -147,12 +154,9 @@ defmodule Sentry.Event do
 
   @spec add_metadata(%Event{}) :: %Event{}
   def add_metadata(state) do
-    tags = Application.get_env(:sentry, :tags, %{})
-            |> Dict.merge(state.tags)
     %{state |
      event_id: UUID.uuid4(:hex),
      timestamp: Util.iso8601_timestamp(),
-     tags: tags,
      server_name: to_string(:net_adm.localhost)}
   end
 

@@ -46,7 +46,8 @@ defmodule Sentry.Context do
   end
 
   defp set_context(current, key, new) when is_map(current) and is_map(new) do
-    merged_context = Map.get(current, key, %{})
+    merged_context = current
+                      |> Map.get(key, %{})
                       |> Map.merge(new)
 
     new_context = Map.put(current, key, merged_context)
