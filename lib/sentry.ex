@@ -1,4 +1,6 @@
 defmodule Sentry do
+  use Application
+
   alias Sentry.{Event, Client}
   require Logger
 
@@ -29,6 +31,14 @@ defmodule Sentry do
     See `Sentry.Logger`
 
   """
+  def start(_type, _opts) do
+    children = []
+    opts = [strategy: :one_for_one, name: Sentry.Supervisor]
+
+    Sentry.Fuse.install_fuse()
+
+    Supervisor.start_link(children, opts)
+  end
 
   @doc """
     Parses and submits an exception to Sentry if current environment is in included_environments.
