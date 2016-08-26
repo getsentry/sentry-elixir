@@ -155,6 +155,15 @@ defmodule SentryTest do
     assert Regex.match? ~r/\(UndefinedFunctionError\)|Error in process/, message
   end
 
+  test "fails with RuntimeError without environment_name configured" do
+    assert_raise RuntimeError, fn ->
+      Application.delete_env(:sentry, :environment_name)
+      Sentry.start(nil, nil)
+    end
+
+    Application.put_env(:sentry, :environment_name, :test)
+  end
+
   test "does not crash on unknown error" do
     assert %Sentry.Event{} = Sentry.Event.transform_logger_stacktrace("unknown error of some kind")
   end
