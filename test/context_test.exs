@@ -47,7 +47,7 @@ defmodule Sentry.ContextTest do
 
   test "passing in tags context as option overrides Sentry.Context and Application config" do
     Sentry.Context.set_tags_context(%{"key" => "345", "key1" => "123"})
-    Application.put_env(:sentry, :tags, %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})
+    Application.put_env(:sentry_elixir, :tags, %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})
 
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [tags: %{"key" => "123"}])
@@ -55,7 +55,7 @@ defmodule Sentry.ContextTest do
     assert event.tags == %{"key" => "123", "key1" => "123", "key2" => "1234", "key3" => "12345"}
     assert event.extra == %{}
     assert event.user == %{}
-    Application.put_env(:sentry, :tags, %{})
+    Application.put_env(:sentry_elixir, :tags, %{})
   end
 
   test "passing in user context as option overrides Sentry.Context" do

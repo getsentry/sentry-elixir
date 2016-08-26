@@ -12,7 +12,7 @@ defmodule Sentry do
 
     Add the following to your production config
 
-        config :sentry,
+        config :sentry_elixir,
           dsn: "https://public:secret@app.getsentry.com/1",
           included_environments: [:prod],
           environment_name: :prod,
@@ -71,7 +71,7 @@ defmodule Sentry do
   end
 
   def send_event(event = %Event{}) do
-    included_environments = Application.get_env(:sentry, :included_environments, ~w(prod dev test)a)
+    included_environments = Application.get_env(:sentry_elixir, :included_environments, ~w(prod dev test)a)
 
     if event.environment in included_environments do
       Client.send_event(event)
@@ -81,7 +81,7 @@ defmodule Sentry do
   end
 
   defp check_required_env! do
-    case Application.fetch_env(:sentry, :environment_name) do
+    case Application.fetch_env(:sentry_elixir, :environment_name) do
       {:ok, env} -> env
       :error ->
         case System.get_env("MIX_ENV") do
@@ -89,7 +89,7 @@ defmodule Sentry do
             raise RuntimeError.exception("environment_name not configured")
           system_env ->
             env = String.to_atom(system_env)
-            Application.put_env(:sentry, :environment_name, env)
+            Application.put_env(:sentry_elixir, :environment_name, env)
             env
         end
     end

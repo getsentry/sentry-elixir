@@ -13,7 +13,7 @@ defmodule Sentry.Fuse do
   """
 
   def install_fuse do
-    :fuse.install(:sentry_api, {{:standard, @max_failures, @failure_period}, {:reset, @reset_period}})
+    :fuse.install(@api_fuse_name, {{:standard, @max_failures, @failure_period}, {:reset, @reset_period}})
   end
 
   def api_fuse_name do

@@ -1,6 +1,6 @@
 use Mix.Config
 
-config :sentry,
+config :sentry_elixir,
   included_environments: [:prod]
 
 config :sasl,

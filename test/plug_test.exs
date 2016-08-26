@@ -34,9 +34,9 @@ defmodule Sentry.PlugTest do
      assert conn.method == "POST"
      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
    end
-   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-   Application.put_env(:sentry, :included_environments, [:test])
-   Application.put_env(:sentry, :environment_name, :test)
+   Application.put_env(:sentry_elixir, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+   Application.put_env(:sentry_elixir, :included_environments, [:test])
+   Application.put_env(:sentry_elixir, :environment_name, :test)
 
    assert_raise(RuntimeError, "Error", fn ->
      conn(:get, "/error_route")

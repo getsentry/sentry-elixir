@@ -22,7 +22,7 @@ end
 Setup the application environment in your `config/prod.exs`
 
 ```elixir
-config :sentry,
+config :sentry_elixir,
   dsn: "https://public:secret@app.getsentry.com/1",
   tags: %{
     env: "production"
