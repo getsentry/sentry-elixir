@@ -25,8 +25,8 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.6.1"},
       {:uuid, "~> 1.0"},
       {:poison, "~> 1.5 or ~> 2.0"},
+      {:fuse, "~> 2.4.0"},
       {:plug, "~> 1.0", optional: true},
-      {:fuse, git: "https://github.com/jlouis/fuse.git", tag: "v2.4.0"},
 
       {:ex_doc, "~> 0.13.0", only: :dev},
       {:credo, "~> 0.4", only: [:dev, :test]},
