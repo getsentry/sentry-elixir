@@ -9,6 +9,7 @@ defmodule Sentry.Mixfile do
       description: "An Elixir client for Sentry",
       package: package(),
       deps: deps(),
+      elixirc_paths: elixirc_paths(Mix.env),
       docs: [extras: ["README.md"], main: "README"]
     ]
   end
@@ -43,4 +44,7 @@ defmodule Sentry.Mixfile do
       }
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end
