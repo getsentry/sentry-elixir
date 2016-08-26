@@ -12,10 +12,10 @@ defmodule Sentry.Context do
     error happens in a Task the context won't send.
   """
   @process_dictionary_key :sentry_context
-  @user_key :user_context
-  @tags_key :tags_context
-  @extra_key :extra_context
-  @breadcrumbs_key :breadcrumbs_context
+  @user_key :user
+  @tags_key :tags
+  @extra_key :extra
+  @breadcrumbs_key :breadcrumbs
 
   def get_all do
     context = get_context()

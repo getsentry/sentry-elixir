@@ -11,9 +11,7 @@ defmodule Sentry do
     ### Configuration
 
     Add the following to your production config
-
-        config :sentry_elixir,
-          dsn: "https://public:secret@app.getsentry.com/1",
+config :sentry_elixir, dsn: "https://public:secret@app.getsentry.com/1",
           included_environments: [:prod],
           environment_name: :prod,
           tags: %{
@@ -33,23 +31,19 @@ defmodule Sentry do
   """
 
   @client Application.get_env(:sentry_elixir, :client, Sentry.Client)
+  @use_error_logger Application.get_env(:sentry_elixir, :use_error_logger, false)
 
   def start(_type, _opts) do
     check_required_env!()
     children = []
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
-    Supervisor.start_link(children, opts)
-  end
+    
+    if @use_error_logger do
+      :error_logger.add_report_handler(Sentry.Logger)
+    end
 
-  @doc """
-    Parses and submits an exception to Sentry if current environment is in included_environments.
-  """
-  @spec capture_logger_message(String.t) :: {:ok, String.t} | :error
-  def capture_logger_message(message) do
-    message
-    |> Event.transform_logger_stacktrace()
-    |> send_event()
+    Supervisor.start_link(children, opts)
   end
 
   @doc """

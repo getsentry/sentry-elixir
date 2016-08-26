@@ -44,12 +44,16 @@ use Sentry.Plug
 ```
 
 
-### Use the Logger Backend. 
+### Capture all exception
 
-Use this if you'd like to capture all Error messages that the Plug handler might not.
+Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true. 
+
+This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
 ```elixir
-config :logger, backends: [:console, Sentry.Logger]
+config :sentry_elixir,
+  use_error_logger: true
+
 ```
 
 ## Configuration
@@ -61,3 +65,4 @@ config :logger, backends: [:console, Sentry.Logger]
 | `tags` | False  | `%{}` |
 | `release` | False  | None |
 | `server_name` | False  | None |
+| `use_error_logger` | False  | False |
