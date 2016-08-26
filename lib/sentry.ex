@@ -1,7 +1,7 @@
 defmodule Sentry do
   use Application
 
-  alias Sentry.{Event, Client}
+  alias Sentry.Event
   require Logger
 
 
@@ -31,6 +31,9 @@ defmodule Sentry do
     See `Sentry.Logger`
 
   """
+
+  @client Application.fetch_env!(:sentry_elixir, :client)
+
   def start(_type, _opts) do
     check_required_env!()
     children = []
@@ -72,7 +75,7 @@ defmodule Sentry do
     included_environments = Application.get_env(:sentry_elixir, :included_environments, ~w(prod dev test)a)
 
     if event.environment in included_environments do
-      Client.send_event(event)
+      @client.send_event(event)
     else
       {:ok, ""}
     end
