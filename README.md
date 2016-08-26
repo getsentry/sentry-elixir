@@ -15,7 +15,7 @@ defp application do
 end
 
 defp deps do
-  [{:sentry, "..."}]
+  [{:sentry, "~> 1.0"}]
 end
 ```
 
