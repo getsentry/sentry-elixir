@@ -3,7 +3,7 @@ defmodule Sentry.Mixfile do
 
   def project do
     [
-      app: :sentry,
+      app: :sentry_elixir,
       version: "0.0.2",
       elixir: "~> 1.3",
       description: "An Elixir client for Sentry",
@@ -36,7 +36,6 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      name: :sentry_elixir,
       files: ["lib", "LICENSE", "mix.exs", "README.md"],
       maintainers: ["Stanislav Vishnevskiy", "Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
