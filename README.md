@@ -57,7 +57,7 @@ config :logger, backends: [:console, Sentry.Logger]
 | ------------- | -----------------|--------------|
 | `dsn` | True  | n/a |
 | `environment_name` | False  | `MIX_ENV` |
-| `included_environments` | False  | `~w(prod test dev)` |
+| `included_environments` | False  | `~w(prod test dev)a` |
 | `tags` | False  | `%{}` |
 | `release` | False  | None |
 | `server_name` | False  | None |
