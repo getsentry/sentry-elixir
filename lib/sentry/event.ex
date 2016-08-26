@@ -58,10 +58,7 @@ defmodule Sentry.Event do
 
     server_name = Application.get_env(:sentry, :server_name)
 
-    env = case Application.fetch_env(:sentry, :environment_name) do
-      {:ok, e} -> e
-      :error -> System.get_env("MIX_ENV") |> String.to_existing_atom()
-    end
+    env = Application.get_env(:sentry, :environment_name)
 
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
