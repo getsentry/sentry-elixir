@@ -38,7 +38,7 @@ defmodule Sentry.Mixfile do
   defp package do
     [
       files: ["lib", "LICENSE", "mix.exs", "README.md"],
-      contributors: ["Stanislav Vishnevskiy", "Mitchell Henke", "Jason Stiebs"],
+      maintainers: ["Stanislav Vishnevskiy", "Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
         "github" => "https://github.com/getsentry/sentry_elixir"
