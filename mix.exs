@@ -16,7 +16,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry, []},
-      applications: [:hackney, :uuid, :poison, :logger, :fuse]
+      applications: [:hackney, :uuid, :poison, :logger]
     ]
   end
 
@@ -25,7 +25,6 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.6.1"},
       {:uuid, "~> 1.0"},
       {:poison, "~> 1.5 or ~> 2.0"},
-      {:fuse, "~> 2.4.0"},
       {:plug, "~> 1.0", optional: true},
 
       {:ex_doc, "~> 0.13.0", only: :dev},

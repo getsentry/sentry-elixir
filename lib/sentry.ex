@@ -36,8 +36,6 @@ defmodule Sentry do
     children = []
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
-    Sentry.Fuse.install_fuse()
-
     Supervisor.start_link(children, opts)
   end
 
