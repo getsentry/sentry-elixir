@@ -35,7 +35,7 @@ defmodule Sentry.Client do
     do_try_request(method, url, headers, body, 1)
   end
 
-  defp do_try_request(method, url, headers, body, current_attempt) when current_attempt > @max_attempts do
+  defp do_try_request(_method, _url, _headers, _body, current_attempt) when current_attempt > @max_attempts do
     :error
   end
 
