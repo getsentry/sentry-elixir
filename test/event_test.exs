@@ -36,10 +36,10 @@ defmodule Sentry.EventTest do
   end
 
   test "respects tags in config" do
-    Application.put_env(:sentry_elixir, :tags, %{testing: "tags"})
+    Application.put_env(:sentry, :tags, %{testing: "tags"})
     event = event_generated_by_exception()
     assert event.tags == %{testing: "tags"}
-    Application.put_env(:sentry_elixir, :tags, %{})
+    Application.put_env(:sentry, :tags, %{})
   end
 
   test "respects extra information passed in" do

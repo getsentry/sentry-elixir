@@ -21,7 +21,7 @@ defmodule Sentry.Client do
   """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{} = event) do
-    {endpoint, public_key, secret_key} = parse_dsn!(Application.fetch_env!(:sentry_elixir, :dsn))
+    {endpoint, public_key, secret_key} = parse_dsn!(Application.fetch_env!(:sentry, :dsn))
 
     auth_headers = authorization_headers(public_key, secret_key)
     body = Poison.encode!(event)

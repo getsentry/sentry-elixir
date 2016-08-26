@@ -47,7 +47,7 @@ defmodule Sentry.Event do
             |> Map.merge(Keyword.get(opts, :extra, %{}))
     user = user_context
             |> Map.merge(Keyword.get(opts, :user, %{}))
-    tags = Application.get_env(:sentry_elixir, :tags, %{})
+    tags = Application.get_env(:sentry, :tags, %{})
             |> Dict.merge(tags_context)
             |> Dict.merge(Keyword.get(opts, :tags, %{}))
     request = Keyword.get(opts, :request, %{})
@@ -61,11 +61,11 @@ defmodule Sentry.Event do
       |> String.trim("*")
       |> String.trim
 
-    release = Application.get_env(:sentry_elixir, :release)
+    release = Application.get_env(:sentry, :release)
 
-    server_name = Application.get_env(:sentry_elixir, :server_name)
+    server_name = Application.get_env(:sentry, :server_name)
 
-    env = Application.get_env(:sentry_elixir, :environment_name)
+    env = Application.get_env(:sentry, :environment_name)
 
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
@@ -116,5 +116,4 @@ defmodule Sentry.Event do
   @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil
   def culprit_from_stacktrace([]), do: nil
   def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
-
 end
