@@ -1,6 +1,6 @@
 # sentry
 
-[![Build Status](https://img.shields.io/travis/getsentry/raven-elixir.svg?style=flat)](https://travis-ci.org/getsentry/raven-elixir)
+[![Build Status](https://img.shields.io/travis/getsentry/sentry-elixir.svg?style=flat)](https://travis-ci.org/getsentry/sentry-elixir)
 [![hex.pm version](https://img.shields.io/hexpm/v/sentry.svg?style=flat)](https://hex.pm/packages/sentry)
 
 Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger.
