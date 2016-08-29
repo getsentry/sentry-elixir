@@ -1,7 +1,6 @@
 use Mix.Config
 
 config :sentry_elixir,
-  included_environments: [:prod],
-  client: Sentry.Client
+  included_environments: [:prod]
 
 import_config "#{Mix.env}.exs"

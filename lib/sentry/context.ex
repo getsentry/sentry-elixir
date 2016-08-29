@@ -12,10 +12,10 @@ defmodule Sentry.Context do
     error happens in a Task the context won't send.
   """
   @process_dictionary_key :sentry_context
-  @user_key :user_context
-  @tags_key :tags_context
-  @extra_key :extra_context
-  @breadcrumbs_key :breadcrumbs_context
+  @user_key :user
+  @tags_key :tags
+  @extra_key :extra
+  @breadcrumbs_key :breadcrumbs
 
   def get_all do
     context = get_context()
@@ -66,5 +66,9 @@ defmodule Sentry.Context do
 
     new_context = Map.put(current, key, merged_context)
     Process.put(@process_dictionary_key, new_context)
+  end
+
+  def context_keys do
+    [@breadcrumbs_key, @tags_key, @user_key, @extra_key]
   end
 end
