@@ -1,4 +1,4 @@
 use Mix.Config
 
-config :sentry_elixir,
+config :sentry,
   environment_name: :dev
