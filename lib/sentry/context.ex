@@ -67,4 +67,8 @@ defmodule Sentry.Context do
     new_context = Map.put(current, key, merged_context)
     Process.put(@process_dictionary_key, new_context)
   end
+
+  def context_keys do
+    [@breadcrumbs_key, @tags_key, @user_key, @extra_key]
+  end
 end

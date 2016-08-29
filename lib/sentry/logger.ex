@@ -28,7 +28,7 @@ defmodule Sentry.Logger do
       error_info = message[:error_info]
       context = get_in(message, [:dictionary, :sentry_context]) || %{}
       opts = context 
-        |> Map.take(~w(tags user extra)a) 
+        |> Map.take(Sentry.Context.context_keys) 
         |> Map.to_list()
 
       case error_info do

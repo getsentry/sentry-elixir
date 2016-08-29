@@ -43,8 +43,7 @@ use Plug.ErrorHandler
 use Sentry.Plug
 ```
 
-
-### Capture all exception
+### Capture all Exceptions
 
 Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true. 
 
