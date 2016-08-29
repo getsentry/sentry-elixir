@@ -22,7 +22,8 @@ defmodule Sentry.Event do
             },
             request: %{},
             extra: %{},
-            user: %{}
+            user: %{},
+            breadcrumbs: []
 
   @doc """
   Transforms an Exception to a Sentry event.
@@ -35,7 +36,10 @@ defmodule Sentry.Event do
   """
   @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
-    %{user: user_context, tags: tags_context, extra: extra_context} = Sentry.Context.get_all()
+    %{user: user_context,
+     tags: tags_context,
+     extra: extra_context,
+     breadcrumbs: breadcrumbs_context} = Sentry.Context.get_all()
 
     stacktrace = Keyword.get(opts, :stacktrace, [])
     extra = extra_context
@@ -46,6 +50,8 @@ defmodule Sentry.Event do
             |> Dict.merge(tags_context)
             |> Dict.merge(Keyword.get(opts, :tags, %{}))
     request = Keyword.get(opts, :request, %{})
+    breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
+                  |> Kernel.++(breadcrumbs_context)
 
     exception = Exception.normalize(:error, exception)
 
@@ -75,6 +81,7 @@ defmodule Sentry.Event do
       extra: extra,
       tags: tags,
       user: user,
+      breadcrumbs: breadcrumbs,
     }
     |> add_metadata()
     |> Map.put(:request, request)

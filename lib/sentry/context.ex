@@ -15,6 +15,7 @@ defmodule Sentry.Context do
   @user_key :user_context
   @tags_key :tags_context
   @extra_key :extra_context
+  @breadcrumbs_key :breadcrumbs_context
 
   def get_all do
     context = get_context()
@@ -22,6 +23,7 @@ defmodule Sentry.Context do
       user: Map.get(context, @user_key, %{}),
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
+      breadcrumbs: Map.get(context, @breadcrumbs_key, []),
     }
   end
 
@@ -46,6 +48,15 @@ defmodule Sentry.Context do
 
   defp get_context do
     Process.get(@process_dictionary_key) || %{}
+  end
+
+  def add_breadcrumb(map) when is_map(map) do
+    map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
+    current_context = get_context()
+    breadcrumbs = Map.get(current_context, @breadcrumbs_key, [])
+    new_breadcrumbs = breadcrumbs ++ [map]
+    new_context = Map.put(current_context, @breadcrumbs_key, new_breadcrumbs)
+    Process.put(@process_dictionary_key, new_context)
   end
 
   defp set_context(current, key, new) when is_map(current) and is_map(new) do
