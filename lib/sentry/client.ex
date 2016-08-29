@@ -3,6 +3,7 @@ defmodule Sentry.Client do
   require Logger
   @type parsed_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
+  @max_attempts 4
 
   quote do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
@@ -12,27 +13,42 @@ defmodule Sentry.Client do
     Provides basic HTTP client request and response handling for the Sentry API.
   """
 
+  @doc """
+  Starts an unlinked asynchronous task that will attempt to send the event to the Sentry
+  API up to 4 times with exponential backoff.
+
+  The event is dropped if it all retries fail.
+  """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = parse_dsn!(Application.fetch_env!(:sentry_elixir, :dsn))
 
     auth_headers = authorization_headers(public_key, secret_key)
+    body = Poison.encode!(event)
 
-    request(:post, endpoint, auth_headers, Poison.encode!(event))
+    Task.start(fn ->
+      try_request(:post, endpoint, auth_headers, body)
+    end)
   end
 
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
-  def request(method, url, headers, body) do
-    case :fuse.ask(Sentry.Fuse.api_fuse_name(), :sync) do
-      :ok ->
-        do_request(method, url, headers, body)
-      :blown ->
-        log_api_error(body)
-        :error
+  defp try_request(method, url, headers, body) do
+    do_try_request(method, url, headers, body, 1)
+  end
+
+  defp do_try_request(_method, _url, _headers, _body, current_attempt) when current_attempt > @max_attempts do
+    :error
+  end
+
+  defp do_try_request(method, url, headers, body, current_attempt) when current_attempt <= @max_attempts do
+    case request(method, url, headers, body) do
+      {:ok, id} -> {:ok, id}
+      _ ->
+        sleep(current_attempt)
+        do_try_request(method, url, headers, body, current_attempt + 1)
     end
   end
 
-  defp do_request(method, url, headers, body) do
+  defp request(method, url, headers, body) do
     case :hackney.request(method, url, headers, body, []) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
@@ -43,12 +59,10 @@ defmodule Sentry.Client do
             {:ok, id}
           _ ->
             log_api_error(body)
+            :error
         end
       _ ->
         log_api_error(body)
-        Sentry.Fuse.api_fuse_name()
-        |> :fuse.melt()
-
         :error
     end
   end
@@ -88,5 +102,13 @@ defmodule Sentry.Client do
     Logger.error(fn ->
       ["Failed to send sentry event.", ?\n, body]
     end, [skip_sentry: true])
+  end
+
+  defp sleep(attempt_number) do
+    # sleep 2^n seconds
+    :math.pow(attempt_number, 2)
+    |> Kernel.*(1000)
+    |> Kernel.round()
+    |> :timer.sleep()
   end
 end

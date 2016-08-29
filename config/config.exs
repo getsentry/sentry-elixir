@@ -1,10 +1,7 @@
 use Mix.Config
 
 config :sentry_elixir,
-  included_environments: [:prod]
-
-config :sasl,
-  errlog_type: :error,
-  sasl_error_logger: false
+  included_environments: [:prod],
+  client: Sentry.Client
 
 import_config "#{Mix.env}.exs"
