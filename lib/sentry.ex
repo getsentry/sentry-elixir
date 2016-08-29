@@ -32,7 +32,7 @@ defmodule Sentry do
 
   """
 
-  @client Application.fetch_env!(:sentry_elixir, :client)
+  @client Application.get_env(:sentry_elixir, :client, Sentry.Client)
 
   def start(_type, _opts) do
     check_required_env!()
