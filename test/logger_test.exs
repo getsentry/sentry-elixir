@@ -13,8 +13,8 @@ defmodule Sentry.LoggerTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry_elixir, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-    Application.put_env(:sentry_elixir, :included_environments, [:test])
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    Application.put_env(:sentry, :included_environments, [:test])
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->

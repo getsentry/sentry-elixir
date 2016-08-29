@@ -6,7 +6,7 @@ defmodule Sentry.Logger do
     This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
     ```elixir
-    config :sentry_elixir,
+    config :sentry,
       use_error_logger: true
     ```
   """

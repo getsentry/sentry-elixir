@@ -11,7 +11,7 @@ defmodule Sentry do
     ### Configuration
 
     Add the following to your production config
-        config :sentry_elixir, dsn: "https://public:secret@app.getsentry.com/1"
+        config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
           included_environments: [:prod],
           environment_name: :prod,
           tags: %{
@@ -30,8 +30,8 @@ defmodule Sentry do
 
   """
 
-  @client Application.get_env(:sentry_elixir, :client, Sentry.Client)
-  @use_error_logger Application.get_env(:sentry_elixir, :use_error_logger, false)
+  @client Application.get_env(:sentry, :client, Sentry.Client)
+  @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
 
   def start(_type, _opts) do
     check_required_env!()

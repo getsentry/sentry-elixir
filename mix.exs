@@ -40,7 +40,7 @@ defmodule Sentry.Mixfile do
       maintainers: ["Stanislav Vishnevskiy", "Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
-        "github" => "https://github.com/getsentry/sentry_elixir"
+        "github" => "https://github.com/getsentry/sentry-elixir"
       }
     ]
   end

@@ -1,4 +1,4 @@
-# sentry_elixir
+# sentry
 
 [![Build Status](https://img.shields.io/travis/getsentry/raven-elixir.svg?style=flat)](https://travis-ci.org/getsentry/raven-elixir)
 [![hex.pm version](https://img.shields.io/hexpm/v/sentry.svg?style=flat)](https://hex.pm/packages/sentry)
@@ -50,7 +50,7 @@ Use this if you'd like to capture all Error messages that the Plug handler might
 This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
 ```elixir
-config :sentry_elixir,
+config :sentry,
   use_error_logger: true
 
 ```
