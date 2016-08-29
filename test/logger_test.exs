@@ -8,6 +8,7 @@ defmodule Sentry.LoggerTest do
     Bypass.expect bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "RuntimeError"
+      assert body =~ "Unique Error"
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -19,7 +20,7 @@ defmodule Sentry.LoggerTest do
 
     capture_log fn ->
       Task.start( fn ->
-        raise "Error"
+        raise "Unique Error"
       end)
     end
 
