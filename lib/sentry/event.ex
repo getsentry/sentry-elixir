@@ -33,6 +33,7 @@ defmodule Sentry.Event do
     * `:user` - map of user context
     * `:tags` - map of tags context
     * `:request` - map of request context
+    * `:breadcrumbs` - list of breadcrumbs
   """
   @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
