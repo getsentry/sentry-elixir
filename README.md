@@ -40,7 +40,7 @@ try do
   ThisWillError.reall()
 rescue
   my_exception ->
-    Sentry.capture_exception(my_exception)
+    Sentry.capture_exception(my_exception, [stacktrace: System.stacktrace(), extra: %{extra: information}])
 end
 ```
 
