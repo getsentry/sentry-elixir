@@ -10,7 +10,7 @@ defmodule Sentry.Mixfile do
       package: package(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env),
-      docs: [extras: ["README.md"], main: "README"]
+      docs: [extras: ["README.md"], main: "readme"]
     ]
   end
 
