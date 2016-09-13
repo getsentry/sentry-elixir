@@ -44,7 +44,7 @@ rescue
 end
 ```
 
-For optionional settings check the [docs](https://hexdocs.pm/sentry/README.html).
+For optional settings check the [docs](https://hexdocs.pm/sentry/README.html).
 
 ### Setup with Plug or Phoenix
 
