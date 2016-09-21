@@ -5,7 +5,7 @@
 
 The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger.
 
-[Documentation](https://hexdocs.pm/sentry/README.html)
+[Documentation](https://hexdocs.pm/sentry/readme.html)
 
 ## Installation
 
@@ -44,11 +44,11 @@ rescue
 end
 ```
 
-For optional settings check the [docs](https://hexdocs.pm/sentry/README.html).
+For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 
 ### Setup with Plug or Phoenix
 
-In your router add the following lines
+In your router add the following lines:
 
 ```elixir
 use Plug.ErrorHandler
