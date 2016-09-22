@@ -27,7 +27,7 @@ defmodule Sentry.Plug do
 
   Then pass it into Sentry.Plug
 
-      use Sentry.Plug, scrubber: scrub_params\1
+      use Sentry.Plug, scrubber: &scrub_params/1
 
   You can also pass it in as a `{module, fun}` like so
 
