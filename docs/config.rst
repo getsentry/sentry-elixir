@@ -22,7 +22,7 @@ Required settings
 
 .. describe:: environment_name
 
-  The name of the environment, this defaults to the `MIX_ENV` environment variable.
+  The name of the environment, this defaults to the ``MIX_ENV`` environment variable.
 
 .. describe:: dsn
 
@@ -33,7 +33,7 @@ Optional settings
 
 .. describe:: included_environments
 
-  The list of environments you want to send reports to sentry, this defaults to `~w(prod test dev)a`.
+  The list of environments you want to send reports to sentry, this defaults to ``~w(prod test dev)a``.
 
 .. describe:: tags
 
