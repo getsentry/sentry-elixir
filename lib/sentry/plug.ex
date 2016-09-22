@@ -18,7 +18,7 @@ defmodule Sentry.Plug do
       def scrub_params(conn) do
         conn.params # Make sure the params have been fetched.
         |> Map.to_list
-        |> Enum.filter(fn ({key, val} -> 
+        |> Enum.filter(fn ({key, val}) -> 
           key in ~w(password passwd secret credit_card) ||
           Regex.match?(~r/^(?:\d[ -]*?){13,16}$r/, val) # Matches Credit Cards
         end)
