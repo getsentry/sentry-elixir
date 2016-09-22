@@ -24,7 +24,7 @@ Required settings
 
   The name of the environment, this defaults to the `MIX_ENV` environment variable.
 
-.. describe:: DSN
+.. describe:: dsn
 
   The DSN provided by Sentry.
 
