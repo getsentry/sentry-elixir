@@ -79,10 +79,6 @@ Sentry supports capturing breadcrumbs -- events that happened prior to an issue.
 breadcrumbs are per-process, if a process dies it might lose its context.
 
 .. code-block:: elixir
+
   Sentry.Context.add_breadcrumb(%{my: "crumb"})
-
-
-
-Filtering Out Errors
---------------------
 

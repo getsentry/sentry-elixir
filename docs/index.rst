@@ -18,6 +18,7 @@ Installation
 Edit your mix.exs file to add it as a dependency and add the `:sentry` package to your applications:
 
 .. code-block:: elixir
+
   defp application do
    [applications: [:sentry, :logger]]
   end
@@ -32,6 +33,7 @@ Configuration
 Setup the application production environment in your `config/prod.exs`
 
 .. code-block:: elixir
+
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1",
     tags: %{
@@ -42,6 +44,7 @@ Setup the application production environment in your `config/prod.exs`
 If using an environment with Plug or Phoenix add the following to your router: 
 
 .. code-block:: elixir
+
   use Plug.ErrorHandler
   use Sentry.Plug
 
@@ -54,6 +57,7 @@ case. When setting a context we store that context in the process dictionary, wh
 new process and it fails you might lose your context. That said using the context is simple:
 
 .. code-block:: elixir
+
   # sets the logged in user
   Sentry.Context.set_user_context(%{email: "foo@example.com"})
 
@@ -65,7 +69,6 @@ new process and it fails you might lose your context. That said using the contex
 
   # adds an breadcrumb to the request to help debug
   Sentry.Context.add_breadcrumb(%{my: "crumb"})
-```
 
 Deep Dive
 ---------
