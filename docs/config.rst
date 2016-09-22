@@ -3,13 +3,14 @@ Configuration
 
 Configuration is handled using the standard elixir configuration.
 
-Simply add configuration to the `:sentry` key in the file `config/prod.exs`: 
+Simply add configuration to the `:sentry` key in the file `config/prod.exs`:
+
 .. code-block:: elixir
 
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1"
 
-If using an environment with Plug or Phoenix add the following to your router: 
+If using an environment with Plug or Phoenix add the following to your router:
 
 .. code-block:: elixir
 
@@ -18,6 +19,7 @@ If using an environment with Plug or Phoenix add the following to your router:
 
 Required settings
 ------------------
+
 .. describe:: environment_name
 
   The name of the environment, this defaults to the `MIX_ENV` environment variable.
@@ -37,7 +39,7 @@ Optional settings
 
   The default tags to send with each report.
 
-.. describe:: release 
+.. describe:: release
 
   The release to send to sentry with each report. This defaults to nothing.
 

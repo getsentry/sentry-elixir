@@ -38,7 +38,7 @@ Setup the application production environment in your ``config/prod.exs``
     dsn: "https://public:secret@app.getsentry.com/1",
     tags: %{
       env: "production"
-      },
+    },
     included_environments: ~w(prod)
 
 If using an environment with Plug or Phoenix add the following to your router:
