@@ -19,7 +19,8 @@ Otherwise we provide a simple way to capture exceptions:
     end
 
 
-Optional Attributes -------------------
+Optional Attributes
+-------------------
 
 With calls to ``capture_exception`` additional data can be supplied as a keyword list:
 
