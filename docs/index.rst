@@ -81,7 +81,6 @@ Want more?  Have a look at the full documentation for more information.
 
    usage
    config
-   integrations/index
 
 Resources:
 
