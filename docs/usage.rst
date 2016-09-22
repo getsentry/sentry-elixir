@@ -1,8 +1,6 @@
 Usage
 =====
 
-To use simply follow the :doc:`installation guide <installation>`.
-
 Capturing Errors
 ----------------
 
