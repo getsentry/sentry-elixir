@@ -90,7 +90,7 @@ $ pip install sphinx
 Once Sphinx is available building the docs is simply:
 
 ```
-$ cd docs && make html
+$ make docs
 ```
 
 You can then view the docs in your browser:
