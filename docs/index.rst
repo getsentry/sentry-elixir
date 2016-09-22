@@ -15,7 +15,7 @@ The Elixir SDK for Sentry.
 Installation
 ------------
 
-Edit your mix.exs file to add it as a dependency and add the `:sentry` package to your applications:
+Edit your mix.exs file to add it as a dependency and add the ``:sentry`` package to your applications:
 
 .. code-block:: elixir
 
@@ -30,7 +30,7 @@ Edit your mix.exs file to add it as a dependency and add the `:sentry` package t
 Configuration
 -------------
 
-Setup the application production environment in your `config/prod.exs`
+Setup the application production environment in your ``config/prod.exs``
 
 .. code-block:: elixir
 
@@ -41,7 +41,7 @@ Setup the application production environment in your `config/prod.exs`
       },
     included_environments: ~w(prod)
 
-If using an environment with Plug or Phoenix add the following to your router: 
+If using an environment with Plug or Phoenix add the following to your router:
 
 .. code-block:: elixir
 
@@ -52,7 +52,7 @@ If using an environment with Plug or Phoenix add the following to your router:
 Adding Context
 --------------
 
-Sentry allows a user to provide context to all error reports, Elixir being multi-process makes this a special 
+Sentry allows a user to provide context to all error reports, Elixir being multi-process makes this a special
 case. When setting a context we store that context in the process dictionary, which means if you spin up a
 new process and it fails you might lose your context. That said using the context is simple:
 
