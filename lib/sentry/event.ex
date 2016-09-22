@@ -34,6 +34,7 @@ defmodule Sentry.Event do
     * `:tags` - map of tags context
     * `:request` - map of request context
     * `:breadcrumbs` - list of breadcrumbs
+    * `:level` - error level
   """
   @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
   def transform_exception(exception, opts) do
@@ -55,6 +56,8 @@ defmodule Sentry.Event do
     breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
                   |> Kernel.++(breadcrumbs_context)
 
+    level = Keyword.get(opts, :level, "error")
+
     exception = Exception.normalize(:error, exception)
 
     message = :error
@@ -71,7 +74,7 @@ defmodule Sentry.Event do
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
       message: message,
-      level: "error",
+      level: level,
       platform: "elixir",
       environment: env,
       server_name: server_name,

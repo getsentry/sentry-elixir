@@ -5,7 +5,7 @@
 
 The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger.
 
-[Documentation](https://hexdocs.pm/sentry/README.html)
+[Documentation](https://hexdocs.pm/sentry/readme.html)
 
 ## Installation
 
@@ -44,11 +44,11 @@ rescue
 end
 ```
 
-For optional settings check the [docs](https://hexdocs.pm/sentry/README.html).
+For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 
 ### Setup with Plug or Phoenix
 
-In your router add the following lines
+In your router add the following lines:
 
 ```elixir
 use Plug.ErrorHandler
@@ -57,7 +57,7 @@ use Sentry.Plug
 
 ### Capture all Exceptions
 
-This library comes with an extension to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true. 
+This library comes with an extension to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true.
 
 This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
@@ -72,12 +72,32 @@ config :sentry,
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
 | `environment_name` | False  | `MIX_ENV` | |
-| `included_environments` | False  | `~w(prod test dev)a` | If you need non-standard mix env names you *need* to include it here | 
-| `tags` | False  | `%{}` | | 
+| `included_environments` | False  | `~w(prod test dev)a` | If you need non-standard mix env names you *need* to include it here |
+| `tags` | False  | `%{}` | |
 | `release` | False  | None | |
-| `server_name` | False  | None | | 
+| `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
 
+
+## Docs
+
+To build the docs locally, you'll need the [Sphinx](http://www.sphinx-doc.org/en/stable/):
+
+```
+$ pip install sphinx
+```
+
+Once Sphinx is available building the docs is simply:
+
+```
+$ make docs
+```
+
+You can then view the docs in your browser:
+
+```
+$ open docs/_build/html/index.html
+```
 
 ## License
 

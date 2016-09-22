@@ -1,0 +1,15 @@
+{
+  "support_level": "production",
+  "platforms": {
+    "elixir": {
+      "name": "Elixir",
+      "type": "language",
+      "doc_link": "",
+      "wizard": [
+        "index#installation",
+        "index#configuration",
+        "usage#capturing-errors"
+      ]
+    }
+  }
+}
