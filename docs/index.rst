@@ -39,7 +39,7 @@ Setup the application production environment in your ``config/prod.exs``
     tags: %{
       env: "production"
     },
-    included_environments: ~w(prod)
+    included_environments: ~w(prod)a
 
 If using an environment with Plug or Phoenix add the following to your router:
 
