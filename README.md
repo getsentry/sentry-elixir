@@ -78,6 +78,40 @@ config :sentry,
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
 
+## Testing Your Configuration
+
+To ensure you've set up your configuration correctly we recommend running the
+included mix task.  It can be tested on different Mix environments and will tell you if it is not currently configured to send events in that environment:
+
+```bash
+$ MIX_ENV=dev mix sentry.send_test_event
+Client configuration:
+server: https://sentry.io/
+public_key: public
+secret_key: secret
+included_environments: [:prod]
+current environment_name: :dev
+
+:dev is not in [:prod] so no test event will be sent
+
+$ MIX_ENV=prod mix sentry.send_test_event
+Client configuration:
+server: https://sentry.io/
+public_key: public
+secret_key: secret
+included_environments: [:prod]
+current environment_name: :prod
+
+Sending test event!
+```
+
+A couple of things to note:
+
+* This won't test your environment configuration. The test CLI forces your
+  configuration to represent itself as if it were running in the production env.
+* If you're running within Rails (or anywhere else that will bootstrap the
+  rake environment), you should be able to omit the DSN argument.
+
 
 ## Docs
 
