@@ -5,7 +5,7 @@ defmodule Sentry.ClientTest do
 
   test "authorization" do
     {_endpoint, public_key, private_key} = Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
-    assert Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/1.0.0, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret/
+    assert Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret/
   end
 
   test "parning dsn" do
