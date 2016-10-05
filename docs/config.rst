@@ -59,6 +59,7 @@ To ensure you've set up your configuration correctly we recommend running the
 included mix task.  It can be tested on different Mix environments and will tell you if it is not currently configured to send events in that environment:
 
 .. code-block:: bash
+
   $ MIX_ENV=dev mix sentry.send_test_event
   Client configuration:
   server: https://sentry.io/
