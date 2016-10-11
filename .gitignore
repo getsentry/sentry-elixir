@@ -3,3 +3,4 @@
 erl_crash.dump
 *.ez
 /docs/_build
+.DS_Store
