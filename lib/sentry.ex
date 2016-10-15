@@ -79,14 +79,9 @@ defmodule Sentry do
     case Application.fetch_env(:sentry, :environment_name) do
       {:ok, env} -> env
       :error ->
-        case System.get_env("MIX_ENV") do
-          nil ->
-            raise RuntimeError.exception("environment_name not configured")
-          system_env ->
-            env = String.to_atom(system_env)
-            Application.put_env(:sentry, :environment_name, env)
-            env
-        end
+        env = Mix.env
+        Application.put_env(:sentry, :environment_name, env)
+        env
     end
   end
 end
