@@ -1,5 +1,5 @@
 defmodule Sentry.LoggerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
   import ExUnit.CaptureLog
 
   test "exception makes call to Sentry API" do

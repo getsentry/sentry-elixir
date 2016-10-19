@@ -71,7 +71,7 @@ config :sentry,
 | Key           | Required         | Default      | Notes |
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
-| `environment_name` | False  | `MIX_ENV` | |
+| `environment_name` | False  | `:dev` | |
 | `included_environments` | False  | `~w(prod test dev)a` | If you need non-standard mix env names you *need* to include it here |
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |

@@ -22,7 +22,7 @@ Required settings
 
 .. describe:: environment_name
 
-  The name of the environment, this defaults to the ``MIX_ENV`` environment variable.
+  The name of the environment, this defaults to the ``:dev`` environment variable.
 
 .. describe:: dsn
 
