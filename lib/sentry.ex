@@ -34,7 +34,6 @@ defmodule Sentry do
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
 
   def start(_type, _opts) do
-    check_required_env!()
     children = []
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
@@ -66,27 +65,13 @@ defmodule Sentry do
   end
 
   def send_event(event = %Event{}) do
-    included_environments = Application.get_env(:sentry, :included_environments, ~w(prod dev test)a)
+    included_environments = Application.get_env(:sentry, :included_environments)
+    environment_name = Application.get_env(:sentry, :environment_name)
 
-    if event.environment in included_environments do
+    if environment_name in included_environments do
       @client.send_event(event)
     else
       {:ok, ""}
-    end
-  end
-
-  defp check_required_env! do
-    case Application.fetch_env(:sentry, :environment_name) do
-      {:ok, env} -> env
-      :error ->
-        case System.get_env("MIX_ENV") do
-          nil ->
-            raise RuntimeError.exception("environment_name not configured")
-          system_env ->
-            env = String.to_atom(system_env)
-            Application.put_env(:sentry, :environment_name, env)
-            env
-        end
     end
   end
 end
