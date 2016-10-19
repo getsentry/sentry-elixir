@@ -15,7 +15,6 @@ defmodule Sentry.LoggerTest do
     end
 
     Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-    Application.put_env(:sentry, :included_environments, [:test])
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->
