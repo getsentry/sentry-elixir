@@ -21,7 +21,7 @@ defp deps do
 end
 ```
 
-Setup the application environment in your `config/prod.exs`
+Setup the application environment in your `config/conf.exs` you may overload these values or add additional values in other environment files.
 
 ```elixir
 config :sentry,
