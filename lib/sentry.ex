@@ -49,7 +49,7 @@ defmodule Sentry do
   environment variable. If that variable does not exist, we default to `"development"`.
   Now, on our servers, we can set the environment variable appropriately. On
   our local development machines, exceptions will never be sent, because the
-  default value is not in the list of `include_environments`.
+  default value is not in the list of `included_environments`.
 
   ## Capturing Exceptions
 

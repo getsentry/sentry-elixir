@@ -21,15 +21,50 @@ defp deps do
 end
 ```
 
-Setup the application environment in your `config/prod.exs`
+An example production config might look like this:
 
 ```elixir
 config :sentry,
   dsn: "https://public:secret@app.getsentry.com/1",
+  environment_name: :prod,
+  included_environments: [:prod],
   tags: %{
     env: "production"
   }
 ```
+
+The environment
+
+The `environment_name` and `included_environments` work together to determine
+if and when Sentry should record exceptions. The `environment_name` is the
+name of the current environment. In the example above, we have explicitly set
+the environment to `:prod` which works well if you are inside an environment
+specific configuration like `config/prod.exs`.
+
+Alternatively, you could use Mix.env in your general configuration file:
+
+```elixir
+config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+  included_environments: [:prod],
+  environment_name: Mix.env
+```
+
+You can even rely on more custom determinations of the environment name. It's
+not uncommmon for most applications to have a "staging" environment. In order
+to handle this without adding an additional Mix environment, you can set an
+environment variable that determines the release level.
+
+```elixir
+config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+  included_environments: ~w(production staging),
+  environment_name: System.get_env("RELEASE_LEVEL") || "development"
+```
+
+In this example, we are getting the environment name from the `RELEASE_LEVEL`
+environment variable. If that variable does not exist, we default to `"development"`.
+Now, on our servers, we can set the environment variable appropriately. On
+our local development machines, exceptions will never be sent, because the
+default value is not in the list of `included_environments`.
 
 ### Capture Exceptions
 
