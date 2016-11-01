@@ -5,10 +5,11 @@ defmodule Sentry.PlugTest do
   defmodule ExampleApp do
     use Plug.Router
     use Plug.ErrorHandler
-    use Sentry.Plug
+    use Sentry.Plug, request_id_header: "x-request-id"
 
 
     plug Plug.Parsers, parsers: [:multipart]
+    plug Plug.RequestId
     plug :match
     plug :dispatch
 
@@ -49,7 +50,7 @@ defmodule Sentry.PlugTest do
     |> put_req_cookie("cookie_key", "cookie_value")
     |> put_req_header("accept-language", "en-US")
 
-    request_data = Sentry.Plug.build_request_interface_data(conn, nil)
+    request_data = Sentry.Plug.build_request_interface_data(conn, [])
 
     assert request_data[:url] =~ ~r/\/error_route$/
     assert request_data[:method] == "GET"
@@ -81,10 +82,18 @@ defmodule Sentry.PlugTest do
       |> Enum.into(%{})
     end
 
-    request_data = Sentry.Plug.build_request_interface_data(conn, scrubber)
+    request_data = Sentry.Plug.build_request_interface_data(conn, scrubber: scrubber)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"hello" => "world"}
     assert request_data[:headers] == %{"cookie" => "cookie_key=cookie_value", "accept-language" => "en-US", "content-type" => "multipart/mixed; charset: utf-8"}
     assert request_data[:cookies] == %{"cookie_key" => "cookie_value"}
+  end
+
+  test "gets request_id" do
+    conn = conn(:get, "/error_route")
+           |> Plug.Conn.put_resp_header("x-request-id", "my_request_id")
+
+    request_data = Sentry.Plug.build_request_interface_data(conn, [request_id_header: "x-request-id"])
+    assert request_data[:env]["REQUEST_ID"] == "my_request_id"
   end
 end
