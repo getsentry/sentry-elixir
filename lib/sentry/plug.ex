@@ -33,29 +33,40 @@ defmodule Sentry.Plug do
 
       use Sentry.Plug, scrubber: {MyModule, :scrub_params}
 
-  *Please Note*: If your are sending large files you will want to scrub them out.
+  *Please Note*: If you are sending large files you will want to scrub them out.
 
   ### Headers Scrubber
 
   By default we will scrub Authorization and Authentication headers from all requests before sending them. 
 
+  ### Including Request Identifiers
+
+  If you're using Phoenix, Plug.RequestId, or another method to set a request ID response header, and would like to include that information with errors reported by Sentry.Plug, the `:request_id_header` option allows you to set which header key Sentry should check.  It will default to "x-request-id", which Plug.RequestId (and therefore Phoenix) also default to.
+
+      use Sentry.Plug, request_id_header: "application-request-id"
   """
 
+  @default_plug_request_id_header "x-request-id"
 
 
   defmacro __using__(env) do
     scrubber = Keyword.get(env, :scrubber, nil)
+    request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        request = Sentry.Plug.build_request_interface_data(conn, unquote(scrubber))
+        opts = [scrubber: unquote(scrubber), request_id_header: unquote(request_id_header)]
+        request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request])
       end
     end
   end
 
-  def build_request_interface_data(%Plug.Conn{} = conn, scrubber) do
+  def build_request_interface_data(%Plug.Conn{} = conn, opts) do
+    scrubber = Keyword.get(opts, :scrubber)
+    request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
+
     conn = conn
             |> Plug.Conn.fetch_cookies
             |> Plug.Conn.fetch_query_params
@@ -72,6 +83,7 @@ defmodule Sentry.Plug do
         "REMOTE_PORT" => remote_port(conn.peer),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
+        "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first,
       }
     }
   end

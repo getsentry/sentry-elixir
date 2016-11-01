@@ -94,6 +94,6 @@ defmodule Sentry.PlugTest do
            |> Plug.Conn.put_resp_header("x-request-id", "my_request_id")
 
     request_data = Sentry.Plug.build_request_interface_data(conn, [request_id_header: "x-request-id"])
-    assert request_data[:request_id] == "my_request_id"
+    assert request_data[:env]["REQUEST_ID"] == "my_request_id"
   end
 end
