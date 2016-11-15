@@ -145,7 +145,7 @@ defmodule Sentry.Plug do
       value = cond do
         Enum.member?(@default_scrubbed_param_keys, key) -> @scrubbed_value
         Regex.match?(@credit_card_regex, value) -> @scrubbed_value
-        true -> true
+        true -> value
       end
 
       {key, value}
