@@ -1,4 +1,8 @@
 defmodule Sentry.Plug do
+  @default_scrubbed_param_keys ["password", "passwd", "secret"]
+  @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
+  @scrubbed_value "*********"
+
   @moduledoc """
   Provides basic funcitonality to handle Plug.ErrorHandler
 
@@ -50,7 +54,7 @@ defmodule Sentry.Plug do
 
 
   defmacro __using__(env) do
-    scrubber = Keyword.get(env, :scrubber, nil)
+    scrubber = Keyword.get(env, :scrubber, {__MODULE__, :default_scrubber})
     request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
@@ -74,7 +78,7 @@ defmodule Sentry.Plug do
     %{
       url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
       method: conn.method,
-      data: handle_request_data(conn, scrubber),
+      data: handle_data(conn, scrubber),
       query_string: conn.query_string,
       cookies: conn.req_cookies,
       headers: Enum.into(conn.req_headers, %{}) |> scrub_headers(),
@@ -96,11 +100,11 @@ defmodule Sentry.Plug do
 
   def remote_port({_, port}), do: port
 
-  defp handle_request_data(_conn, nil), do: %{}
-  defp handle_request_data(conn, {module, fun}) do
+  defp handle_data(_conn, nil), do: %{}
+  defp handle_data(conn, {module, fun}) do
     apply(module, fun, [conn])
   end
-  defp handle_request_data(conn, fun) when is_function(fun) do
+  defp handle_data(conn, fun) when is_function(fun) do
     fun.(conn)
   end
 
@@ -108,5 +112,19 @@ defmodule Sentry.Plug do
 
   defp scrub_headers(data) do
     Map.drop(data, ~w(authorization authentication))
+  end
+
+  def default_scrubber(conn) do
+    conn.params
+    |> Enum.map(fn({key, value}) ->
+      value = cond do
+        Enum.member?(@default_scrubbed_param_keys, key) -> @scrubbed_value
+        Regex.match?(@credit_card_regex, value) -> @scrubbed_value
+        true -> true
+      end
+
+      {key, value}
+    end)
+    |> Enum.into(%{})
   end
 end
