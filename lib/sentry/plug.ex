@@ -63,7 +63,7 @@ defmodule Sentry.Plug do
     end
   end
 
-  def build_request_interface_data(%Plug.Conn{} = conn, opts) do
+  def build_request_interface_data(%{__struct__: Plug.Conn} = conn, opts) do
     scrubber = Keyword.get(opts, :scrubber)
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
