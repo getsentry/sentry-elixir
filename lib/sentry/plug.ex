@@ -16,25 +16,24 @@ defmodule Sentry.Plug do
 
   ### Sending Post Body Params
 
-  In order to send post body parameters you need to first scrub them of sensitive information. To
-  do so we ask you to pass a `scrubber` key which accepts a `Plug.Conn` and returns a map with keys 
-  to send. 
+  In order to send post body parameters you should first scrub them of sensitive information. By default,
+  they will be scrubbed with `Sentry.Plug.default_scrubber/1`.  It can be overridden by passing
+  the `scrubber` option, which accepts a `Plug.Conn` and returns a map to send.  Setting `:scrubber` to nil
+  will not send any data back.  If you would like to make use of Sentry's default scrubber behavior in a custom scrubber,
+  it can be called directly.  An example configuration may look like the following:
 
       def scrub_params(conn) do
-        conn.params # Make sure the params have been fetched.
-        |> Map.to_list
-        |> Enum.filter(fn ({key, val}) -> 
-          key in ~w(password passwd secret credit_card) ||
-          Regex.match?(~r/^(?:\d[ -]*?){13,16}$r/, val) # Matches Credit Cards
-        end)
-        |> Enum.into(%{})
+        # Makes use of the default scrubber to avoid sending password and credit card information in plain text.
+        # To also prevent sending our sensitive "my_secret_field" and "other_sensitive_data" fields, we simply drop those keys.
+        Sentry.Plug.default_scrubber(conn)
+        |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
 
-  Then pass it into Sentry.Plug
+  Then pass it into Sentry.Plug:
 
       use Sentry.Plug, scrubber: &scrub_params/1
 
-  You can also pass it in as a `{module, fun}` like so
+  You can also pass it in as a `{module, fun}` like so:
 
       use Sentry.Plug, scrubber: {MyModule, :scrub_params}
 
@@ -42,7 +41,28 @@ defmodule Sentry.Plug do
 
   ### Headers Scrubber
 
-  By default we will scrub Authorization and Authentication headers from all requests before sending them. 
+  By default Sentry will scrub Authorization and Authentication headers from all requests before sending them. It can be
+  configured similarly to the body params scrubber, but is configured with the `:header_scrubber` key.
+
+      def scrub_headers(conn) do
+        # default is: Sentry.Plug.default_header_scrubber(conn)
+        #
+        # We do not want to include Content-Type or User-Agent in reported headers, so we drop them.
+        Enum.into(conn.req_headers, %{})
+        |> Map.drop(["content-type", "user-agent"])
+      end
+
+  Then pass it into Sentry.Plug:
+
+      use Sentry.Plug, header_scrubber: &scrub_headers/1
+
+  It can also be passed in as a `{module, fun}` like so:
+
+      use Sentry.Plug, header_scrubber: {MyModule, :scrub_headers}
+
+  To configure scrubbing body and header data, we can set both configuration keys:
+
+      use Sentry.Plug, header_scrubber: &scrub_headers/1, scrubber: &scrub_params/1
 
   ### Including Request Identifiers
 
