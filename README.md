@@ -13,7 +13,7 @@ To use Sentry with your projects, edit your mix.exs file to add it as a dependen
 
 ```elixir
 defp application do
- [applications: [:sentry, :logger]]
+  [applications: [:sentry, :logger]]
 end
 
 defp deps do
