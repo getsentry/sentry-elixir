@@ -1,5 +1,6 @@
 defmodule Sentry.Plug do
   @default_scrubbed_param_keys ["password", "passwd", "secret"]
+  @default_scrubbed_header_keys ["authorization", "authentication"]
   @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
   @scrubbed_value "*********"
 
@@ -55,11 +56,13 @@ defmodule Sentry.Plug do
 
   defmacro __using__(env) do
     scrubber = Keyword.get(env, :scrubber, {__MODULE__, :default_scrubber})
+    header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
     request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        opts = [scrubber: unquote(scrubber), request_id_header: unquote(request_id_header)]
+        opts = [scrubber: unquote(scrubber), header_scrubber: unquote(header_scrubber),
+                 request_id_header: unquote(request_id_header)]
         request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request])
@@ -69,6 +72,7 @@ defmodule Sentry.Plug do
 
   def build_request_interface_data(%{__struct__: Plug.Conn} = conn, opts) do
     scrubber = Keyword.get(opts, :scrubber)
+    header_scrubber = Keyword.get(opts, :header_scrubber)
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
     conn = conn
@@ -81,7 +85,7 @@ defmodule Sentry.Plug do
       data: handle_data(conn, scrubber),
       query_string: conn.query_string,
       cookies: conn.req_cookies,
-      headers: Enum.into(conn.req_headers, %{}) |> scrub_headers(),
+      headers: handle_data(conn, header_scrubber),
       env: %{
         "REMOTE_ADDR" => remote_address(conn.remote_ip),
         "REMOTE_PORT" => remote_port(conn.peer),
@@ -110,8 +114,9 @@ defmodule Sentry.Plug do
 
   ## TODO also reject too big
 
-  defp scrub_headers(data) do
-    Map.drop(data, ~w(authorization authentication))
+  def default_header_scrubber(conn) do
+    Enum.into(conn.req_headers, %{})
+    |> Map.drop(@default_scrubbed_header_keys)
   end
 
   def default_scrubber(conn) do

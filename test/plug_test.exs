@@ -82,7 +82,7 @@ defmodule Sentry.PlugTest do
       |> Enum.into(%{})
     end
 
-    options = [scrubber: scrubber]
+    options = [scrubber: scrubber, header_scrubber: &Sentry.Plug.default_header_scrubber/1]
     request_data = Sentry.Plug.build_request_interface_data(conn, options)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"hello" => "world"}
