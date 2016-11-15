@@ -82,7 +82,7 @@ defmodule Sentry.PlugTest do
       |> Enum.into(%{})
     end
 
-    options = [scrubber: scrubber, header_scrubber: &Sentry.Plug.default_header_scrubber/1]
+    options = [body_scrubber: scrubber, header_scrubber: &Sentry.Plug.default_header_scrubber/1]
     request_data = Sentry.Plug.build_request_interface_data(conn, options)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"hello" => "world"}
@@ -107,7 +107,7 @@ defmodule Sentry.PlugTest do
       "cc" => "4197-7215-7810-8280",
       "another_cc" => "4197721578108280"})
 
-    request_data = Sentry.Plug.build_request_interface_data(conn, scrubber: &Sentry.Plug.default_scrubber/1)
+    request_data = Sentry.Plug.build_request_interface_data(conn, body_scrubber: &Sentry.Plug.default_body_scrubber/1)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"secret" => "*********", "password" => "*********",
       "passwd" => "*********", "credit_card" => "*********", "cc" => "*********",

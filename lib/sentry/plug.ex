@@ -17,25 +17,25 @@ defmodule Sentry.Plug do
   ### Sending Post Body Params
 
   In order to send post body parameters you should first scrub them of sensitive information. By default,
-  they will be scrubbed with `Sentry.Plug.default_scrubber/1`.  It can be overridden by passing
-  the `scrubber` option, which accepts a `Plug.Conn` and returns a map to send.  Setting `:scrubber` to nil
+  they will be scrubbed with `Sentry.Plug.default_body_scrubber/1`.  It can be overridden by passing
+  the `body_scrubber` option, which accepts a `Plug.Conn` and returns a map to send.  Setting `:body_scrubber` to nil
   will not send any data back.  If you would like to make use of Sentry's default scrubber behavior in a custom scrubber,
   it can be called directly.  An example configuration may look like the following:
 
       def scrub_params(conn) do
-        # Makes use of the default scrubber to avoid sending password and credit card information in plain text.
+        # Makes use of the default body_scrubber to avoid sending password and credit card information in plain text.
         # To also prevent sending our sensitive "my_secret_field" and "other_sensitive_data" fields, we simply drop those keys.
-        Sentry.Plug.default_scrubber(conn)
+        Sentry.Plug.default_body_scrubber(conn)
         |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
 
   Then pass it into Sentry.Plug:
 
-      use Sentry.Plug, scrubber: &scrub_params/1
+      use Sentry.Plug, body_scrubber: &scrub_params/1
 
   You can also pass it in as a `{module, fun}` like so:
 
-      use Sentry.Plug, scrubber: {MyModule, :scrub_params}
+      use Sentry.Plug, body_scrubber: {MyModule, :scrub_params}
 
   *Please Note*: If you are sending large files you will want to scrub them out.
 
@@ -62,7 +62,7 @@ defmodule Sentry.Plug do
 
   To configure scrubbing body and header data, we can set both configuration keys:
 
-      use Sentry.Plug, header_scrubber: &scrub_headers/1, scrubber: &scrub_params/1
+      use Sentry.Plug, header_scrubber: &scrub_headers/1, body_scrubber: &scrub_params/1
 
   ### Including Request Identifiers
 
@@ -75,13 +75,13 @@ defmodule Sentry.Plug do
 
 
   defmacro __using__(env) do
-    scrubber = Keyword.get(env, :scrubber, {__MODULE__, :default_scrubber})
+    body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
     header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
     request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        opts = [scrubber: unquote(scrubber), header_scrubber: unquote(header_scrubber),
+        opts = [body_scrubber: unquote(body_scrubber), header_scrubber: unquote(header_scrubber),
                  request_id_header: unquote(request_id_header)]
         request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
@@ -90,8 +90,8 @@ defmodule Sentry.Plug do
     end
   end
 
-  def build_request_interface_data(%{__struct__: Plug.Conn} = conn, opts) do
-    scrubber = Keyword.get(opts, :scrubber)
+  def build_request_interface_data(%Plug.Conn{} = conn, opts) do
+    body_scrubber = Keyword.get(opts, :body_scrubber)
     header_scrubber = Keyword.get(opts, :header_scrubber)
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
@@ -102,7 +102,7 @@ defmodule Sentry.Plug do
     %{
       url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
       method: conn.method,
-      data: handle_data(conn, scrubber),
+      data: handle_data(conn, body_scrubber),
       query_string: conn.query_string,
       cookies: conn.req_cookies,
       headers: handle_data(conn, header_scrubber),
@@ -139,7 +139,7 @@ defmodule Sentry.Plug do
     |> Map.drop(@default_scrubbed_header_keys)
   end
 
-  def default_scrubber(conn) do
+  def default_body_scrubber(conn) do
     conn.params
     |> Enum.map(fn({key, value}) ->
       value = cond do
