@@ -103,7 +103,7 @@ defmodule Sentry.Client do
   end
 
   defp log_api_error(body) do
-    Logger.error(fn ->
+    Logger.warn(fn ->
       ["Failed to send sentry event.", ?\n, body]
     end)
   end
