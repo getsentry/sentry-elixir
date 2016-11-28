@@ -30,9 +30,10 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
   def maybe_send_event(env_name, included_envs) do
     if env_name in included_envs do
-      Mix.shell.info "Sending test event!"
+      Mix.shell.info "Sending test event..."
       Sentry.capture_exception(RuntimeError.exception("Testing sending Sentry event"))
       |> Task.await()
+      Mix.shell.info "Test event sent!"
     else
       Mix.shell.info "#{inspect env_name} is not in #{inspect included_envs} so no test event will be sent"
     end
