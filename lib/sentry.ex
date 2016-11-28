@@ -1,6 +1,6 @@
 defmodule Sentry do
   use Application
-
+  import Supervisor.Spec
   alias Sentry.Event
   require Logger
 
@@ -66,7 +66,9 @@ defmodule Sentry do
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
 
   def start(_type, _opts) do
-    children = []
+    children = [
+      supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+    ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
 
