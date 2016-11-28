@@ -26,7 +26,7 @@ defmodule Sentry.Client do
     auth_headers = authorization_headers(public_key, secret_key)
     body = Poison.encode!(event)
 
-    Task.start(fn ->
+    Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
     end)
   end
