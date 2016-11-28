@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.0.0
+## master
+
+## 2.0.0 (2016-11-28)
 
 * Enhancements
   * Return a task when sending a Sentry event
