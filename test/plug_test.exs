@@ -50,7 +50,7 @@ defmodule Sentry.PlugTest do
     |> put_req_cookie("cookie_key", "cookie_value")
     |> put_req_header("accept-language", "en-US")
 
-    request_data = Sentry.Plug.build_request_interface_data(conn, [])
+    request_data = Sentry.Plug.build_request_interface_data(conn, [header_scrubber: &Sentry.Plug.default_header_scrubber/1])
 
     assert request_data[:url] =~ ~r/\/error_route$/
     assert request_data[:method] == "GET"
@@ -82,7 +82,8 @@ defmodule Sentry.PlugTest do
       |> Enum.into(%{})
     end
 
-    request_data = Sentry.Plug.build_request_interface_data(conn, scrubber: scrubber)
+    options = [body_scrubber: scrubber, header_scrubber: &Sentry.Plug.default_header_scrubber/1]
+    request_data = Sentry.Plug.build_request_interface_data(conn, options)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"hello" => "world"}
     assert request_data[:headers] == %{"cookie" => "cookie_key=cookie_value", "accept-language" => "en-US", "content-type" => "multipart/mixed; charset: utf-8"}
@@ -95,5 +96,21 @@ defmodule Sentry.PlugTest do
 
     request_data = Sentry.Plug.build_request_interface_data(conn, [request_id_header: "x-request-id"])
     assert request_data[:env]["REQUEST_ID"] == "my_request_id"
+  end
+
+  test "default data scrubbing" do
+    conn = conn(:post, "/error_route", %{
+      "secret" => "world",
+      "password" => "test",
+      "passwd" => "4242424242424242",
+      "credit_card" => "4197 7215 7810 8280",
+      "cc" => "4197-7215-7810-8280",
+      "another_cc" => "4197721578108280"})
+
+    request_data = Sentry.Plug.build_request_interface_data(conn, body_scrubber: &Sentry.Plug.default_body_scrubber/1)
+    assert request_data[:method] == "POST"
+    assert request_data[:data] == %{"secret" => "*********", "password" => "*********",
+      "passwd" => "*********", "credit_card" => "*********", "cc" => "*********",
+      "another_cc" => "*********"}
   end
 end

@@ -1,9 +1,9 @@
 Configuration
 =============
 
-Configuration is handled using the standard elixir configuration.
+Configuration is handled using the standard Elixir configuration.
 
-Simply add configuration to the `:sentry` key in the file `config/prod.exs`:
+Simply add configuration to the ``:sentry`` key in the file ``config/prod.exs``:
 
 .. code-block:: elixir
 

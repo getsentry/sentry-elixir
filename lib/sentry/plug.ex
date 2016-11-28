@@ -1,4 +1,9 @@
 defmodule Sentry.Plug do
+  @default_scrubbed_param_keys ["password", "passwd", "secret"]
+  @default_scrubbed_header_keys ["authorization", "authentication"]
+  @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
+  @scrubbed_value "*********"
+
   @moduledoc """
   Provides basic funcitonality to handle Plug.ErrorHandler
 
@@ -11,33 +16,53 @@ defmodule Sentry.Plug do
 
   ### Sending Post Body Params
 
-  In order to send post body parameters you need to first scrub them of sensitive information. To
-  do so we ask you to pass a `scrubber` key which accepts a `Plug.Conn` and returns a map with keys 
-  to send. 
+  In order to send post body parameters you should first scrub them of sensitive information. By default,
+  they will be scrubbed with `Sentry.Plug.default_body_scrubber/1`.  It can be overridden by passing
+  the `body_scrubber` option, which accepts a `Plug.Conn` and returns a map to send.  Setting `:body_scrubber` to nil
+  will not send any data back.  If you would like to make use of Sentry's default scrubber behavior in a custom scrubber,
+  it can be called directly.  An example configuration may look like the following:
 
       def scrub_params(conn) do
-        conn.params # Make sure the params have been fetched.
-        |> Map.to_list
-        |> Enum.filter(fn ({key, val}) -> 
-          key in ~w(password passwd secret credit_card) ||
-          Regex.match?(~r/^(?:\d[ -]*?){13,16}$r/, val) # Matches Credit Cards
-        end)
-        |> Enum.into(%{})
+        # Makes use of the default body_scrubber to avoid sending password and credit card information in plain text.
+        # To also prevent sending our sensitive "my_secret_field" and "other_sensitive_data" fields, we simply drop those keys.
+        Sentry.Plug.default_body_scrubber(conn)
+        |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
 
-  Then pass it into Sentry.Plug
+  Then pass it into Sentry.Plug:
 
-      use Sentry.Plug, scrubber: &scrub_params/1
+      use Sentry.Plug, body_scrubber: &scrub_params/1
 
-  You can also pass it in as a `{module, fun}` like so
+  You can also pass it in as a `{module, fun}` like so:
 
-      use Sentry.Plug, scrubber: {MyModule, :scrub_params}
+      use Sentry.Plug, body_scrubber: {MyModule, :scrub_params}
 
   *Please Note*: If you are sending large files you will want to scrub them out.
 
   ### Headers Scrubber
 
-  By default we will scrub Authorization and Authentication headers from all requests before sending them. 
+  By default Sentry will scrub Authorization and Authentication headers from all requests before sending them. It can be
+  configured similarly to the body params scrubber, but is configured with the `:header_scrubber` key.
+
+      def scrub_headers(conn) do
+        # default is: Sentry.Plug.default_header_scrubber(conn)
+        #
+        # We do not want to include Content-Type or User-Agent in reported headers, so we drop them.
+        Enum.into(conn.req_headers, %{})
+        |> Map.drop(["content-type", "user-agent"])
+      end
+
+  Then pass it into Sentry.Plug:
+
+      use Sentry.Plug, header_scrubber: &scrub_headers/1
+
+  It can also be passed in as a `{module, fun}` like so:
+
+      use Sentry.Plug, header_scrubber: {MyModule, :scrub_headers}
+
+  To configure scrubbing body and header data, we can set both configuration keys:
+
+      use Sentry.Plug, header_scrubber: &scrub_headers/1, body_scrubber: &scrub_params/1
 
   ### Including Request Identifiers
 
@@ -50,12 +75,14 @@ defmodule Sentry.Plug do
 
 
   defmacro __using__(env) do
-    scrubber = Keyword.get(env, :scrubber, nil)
+    body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
+    header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
     request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        opts = [scrubber: unquote(scrubber), request_id_header: unquote(request_id_header)]
+        opts = [body_scrubber: unquote(body_scrubber), header_scrubber: unquote(header_scrubber),
+                 request_id_header: unquote(request_id_header)]
         request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request])
@@ -63,8 +90,9 @@ defmodule Sentry.Plug do
     end
   end
 
-  def build_request_interface_data(%{__struct__: Plug.Conn} = conn, opts) do
-    scrubber = Keyword.get(opts, :scrubber)
+  def build_request_interface_data(%Plug.Conn{} = conn, opts) do
+    body_scrubber = Keyword.get(opts, :body_scrubber)
+    header_scrubber = Keyword.get(opts, :header_scrubber)
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
     conn = conn
@@ -74,10 +102,10 @@ defmodule Sentry.Plug do
     %{
       url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
       method: conn.method,
-      data: handle_request_data(conn, scrubber),
+      data: handle_data(conn, body_scrubber),
       query_string: conn.query_string,
       cookies: conn.req_cookies,
-      headers: Enum.into(conn.req_headers, %{}) |> scrub_headers(),
+      headers: handle_data(conn, header_scrubber),
       env: %{
         "REMOTE_ADDR" => remote_address(conn.remote_ip),
         "REMOTE_PORT" => remote_port(conn.peer),
@@ -96,17 +124,32 @@ defmodule Sentry.Plug do
 
   def remote_port({_, port}), do: port
 
-  defp handle_request_data(_conn, nil), do: %{}
-  defp handle_request_data(conn, {module, fun}) do
+  defp handle_data(_conn, nil), do: %{}
+  defp handle_data(conn, {module, fun}) do
     apply(module, fun, [conn])
   end
-  defp handle_request_data(conn, fun) when is_function(fun) do
+  defp handle_data(conn, fun) when is_function(fun) do
     fun.(conn)
   end
 
   ## TODO also reject too big
 
-  defp scrub_headers(data) do
-    Map.drop(data, ~w(authorization authentication))
+  def default_header_scrubber(conn) do
+    Enum.into(conn.req_headers, %{})
+    |> Map.drop(@default_scrubbed_header_keys)
+  end
+
+  def default_body_scrubber(conn) do
+    conn.params
+    |> Enum.map(fn({key, value}) ->
+      value = cond do
+        Enum.member?(@default_scrubbed_param_keys, key) -> @scrubbed_value
+        Regex.match?(@credit_card_regex, value) -> @scrubbed_value
+        true -> value
+      end
+
+      {key, value}
+    end)
+    |> Enum.into(%{})
   end
 end

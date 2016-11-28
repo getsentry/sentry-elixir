@@ -118,6 +118,7 @@ Want more?  Have a look at the full documentation for more information.
 
    usage
    config
+   plug
 
 Resources:
 
