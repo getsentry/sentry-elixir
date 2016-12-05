@@ -10,7 +10,7 @@ defmodule Sentry.Plug do
   #### Usage
 
   Add the following to your router.ex:
-      
+
       use Plug.ErrorLogger
       use Sentry.Plug
 
