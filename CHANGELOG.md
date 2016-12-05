@@ -2,6 +2,11 @@
 
 ## master
 
+## 2.0.1 (2016-12-05)
+
+* Bug Fixes
+  * Fix compilation error when Plug is not available
+
 ## 2.0.0 (2016-11-28)
 
 * Enhancements
