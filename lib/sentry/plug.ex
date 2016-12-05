@@ -1,3 +1,5 @@
+if(Code.ensure_loaded?(Plug), do:
+
 defmodule Sentry.Plug do
   @default_scrubbed_param_keys ["password", "passwd", "secret"]
   @default_scrubbed_header_keys ["authorization", "authentication"]
@@ -152,4 +154,4 @@ defmodule Sentry.Plug do
     end)
     |> Enum.into(%{})
   end
-end
+end)
