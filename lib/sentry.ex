@@ -84,9 +84,12 @@ defmodule Sentry do
   """
   @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
   def capture_exception(exception, opts \\ []) do
-    exception
-    |> Event.transform_exception(opts)
-    |> send_event()
+    filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
+    {source, opts} = Keyword.pop(opts, :event_source)
+    unless(filter_module.exclude_exception?(exception, source)) do
+      Event.transform_exception(exception, opts)
+      |> send_event()
+    end
   end
 
   @doc """
