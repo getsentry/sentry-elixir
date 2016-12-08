@@ -145,8 +145,10 @@ defmodule Sentry.Plug do
     conn.params
     |> Enum.map(fn({key, value}) ->
       value = cond do
-        Enum.member?(@default_scrubbed_param_keys, key) -> @scrubbed_value
-        Regex.match?(@credit_card_regex, value) -> @scrubbed_value
+        Enum.member?(@default_scrubbed_param_keys, key) ->
+          @scrubbed_value
+        is_binary(value) && Regex.match?(@credit_card_regex, value) ->
+          @scrubbed_value
         true -> value
       end
 
