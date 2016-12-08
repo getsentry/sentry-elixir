@@ -54,7 +54,7 @@ defmodule Sentry do
   ## Filtering Exceptions
 
   If you would like to prevent certain exceptions, the :filter configuration option
-  allows you to implement the `Sentry.Filter` behaviour.  The first argument is the
+  allows you to implement the `Sentry.EventFilter` behaviour.  The first argument is the
   source of the event, and the second is the exception to be sent.  `Sentry.Plug`
   will have a source of `:plug`, and `Sentry.Logger` will have a source of `:logger`.
   If an exception does not come from either of those sources, the source will be nil
@@ -65,7 +65,7 @@ defmodule Sentry do
 
       # sentry_event_filter.exs
       defmodule MyApp.SentryEventFilter do
-        @behaviour Sentry.Filter
+        @behaviour Sentry.EventFilter
 
         def exclude_exception?(:plug, %Elixir.Phoenix.Router.NoRouteError{}), do: true
         def exclude_exception?(_, ), do: false
@@ -84,7 +84,7 @@ defmodule Sentry do
       Sentry.capture_exception(other_exception, [source_name: :my_source])
 
   ### Options
-    * `:event_source` - The source passed as the first argument to `Sentry.Filter.exclude_exception?/2`
+    * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
 
   ## Configuring The `Logger` Backend
 
