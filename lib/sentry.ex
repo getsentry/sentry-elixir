@@ -111,11 +111,13 @@ defmodule Sentry do
   @doc """
     Parses and submits an exception to Sentry if current environment is in included_environments.
   """
-  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
+  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error | :excluded
   def capture_exception(exception, opts \\ []) do
     filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
     {source, opts} = Keyword.pop(opts, :event_source)
-    unless(filter_module.exclude_exception?(exception, source)) do
+    if(filter_module.exclude_exception?(exception, source)) do
+      :excluded
+    else
       Event.transform_exception(exception, opts)
       |> send_event()
     end

@@ -18,7 +18,7 @@ defmodule SentryTest do
    Application.put_env(:sentry, :included_environments, [:test])
    Application.put_env(:sentry, :environment_name, :test)
 
-   Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug])
-   Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug])
+   assert {:ok, _} = Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug])
+   assert :excluded = Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug])
   end
 end
