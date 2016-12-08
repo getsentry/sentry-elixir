@@ -71,6 +71,9 @@ With calls to ``capture_exception`` additional data can be supplied as a keyword
             "email" => "clever-girl"
         }
 
+.. describe:: event_source
+
+    The source of the event.  Used by the `Sentry.EventFilter` behaviour.
 
 Breadcrumbs
 -----------
