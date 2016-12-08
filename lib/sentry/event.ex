@@ -50,8 +50,8 @@ defmodule Sentry.Event do
     user = user_context
             |> Map.merge(Keyword.get(opts, :user, %{}))
     tags = Application.get_env(:sentry, :tags, %{})
-            |> Dict.merge(tags_context)
-            |> Dict.merge(Keyword.get(opts, :tags, %{}))
+            |> Map.merge(tags_context)
+            |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = Keyword.get(opts, :request, %{})
     breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
                   |> Kernel.++(breadcrumbs_context)
