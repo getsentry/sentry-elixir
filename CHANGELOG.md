@@ -2,6 +2,9 @@
 
 ## master
 
+* Enhancements
+  * Allow filtering which exceptions are sent via `Sentry.Filter` behaviour
+
 * Bug Fixes
   * Fix usage of deprecated modules
 
