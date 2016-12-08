@@ -2,6 +2,11 @@
 
 ## master
 
+## 2.0.2 (2016-12-08)
+
+* Bug Fixes
+  * Fix regex checking of non-binary values
+
 ## 2.0.1 (2016-12-05)
 
 * Bug Fixes
