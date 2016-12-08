@@ -34,10 +34,12 @@ defmodule Sentry.Logger do
       case error_info do
         {_kind, {exception, stacktrace}, _stack} when is_list(stacktrace) ->
           opts = Keyword.put(opts, :stacktrace, stacktrace)
-          Sentry.capture_exception(exception, opts) 
+          |> Keyword.put(:event_source, :logger)
+          Sentry.capture_exception(exception, opts)
         {_kind, exception, stacktrace} ->
           opts = Keyword.put(opts, :stacktrace, stacktrace)
-          Sentry.capture_exception(exception, opts) 
+          |> Keyword.put(:event_source, :logger)
+          Sentry.capture_exception(exception, opts)
       end
     rescue
       ex ->

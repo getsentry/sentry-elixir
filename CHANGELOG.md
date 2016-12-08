@@ -2,6 +2,9 @@
 
 ## master
 
+* Enhancements
+  * Allow filtering which exceptions are sent via `Sentry.EventFilter` behaviour
+
 * Bug Fixes
   * Fix usage of deprecated modules
 

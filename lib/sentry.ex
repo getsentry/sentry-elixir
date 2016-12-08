@@ -51,11 +51,40 @@ defmodule Sentry do
   our local development machines, exceptions will never be sent, because the
   default value is not in the list of `included_environments`.
 
+  ## Filtering Exceptions
+
+  If you would like to prevent certain exceptions, the :filter configuration option
+  allows you to implement the `Sentry.EventFilter` behaviour.  The first argument is the
+  source of the event, and the second is the exception to be sent.  `Sentry.Plug`
+  will have a source of `:plug`, and `Sentry.Logger` will have a source of `:logger`.
+  If an exception does not come from either of those sources, the source will be nil
+  unless the `:event_source` option is passed to `Sentry.capture_exception/2`
+
+  A configuration like below will prevent sending `Phoenix.Router.NoRouteError` from `Sentry.Plug`, but
+  allows other exceptions to be sent.
+
+      # sentry_event_filter.exs
+      defmodule MyApp.SentryEventFilter do
+        @behaviour Sentry.EventFilter
+
+        def exclude_exception?(:plug, %Elixir.Phoenix.Router.NoRouteError{}), do: true
+        def exclude_exception?(_, ), do: false
+      end
+
+      # config.exs
+      config :sentry, filter: MyApp.SentryEventFilter,
+        included_environments: ~w(production staging),
+        environment_name: System.get_env("RELEASE_LEVEL") || "development"
+
   ## Capturing Exceptions
 
-  Simply calling `capture_exception\2` will send the event.
+  Simply calling `capture_exception/2` will send the event.
 
       Sentry.capture_exception(my_exception)
+      Sentry.capture_exception(other_exception, [source_name: :my_source])
+
+  ### Options
+    * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
 
   ## Configuring The `Logger` Backend
 
@@ -82,11 +111,16 @@ defmodule Sentry do
   @doc """
     Parses and submits an exception to Sentry if current environment is in included_environments.
   """
-  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error
+  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error | :excluded
   def capture_exception(exception, opts \\ []) do
-    exception
-    |> Event.transform_exception(opts)
-    |> send_event()
+    filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
+    {source, opts} = Keyword.pop(opts, :event_source)
+    if(filter_module.exclude_exception?(exception, source)) do
+      :excluded
+    else
+      Event.transform_exception(exception, opts)
+      |> send_event()
+    end
   end
 
   @doc """
