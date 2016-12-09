@@ -121,6 +121,7 @@ A configuration like below will prevent sending ``Phoenix.Router.NoRouteError`` 
 allows other exceptions to be sent.
 
 .. code-block:: elixir
+
   # sentry_event_filter.exs
   defmodule MyApp.SentryEventFilter do
     @behaviour Sentry.EventFilter
