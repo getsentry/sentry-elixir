@@ -108,7 +108,7 @@ new process and it fails you might lose your context. That said using the contex
   Sentry.Context.add_breadcrumb(%{my: "crumb"})
 
 Filtering Events
---------------
+----------------
 
 If you would like to prevent certain exceptions, the :filter configuration option
 allows you to implement the ``Sentry.EventFilter`` behaviour.  The first argument is the
