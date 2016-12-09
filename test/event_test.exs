@@ -32,7 +32,7 @@ defmodule Sentry.EventTest do
       %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 246, module: ExUnit.Runner}])
     }
     assert event.tags == %{}
-    assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z/
+    assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
   end
 
   test "respects tags in config" do
