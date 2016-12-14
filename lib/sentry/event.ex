@@ -41,7 +41,8 @@ defmodule Sentry.Event do
     %{user: user_context,
      tags: tags_context,
      extra: extra_context,
-     breadcrumbs: breadcrumbs_context} = Sentry.Context.get_all()
+     breadcrumbs: breadcrumbs_context,
+     request: request_context} = Sentry.Context.get_all()
 
     stacktrace = Keyword.get(opts, :stacktrace, [])
 
@@ -52,7 +53,8 @@ defmodule Sentry.Event do
     tags = Application.get_env(:sentry, :tags, %{})
             |> Map.merge(tags_context)
             |> Map.merge(Keyword.get(opts, :tags, %{}))
-    request = Keyword.get(opts, :request, %{})
+    request = request_context
+              |> Map.merge(Keyword.get(opts, :request, %{}))
     breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
                   |> Kernel.++(breadcrumbs_context)
 
