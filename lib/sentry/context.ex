@@ -15,6 +15,7 @@ defmodule Sentry.Context do
   @user_key :user
   @tags_key :tags
   @extra_key :extra
+  @request_key :request
   @breadcrumbs_key :breadcrumbs
 
   def get_all do
@@ -23,6 +24,7 @@ defmodule Sentry.Context do
       user: Map.get(context, @user_key, %{}),
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
+      request: Map.get(context, @request_key, %{}),
       breadcrumbs: Map.get(context, @breadcrumbs_key, []),
     }
   end
@@ -40,6 +42,11 @@ defmodule Sentry.Context do
   def set_tags_context(map) when is_map(map) do
     get_context()
     |> set_context(@tags_key, map)
+  end
+
+  def set_http_context(map) when is_map(map) do
+    get_context()
+    |> set_context(@request_key, map)
   end
 
   def clear_all do
