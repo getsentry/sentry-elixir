@@ -4,9 +4,12 @@
 
 * Enhancements
   * Allow filtering which exceptions are sent via `Sentry.EventFilter` behaviour
+  * Add `Sentry.Context.set_http_context/1`
 
 * Bug Fixes
   * Fix usage of deprecated modules
+  * Fix README documentation
+  * Fix timestamp parameter format
 
 ## 2.0.2 (2016-12-08)
 
