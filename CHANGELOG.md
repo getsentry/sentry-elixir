@@ -1,6 +1,6 @@
 # Changelog
 
-## master
+## 2.1.0 (2016-12-17)
 
 * Enhancements
   * Allow filtering which exceptions are sent via `Sentry.EventFilter` behaviour
