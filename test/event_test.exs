@@ -21,7 +21,7 @@ defmodule Sentry.EventTest do
        value: "function Sentry.Event.not_a_function/0 is undefined or private"}
     ]
     assert event.level == "error"
-    assert event.message()== "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
+    assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
     assert is_binary(event.server_name)
     assert event.stacktrace == %{frames: Enum.reverse([
       %{filename: nil, function: "Sentry.Event.not_a_function()", lineno: nil, module: Sentry.Event},

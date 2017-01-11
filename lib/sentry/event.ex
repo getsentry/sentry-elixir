@@ -26,8 +26,10 @@ defmodule Sentry.Event do
             breadcrumbs: []
 
   @doc """
-  Transforms an Exception to a Sentry event.
+  Creates an Event struct out of context collected and options 
   ## Options
+    * `:exception` - expection
+    * `:message` - message
     * `:stacktrace` - a list of Exception.stacktrace()
     * `:extra` - map of extra context
     * `:user` - map of user context
@@ -36,36 +38,32 @@ defmodule Sentry.Event do
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
   """
-  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
-  def transform_exception(exception, opts) do
+  def create_event(opts) do
     %{user: user_context,
-     tags: tags_context,
-     extra: extra_context,
-     breadcrumbs: breadcrumbs_context,
-     request: request_context} = Sentry.Context.get_all()
+      tags: tags_context,
+      extra: extra_context,
+      breadcrumbs: breadcrumbs_context,
+      request: request_context} = Sentry.Context.get_all()
+
+    exception = Keyword.get(opts, :exception)
+
+    message = Keyword.get(opts, :message)
 
     stacktrace = Keyword.get(opts, :stacktrace, [])
 
     extra = extra_context
-            |> Map.merge(Keyword.get(opts, :extra, %{}))
+    |> Map.merge(Keyword.get(opts, :extra, %{}))
     user = user_context
-            |> Map.merge(Keyword.get(opts, :user, %{}))
+    |> Map.merge(Keyword.get(opts, :user, %{}))
     tags = Application.get_env(:sentry, :tags, %{})
-            |> Map.merge(tags_context)
-            |> Map.merge(Keyword.get(opts, :tags, %{}))
+    |> Map.merge(tags_context)
+    |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = request_context
-              |> Map.merge(Keyword.get(opts, :request, %{}))
+    |> Map.merge(Keyword.get(opts, :request, %{}))
     breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
-                  |> Kernel.++(breadcrumbs_context)
+    |> Kernel.++(breadcrumbs_context)
 
     level = Keyword.get(opts, :level, "error")
-
-    exception = Exception.normalize(:error, exception)
-
-    message = :error
-      |> Exception.format_banner(exception)
-      |> String.trim("*")
-      |> String.trim
 
     release = Application.get_env(:sentry, :release)
 
@@ -80,7 +78,7 @@ defmodule Sentry.Event do
       platform: "elixir",
       environment: env,
       server_name: server_name,
-      exception: [%{type: exception.__struct__, value: Exception.message(exception)}],
+      exception: exception,
       stacktrace: %{
         frames: stacktrace_to_frames(stacktrace)
       },
@@ -89,9 +87,37 @@ defmodule Sentry.Event do
       tags: tags,
       user: user,
       breadcrumbs: breadcrumbs,
+      request: request
     }
     |> add_metadata()
-    |> Map.put(:request, request)
+  end
+
+  @doc """
+  Transforms an Exception to a Sentry event.
+  ## Options
+    * `:stacktrace` - a list of Exception.stacktrace()
+    * `:extra` - map of extra context
+    * `:user` - map of user context
+    * `:tags` - map of tags context
+    * `:request` - map of request context
+    * `:breadcrumbs` - list of breadcrumbs
+    * `:level` - error level
+  """
+  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
+  def transform_exception(exception, opts) do
+    exception = Exception.normalize(:error, exception)
+
+    message = :error
+      |> Exception.format_banner(exception)
+      |> String.trim("*")
+      |> String.trim
+
+    exception = [%{type: exception.__struct__, value: Exception.message(exception)}]
+
+    opts
+    |> Keyword.put(:exception, exception)
+    |> Keyword.put(:message, message)
+    |> create_event()
   end
 
   @spec add_metadata(%Event{}) :: %Event{}

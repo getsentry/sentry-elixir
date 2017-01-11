@@ -124,6 +124,17 @@ defmodule Sentry do
   end
 
   @doc """
+  Reports a message to Sentry.
+  """
+  @spec capture_message(String.t, Keyword.t) :: {:ok, String.t} | :error
+  def capture_message(message, opts \\ []) do
+    opts
+    |> Keyword.put(:message, message)
+    |> Event.create_event()
+    |> send_event()
+  end
+
+  @doc """
     Sends a `Sentry.Event`
   """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
