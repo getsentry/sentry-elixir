@@ -13,8 +13,8 @@ defmodule Sentry.ContextTest do
   end
 
   test "storing breadcrumbs appears when generating event" do
-    Sentry.Context.add_breadcrumb(%{"category" => "a category", "message" => "a message"})
-    Sentry.Context.add_breadcrumb(%{"category" => "a category", "message" => "second message"})
+    Sentry.Context.add_breadcrumb(%Sentry.Context.BreadCrumb{category: "a category", message: "a message"})
+    Sentry.Context.add_breadcrumb(%Sentry.Context.BreadCrumb{category: "a category", message: "second message"})
 
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [])
@@ -25,11 +25,11 @@ defmodule Sentry.ContextTest do
     assert event.user == %{}
     assert event.extra == %{}
     assert event.tags == %{}
-    assert first_breadcrumb["category"] == "a category"
-    assert second_breadcrumb["category"] == "a category"
-    assert first_breadcrumb["message"] == "a message"
-    assert second_breadcrumb["message"] == "second message"
-    assert first_breadcrumb["timestamp"] <= second_breadcrumb["timestamp"]
+    assert first_breadcrumb.category == "a category"
+    assert second_breadcrumb.category == "a category"
+    assert first_breadcrumb.message == "a message"
+    assert second_breadcrumb.message == "second message"
+    assert first_breadcrumb.timestamp <= second_breadcrumb.timestamp
   end
 
   test "storing user context appears when generating event" do
