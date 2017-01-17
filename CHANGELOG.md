@@ -1,5 +1,10 @@
 # Changelog
 
+## master
+
+* Enhancements
+  * Allow setting `hackney_opts`
+
 ## 2.1.0 (2016-12-17)
 
 * Enhancements
