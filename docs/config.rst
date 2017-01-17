@@ -57,6 +57,10 @@ Optional settings
   Set this to a module that implements the ``Sentry.EventFilter`` behaviour if you would like to prevent
   certain exceptions from being sent.  See below for further documentation.
 
+.. describe:: hackney_opts
+
+  Sentry uses [hackney](https://github.com/benoitc/hackney).  If you would like to set [options](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for hackney requests, they can be provided via this configuration.
+
 Testing Your Configuration
 --------------------------
 
