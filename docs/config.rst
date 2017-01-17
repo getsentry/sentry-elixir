@@ -59,7 +59,7 @@ Optional settings
 
 .. describe:: hackney_opts
 
-  Sentry uses [hackney](https://github.com/benoitc/hackney).  If you would like to set [options](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for hackney requests, they can be provided via this configuration.
+  Sentry uses `hackney <https://github.com/benoitc/hackney>`_.  If you would like to set `options <https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5>`_ for hackney requests, they can be provided via this configuration.
 
 Testing Your Configuration
 --------------------------
