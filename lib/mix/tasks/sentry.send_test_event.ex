@@ -18,12 +18,14 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     end
 
     environment_name = Application.get_env(:sentry, :environment_name)
+    hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
     Mix.shell.info "Client configuration:"
     Mix.shell.info "server: #{endpoint}"
     Mix.shell.info "public_key: #{public_key}"
     Mix.shell.info "secret_key: #{secret_key}"
     Mix.shell.info "included_environments: #{inspect included_environments}"
-    Mix.shell.info "current environment_name: #{inspect environment_name}\n"
+    Mix.shell.info "current environment_name: #{inspect environment_name}"
+    Mix.shell.info "hackney_opts: #{inspect hackney_opts}\n"
 
     maybe_send_event(environment_name, included_environments)
   end

@@ -48,8 +48,14 @@ defmodule Sentry.Client do
     end
   end
 
+  @doc """
+  Makes the HTTP request to Sentry using hackney.
+
+  Hackney options can be set via the `hackney_opts` configuration option.
+  """
   def request(method, url, headers, body) do
-    case :hackney.request(method, url, headers, body, []) do
+    hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
+    case :hackney.request(method, url, headers, body, hackney_opts) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
           {:ok, body} ->

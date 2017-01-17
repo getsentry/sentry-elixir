@@ -67,6 +67,7 @@ config :sentry,
 | `release` | False  | None | |
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
+| hackney_opts | False  | [] | |
 
 An example production config might look like this:
 
@@ -77,7 +78,8 @@ config :sentry,
   included_environments: [:prod],
   tags: %{
     env: "production"
-  }
+  },
+  hackney_opts: [pool: :my_pool]
 ```
 
 The `environment_name` and `included_environments` work together to determine
@@ -110,6 +112,8 @@ environment variable. If that variable does not exist, we default to `"developme
 Now, on our servers, we can set the environment variable appropriately. On
 our local development machines, exceptions will never be sent, because the
 default value is not in the list of `included_environments`.
+
+Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  If you need to set [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy or different pool, the `hackney_opts` configuration is passed directly to hackney.
 
 ## Testing Your Configuration
 
