@@ -32,7 +32,11 @@ defmodule Sentry.Client do
   end
 
   defp try_request(method, url, headers, body) do
-    do_try_request(method, url, headers, body, 1)
+    try do
+      do_try_request(method, url, headers, body, 1)
+    rescue e ->
+      log_error(inspect(e))
+    end
   end
 
   defp do_try_request(_method, _url, _headers, _body, current_attempt) when current_attempt > @max_attempts do
@@ -64,15 +68,15 @@ defmodule Sentry.Client do
               |> Map.get("id")
             {:ok, id}
           _ ->
-            log_api_error(body)
+            log_error(body)
             :error
         end
       {:ok, status, headers, _client} ->
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
-        log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
+        log_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
         :error
       _ ->
-        log_api_error(body)
+        log_error(body)
         :error
     end
   end
@@ -108,7 +112,7 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
-  defp log_api_error(body) do
+  defp log_error(body) do
     Logger.warn(fn ->
       ["Failed to send sentry event.", ?\n, body]
     end)
