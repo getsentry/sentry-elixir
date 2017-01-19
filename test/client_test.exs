@@ -18,6 +18,17 @@ defmodule Sentry.ClientTest do
       Sentry.Client.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
   end
 
+  test "fetches default dsn_env" do
+    Application.put_env(:sentry, :dsn, @sentry_dsn)
+    assert @sentry_dsn == Sentry.Client.dsn_env
+  end
+
+  test "fetches system dsn_env" do
+    System.put_env("SYSTEM_KEY", @sentry_dsn)
+    Application.put_env(:sentry, :dsn, {:system, "SYSTEM_KEY"})
+    assert @sentry_dsn == Sentry.Client.dsn_env
+  end
+
   test "logs api errors" do
     bypass = Bypass.open
     Bypass.expect bypass, fn conn ->
