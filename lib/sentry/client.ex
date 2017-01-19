@@ -32,7 +32,7 @@ defmodule Sentry.Client do
   end
 
   def dsn_env do
-    case Application.get_env(:sentry, :dsn) do
+    case Application.fetch_env!(:sentry, :dsn) do
       {:system, env_var} -> System.get_env(env_var)
       value -> value
     end
