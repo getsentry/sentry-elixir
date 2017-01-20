@@ -1,7 +1,7 @@
 defmodule Sentry.Client do
   alias Sentry.{Event, Util}
   require Logger
-  @type parsed_dsn :: {String.t, String.t, Integer.t}
+  @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
 
@@ -21,7 +21,7 @@ defmodule Sentry.Client do
   """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{} = event) do
-    {endpoint, public_key, secret_key} = dsn_env |> parse_dsn!
+    {endpoint, public_key, secret_key} = get_dsn!
 
     auth_headers = authorization_headers(public_key, secret_key)
     body = Poison.encode!(event)
@@ -29,13 +29,6 @@ defmodule Sentry.Client do
     Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
     end)
-  end
-
-  def dsn_env do
-    case Application.fetch_env!(:sentry, :dsn) do
-      {:system, env_var} -> System.get_env(env_var)
-      value -> value
-    end
   end
 
   defp try_request(method, url, headers, body) do
@@ -101,18 +94,25 @@ defmodule Sentry.Client do
   end
 
   @doc """
-  Parses a Sentry DSN which is simply a URI.
+  Get a Sentry DSN which is simply a URI.
   """
-  @spec parse_dsn!(String.t) :: parsed_dsn
-  def parse_dsn!(dsn) do
+  @spec get_dsn! :: get_dsn
+  def get_dsn! do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(dsn)
+    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(fetch_dsn)
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
     [_, binary_project_id] = String.split(path, "/")
     project_id = String.to_integer(binary_project_id)
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
 
     {endpoint, public_key, secret_key}
+  end
+
+  defp fetch_dsn do
+    case Application.fetch_env!(:sentry, :dsn) do
+      {:system, env_var} -> System.get_env(env_var)
+      value -> value
+    end
   end
 
   defp log_api_error(body) do

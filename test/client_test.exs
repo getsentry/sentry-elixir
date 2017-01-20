@@ -5,28 +5,25 @@ defmodule Sentry.ClientTest do
   alias Sentry.Client
   @sentry_dsn "https://public:secret@app.getsentry.com/1"
 
+  setup do
+    Application.put_env(:sentry, :dsn, @sentry_dsn)
+  end
+
   test "authorization" do
-    {_endpoint, public_key, private_key} = Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
+    {_endpoint, public_key, private_key} = Client.get_dsn!
     assert Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret/
   end
 
-  test "parsing dsn" do
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-      Sentry.Client.parse_dsn!("https://public:secret@app.getsentry.com/1")
-
-    assert {"http://app.getsentry.com:9000/api/1/store/", "public", "secret"} =
-      Sentry.Client.parse_dsn!("http://public:secret@app.getsentry.com:9000/1")
+  test "get dsn with default config" do
+    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} = Sentry.Client.get_dsn!
   end
 
-  test "fetches default dsn_env" do
-    Application.put_env(:sentry, :dsn, @sentry_dsn)
-    assert @sentry_dsn == Sentry.Client.dsn_env
-  end
-
-  test "fetches system dsn_env" do
+  test "get dsn with system config" do
     System.put_env("SYSTEM_KEY", @sentry_dsn)
     Application.put_env(:sentry, :dsn, {:system, "SYSTEM_KEY"})
-    assert @sentry_dsn == Sentry.Client.dsn_env
+    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} = Sentry.Client.get_dsn!
+
+    System.delete_env("SYSTEM_KEY")
   end
 
   test "logs api errors" do
@@ -35,7 +32,8 @@ defmodule Sentry.ClientTest do
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
-      Plug.Conn.put_resp_header(conn, "X-Sentry-Error", "Creation of this event was denied due to rate limiting.")
+      conn
+      |> Plug.Conn.put_resp_header("X-Sentry-Error", "Creation of this event was denied due to rate limiting.")
       |> Plug.Conn.resp(400, "Something bad happened")
     end
 
