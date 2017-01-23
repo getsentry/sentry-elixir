@@ -52,16 +52,16 @@ defmodule Sentry.Event do
     stacktrace = Keyword.get(opts, :stacktrace, [])
 
     extra = extra_context
-    |> Map.merge(Keyword.get(opts, :extra, %{}))
+            |> Map.merge(Keyword.get(opts, :extra, %{}))
     user = user_context
-    |> Map.merge(Keyword.get(opts, :user, %{}))
+           |> Map.merge(Keyword.get(opts, :user, %{}))
     tags = Application.get_env(:sentry, :tags, %{})
-    |> Map.merge(tags_context)
-    |> Map.merge(Keyword.get(opts, :tags, %{}))
+           |> Map.merge(tags_context)
+           |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = request_context
-    |> Map.merge(Keyword.get(opts, :request, %{}))
+              |> Map.merge(Keyword.get(opts, :request, %{}))
     breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
-    |> Kernel.++(breadcrumbs_context)
+                  |> Kernel.++(breadcrumbs_context)
 
     level = Keyword.get(opts, :level, "error")
 
