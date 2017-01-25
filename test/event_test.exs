@@ -27,9 +27,9 @@ defmodule Sentry.EventTest do
       %{filename: nil, function: "Sentry.Event.not_a_function()", lineno: nil, module: Sentry.Event},
       %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 7, module: Sentry.EventTest},
       %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 14, module: Sentry.EventTest},
-      %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 296, module: ExUnit.Runner},
+      %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner},
       %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer},
-      %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 246, module: ExUnit.Runner}])
+      %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner}])
     }
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
