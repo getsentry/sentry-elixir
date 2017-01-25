@@ -21,7 +21,7 @@ defmodule Sentry.Client do
   """
   @spec send_event(%Event{}) :: {:ok, String.t} | :error
   def send_event(%Event{} = event) do
-    {endpoint, public_key, secret_key} = get_dsn!
+    {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
     body = Poison.encode!(event)
@@ -99,7 +99,7 @@ defmodule Sentry.Client do
   @spec get_dsn! :: get_dsn
   def get_dsn! do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(fetch_dsn)
+    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(fetch_dsn())
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
     [_, binary_project_id] = String.split(path, "/")
     project_id = String.to_integer(binary_project_id)
