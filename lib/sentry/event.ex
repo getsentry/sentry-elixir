@@ -26,7 +26,7 @@ defmodule Sentry.Event do
             breadcrumbs: []
 
   @doc """
-  Creates an Event struct out of context collected and options 
+  Creates an Event struct out of context collected and options
   ## Options
     * `:exception` - expection
     * `:message` - message
