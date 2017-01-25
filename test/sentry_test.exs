@@ -20,5 +20,6 @@ defmodule SentryTest do
 
    assert {:ok, _} = Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug])
    assert :excluded = Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug])
+   assert {:ok, _} = Sentry.capture_message("RuntimeError: error", [event_source: :plug])
   end
 end

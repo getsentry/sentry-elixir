@@ -21,7 +21,7 @@ defmodule Sentry.EventTest do
        value: "function Sentry.Event.not_a_function/0 is undefined or private"}
     ]
     assert event.level == "error"
-    assert event.message()== "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
+    assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
     assert is_binary(event.server_name)
     assert event.stacktrace == %{frames: Enum.reverse([
       %{filename: nil, function: "Sentry.Event.not_a_function()", lineno: nil, module: Sentry.Event},
@@ -45,5 +45,30 @@ defmodule Sentry.EventTest do
   test "respects extra information passed in" do
     event = event_generated_by_exception(%{extra_data: "data"})
     assert event.extra == %{extra_data: "data"}
+  end
+
+  test "create_event works for message" do
+    assert Event.create_event(message: "Test message")
+           |> Map.put(:event_id, nil)
+           |> Map.put(:server_name, nil)
+           |> Map.put(:timestamp, nil)
+    ==
+    %Sentry.Event{
+      breadcrumbs: [],
+      culprit: nil,
+      environment: :test,
+      event_id: nil,
+      exception: nil,
+      extra: %{},
+      level: "error",
+      message: "Test message",
+      platform: "elixir",
+      release: nil,
+      request: %{},
+      server_name: nil,
+      stacktrace: %{frames: []},
+      tags: %{},
+      timestamp: nil,
+      user: %{}}
   end
 end
