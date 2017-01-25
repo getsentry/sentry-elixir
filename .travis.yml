@@ -1,10 +1,9 @@
 language: elixir
-matrix:
-  include:
-    - otp_release: 18.3
-      elixir: 1.4.0
-    - otp_release: 19.1
-      elixir: 1.4.0
+elixir:
+  - 1.4.0
+otp_release:
+  - 18.3
+  - 19.1
 notifications:
   email:
     - mitch@rokkincat.com
