@@ -1,5 +1,5 @@
 defmodule Sentry.EventFilter do
-  @callback exclude_exception?(atom, Exception.t) :: any
+  @callback exclude_exception?(Exception.t, atom) :: any
 end
 
 defmodule Sentry.DefaultEventFilter do
