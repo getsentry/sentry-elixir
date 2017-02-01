@@ -110,9 +110,9 @@ new process and it fails you might lose your context. That said using the contex
 Filtering Events
 ----------------
 
-If you would like to prevent certain exceptions, the :filter configuration option
+If you would like to prevent certain exceptions, the ``:filter`` configuration option
 allows you to implement the ``Sentry.EventFilter`` behaviour.  The first argument is the
-source of the event, and the second is the exception to be sent.  ``Sentry.Plug``
+exception to be sent, and the second is the source of the event.  ``Sentry.Plug``
 will have a source of ``:plug``, and ``Sentry.Logger`` will have a source of ``:logger``.
 If an exception does not come from either of those sources, the source will be nil
 unless the ``:event_source`` option is passed to ``Sentry.capture_exception/2``
@@ -122,12 +122,12 @@ allows other exceptions to be sent.
 
 .. code-block:: elixir
 
-  # sentry_event_filter.exs
+  # sentry_event_filter.ex
   defmodule MyApp.SentryEventFilter do
     @behaviour Sentry.EventFilter
 
-    def exclude_exception?(:plug, %Elixir.Phoenix.Router.NoRouteError{}), do: true
-    def exclude_exception?(_, ), do: false
+    def exclude_exception?(%Elixir.Phoenix.Router.NoRouteError{}, :plug), do: true
+    def exclude_exception?(_exception, _source), do: false
   end
 
   # config.exs
