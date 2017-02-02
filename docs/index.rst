@@ -36,7 +36,7 @@ Setup the application production environment in your ``config/prod.exs``
 
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1",
-    environment_name: :prod
+    environment_name: :prod,
     tags: %{
       env: "production"
     },
