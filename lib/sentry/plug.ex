@@ -97,9 +97,10 @@ defmodule Sentry.Plug do
     header_scrubber = Keyword.get(opts, :header_scrubber)
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
-    conn = conn
-            |> Plug.Conn.fetch_cookies
-            |> Plug.Conn.fetch_query_params
+    conn =
+      conn
+      |> Plug.Conn.fetch_cookies
+      |> Plug.Conn.fetch_query_params
 
     %{
       url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
@@ -118,6 +119,7 @@ defmodule Sentry.Plug do
     }
   end
 
+  def remote_address(address) when is_binary(address), do: address
   def remote_address(address) do
     address
     |> :inet.ntoa()
