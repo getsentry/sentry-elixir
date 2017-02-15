@@ -4,6 +4,11 @@
 
 * Enhancements
   * Allow setting `hackney_opts`
+  * Add `Sentry.capture_message/1`
+  * Allow reading `:dsn` from System at runtime by configuring as `{:system, "ENV_VAR"}`
+
+* Bug Fixes
+  * Fix 
 
 ## 2.1.0 (2016-12-17)
 
