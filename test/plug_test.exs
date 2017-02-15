@@ -47,8 +47,8 @@ defmodule Sentry.PlugTest do
 
   test "builds request data" do
     conn = conn(:get, "/error_route?key=value")
-    |> put_req_cookie("cookie_key", "cookie_value")
-    |> put_req_header("accept-language", "en-US")
+           |> put_req_cookie("cookie_key", "cookie_value")
+           |> put_req_header("accept-language", "en-US")
 
     request_data = Sentry.Plug.build_request_interface_data(conn, [header_scrubber: &Sentry.Plug.default_header_scrubber/1])
 
@@ -66,9 +66,9 @@ defmodule Sentry.PlugTest do
 
   test "handles data scrubbing" do
     conn = conn(:post, "/error_route", %{
-      "hello" => "world",
-      "password" => "test",
-      "cc" => "4242424242424242" })
+                  "hello" => "world",
+                  "password" => "test",
+                  "cc" => "4242424242424242"})
     |> put_req_cookie("cookie_key", "cookie_value")
     |> put_req_header("accept-language", "en-US")
     |> put_req_header("authorization", "ignorme")
