@@ -6,6 +6,8 @@ defmodule Sentry.Event do
     entries into Sentry Events.
   """
 
+  @type t :: %__MODULE__{}
+
   defstruct event_id: nil,
             culprit: nil,
             timestamp: nil,

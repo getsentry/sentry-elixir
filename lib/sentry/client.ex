@@ -19,7 +19,7 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  @spec send_event(Event.t) :: {:ok, Event.t}
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = get_dsn!()
 
@@ -29,6 +29,8 @@ defmodule Sentry.Client do
     Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
     end)
+
+    {:ok, event}
   end
 
   defp try_request(method, url, headers, body) do

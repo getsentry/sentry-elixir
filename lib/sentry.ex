@@ -137,20 +137,19 @@ defmodule Sentry do
   @doc """
     Sends a `Sentry.Event`
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
-  def send_event(%Event{message: nil, exception: nil}) do
-    Logger.warn("unable to parse exception")
-    {:ok, "Unable to parse as exception, ignoring..."}
+  @spec send_event(Event.t) :: {:ok | :error, Event.t}
+  def send_event(%Event{message: nil, exception: nil} = event) do
+    Logger.warn("Sentry: Unable to parse exception")
+    {:error, event}
   end
-
-  def send_event(event = %Event{}) do
+  def send_event(%Event{} = event) do
     included_environments = Application.get_env(:sentry, :included_environments)
     environment_name = Application.get_env(:sentry, :environment_name)
 
     if environment_name in included_environments do
       @client.send_event(event)
     else
-      {:ok, ""}
+      {:ok, event}
     end
   end
 end
