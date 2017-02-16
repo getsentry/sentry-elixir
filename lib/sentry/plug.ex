@@ -93,7 +93,10 @@ defmodule Sentry.Plug do
   def capture(conn, %{kind: kind, reason: reason, stack: stack}, opts) do
     request = Sentry.Plug.build_request_interface_data(conn, opts)
     exception = Exception.normalize(kind, reason, stack)
-    Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
+    case Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug]) do
+      {:ok, event, _} -> {:ok, event}
+      _ -> :error
+    end
   end
 
   def build_request_interface_data(%Plug.Conn{} = conn, opts) do

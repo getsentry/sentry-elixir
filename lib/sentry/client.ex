@@ -1,6 +1,7 @@
 defmodule Sentry.Client do
   alias Sentry.{Event, Util}
   require Logger
+
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
@@ -8,6 +9,8 @@ defmodule Sentry.Client do
   quote do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
+
+  @callback send_event(Event.t) :: Task.t
 
   @moduledoc """
     Provides basic HTTP client request and response handling for the Sentry API.
@@ -19,7 +22,7 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(Event.t) :: {:ok, Event.t}
+  @spec send_event(Event.t) :: Task.t
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = get_dsn!()
 
@@ -29,8 +32,6 @@ defmodule Sentry.Client do
     Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
     end)
-
-    {:ok, event}
   end
 
   defp try_request(method, url, headers, body) do
