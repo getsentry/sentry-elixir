@@ -1,9 +1,11 @@
 defmodule Sentry do
   use Application
-  import Supervisor.Spec
-  alias Sentry.Event
+
   require Logger
 
+  import Supervisor.Spec
+
+  alias Sentry.Event
 
   @moduledoc """
   Provides the basic functionality to submit a `Sentry.Event` to the Sentry Service.
@@ -111,15 +113,21 @@ defmodule Sentry do
   @doc """
     Parses and submits an exception to Sentry if current environment is in included_environments.
   """
-  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error | :excluded
+  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, Event.t, Task.t} | :error | :excluded
   def capture_exception(exception, opts \\ []) do
     filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
     {source, opts} = Keyword.pop(opts, :event_source)
-    if(filter_module.exclude_exception?(exception, source)) do
+
+    if filter_module.exclude_exception?(exception, source) do
       :excluded
     else
-      Event.transform_exception(exception, opts)
-      |> send_event()
+      event = exception
+              |> Event.transform_exception(opts)
+
+      case send_event(event) do
+        {:ok, task} -> {:ok, event, task}
+        :error -> :error
+      end
     end
   end
 
@@ -128,29 +136,32 @@ defmodule Sentry do
   """
   @spec capture_message(String.t, Keyword.t) :: {:ok, String.t} | :error
   def capture_message(message, opts \\ []) do
-    opts
-    |> Keyword.put(:message, message)
-    |> Event.create_event()
-    |> send_event()
+    event = opts
+            |> Keyword.put(:message, message)
+            |> Event.create_event()
+
+    case send_event(event) do
+      {:ok, task} -> {:ok, event, task}
+      :error -> :error
+    end
   end
 
   @doc """
     Sends a `Sentry.Event`
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
-  def send_event(%Event{message: nil, exception: nil}) do
-    Logger.warn("unable to parse exception")
-    {:ok, "Unable to parse as exception, ignoring..."}
+  @spec send_event(Event.t) :: {:ok, Task.t} | :error
+  def send_event(%Event{message: nil, exception: nil} = event) do
+    Logger.warn("Sentry: Unable to parse exception")
+    :error
   end
-
-  def send_event(event = %Event{}) do
+  def send_event(%Event{} = event) do
     included_environments = Application.get_env(:sentry, :included_environments)
     environment_name = Application.get_env(:sentry, :environment_name)
 
     if environment_name in included_environments do
-      @client.send_event(event)
+      {:ok, @client.send_event(event)}
     else
-      {:ok, ""}
+      :excluded
     end
   end
 end

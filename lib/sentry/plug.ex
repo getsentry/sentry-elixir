@@ -76,26 +76,33 @@ defmodule Sentry.Plug do
   @default_plug_request_id_header "x-request-id"
 
 
-  defmacro __using__(env) do
-    body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    request_id_header = Keyword.get(env, :request_id_header, nil)
-
+  defmacro __using__(opts \\ []) do
     quote do
-      defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        opts = [body_scrubber: unquote(body_scrubber), header_scrubber: unquote(header_scrubber),
-                 request_id_header: unquote(request_id_header)]
-        request = Sentry.Plug.build_request_interface_data(conn, opts)
-        exception = Exception.normalize(kind, reason, stack)
-        Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
+      defp handle_errors(conn, error) do
+        case Sentry.Plug.capture(conn, error, unquote(opts)) do
+          {:ok, %Sentry.Event{} = entry} ->
+            conn
+            |> Plug.Conn.assign(:sentry_entry, entry)
+            |> Plug.Conn.put_resp_header("x-sentry-event-id", entry.event_id)
+          _ -> conn
+        end
       end
     end
   end
 
+  def capture(conn, %{kind: kind, reason: reason, stack: stack}, opts) do
+    request = Sentry.Plug.build_request_interface_data(conn, opts)
+    exception = Exception.normalize(kind, reason, stack)
+    case Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug]) do
+      {:ok, event, _} -> {:ok, event}
+      _ -> :error
+    end
+  end
+
   def build_request_interface_data(%Plug.Conn{} = conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber)
-    header_scrubber = Keyword.get(opts, :header_scrubber)
-    request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
+    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
+    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
+    request_id = Keyword.get(opts, :request_id_header, @default_plug_request_id_header)
 
     conn = conn
             |> Plug.Conn.fetch_cookies
@@ -113,7 +120,7 @@ defmodule Sentry.Plug do
         "REMOTE_PORT" => remote_port(conn.peer),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
-        "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first,
+        "REQUEST_ID" => conn |> Plug.Conn.get_resp_header(request_id) |> List.first,
       }
     }
   end
@@ -137,12 +144,14 @@ defmodule Sentry.Plug do
   ## TODO also reject too big
 
   def default_header_scrubber(conn) do
-    Enum.into(conn.req_headers, %{})
+    conn.req_headers
+    |> Enum.into(%{})
     |> Map.drop(@default_scrubbed_header_keys)
   end
 
   def default_body_scrubber(conn) do
     conn.params
+    |> Map.drop(Map.keys(conn.query_params))
     |> Enum.map(fn({key, value}) ->
       value = cond do
         Enum.member?(@default_scrubbed_param_keys, key) ->

@@ -9,6 +9,8 @@ defmodule Sentry.Mixfile do
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      dialyzer: [plt_add_deps: :transitive],
       elixirc_paths: elixirc_paths(Mix.env),
       docs: [extras: ["README.md"], main: "readme"]
     ]
@@ -24,13 +26,15 @@ defmodule Sentry.Mixfile do
   defp deps do
     [
       {:hackney, "~> 1.6.1"},
-      {:uuid, "~> 1.0"},
-      {:poison, "~> 1.5 or ~> 2.0 or ~> 3.0"},
-      {:plug, "~> 1.0", optional: true},
+      {:uuid,    "~> 1.0"},
+      {:poison,  ">= 1.5.0"},
+      {:plug,    "~> 1.0", optional: true},
 
-      {:ex_doc, "~> 0.14.0", only: :dev},
-      {:credo, "~> 0.4", only: [:dev, :test]},
-      {:bypass, "~> 0.5.1", only: [:test]}
+      {:dialyxir,    "~> 0.4.0",  only: [:dev]},
+      {:ex_doc,      "~> 0.14.0", only: :dev},
+      {:credo,       "~> 0.4",    only: [:dev, :test]},
+      {:excoveralls, "~> 0.5",    only: [:test]},
+      {:bypass,      "~> 0.5.1",  only: [:test]}
     ]
   end
 
