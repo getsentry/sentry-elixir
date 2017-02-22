@@ -2,7 +2,7 @@ defmodule Sentry.Event do
   alias Sentry.{Event, Util}
 
   @moduledoc """
-    Provides an Event Struct as well as transformation of Logger 
+    Provides an Event Struct as well as transformation of Logger
     entries into Sentry Events.
   """
 
