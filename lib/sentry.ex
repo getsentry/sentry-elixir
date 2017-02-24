@@ -93,6 +93,7 @@ defmodule Sentry do
 
   @client Application.get_env(:sentry, :client, Sentry.Client)
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
+  @default_environment_name Mix.env
 
   def start(_type, _opts) do
     children = [
@@ -144,8 +145,8 @@ defmodule Sentry do
   end
 
   def send_event(event = %Event{}) do
-    included_environments = Application.get_env(:sentry, :included_environments)
-    environment_name = Application.get_env(:sentry, :environment_name)
+    included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
+    environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
 
     if environment_name in included_environments do
       @client.send_event(event)
