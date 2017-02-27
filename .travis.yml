@@ -6,6 +6,11 @@ elixir:
 otp_release:
   - 18.3
   - 19.1
+
+matrix:
+  allow_failures:
+    - elixir: 1.3.4
+
 notifications:
   email:
     - mitch@rokkincat.com
