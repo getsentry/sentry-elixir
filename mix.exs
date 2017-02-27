@@ -10,6 +10,7 @@ defmodule Sentry.Mixfile do
       package: package(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env),
+      dialyzer: [plt_add_deps: :transitive],
       docs: [extras: ["README.md"], main: "readme"]
     ]
   end
@@ -28,6 +29,7 @@ defmodule Sentry.Mixfile do
       {:poison, "~> 1.5 or ~> 2.0 or ~> 3.0"},
       {:plug, "~> 1.0", optional: true},
 
+      {:dialyxir, "> 0.0.0", only: :dev},
       {:ex_doc, "~> 0.14.0", only: :dev},
       {:credo, "~> 0.4", only: [:dev, :test]},
       {:bypass, "~> 0.5.1", only: [:test]}
