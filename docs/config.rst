@@ -57,9 +57,17 @@ Optional settings
   Set this to a module that implements the ``Sentry.EventFilter`` behaviour if you would like to prevent
   certain exceptions from being sent.  See below for further documentation.
 
+.. describe:: hackney_pool_max_connections
+
+  Number of connections for Sentry's hackney pool.  This defaults to 50.
+
+.. describe:: hackney_pool_timeout
+
+  Timeout for Sentry's hackney pool.  This defaults to 5000 milliseconds.
+
 .. describe:: hackney_opts
 
-  Sentry uses `hackney <https://github.com/benoitc/hackney>`_.  If you would like to set `options <https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5>`_ for hackney requests, they can be provided via this configuration.
+  Sentry starts its own hackney pool named ``:sentry_pool``, and defaults to using it.  Hackney's ``pool`` configuration as well others like proxy or response timeout can be set through this configuration as it is passed directly to hackney when making a request.
 
 Testing Your Configuration
 --------------------------
