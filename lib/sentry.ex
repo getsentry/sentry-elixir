@@ -94,10 +94,13 @@ defmodule Sentry do
   @client Application.get_env(:sentry, :client, Sentry.Client)
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
   @default_environment_name Mix.env
+  @max_hackney_connections Application.get_env(:sentry, :hackney_pool_max_connections, 50)
+  @hackney_timeout Application.get_env(:sentry, :hackney_pool_timeout, 5000)
 
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: @hackney_timeout, max_connections: @max_hackney_connections])
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
