@@ -24,11 +24,15 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
-    body = Poison.encode!(event)
-
-    Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-      try_request(:post, endpoint, auth_headers, body)
-    end)
+    case Poison.encode(event) do
+      {:ok, body} ->
+        Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+          try_request(:post, endpoint, auth_headers, body)
+        end)
+      {:error, error} ->
+        log_api_error("Unable to encode Sentry error - #{inspect(error)}")
+        :error
+    end
   end
 
   defp try_request(method, url, headers, body) do
