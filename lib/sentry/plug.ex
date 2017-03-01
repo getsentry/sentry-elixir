@@ -18,15 +18,20 @@ defmodule Sentry.Plug do
 
   ### Sending Post Body Params
 
-  In order to send post body parameters you should first scrub them of sensitive information. By default,
-  they will be scrubbed with `Sentry.Plug.default_body_scrubber/1`.  It can be overridden by passing
-  the `body_scrubber` option, which accepts a `Plug.Conn` and returns a map to send.  Setting `:body_scrubber` to nil
-  will not send any data back.  If you would like to make use of Sentry's default scrubber behavior in a custom scrubber,
-  it can be called directly.  An example configuration may look like the following:
+  In order to send post body parameters you should first scrub them of sensitive
+  information. By default, they will be scrubbed with
+  `Sentry.Plug.default_body_scrubber/1`. It can be overridden by passing
+  the `body_scrubber` option, which accepts a `Plug.Conn` and returns a map
+  to send.  Setting `:body_scrubber` to `nil` will not send any data back.
+  If you would like to make use of Sentry's default scrubber behavior in a custom
+  scrubber, it can be called directly.  An example configuration may look like
+  the following:
 
       def scrub_params(conn) do
-        # Makes use of the default body_scrubber to avoid sending password and credit card information in plain text.
-        # To also prevent sending our sensitive "my_secret_field" and "other_sensitive_data" fields, we simply drop those keys.
+        # Makes use of the default body_scrubber to avoid sending password
+        # and credit card information in plain text.  To also prevent sending
+        # our sensitive "my_secret_field" and "other_sensitive_data" fields,
+        # we simply drop those keys.
         Sentry.Plug.default_body_scrubber(conn)
         |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
@@ -43,13 +48,15 @@ defmodule Sentry.Plug do
 
   ### Headers Scrubber
 
-  By default Sentry will scrub Authorization and Authentication headers from all requests before sending them. It can be
-  configured similarly to the body params scrubber, but is configured with the `:header_scrubber` key.
+  By default Sentry will scrub Authorization and Authentication headers from all
+  requests before sending them. It can be configured similarly to the body params
+  scrubber, but is configured with the `:header_scrubber` key.
 
       def scrub_headers(conn) do
         # default is: Sentry.Plug.default_header_scrubber(conn)
         #
-        # We do not want to include Content-Type or User-Agent in reported headers, so we drop them.
+        # We do not want to include Content-Type or User-Agent in reported
+        # headers, so we drop them.
         Enum.into(conn.req_headers, %{})
         |> Map.drop(["content-type", "user-agent"])
       end
@@ -68,7 +75,11 @@ defmodule Sentry.Plug do
 
   ### Including Request Identifiers
 
-  If you're using Phoenix, Plug.RequestId, or another method to set a request ID response header, and would like to include that information with errors reported by Sentry.Plug, the `:request_id_header` option allows you to set which header key Sentry should check.  It will default to "x-request-id", which Plug.RequestId (and therefore Phoenix) also default to.
+  If you're using Phoenix, Plug.RequestId, or another method to set a request ID
+  response header, and would like to include that information with errors
+  reported by Sentry.Plug, the `:request_id_header` option allows you to set
+  which header key Sentry should check.  It will default to "x-request-id",
+  which Plug.RequestId (and therefore Phoenix) also default to.
 
       use Sentry.Plug, request_id_header: "application-request-id"
   """
@@ -76,30 +87,27 @@ defmodule Sentry.Plug do
   @default_plug_request_id_header "x-request-id"
 
 
-  defmacro __using__(env) do
-    body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    request_id_header = Keyword.get(env, :request_id_header, nil)
-
+  defmacro __using__(opts) do
     quote do
+      require Sentry
+
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        opts = [body_scrubber: unquote(body_scrubber), header_scrubber: unquote(header_scrubber),
-                 request_id_header: unquote(request_id_header)]
-        request = Sentry.Plug.build_request_interface_data(conn, opts)
+        request = Sentry.Plug.build_request_interface_data(conn, unquote(opts))
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
       end
     end
   end
 
+  @spec build_request_interface_data(Plug.Conn.t, keyword()) :: map()
   def build_request_interface_data(%Plug.Conn{} = conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber)
-    header_scrubber = Keyword.get(opts, :header_scrubber)
-    request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
+    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
+    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
+    request_id = Keyword.get(opts, :request_id_header, @default_plug_request_id_header)
 
     conn = conn
-            |> Plug.Conn.fetch_cookies
-            |> Plug.Conn.fetch_query_params
+           |> Plug.Conn.fetch_cookies
+           |> Plug.Conn.fetch_query_params
 
     %{
       url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
@@ -118,13 +126,13 @@ defmodule Sentry.Plug do
     }
   end
 
-  def remote_address(address) do
+  defp remote_address(address) do
     address
     |> :inet.ntoa()
     |> to_string()
   end
 
-  def remote_port({_, port}), do: port
+  defp remote_port({_, port}), do: port
 
   defp handle_data(_conn, nil), do: %{}
   defp handle_data(conn, {module, fun}) do
@@ -136,14 +144,20 @@ defmodule Sentry.Plug do
 
   ## TODO also reject too big
 
+  @spec default_header_scrubber(Plug.Conn.t) :: map()
   def default_header_scrubber(conn) do
-    Enum.into(conn.req_headers, %{})
+    conn.req_headers
+    |> Enum.into(%{})
     |> Map.drop(@default_scrubbed_header_keys)
   end
 
+  @spec default_body_scrubber(Plug.Conn.t) :: map()
   def default_body_scrubber(conn) do
+    keys = Map.keys(conn.query_params)
+
     conn.params
-    |> Enum.map(fn({key, value}) ->
+    |> Enum.reject(fn {key, _value} -> key in keys end)
+    |> Enum.map(fn {key, value} ->
       value = cond do
         Enum.member?(@default_scrubbed_param_keys, key) ->
           @scrubbed_value
@@ -156,4 +170,7 @@ defmodule Sentry.Plug do
     end)
     |> Enum.into(%{})
   end
+
+  defp get_conn_params(%Plug.Conn.Unfetched{}), do: []
+  defp get_conn_params(params), do: params
 end)
