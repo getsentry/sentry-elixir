@@ -17,7 +17,7 @@ defp application do
 end
 
 defp deps do
-  [{:sentry, "~> 2.1.0"}]
+  [{:sentry, "~> 2.2.0"}]
 end
 ```
 
