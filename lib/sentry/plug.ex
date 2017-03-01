@@ -82,12 +82,13 @@ defmodule Sentry.Plug do
     request_id_header = Keyword.get(env, :request_id_header, nil)
 
     quote do
-      defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
+      def handle_errors(conn, opts = %{kind: kind, reason: reason, stack: stack}) do
         opts = [body_scrubber: unquote(body_scrubber), header_scrubber: unquote(header_scrubber),
                  request_id_header: unquote(request_id_header)]
         request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
+        super(conn, opts)
       end
     end
   end
