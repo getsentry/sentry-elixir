@@ -68,6 +68,8 @@ config :sentry,
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
 | hackney_opts | False  | [] | |
+| hackney_pool_max_connections | False  | 50 | |
+| hackney_pool_timeout | False  | 5000 | |
 
 An example production config might look like this:
 
@@ -113,7 +115,7 @@ Now, on our servers, we can set the environment variable appropriately. On
 our local development machines, exceptions will never be sent, because the
 default value is not in the list of `included_environments`.
 
-Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  If you need to set [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy or different pool, the `hackney_opts` configuration is passed directly to hackney.
+Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
 
 ## Testing Your Configuration
 

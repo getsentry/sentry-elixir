@@ -4,6 +4,7 @@ defmodule Sentry.Client do
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
+  @hackney_pool_name :sentry_pool
 
   quote do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
@@ -55,6 +56,7 @@ defmodule Sentry.Client do
   """
   def request(method, url, headers, body) do
     hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
+                   |> Keyword.put_new(:pool, @hackney_pool_name)
     case :hackney.request(method, url, headers, body, hackney_opts) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
@@ -108,6 +110,10 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
+  def hackney_pool_name do
+    @hackney_pool_name
+  end
+
   defp fetch_dsn do
     case Application.fetch_env!(:sentry, :dsn) do
       {:system, env_var} -> System.get_env(env_var)
@@ -117,7 +123,7 @@ defmodule Sentry.Client do
 
   defp log_api_error(body) do
     Logger.warn(fn ->
-      ["Failed to send sentry event.", ?\n, body]
+      ["Failed to send Sentry event.", ?\n, body]
     end)
   end
 
