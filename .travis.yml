@@ -7,3 +7,6 @@ otp_release:
 notifications:
   email:
     - mitch@rokkincat.com
+script:
+  - mix test
+  - mix credo
