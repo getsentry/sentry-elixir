@@ -25,6 +25,8 @@ defmodule Sentry.Event do
             user: %{},
             breadcrumbs: []
 
+  @type t :: %__MODULE__{}
+
   @doc """
   Creates an Event struct out of context collected and options
   ## Options
@@ -38,6 +40,7 @@ defmodule Sentry.Event do
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
   """
+  @spec create_event(keyword()) :: Event.t
   def create_event(opts) do
     %{user: user_context,
       tags: tags_context,
@@ -60,8 +63,7 @@ defmodule Sentry.Event do
            |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = request_context
               |> Map.merge(Keyword.get(opts, :request, %{}))
-    breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
-                  |> Kernel.++(breadcrumbs_context)
+    breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
 
     level = Keyword.get(opts, :level, "error")
 
@@ -103,16 +105,16 @@ defmodule Sentry.Event do
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
   """
-  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
+  @spec transform_exception(Exception.t, keyword()) :: Event.t
   def transform_exception(exception, opts) do
-    exception = Exception.normalize(:error, exception)
+    normalized = Exception.normalize(:error, exception)
 
     message = :error
-      |> Exception.format_banner(exception)
-      |> String.trim("*")
-      |> String.trim
+              |> Exception.format_banner(normalized)
+              |> String.trim("*")
+              |> String.trim
 
-    exception = [%{type: exception.__struct__, value: Exception.message(exception)}]
+    exception = [%{type: normalized.__struct__, value: Exception.message(normalized)}]
 
     opts
     |> Keyword.put(:exception, exception)
@@ -120,7 +122,7 @@ defmodule Sentry.Event do
     |> create_event()
   end
 
-  @spec add_metadata(%Event{}) :: %Event{}
+  @spec add_metadata(Event.t) :: Event.t
   def add_metadata(state) do
     %{state |
      event_id: UUID.uuid4(:hex),
@@ -131,10 +133,11 @@ defmodule Sentry.Event do
   @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
   def stacktrace_to_frames(stacktrace) do
     stacktrace
-    |> Enum.map(fn(line) ->
+    |> Enum.map(fn line ->
         {mod, function, arity, location} = line
         file = Keyword.get(location, :file)
         line_number = Keyword.get(location, :line)
+
         %{
           filename: file && to_string(file),
           function: Exception.format_mfa(mod, function, arity),

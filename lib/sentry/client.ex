@@ -1,6 +1,8 @@
 defmodule Sentry.Client do
   alias Sentry.{Event, Util}
+
   require Logger
+
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
@@ -20,7 +22,7 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  @spec send_event(Event.t) :: Task.t
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = get_dsn!()
 
@@ -66,8 +68,8 @@ defmodule Sentry.Client do
         case :hackney.body(client) do
           {:ok, body} ->
             id = body
-              |> Poison.decode!()
-              |> Map.get("id")
+                 |> Poison.decode!()
+                 |> Map.get("id")
             {:ok, id}
           _ ->
             log_api_error(body)
@@ -92,7 +94,7 @@ defmodule Sentry.Client do
     "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
   end
 
-  def authorization_headers(public_key, secret_key) do
+  defp authorization_headers(public_key, secret_key) do
     [
       {"User-Agent", @sentry_client},
       {"X-Sentry-Auth", authorization_header(public_key, secret_key)}

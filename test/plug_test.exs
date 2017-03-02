@@ -22,7 +22,6 @@ defmodule Sentry.PlugTest do
       _ = conn
       raise RuntimeError, "Error"
     end
-
   end
 
   test "exception makes call to Sentry API" do
@@ -47,8 +46,8 @@ defmodule Sentry.PlugTest do
 
   test "builds request data" do
     conn = conn(:get, "/error_route?key=value")
-    |> put_req_cookie("cookie_key", "cookie_value")
-    |> put_req_header("accept-language", "en-US")
+           |> put_req_cookie("cookie_key", "cookie_value")
+           |> put_req_header("accept-language", "en-US")
 
     request_data = Sentry.Plug.build_request_interface_data(conn, [header_scrubber: &Sentry.Plug.default_header_scrubber/1])
 
@@ -68,7 +67,7 @@ defmodule Sentry.PlugTest do
     conn = conn(:post, "/error_route", %{
       "hello" => "world",
       "password" => "test",
-      "cc" => "4242424242424242" })
+      "cc" => "4242424242424242"})
     |> put_req_cookie("cookie_key", "cookie_value")
     |> put_req_header("accept-language", "en-US")
     |> put_req_header("authorization", "ignorme")
@@ -109,8 +108,12 @@ defmodule Sentry.PlugTest do
 
     request_data = Sentry.Plug.build_request_interface_data(conn, body_scrubber: &Sentry.Plug.default_body_scrubber/1)
     assert request_data[:method] == "POST"
-    assert request_data[:data] == %{"secret" => "*********", "password" => "*********",
-      "passwd" => "*********", "credit_card" => "*********", "cc" => "*********",
+    assert request_data[:data] == %{
+      "secret" => "*********",
+      "password" => "*********",
+      "passwd" => "*********",
+      "credit_card" => "*********",
+      "cc" => "*********",
       "another_cc" => "*********"}
   end
 
