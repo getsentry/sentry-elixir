@@ -1,7 +1,7 @@
 defmodule Sentry.Logger do
   require Logger
   @moduledoc """
-    Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true. 
+    Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true.
 
     This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
@@ -27,8 +27,8 @@ defmodule Sentry.Logger do
     try do
       error_info = message[:error_info]
       context = get_in(message, [:dictionary, :sentry_context]) || %{}
-      opts = context 
-        |> Map.take(Sentry.Context.context_keys) 
+      opts = context
+        |> Map.take(Sentry.Context.context_keys)
         |> Map.to_list()
 
       case error_info do
