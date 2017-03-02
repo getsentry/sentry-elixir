@@ -2,6 +2,14 @@
 
 ## master
 
+## 3.0.0 (2017-03-02)
+* Enhancements
+  * Add dialyzer support (#128)
+* Backward incompatible changes
+  * Fix default configuration (#124)
+  * Start and use separate Sentry hackney pool instead of default (#130)
+  * Return `:error` instead of raising when encoding invalid JSON (#131)
+
 ## 2.2.0 (2017-02-15)
 
 * Enhancements
