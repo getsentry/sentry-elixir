@@ -32,7 +32,7 @@ defmodule Sentry.Context do
     for {_, key} <- @keys, into: %{} do
       {key, Map.get(context, key, %{})}
     end
-    |> Map.put(@breadcrumbs_key, Map.get(context, :breadcrumbs, []))
+    |> Map.put(@breadcrumbs_key, Enum.reverse(Map.get(context, :breadcrumbs, [])))
   end
 
   Enum.each @keys, fn {name, key} ->
@@ -59,7 +59,14 @@ defmodule Sentry.Context do
           |> Map.put_new(:timestamp, Sentry.Util.unix_timestamp())
 
     context = get_context()
-              |> Map.update(@breadcrumbs_key, [map], &(&1 ++ [map]))
+              |> Map.update(@breadcrumbs_key, [map], &([map | &1]))
+
+    Process.put(@process_dictionary_key, context)
+  end
+
+  def pop_breadcrumb do
+    context = get_context()
+              |> Map.update!(@breadcrumbs_key, fn [_ | tail] -> tail end)
 
     Process.put(@process_dictionary_key, context)
   end
