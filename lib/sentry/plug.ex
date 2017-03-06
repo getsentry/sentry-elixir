@@ -87,12 +87,17 @@ defmodule Sentry.Plug do
   @default_plug_request_id_header "x-request-id"
 
 
-  defmacro __using__(opts) do
-    quote do
-      require Sentry
+  defmacro __using__(env) do
+    body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
+    header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
+    request_id_header = Keyword.get(env, :request_id_header)
 
+    quote do
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
-        request = Sentry.Plug.build_request_interface_data(conn, unquote(opts))
+        opts = [body_scrubber: unquote(body_scrubber),
+                 header_scrubber: unquote(header_scrubber),
+                 request_id_header: unquote(request_id_header)]
+        request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
       end
@@ -101,12 +106,11 @@ defmodule Sentry.Plug do
 
   @spec build_request_interface_data(Plug.Conn.t, keyword()) :: map()
   def build_request_interface_data(%Plug.Conn{} = conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    request_id = Keyword.get(opts, :request_id_header, @default_plug_request_id_header)
+    body_scrubber = Keyword.get(opts, :body_scrubber)
+    header_scrubber = Keyword.get(opts, :header_scrubber)
+    request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
-    conn = conn
-           |> Plug.Conn.fetch_cookies
+    conn = Plug.Conn.fetch_cookies(conn)
            |> Plug.Conn.fetch_query_params
 
     %{
@@ -142,22 +146,15 @@ defmodule Sentry.Plug do
     fun.(conn)
   end
 
-  ## TODO also reject too big
-
   @spec default_header_scrubber(Plug.Conn.t) :: map()
   def default_header_scrubber(conn) do
-    conn.req_headers
-    |> Enum.into(%{})
+    Enum.into(conn.req_headers, %{})
     |> Map.drop(@default_scrubbed_header_keys)
   end
 
   @spec default_body_scrubber(Plug.Conn.t) :: map()
   def default_body_scrubber(conn) do
-    keys = Map.keys(conn.query_params)
-
-    conn.params
-    |> Enum.reject(fn {key, _value} -> key in keys end)
-    |> Enum.map(fn {key, value} ->
+    Enum.map(conn.params, fn {key, value} ->
       value = cond do
         Enum.member?(@default_scrubbed_param_keys, key) ->
           @scrubbed_value
@@ -170,7 +167,4 @@ defmodule Sentry.Plug do
     end)
     |> Enum.into(%{})
   end
-
-  defp get_conn_params(%Plug.Conn.Unfetched{}), do: []
-  defp get_conn_params(params), do: params
 end)

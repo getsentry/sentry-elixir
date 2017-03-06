@@ -133,7 +133,7 @@ defmodule Sentry.Event do
   @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
   def stacktrace_to_frames(stacktrace) do
     stacktrace
-    |> Enum.map(fn line ->
+    |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
         file = Keyword.get(location, :file)
         line_number = Keyword.get(location, :line)

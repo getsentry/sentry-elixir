@@ -119,7 +119,7 @@ defmodule Sentry do
   def capture_exception(exception, opts \\ []) do
     filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
     {source, opts} = Keyword.pop(opts, :event_source)
-    if filter_module.exclude_exception?(exception, source) do
+    if(filter_module.exclude_exception?(exception, source)) do
       :excluded
     else
       Event.transform_exception(exception, opts)
@@ -151,7 +151,7 @@ defmodule Sentry do
     included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
     environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
 
-    if environment_name in included_environments do
+    if(environment_name in included_environments) do
       @client.send_event(event)
     else
       {:ok, ""}

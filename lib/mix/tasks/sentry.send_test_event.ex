@@ -8,11 +8,11 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
   def run(_args) do
     Application.ensure_all_started(:sentry)
-    {endpoint, public_key, secret_key} = dsn = Sentry.Client.get_dsn!
 
-    print_environment_info(dsn)
+    Sentry.Client.get_dsn!
+    |> print_environment_info()
 
-    maybe_send_event(environment_name, included_environments())
+    maybe_send_event()
   end
 
   defp print_environment_info({endpoint, public_key, secret_key}) do
@@ -37,7 +37,10 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
   defp hackney_opts, do: Application.get_env(:sentry, :hackney_opts, [])
 
-  defp maybe_send_event(env_name, included_envs) do
+  defp maybe_send_event() do
+    env_name = environment_name()
+    included_envs = included_environments()
+
     if env_name in included_envs do
       Mix.shell.info "Sending test event..."
 

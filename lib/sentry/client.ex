@@ -67,8 +67,7 @@ defmodule Sentry.Client do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
           {:ok, body} ->
-            id = body
-                 |> Poison.decode!()
+            id = Poison.decode!(body)
                  |> Map.get("id")
             {:ok, id}
           _ ->
