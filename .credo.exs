@@ -79,7 +79,7 @@
         {Credo.Check.Readability.ModuleDoc},
         {Credo.Check.Readability.ModuleNames},
         {Credo.Check.Readability.NoParenthesesWhenZeroArity},
-        {Credo.Check.Readability.ParenthesesInCondition},
+        {Credo.Check.Readability.ParenthesesInCondition, false},
         {Credo.Check.Readability.PredicateFunctionNames},
         {Credo.Check.Readability.PreferImplicitTry},
         {Credo.Check.Readability.RedundantBlankLines},
