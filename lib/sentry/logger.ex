@@ -42,11 +42,6 @@ defmodule Sentry.Logger do
     {:ok, state}
   end
 
-  def handle_event({:error_report, _gl, event}, state) do
-    Sentry.capture_message(inspect(event))
-    {:ok, state}
-  end
-
   def handle_event(_, state) do
     {:ok, state}
   end
