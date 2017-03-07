@@ -24,7 +24,7 @@ defmodule Sentry.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 1.6.1"},
+      {:hackney, "~> 1.7.0"},
       {:uuid, "~> 1.0"},
       {:poison, "~> 1.5 or ~> 2.0 or ~> 3.0"},
       {:plug, "~> 1.0", optional: true},
