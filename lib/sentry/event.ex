@@ -66,7 +66,6 @@ defmodule Sentry.Event do
     breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
 
     level = Keyword.get(opts, :level, "error")
-    culprit = Keyword.get(opts, :culprit) || culprit_from_stacktrace(stacktrace)
 
     release = Application.get_env(:sentry, :release)
 
@@ -75,7 +74,7 @@ defmodule Sentry.Event do
     env = Application.get_env(:sentry, :environment_name)
 
     %Event{
-      culprit: culprit,
+      culprit: culprit_from_stacktrace(stacktrace),
       message: message,
       level: level,
       platform: "elixir",
@@ -125,7 +124,8 @@ defmodule Sentry.Event do
         Exception.format_banner(error_type, exception)
     end
 
-    exception = [%{type: type, value: value}]
+    module = Keyword.get(opts, :module)
+    exception = [%{type: type, value: value, module: module}]
     message = :error
               |> Exception.format_banner(normalized)
               |> String.trim("*")

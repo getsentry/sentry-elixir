@@ -23,8 +23,8 @@ defmodule Sentry.Logger do
 
   def handle_event({:error_report, _gl, {_pid, _type, [message | _]}}, state) when is_list(message) do
     try do
-      {kind, exception, stacktrace, culprit} = get_exception_and_stacktrace(message[:error_info])
-                                      |> get_culprit(message)
+      {kind, exception, stacktrace, module} = get_exception_and_stacktrace(message[:error_info])
+                                      |> get_initial_call_and_module(message)
 
       opts = get_in(message, ~w[dictionary sentry_context]a) || %{}
              |> Map.take(Sentry.Context.context_keys)
@@ -32,7 +32,7 @@ defmodule Sentry.Logger do
              |> Keyword.put(:event_source, :logger)
              |> Keyword.put(:stacktrace, stacktrace)
              |> Keyword.put(:error_type, kind)
-             |> Keyword.put(:culprit, culprit)
+             |> Keyword.put(:module, module)
 
       Sentry.capture_exception(exception, opts)
     rescue ex ->
@@ -54,10 +54,10 @@ defmodule Sentry.Logger do
     {kind, exception, stacktrace}
   end
 
-  defp get_culprit({kind, exception, stacktrace}, error_info) do
+  defp get_initial_call_and_module({kind, exception, stacktrace}, error_info) do
     case Keyword.get(error_info, :initial_call) do
       {module, function, arg} ->
-        {kind, exception, stacktrace, Exception.format_mfa(module, function, arg)}
+        {kind, exception, stacktrace ++ [{module, function, arg, []}], module}
         _ ->
           {kind, exception, stacktrace, nil}
     end
