@@ -1,6 +1,8 @@
 # Changelog
 
 ## master
+* Enhancements
+  * Bump hackney to a version that isn't retired (#135)
 
 ## 3.0.0 (2017-03-02)
 * Enhancements
