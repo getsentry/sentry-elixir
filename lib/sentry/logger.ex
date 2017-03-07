@@ -21,40 +21,50 @@ defmodule Sentry.Logger do
     {:ok, state}
   end
 
-  def handle_event({:error_report, gl, {_pid, _type, [message | _]}}, state) when is_list(message) do
+  def handle_event({:error_report, _gl, {_pid, _type, [message | _]}}, state) when is_list(message) do
     try do
-      {exception, stacktrace} = get_exception_and_stacktrace(message[:error_info])
+      {kind, exception, stacktrace, culprit} = get_exception_and_stacktrace(message[:error_info])
+                                      |> get_culprit(message)
 
       opts = get_in(message, ~w[dictionary sentry_context]a) || %{}
              |> Map.take(Sentry.Context.context_keys)
              |> Map.to_list()
              |> Keyword.put(:event_source, :logger)
              |> Keyword.put(:stacktrace, stacktrace)
+             |> Keyword.put(:error_type, kind)
+             |> Keyword.put(:culprit, culprit)
 
       Sentry.capture_exception(exception, opts)
     rescue ex ->
-      error_type = strip_elixir_prefix(ex.__struct__)
-      reason = Exception.message(ex)
-      Logger.warn("Unable to notify Sentry! #{error_type}: #{reason}")
+      Logger.warn("Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}")
     end
 
     {:ok, state}
   end
-  def handle_event({_level, _gl, _event}, state), do: {:ok, state}
 
-  defp get_exception_and_stacktrace({_kind, {exception, stacktrace}, _stack}), do: {exception, stacktrace}
-  defp get_exception_and_stacktrace({_kind, exception, stacktrace}), do: {exception, stacktrace}
+  def handle_event({:error_report, _gl, event}, state) do
+    Sentry.capture_message(inspect(event))
+    {:ok, state}
+  end
 
-  @doc """
-  Internally all modules are prefixed with Elixir. This function removes the
-  Elixir prefix from the module when it is converted to a string.
-  """
-  @spec strip_elixir_prefix(module :: atom()) :: bitstring()
-  def strip_elixir_prefix(module) do
-    module
-    |> Atom.to_string
-    |> String.split(".")
-    |> tl
-    |> Enum.join(".")
+  def handle_event(_, state) do
+    {:ok, state}
+  end
+
+
+  defp get_exception_and_stacktrace({kind, {exception, sub_stack}, _stack}) when is_list(sub_stack) do
+    {kind, exception, sub_stack}
+  end
+  defp get_exception_and_stacktrace({kind, exception, stacktrace}) do
+    {kind, exception, stacktrace}
+  end
+
+  defp get_culprit({kind, exception, stacktrace}, error_info) do
+    case Keyword.get(error_info, :initial_call) do
+      {module, function, arg} ->
+        {kind, exception, stacktrace, Exception.format_mfa(module, function, arg)}
+        _ ->
+          {kind, exception, stacktrace, nil}
+    end
   end
 end

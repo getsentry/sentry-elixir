@@ -108,14 +108,28 @@ defmodule Sentry.Event do
   """
   @spec transform_exception(Exception.t, keyword()) :: Event.t
   def transform_exception(exception, opts) do
+    error_type = Keyword.get(opts, :error_type) || :error
     normalized = Exception.normalize(:error, exception)
 
+    type = case error_type do
+      :error ->
+        normalized.__struct__
+      _ ->
+        error_type
+    end
+
+    value = case error_type do
+      :error ->
+        Exception.message(normalized)
+      _ ->
+        Exception.format_banner(error_type, exception)
+    end
+
+    exception = [%{type: type, value: value}]
     message = :error
               |> Exception.format_banner(normalized)
               |> String.trim("*")
               |> String.trim
-
-    exception = [%{type: normalized.__struct__, value: Exception.message(normalized)}]
 
     opts
     |> Keyword.put(:exception, exception)
