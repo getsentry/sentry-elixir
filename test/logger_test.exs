@@ -22,10 +22,87 @@ defmodule Sentry.LoggerTest do
       Task.start( fn ->
         raise "Unique Error"
       end)
+
+      assert_receive "API called"
     end
 
-    :timer.sleep 250
+    :error_logger.delete_report_handler(Sentry.Logger)
+  end
 
+  test "GenServer throw makes call to Sentry API" do
+    Process.flag :trap_exit, true
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert List.first(json["exception"])["type"] == "exit"
+      assert List.first(json["exception"])["value"] == "** (exit) bad return value: \"I am throwing\""
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    :error_logger.add_report_handler(Sentry.Logger)
+
+    capture_log fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(self())
+      Sentry.TestGenServer.do_throw(pid)
+      assert_receive "terminating"
+    end
+    :error_logger.delete_report_handler(Sentry.Logger)
+  end
+
+  test "abnormal GenServer exit makes call to Sentry API" do
+    Process.flag :trap_exit, true
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert List.first(json["exception"])["type"] == "exit"
+      assert List.first(json["exception"])["value"] == "** (exit) :bad_exit"
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    :error_logger.add_report_handler(Sentry.Logger)
+
+    capture_log fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(self())
+      Sentry.TestGenServer.bad_exit(pid)
+      assert_receive "terminating"
+    end
+    :error_logger.delete_report_handler(Sentry.Logger)
+  end
+
+  test "Bad function call causing GenServer crash makes call to Sentry API" do
+    Process.flag :trap_exit, true
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert List.first(json["exception"])["type"] == "exit"
+      assert List.first(json["exception"])["value"] == "** (exit) :undef"
+      assert List.last(json["stacktrace"]["frames"]) == %{"filename" => nil,
+                                                          "function" => "Sentry.TestGenServer.not_a_function(1, 2, 3)",
+                                                          "lineno" => nil,
+                                                          "module" => "Elixir.Sentry.TestGenServer"
+                                                        }
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    :error_logger.add_report_handler(Sentry.Logger)
+
+    capture_log fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(self())
+      Sentry.TestGenServer.invalid_function(pid)
+      assert_receive "terminating"
+    end
     :error_logger.delete_report_handler(Sentry.Logger)
   end
 end
