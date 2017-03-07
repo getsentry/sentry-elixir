@@ -66,6 +66,7 @@ defmodule Sentry.Event do
     breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
 
     level = Keyword.get(opts, :level, "error")
+    culprit = Keyword.get(opts, :culprit) || culprit_from_stacktrace(stacktrace)
 
     release = Application.get_env(:sentry, :release)
 
@@ -74,7 +75,7 @@ defmodule Sentry.Event do
     env = Application.get_env(:sentry, :environment_name)
 
     %Event{
-      culprit: culprit_from_stacktrace(stacktrace),
+      culprit: culprit,
       message: message,
       level: level,
       platform: "elixir",
