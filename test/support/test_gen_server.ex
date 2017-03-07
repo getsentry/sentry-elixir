@@ -1,7 +1,7 @@
 defmodule Sentry.TestGenServer do
 
   def start_link(pid) do
-    GenServer.start_link(__MODULE__, pid, name: __MODULE__)
+    GenServer.start_link(__MODULE__, pid)
   end
 
   def do_throw(pid) do
