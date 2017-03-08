@@ -54,6 +54,10 @@ defmodule Sentry.Logger do
     {kind, exception, stacktrace}
   end
 
+  # GenServer exits will usually only report a stacktrace containing core
+  # GenServer functions, which causes Sentry to group unrelated exits
+  # together.  This gets the `:initial_call` to help disambiguate, as it contains
+  # the MFA for how the GenServer was started.
   defp get_initial_call_and_module({kind, exception, stacktrace}, error_info) do
     case Keyword.get(error_info, :initial_call) do
       {module, function, arg} ->
