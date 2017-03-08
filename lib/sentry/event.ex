@@ -110,18 +110,16 @@ defmodule Sentry.Event do
     error_type = Keyword.get(opts, :error_type) || :error
     normalized = Exception.normalize(:error, exception)
 
-    type = case error_type do
-      :error ->
-        normalized.__struct__
-      _ ->
-        error_type
+    type = if(error_type == :error) do
+      normalized.__struct__
+    else
+      error_type
     end
 
-    value = case error_type do
-      :error ->
-        Exception.message(normalized)
-      _ ->
-        Exception.format_banner(error_type, exception)
+    value = if(error_type == :error) do
+      Exception.message(normalized)
+    else
+      Exception.format_banner(error_type, exception)
     end
 
     module = Keyword.get(opts, :module)
