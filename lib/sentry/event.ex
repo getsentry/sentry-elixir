@@ -127,7 +127,7 @@ defmodule Sentry.Event do
     message = :error
               |> Exception.format_banner(normalized)
               |> String.trim("*")
-              |> String.trim
+              |> String.trim()
 
     opts
     |> Keyword.put(:exception, exception)
