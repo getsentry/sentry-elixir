@@ -57,8 +57,9 @@ defmodule Sentry.Context do
     Process.get(@process_dictionary_key) || %{}
   end
 
-  def add_breadcrumb(map) when is_map(map) do
-    map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
+  @spec add_breadcrumb(Sentry.Context.BreadCrumb.t) :: nil
+  def add_breadcrumb(%Sentry.Context.BreadCrumb{} = map) do
+    map = Map.put(map, :timestamp, Sentry.Util.unix_timestamp())
     current_context = get_context()
     breadcrumbs = Map.get(current_context, @breadcrumbs_key, [])
     new_breadcrumbs = breadcrumbs ++ [map]
