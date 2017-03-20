@@ -69,6 +69,7 @@ config :sentry,
 | `use_error_logger` | False  | False | |
 | `hackney_opts` | False  | `[pool: :sentry_pool]` | |
 | `hackney_pool_max_connections` | False  | 50 | |
+| `hackney_pool_timeout` | False  | 5000 | |
 | `enable_source_code_context` | True | | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
