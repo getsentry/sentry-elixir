@@ -138,6 +138,17 @@ allows other exceptions to be sent.
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
 
+Including Source Code
+----------------
+
+Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).  To enable, set ``:enable_source_code_context`` and ``root_source_code_path``:
+
+.. code-block:: elixir
+
+  config :sentry,
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!
+
 Deep Dive
 ---------
 
