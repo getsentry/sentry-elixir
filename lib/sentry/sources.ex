@@ -7,7 +7,7 @@ defmodule Sentry.Sources do
   ### Configuration
   There is configuration required to set up this functionality.  The options
   include `:enable_source_code_context`, `:root_source_code_path`, `:context_lines`,
-  `:exclude_patterns`, and `:source_code_path_pattern`.
+  `:source_code_exclude_patterns`, and `:source_code_path_pattern`.
 
   * `:enable_source_code_context` - when `true`, enables reporting source code
     alongside exceptions.
@@ -15,7 +15,7 @@ defmodule Sentry.Sources do
     Should usually be set to `File.cwd!`.
   * `:context_lines` - The number of lines of source code before and after the line that
     caused the exception to be included.  Defaults to `3`.
-  * `:exclude_patterns` - a list of Regex expressions used to exclude file paths that
+  * `:source_code_exclude_patterns` - a list of Regex expressions used to exclude file paths that
     should not be stored or referenced when reporting exceptions.  Defaults to
     `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
   * `:source_code_path_pattern` - a glob that is expanded to select files from the

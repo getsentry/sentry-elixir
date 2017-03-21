@@ -73,7 +73,7 @@ config :sentry,
 | `enable_source_code_context` | True | | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
-| `exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
+| `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 
 An example production config might look like this:

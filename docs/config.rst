@@ -81,7 +81,7 @@ Optional settings
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.
 
-.. describe:: exclude_patterns
+.. describe:: source_code_exclude_patterns
 
   A list of Regex expressions used to exclude file paths that should not be stored or referenced when reporting exceptions.  Defaults to ``[~r"/_build/", ~r"/deps/", ~r"/priv/"]``.
 
