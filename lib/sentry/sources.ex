@@ -55,10 +55,11 @@ defmodule Sentry.Sources do
   def load_files do
     root_path = Application.fetch_env!(:sentry, :root_path)
     path_pattern = Application.get_env(:sentry, :source_code_path_pattern, @default_path_pattern)
+    exclude_patterns = Application.get_env(:sentry, :source_code_exclude_patterns, @default_exclude_patterns)
 
     Path.join(root_path, path_pattern)
     |> Path.wildcard()
-    |> exclude_files(@default_exclude_patterns)
+    |> exclude_files(exclude_patterns)
     |> Enum.reduce(%{}, fn(path, acc) ->
       key = Path.relative_to(path, root_path)
       value = source_to_lines(File.read!(path))
