@@ -27,6 +27,7 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
+    event = maybe_call_pre_send_event_function(event)
     case Poison.encode(event) do
       {:ok, body} ->
         Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
@@ -138,5 +139,18 @@ defmodule Sentry.Client do
     |> Kernel.*(1000)
     |> Kernel.round()
     |> :timer.sleep()
+  end
+
+  defp maybe_call_pre_send_event_function(event) do
+    case Application.get_env(:sentry, :pre_event_send_function) do
+      function when is_function(function) ->
+        function.(event)
+      {module, function} ->
+        apply(module, function, [event])
+      nil ->
+        event
+      _ ->
+        raise ArgumentError, message: ":pre_event_send_function must be an anonymous function or a {Module, Function} tuple"
+    end
   end
 end
