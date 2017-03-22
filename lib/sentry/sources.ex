@@ -72,25 +72,27 @@ defmodule Sentry.Sources do
   def get_source_context(files, file_name, line_number) do
     context_lines = Application.get_env(:sentry, :context_lines, @default_context_lines)
     file = Map.get(files, file_name)
-    if file do
-      Enum.reduce(0..(2 * context_lines), {[], nil, []}, fn(i, {pre_context, context, post_context}) ->
-        context_line_number = line_number - context_lines + i
-        source = Map.get(file, context_line_number)
 
-        cond do
-          context_line_number == line_number && source ->
-            {pre_context, source, post_context}
-          context_line_number < line_number && source ->
-            {pre_context ++ [source], context, post_context}
-          context_line_number > line_number && source ->
-            {pre_context, context, post_context ++ [source]}
-          true ->
-            {pre_context, context, post_context}
-        end
-      end)
-    else
-      {[], nil, []}
-    end
+    do_get_source_context(file, line_number, context_lines)
+  end
+
+  defp do_get_source_context(nil, _, _), do: {[], nil, []}
+  defp do_get_source_context(file, line_number, context_lines) do
+    Enum.reduce(0..(2 * context_lines), {[], nil, []}, fn(i, {pre_context, context, post_context}) ->
+      context_line_number = line_number - context_lines + i
+      source = Map.get(file, context_line_number)
+
+      cond do
+        context_line_number == line_number && source ->
+          {pre_context, source, post_context}
+        context_line_number < line_number && source ->
+          {pre_context ++ [source], context, post_context}
+        context_line_number > line_number && source ->
+          {pre_context, context, post_context ++ [source]}
+        true ->
+          {pre_context, context, post_context}
+      end
+    end)
   end
 
   defp exclude_files(file_names, []), do: file_names
