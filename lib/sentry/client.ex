@@ -1,9 +1,12 @@
 defmodule Sentry.Client do
   alias Sentry.{Event, Util}
+
   require Logger
+
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
+  @hackney_pool_name :sentry_pool
 
   quote do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
@@ -19,16 +22,20 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  @spec send_event(Event.t) :: Task.t
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
-    body = Poison.encode!(event)
-
-    Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-      try_request(:post, endpoint, auth_headers, body)
-    end)
+    case Poison.encode(event) do
+      {:ok, body} ->
+        Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+          try_request(:post, endpoint, auth_headers, body)
+        end)
+      {:error, error} ->
+        log_api_error("Unable to encode Sentry error - #{inspect(error)}")
+        :error
+    end
   end
 
   defp try_request(method, url, headers, body) do
@@ -55,13 +62,13 @@ defmodule Sentry.Client do
   """
   def request(method, url, headers, body) do
     hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
+                   |> Keyword.put_new(:pool, @hackney_pool_name)
     case :hackney.request(method, url, headers, body, hackney_opts) do
       {:ok, 200, _headers, client} ->
         case :hackney.body(client) do
           {:ok, body} ->
-            id = body
-              |> Poison.decode!()
-              |> Map.get("id")
+            id = Poison.decode!(body)
+                 |> Map.get("id")
             {:ok, id}
           _ ->
             log_api_error(body)
@@ -86,7 +93,7 @@ defmodule Sentry.Client do
     "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
   end
 
-  def authorization_headers(public_key, secret_key) do
+  defp authorization_headers(public_key, secret_key) do
     [
       {"User-Agent", @sentry_client},
       {"X-Sentry-Auth", authorization_header(public_key, secret_key)}
@@ -108,6 +115,10 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
+  def hackney_pool_name do
+    @hackney_pool_name
+  end
+
   defp fetch_dsn do
     case Application.fetch_env!(:sentry, :dsn) do
       {:system, env_var} -> System.get_env(env_var)
@@ -117,7 +128,7 @@ defmodule Sentry.Client do
 
   defp log_api_error(body) do
     Logger.warn(fn ->
-      ["Failed to send sentry event.", ?\n, body]
+      ["Failed to send Sentry event.", ?\n, body]
     end)
   end
 

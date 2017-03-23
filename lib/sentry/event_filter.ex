@@ -1,8 +1,15 @@
 defmodule Sentry.EventFilter do
-  @callback exclude_exception?(atom, Exception.t) :: any
+  @moduledoc """
+
+  """
+
+  @callback exclude_exception?(Exception.t, atom) :: any
 end
 
 defmodule Sentry.DefaultEventFilter do
   @behaviour Sentry.EventFilter
+
+  @moduledoc false
+
   def exclude_exception?(_, _), do: false
 end

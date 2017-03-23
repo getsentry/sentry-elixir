@@ -53,9 +53,9 @@ defmodule Sentry do
 
   ## Filtering Exceptions
 
-  If you would like to prevent certain exceptions, the :filter configuration option
+  If you would like to prevent certain exceptions, the `:filter` configuration option
   allows you to implement the `Sentry.EventFilter` behaviour.  The first argument is the
-  source of the event, and the second is the exception to be sent.  `Sentry.Plug`
+  exception to be sent, and the second is the source of the event.  `Sentry.Plug`
   will have a source of `:plug`, and `Sentry.Logger` will have a source of `:logger`.
   If an exception does not come from either of those sources, the source will be nil
   unless the `:event_source` option is passed to `Sentry.capture_exception/2`
@@ -63,12 +63,12 @@ defmodule Sentry do
   A configuration like below will prevent sending `Phoenix.Router.NoRouteError` from `Sentry.Plug`, but
   allows other exceptions to be sent.
 
-      # sentry_event_filter.exs
+      # sentry_event_filter.ex
       defmodule MyApp.SentryEventFilter do
         @behaviour Sentry.EventFilter
 
-        def exclude_exception?(:plug, %Elixir.Phoenix.Router.NoRouteError{}), do: true
-        def exclude_exception?(_, ), do: false
+        def exclude_exception?(%Elixir.Phoenix.Router.NoRouteError{}, :plug), do: true
+        def exclude_exception?(_exception, _source), do: false
       end
 
       # config.exs
@@ -93,10 +93,14 @@ defmodule Sentry do
 
   @client Application.get_env(:sentry, :client, Sentry.Client)
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
+  @default_environment_name Mix.env
+  @max_hackney_connections Application.get_env(:sentry, :hackney_pool_max_connections, 50)
+  @hackney_timeout Application.get_env(:sentry, :hackney_pool_timeout, 5000)
 
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: @hackney_timeout, max_connections: @max_hackney_connections])
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
@@ -143,11 +147,11 @@ defmodule Sentry do
     {:ok, "Unable to parse as exception, ignoring..."}
   end
 
-  def send_event(event = %Event{}) do
-    included_environments = Application.get_env(:sentry, :included_environments)
-    environment_name = Application.get_env(:sentry, :environment_name)
+  def send_event(%Event{} = event) do
+    included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
+    environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
 
-    if environment_name in included_environments do
+    if(environment_name in included_environments) do
       @client.send_event(event)
     else
       {:ok, ""}

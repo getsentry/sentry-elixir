@@ -48,4 +48,9 @@ defmodule Sentry.ClientTest do
         end) =~ ~r/400.*Creation of this event was denied due to rate limiting/
       end
   end
+
+  test "errors when attempting to report invalid JSON" do
+    unencodable_tuple = {:a, :b, :c}
+    assert :error = Sentry.capture_message(unencodable_tuple)
+  end
 end

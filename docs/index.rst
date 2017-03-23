@@ -24,7 +24,7 @@ Edit your mix.exs file to add it as a dependency and add the ``:sentry`` package
   end
 
   defp deps do
-    [{:sentry, "~> 1.0"}]
+    [{:sentry, "~> 3.0.0"}]
   end
 
 Configuration
@@ -36,7 +36,10 @@ Setup the application production environment in your ``config/prod.exs``
 
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1",
-    environment_name: :prod
+    environment_name: :prod,
+    environment_name: :prod,
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!,
     tags: %{
       env: "production"
     },
@@ -110,9 +113,9 @@ new process and it fails you might lose your context. That said using the contex
 Filtering Events
 ----------------
 
-If you would like to prevent certain exceptions, the :filter configuration option
+If you would like to prevent certain exceptions, the ``:filter`` configuration option
 allows you to implement the ``Sentry.EventFilter`` behaviour.  The first argument is the
-source of the event, and the second is the exception to be sent.  ``Sentry.Plug``
+exception to be sent, and the second is the source of the event.  ``Sentry.Plug``
 will have a source of ``:plug``, and ``Sentry.Logger`` will have a source of ``:logger``.
 If an exception does not come from either of those sources, the source will be nil
 unless the ``:event_source`` option is passed to ``Sentry.capture_exception/2``
@@ -122,18 +125,41 @@ allows other exceptions to be sent.
 
 .. code-block:: elixir
 
-  # sentry_event_filter.exs
+  # sentry_event_filter.ex
   defmodule MyApp.SentryEventFilter do
     @behaviour Sentry.EventFilter
 
-    def exclude_exception?(:plug, %Elixir.Phoenix.Router.NoRouteError{}), do: true
-    def exclude_exception?(_, ), do: false
+    def exclude_exception?(%Elixir.Phoenix.Router.NoRouteError{}, :plug), do: true
+    def exclude_exception?(_exception, _source), do: false
   end
 
   # config.exs
   config :sentry, filter: MyApp.SentryEventFilter,
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
+
+Including Source Code
+----------------
+
+Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time. This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
+
+The best way to ensure source code is up to date is to recompile Sentry itself via ``mix deps.clean sentry, compile``.  It's possible to create a Mix Task alias in ``mix.exs`` to do this.  The example below would allow one to run ``mix.sentry_recompile`` which will force recompilation of Sentry so it has the newest source and then compile the project:
+
+.. code-block:: elixir
+  # mix.exs
+  defp aliases do
+    [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+  end
+
+To enable, set ``:enable_source_code_context`` and ``root_source_code_path``:
+
+.. code-block:: elixir
+
+  config :sentry,
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!
+
+For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
 
 Deep Dive
 ---------

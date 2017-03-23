@@ -1,7 +1,7 @@
 defmodule Sentry.Logger do
   require Logger
   @moduledoc """
-    Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true. 
+    Use this if you'd like to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true.
 
     This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
@@ -15,9 +15,7 @@ defmodule Sentry.Logger do
 
   def init(_mod, []), do: {:ok, []}
 
-  def handle_call({:configure, new_keys}, _state) do
-    {:ok, :ok, new_keys}
-  end
+  def handle_call({:configure, new_keys}, _state), do: {:ok, :ok, new_keys}
 
   def handle_event({_level, gl, _event}, state) when node(gl) != node() do
     {:ok, state}
@@ -25,46 +23,47 @@ defmodule Sentry.Logger do
 
   def handle_event({:error_report, _gl, {_pid, _type, [message | _]}}, state) when is_list(message) do
     try do
-      error_info = message[:error_info]
-      context = get_in(message, [:dictionary, :sentry_context]) || %{}
-      opts = context 
-        |> Map.take(Sentry.Context.context_keys) 
-        |> Map.to_list()
+      {kind, exception, stacktrace, module} = get_exception_and_stacktrace(message[:error_info])
+                                      |> get_initial_call_and_module(message)
 
-      case error_info do
-        {_kind, {exception, stacktrace}, _stack} when is_list(stacktrace) ->
-          opts = Keyword.put(opts, :stacktrace, stacktrace)
-          |> Keyword.put(:event_source, :logger)
-          Sentry.capture_exception(exception, opts)
-        {_kind, exception, stacktrace} ->
-          opts = Keyword.put(opts, :stacktrace, stacktrace)
-          |> Keyword.put(:event_source, :logger)
-          Sentry.capture_exception(exception, opts)
-      end
-    rescue
-      ex ->
-        error_type = strip_elixir_prefix(ex.__struct__)
-        reason = Exception.message(ex)
-        message = "Unable to notify Sentry! #{error_type}: #{reason}"
-        Logger.warn(message)
+      opts = get_in(message, ~w[dictionary sentry_context]a) || %{}
+             |> Map.take(Sentry.Context.context_keys)
+             |> Map.to_list()
+             |> Keyword.put(:event_source, :logger)
+             |> Keyword.put(:stacktrace, stacktrace)
+             |> Keyword.put(:error_type, kind)
+             |> Keyword.put(:module, module)
+
+      Sentry.capture_exception(exception, opts)
+    rescue ex ->
+      Logger.warn("Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}")
     end
 
     {:ok, state}
   end
 
-  def handle_event({_level, _gl, _event}, state) do
+  def handle_event(_, state) do
     {:ok, state}
   end
 
-  @doc """
-    Internally all modules are prefixed with Elixir. This function removes the
-    Elixir prefix from the module when it is converted to a string.
-  """
-  def strip_elixir_prefix(module) do
-    module
-    |> Atom.to_string
-    |> String.split(".")
-    |> tl
-    |> Enum.join(".")
+
+  defp get_exception_and_stacktrace({kind, {exception, sub_stack}, _stack}) when is_list(sub_stack) do
+    {kind, exception, sub_stack}
+  end
+  defp get_exception_and_stacktrace({kind, exception, stacktrace}) do
+    {kind, exception, stacktrace}
+  end
+
+  # GenServer exits will usually only report a stacktrace containing core
+  # GenServer functions, which causes Sentry to group unrelated exits
+  # together.  This gets the `:initial_call` to help disambiguate, as it contains
+  # the MFA for how the GenServer was started.
+  defp get_initial_call_and_module({kind, exception, stacktrace}, error_info) do
+    case Keyword.get(error_info, :initial_call) do
+      {module, function, arg} ->
+        {kind, exception, stacktrace ++ [{module, function, arg, []}], module}
+        _ ->
+          {kind, exception, stacktrace, nil}
+    end
   end
 end

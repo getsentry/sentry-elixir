@@ -1,9 +1,23 @@
 # Changelog
 
 ## master
+* Enhancements
+  * Bump hackney to a version that isn't retired (#135)
+
+## 3.0.0 (2017-03-02)
+* Enhancements
+  * Add dialyzer support (#128)
+* Backward incompatible changes
+  * Fix default configuration (#124)
+  * Start and use separate Sentry hackney pool instead of default (#130)
+  * Return `:error` instead of raising when encoding invalid JSON (#131)
+
+## 2.2.0 (2017-02-15)
 
 * Enhancements
   * Allow setting `hackney_opts`
+  * Add `Sentry.capture_message/1`
+  * Allow reading `:dsn` from System at runtime by configuring as `{:system, "ENV_VAR"}`
 
 ## 2.1.0 (2016-12-17)
 

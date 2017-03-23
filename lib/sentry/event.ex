@@ -1,8 +1,6 @@
 defmodule Sentry.Event do
-  alias Sentry.{Event, Util}
-
   @moduledoc """
-    Provides an Event Struct as well as transformation of Logger 
+    Provides an Event Struct as well as transformation of Logger
     entries into Sentry Events.
   """
 
@@ -25,6 +23,12 @@ defmodule Sentry.Event do
             user: %{},
             breadcrumbs: []
 
+  @type t :: %__MODULE__{}
+
+  alias Sentry.{Event, Util}
+  @source_code_context_enabled Application.fetch_env!(:sentry, :enable_source_code_context)
+  @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
+
   @doc """
   Creates an Event struct out of context collected and options
   ## Options
@@ -38,6 +42,7 @@ defmodule Sentry.Event do
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
   """
+  @spec create_event(keyword()) :: Event.t
   def create_event(opts) do
     %{user: user_context,
       tags: tags_context,
@@ -60,8 +65,7 @@ defmodule Sentry.Event do
            |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = request_context
               |> Map.merge(Keyword.get(opts, :request, %{}))
-    breadcrumbs = Keyword.get(opts, :breadcrumbs, [])
-                  |> Kernel.++(breadcrumbs_context)
+    breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
 
     level = Keyword.get(opts, :level, "error")
 
@@ -103,16 +107,29 @@ defmodule Sentry.Event do
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
   """
-  @spec transform_exception(Exception.t, Keyword.t) :: %Event{}
+  @spec transform_exception(Exception.t, keyword()) :: Event.t
   def transform_exception(exception, opts) do
-    exception = Exception.normalize(:error, exception)
+    error_type = Keyword.get(opts, :error_type) || :error
+    normalized = Exception.normalize(:error, exception)
 
+    type = if(error_type == :error) do
+      normalized.__struct__
+    else
+      error_type
+    end
+
+    value = if(error_type == :error) do
+      Exception.message(normalized)
+    else
+      Exception.format_banner(error_type, exception)
+    end
+
+    module = Keyword.get(opts, :module)
+    exception = [%{type: type, value: value, module: module}]
     message = :error
-      |> Exception.format_banner(exception)
-      |> String.trim("*")
-      |> String.trim
-
-    exception = [%{type: exception.__struct__, value: Exception.message(exception)}]
+              |> Exception.format_banner(normalized)
+              |> String.trim("*")
+              |> String.trim()
 
     opts
     |> Keyword.put(:exception, exception)
@@ -120,7 +137,7 @@ defmodule Sentry.Event do
     |> create_event()
   end
 
-  @spec add_metadata(%Event{}) :: %Event{}
+  @spec add_metadata(Event.t) :: Event.t
   def add_metadata(state) do
     %{state |
      event_id: UUID.uuid4(:hex),
@@ -134,15 +151,30 @@ defmodule Sentry.Event do
     |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
         file = Keyword.get(location, :file)
+        file = if(file, do: String.Chars.to_string(file), else: file)
         line_number = Keyword.get(location, :line)
+
         %{
           filename: file && to_string(file),
           function: Exception.format_mfa(mod, function, arity),
           module: mod,
           lineno: line_number,
         }
+        |> put_source_context(file, line_number)
       end)
     |> Enum.reverse()
+  end
+
+  @spec put_source_context(map(), String.t, integer()) :: map()
+  def put_source_context(frame, file, line_number) do
+    if(@source_code_context_enabled) do
+      {pre_context, context, post_context} = Sentry.Sources.get_source_context(@source_files, file, line_number)
+      Map.put(frame, :context_line, context)
+      |> Map.put(:pre_context, pre_context)
+      |> Map.put(:post_context, post_context)
+    else
+      frame
+    end
   end
 
   @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil

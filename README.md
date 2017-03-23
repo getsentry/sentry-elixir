@@ -17,7 +17,7 @@ defp application do
 end
 
 defp deps do
-  [{:sentry, "~> 2.0.2"}]
+  [{:sentry, "~> 3.0.0"}]
 end
 ```
 
@@ -45,7 +45,7 @@ use Plug.ErrorHandler
 use Sentry.Plug
 ```
 
-### Capture all Exceptions
+### Capture All Exceptions
 
 This library comes with an extension to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true.
 
@@ -67,7 +67,14 @@ config :sentry,
 | `release` | False  | None | |
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
-| hackney_opts | False  | [] | |
+| `hackney_opts` | False  | `[pool: :sentry_pool]` | |
+| `hackney_pool_max_connections` | False  | 50 | |
+| `hackney_pool_timeout` | False  | 5000 | |
+| `enable_source_code_context` | True | | |
+| `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
+| `context_lines` | False  | 3 | |
+| `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
+| `source_code_path_pattern` | False  | `"**/*.ex"` | |
 
 An example production config might look like this:
 
@@ -76,6 +83,8 @@ config :sentry,
   dsn: "https://public:secret@app.getsentry.com/1",
   environment_name: :prod,
   included_environments: [:prod],
+  enable_source_code_context: true,
+  root_source_code_path: File.cwd!,
   tags: %{
     env: "production"
   },
@@ -113,7 +122,22 @@ Now, on our servers, we can set the environment variable appropriately. On
 our local development machines, exceptions will never be sent, because the
 default value is not in the list of `included_environments`.
 
-Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  If you need to set [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy or different pool, the `hackney_opts` configuration is passed directly to hackney.
+Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
+
+### Reporting Exceptions with Source Code
+
+Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
+
+The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.clean sentry, compile`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below would allow one to run `mix.sentry_recompile` which will force recompilation of Sentry so it has the newest source and then compile the project:
+
+```elixir
+# mix.exs
+defp aliases do
+  [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+end
+```
+
+For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
 
 ## Testing Your Configuration
 
