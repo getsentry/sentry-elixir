@@ -53,4 +53,60 @@ defmodule Sentry.ClientTest do
     unencodable_tuple = {:a, :b, :c}
     assert :error = Sentry.capture_message(unencodable_tuple)
   end
+
+  test "calls anonymous pre_event_send_function" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request_map = Poison.decode!(body)
+      assert request_map["extra"] == %{"key" => "value"}
+      assert request_map["user"]["id"] == 1
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    Logger.metadata([key: "value", user_id: 1])
+
+    Application.put_env(:sentry, :pre_event_send_function, fn(e) ->
+      metadata = Enum.into(Logger.metadata, %{})
+      {user_id, rest_metadata} = Map.pop(metadata, :user_id)
+      %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
+    end)
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        assert capture_log(fn ->
+          Sentry.capture_exception(e)
+        end)
+    end
+
+    Application.delete_env(:sentry, :pre_event_send_function)
+  end
+
+  test "calls MFA pre_event_send_function" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request_map = Poison.decode!(body)
+      assert request_map["extra"] == %{"key" => "value", "user_id" => 1}
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    Logger.metadata([key: "value", user_id: 1])
+    Application.put_env(:sentry, :pre_event_send_function, {Sentry.PreEventSendFunctionTest, :pre_event_send_function})
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        assert capture_log(fn ->
+          Sentry.capture_exception(e)
+        end)
+    end
+
+    Application.delete_env(:sentry, :pre_event_send_function)
+  end
 end
