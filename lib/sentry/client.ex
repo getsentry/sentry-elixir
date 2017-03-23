@@ -1,4 +1,25 @@
 defmodule Sentry.Client do
+  @moduledoc """
+  This module is the default client for sending an event to Sentry via HTTP.
+
+  It makes use of `Task.Supervisor` to create unlinked asynchronous tasks
+  to avoid holding up a user's application to send a Sentry event.
+
+  ### Configuration
+
+  * `:before_send_event` - allows performing operations on the event before
+    it is sent.  Accepts an anonymous function or a {module, function} tuple, and
+    the event will be passed as the only argument.
+
+  Example configuration of putting Logger metadata in the extra context:
+
+      config :sentry,
+        before_send_event: fn(event) ->
+          metadata = Map.new(Logger.metadata)
+          %{event | extra: Map.merge(event.extra, metadata)}
+        end
+  """
+
   alias Sentry.{Event, Util}
 
   require Logger
@@ -12,10 +33,6 @@ defmodule Sentry.Client do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
 
-  @moduledoc """
-    Provides basic HTTP client request and response handling for the Sentry API.
-  """
-
   @doc """
   Starts an unlinked asynchronous task that will attempt to send the event to the Sentry
   API up to 4 times with exponential backoff.
@@ -27,6 +44,7 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
+    event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
         Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
@@ -113,6 +131,19 @@ defmodule Sentry.Client do
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
 
     {endpoint, public_key, secret_key}
+  end
+
+  def maybe_call_before_send_event(event) do
+    case Application.get_env(:sentry, :before_send_event) do
+      function when is_function(function, 1) ->
+        function.(event)
+      {module, function} ->
+        apply(module, function, [event])
+      nil ->
+        event
+      _ ->
+        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
+    end
   end
 
   def hackney_pool_name do
