@@ -90,7 +90,9 @@ defmodule Sentry.Sources do
 
   defp do_get_source_context(nil, _, _), do: {[], nil, []}
   defp do_get_source_context(file, line_number, context_lines) do
-    Enum.reduce(0..(2 * context_lines), {[], nil, []}, fn(i, {pre_context, context, post_context}) ->
+    context_line_indices = 0..(2 * context_lines)
+
+    Enum.reduce(context_line_indices, {[], nil, []}, fn(i, {pre_context, context, post_context}) ->
       context_line_number = line_number - context_lines + i
       source = Map.get(file, context_line_number)
 
