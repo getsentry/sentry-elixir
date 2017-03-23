@@ -1,6 +1,7 @@
 defmodule Sentry.EventTest do
   use ExUnit.Case, async: true
   alias Sentry.Event
+  import Sentry.TestEnvironmentHelper
 
   def event_generated_by_exception(extra \\ %{}) do
     try do
@@ -26,8 +27,8 @@ defmodule Sentry.EventTest do
     assert is_binary(event.server_name)
     assert event.stacktrace == %{frames: Enum.reverse([
       %{filename: nil, function: "Sentry.Event.not_a_function()", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 7, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 14, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
+      %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
+      %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
       %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: []},
       %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: []},
       %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: []}])
@@ -37,10 +38,9 @@ defmodule Sentry.EventTest do
   end
 
   test "respects tags in config" do
-    Application.put_env(:sentry, :tags, %{testing: "tags"})
+    modify_env(:sentry, tags: %{testing: "tags"})
     event = event_generated_by_exception()
     assert event.tags == %{testing: "tags"}
-    Application.put_env(:sentry, :tags, %{})
   end
 
   test "respects extra information passed in" do
