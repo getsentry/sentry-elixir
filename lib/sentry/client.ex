@@ -160,7 +160,7 @@ defmodule Sentry.Client do
 
   defp maybe_call_before_send_event(event) do
     case Application.get_env(:sentry, :before_send_event) do
-      function when is_function(function) ->
+      function when is_function(function, 1) ->
         function.(event)
       {module, function} ->
         apply(module, function, [event])
