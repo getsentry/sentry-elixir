@@ -25,7 +25,7 @@ defmodule Sentry.Context do
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
       request: Map.get(context, @request_key, %{}),
-      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse |> Enum.into([]),
+      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse |> Enum.to_list
     }
   end
 
