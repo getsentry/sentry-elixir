@@ -2,6 +2,16 @@ defmodule Sentry.PlugTest do
   use ExUnit.Case, async: true
   use Plug.Test
 
+  test "non-existent route exceptions are ignored" do
+    exception = %FunctionClauseError{arity: 4,
+                                     function: :do_match,
+                                     module: Sentry.PlugTest.ExampleApp}
+
+    conn = conn(:get, "/not_found")
+
+    assert exception == catch_error(ExampleApp.call conn, [])
+  end
+
   test "exception makes call to Sentry API" do
    bypass = Bypass.open
    Bypass.expect bypass, fn conn ->

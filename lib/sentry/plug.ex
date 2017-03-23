@@ -93,6 +93,18 @@ defmodule Sentry.Plug do
     request_id_header = Keyword.get(env, :request_id_header)
 
     quote do
+      # Ignore 404s for Plug routes
+      defp handle_errors(conn, %{reason: %FunctionClauseError{function: :do_match}}) do
+        nil
+      end
+
+      if :code.is_loaded(Phoenix) do
+        # Ignore 404s for Phoenix routes
+        defp handle_errors(conn, %{reason: %Phoenix.Router.NoRouteError{}}) do
+          nil
+        end
+      end
+
       defp handle_errors(conn, %{kind: kind, reason: reason, stack: stack}) do
         opts = [body_scrubber: unquote(body_scrubber),
                  header_scrubber: unquote(header_scrubber),
