@@ -54,7 +54,7 @@ defmodule Sentry.Context do
   end
 
   defp get_context do
-    Process.get(@process_dictionary_key, %{})
+    Process.get(@process_dictionary_key) || %{}
   end
 
   def add_breadcrumb(map) when is_map(map) do
