@@ -1,28 +1,25 @@
 defmodule Sentry.ClientTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
+  import Sentry.TestEnvironmentHelper
 
   alias Sentry.Client
-  @sentry_dsn "https://public:secret@app.getsentry.com/1"
-
-  setup do
-    Application.put_env(:sentry, :dsn, @sentry_dsn)
-  end
 
   test "authorization" do
+    modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
     {_endpoint, public_key, private_key} = Client.get_dsn!
     assert Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret/
   end
 
   test "get dsn with default config" do
+    modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} = Sentry.Client.get_dsn!
   end
 
   test "get dsn with system config" do
-    System.put_env("SYSTEM_KEY", @sentry_dsn)
-    Application.put_env(:sentry, :dsn, {:system, "SYSTEM_KEY"})
+    modify_env(:sentry, [dsn: {:system, "SYSTEM_KEY"}])
+    System.put_env("SYSTEM_KEY", "https://public:secret@app.getsentry.com/1")
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} = Sentry.Client.get_dsn!
-
     System.delete_env("SYSTEM_KEY")
   end
 
@@ -37,7 +34,7 @@ defmodule Sentry.ClientTest do
       |> Plug.Conn.resp(400, "Something bad happened")
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1"])
 
     try do
       Event.not_a_function
@@ -64,14 +61,15 @@ defmodule Sentry.ClientTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
+                         before_send_event: fn(e) ->
+                           metadata = Map.new(Logger.metadata)
+                           {user_id, rest_metadata} = Map.pop(metadata, :user_id)
+                           %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
+                         end
+                       ]
+    )
     Logger.metadata([key: "value", user_id: 1])
-
-    Application.put_env(:sentry, :before_send_event, fn(e) ->
-      metadata = Enum.into(Logger.metadata, %{})
-      {user_id, rest_metadata} = Map.pop(metadata, :user_id)
-      %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
-    end)
 
     try do
       Event.not_a_function
@@ -81,8 +79,6 @@ defmodule Sentry.ClientTest do
           Sentry.capture_exception(e)
         end)
     end
-
-    Application.delete_env(:sentry, :before_send_event)
   end
 
   test "calls MFA before_send_event" do
@@ -94,9 +90,8 @@ defmodule Sentry.ClientTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1", before_send_event: {Sentry.BeforeSendEventTest, :before_send_event}])
     Logger.metadata([key: "value", user_id: 1])
-    Application.put_env(:sentry, :before_send_event, {Sentry.BeforeSendEventTest, :before_send_event})
 
     try do
       Event.not_a_function
@@ -106,7 +101,5 @@ defmodule Sentry.ClientTest do
           Sentry.capture_exception(e)
         end)
     end
-
-    Application.delete_env(:sentry, :before_send_event)
   end
 end
