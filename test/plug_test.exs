@@ -5,11 +5,13 @@ defmodule Sentry.PlugTest do
   test "non-existent route exceptions are ignored" do
     exception = %FunctionClauseError{arity: 4,
                                      function: :do_match,
-                                     module: Sentry.PlugTest.ExampleApp}
+                                     module: Sentry.ExampleApp}
 
-    conn = conn(:get, "/not_found")
 
-    assert exception == catch_error(ExampleApp.call conn, [])
+    assert ^exception = assert_raise(FunctionClauseError, "no function clause matching in Sentry.ExampleApp.do_match/4", fn ->
+      conn(:get, "/not_found")
+      |> Sentry.ExampleApp.call([])
+    end)
   end
 
   test "exception makes call to Sentry API" do
