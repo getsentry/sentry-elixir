@@ -25,7 +25,7 @@ defmodule Sentry.Context do
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
       request: Map.get(context, @request_key, %{}),
-      breadcrumbs: Map.get(context, @breadcrumbs_key, []),
+      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse |> Enum.to_list
     }
   end
 
@@ -62,11 +62,10 @@ defmodule Sentry.Context do
   end
   def add_breadcrumb(map) when is_map(map) do
     map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
-    current_context = get_context()
-    breadcrumbs = Map.get(current_context, @breadcrumbs_key, [])
-    new_breadcrumbs = breadcrumbs ++ [map]
-    new_context = Map.put(current_context, @breadcrumbs_key, new_breadcrumbs)
-    Process.put(@process_dictionary_key, new_context)
+    context = get_context()
+              |> Map.update(@breadcrumbs_key, [map], &([map | &1]))
+
+    Process.put(@process_dictionary_key, context)
   end
 
   defp set_context(current, key, new) when is_map(current) and is_map(new) do
