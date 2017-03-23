@@ -57,6 +57,9 @@ defmodule Sentry.Context do
     Process.get(@process_dictionary_key) || %{}
   end
 
+  def add_breadcrumb(list) when is_list(list) do
+    add_breadcrumb(Enum.into(list, %{}))
+  end
   def add_breadcrumb(map) when is_map(map) do
     map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
     current_context = get_context()
