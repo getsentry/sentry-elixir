@@ -1,8 +1,16 @@
 # Changelog
 
 ## master
+
+## 4.0.0 (TBD)
 * Enhancements
   * Bump hackney to a version that isn't retired (#135)
+  * Improve Logger reporting (#136)
+  * Accept keyword lists in `Sentry.Context.add_breadcrumb/1` (#139)
+  * Add elements to beginning of breadcrumbs list for performance (#141)
+* Backward incompatible changes
+  * Ignore non-existent route exceptions (#110)
+  * Sending source code as context when reporting errors (#138)
 
 ## 3.0.0 (2017-03-02)
 * Enhancements
