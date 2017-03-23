@@ -39,14 +39,14 @@ defmodule Sentry.ClientTest do
 
     Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
 
-      try do
-        Event.not_a_function
-      rescue
-        e ->
+    try do
+      Event.not_a_function
+    rescue
+      e ->
         assert capture_log(fn ->
           Sentry.capture_exception(e)
         end) =~ ~r/400.*Creation of this event was denied due to rate limiting/
-      end
+    end
   end
 
   test "errors when attempting to report invalid JSON" do
