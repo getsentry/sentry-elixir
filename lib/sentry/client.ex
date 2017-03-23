@@ -133,6 +133,19 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
+  def maybe_call_before_send_event(event) do
+    case Application.get_env(:sentry, :before_send_event) do
+      function when is_function(function, 1) ->
+        function.(event)
+      {module, function} ->
+        apply(module, function, [event])
+      nil ->
+        event
+      _ ->
+        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
+    end
+  end
+
   def hackney_pool_name do
     @hackney_pool_name
   end
@@ -156,18 +169,5 @@ defmodule Sentry.Client do
     |> Kernel.*(1000)
     |> Kernel.round()
     |> :timer.sleep()
-  end
-
-  defp maybe_call_before_send_event(event) do
-    case Application.get_env(:sentry, :before_send_event) do
-      function when is_function(function, 1) ->
-        function.(event)
-      {module, function} ->
-        apply(module, function, [event])
-      nil ->
-        event
-      _ ->
-        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
-    end
   end
 end
