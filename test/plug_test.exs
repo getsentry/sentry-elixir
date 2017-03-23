@@ -1,5 +1,5 @@
 defmodule Sentry.PlugTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
   use Plug.Test
 
   test "non-existent route exceptions are ignored" do

@@ -1,5 +1,5 @@
 defmodule Sentry.SourcesTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
   use Plug.Test
 
   test "exception makes call to Sentry API" do
