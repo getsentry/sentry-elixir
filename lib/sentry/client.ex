@@ -1,4 +1,25 @@
 defmodule Sentry.Client do
+  @moduledoc """
+  This module is the default client for sending an event to Sentry via HTTP.
+
+  It makes use of `Task.Supervisor` to create unlinked asynchronous tasks
+  to avoid holding up a user's application to send a Sentry event.
+
+  ### Configuration
+
+  * `:pre_event_send_function` - allows performing operations on the event before
+    it is sent.  Accepts an anonymous function or a {module, function} tuple, and
+    the event will be passed as the only argument.
+
+  Example configuration of putting Logger metadata in the extra context:
+
+      config :sentry,
+        pre_event_send_function: fn(event) ->
+          metadata = Enum.into(Logger.metadata, %{})
+          %{event | extra: Map.merge(event.extra, metadata)}
+        end
+  """
+
   alias Sentry.{Event, Util}
 
   require Logger
@@ -11,10 +32,6 @@ defmodule Sentry.Client do
   quote do
     unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
   end
-
-  @moduledoc """
-    Provides basic HTTP client request and response handling for the Sentry API.
-  """
 
   @doc """
   Starts an unlinked asynchronous task that will attempt to send the event to the Sentry

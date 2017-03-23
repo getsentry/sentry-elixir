@@ -77,6 +77,10 @@ Optional settings
 
   Sentry starts its own hackney pool named ``:sentry_pool``, and defaults to using it.  Hackney's ``pool`` configuration as well others like proxy or response timeout can be set through this configuration as it is passed directly to hackney when making a request.
 
+.. describe:: pre_event_send_function
+
+  This option allows performing operations on the event before it is sent by ``Sentry.Client``.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
+
 .. describe:: context_lines
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.
