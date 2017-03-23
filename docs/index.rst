@@ -37,6 +37,9 @@ Setup the application production environment in your ``config/prod.exs``
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1",
     environment_name: :prod,
+    environment_name: :prod,
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!,
     tags: %{
       env: "production"
     },
@@ -134,6 +137,29 @@ allows other exceptions to be sent.
   config :sentry, filter: MyApp.SentryEventFilter,
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
+
+Including Source Code
+----------------
+
+Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time. This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
+
+The best way to ensure source code is up to date is to recompile Sentry itself via ``mix deps.clean sentry, compile``.  It's possible to create a Mix Task alias in ``mix.exs`` to do this.  The example below would allow one to run ``mix.sentry_recompile`` which will force recompilation of Sentry so it has the newest source and then compile the project:
+
+.. code-block:: elixir
+  # mix.exs
+  defp aliases do
+    [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+  end
+
+To enable, set ``:enable_source_code_context`` and ``root_source_code_path``:
+
+.. code-block:: elixir
+
+  config :sentry,
+    enable_source_code_context: true,
+    root_source_code_path: File.cwd!
+
+For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
 
 Deep Dive
 ---------

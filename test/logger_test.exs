@@ -88,7 +88,10 @@ defmodule Sentry.LoggerTest do
       assert List.last(json["stacktrace"]["frames"]) == %{"filename" => nil,
                                                           "function" => "Sentry.TestGenServer.not_a_function(1, 2, 3)",
                                                           "lineno" => nil,
-                                                          "module" => "Elixir.Sentry.TestGenServer"
+                                                          "module" => "Elixir.Sentry.TestGenServer",
+                                                          "context_line" => nil,
+                                                          "pre_context" => [],
+                                                          "post_context" => [],
                                                         }
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"

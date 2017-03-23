@@ -1,6 +1,4 @@
 defmodule Sentry.Event do
-  alias Sentry.{Event, Util}
-
   @moduledoc """
     Provides an Event Struct as well as transformation of Logger
     entries into Sentry Events.
@@ -26,6 +24,10 @@ defmodule Sentry.Event do
             breadcrumbs: []
 
   @type t :: %__MODULE__{}
+
+  alias Sentry.{Event, Util}
+  @source_code_context_enabled Application.fetch_env!(:sentry, :enable_source_code_context)
+  @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
   @doc """
   Creates an Event struct out of context collected and options
@@ -149,6 +151,7 @@ defmodule Sentry.Event do
     |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
         file = Keyword.get(location, :file)
+        file = if(file, do: String.Chars.to_string(file), else: file)
         line_number = Keyword.get(location, :line)
 
         %{
@@ -157,8 +160,21 @@ defmodule Sentry.Event do
           module: mod,
           lineno: line_number,
         }
+        |> put_source_context(file, line_number)
       end)
     |> Enum.reverse()
+  end
+
+  @spec put_source_context(map(), String.t, integer()) :: map()
+  def put_source_context(frame, file, line_number) do
+    if(@source_code_context_enabled) do
+      {pre_context, context, post_context} = Sentry.Sources.get_source_context(@source_files, file, line_number)
+      Map.put(frame, :context_line, context)
+      |> Map.put(:pre_context, pre_context)
+      |> Map.put(:post_context, post_context)
+    else
+      frame
+    end
   end
 
   @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil

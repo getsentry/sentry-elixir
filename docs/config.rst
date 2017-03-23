@@ -28,6 +28,14 @@ Required settings
 
   The DSN provided by Sentry.
 
+.. describe:: enable_source_code_context
+
+  When true, Sentry will read and store source code files to report the source code that caused an exception.
+
+.. describe:: root_source_code_path
+
+  This is only required if ``enable_source_code_context`` is enabled.  Should generally be set to ``File.cwd!``.
+
 Optional settings
 ------------------
 
@@ -68,6 +76,18 @@ Optional settings
 .. describe:: hackney_opts
 
   Sentry starts its own hackney pool named ``:sentry_pool``, and defaults to using it.  Hackney's ``pool`` configuration as well others like proxy or response timeout can be set through this configuration as it is passed directly to hackney when making a request.
+
+.. describe:: context_lines
+
+  The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.
+
+.. describe:: source_code_exclude_patterns
+
+  A list of Regex expressions used to exclude file paths that should not be stored or referenced when reporting exceptions.  Defaults to ``[~r"/_build/", ~r"/deps/", ~r"/priv/"]``.
+
+.. describe:: source_code_path_pattern
+
+  A glob that is expanded to select files from the ``:root_source_code_path``.  Defaults to ``"**/*.ex"``.
 
 Testing Your Configuration
 --------------------------

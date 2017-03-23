@@ -2,28 +2,6 @@ defmodule Sentry.PlugTest do
   use ExUnit.Case, async: true
   use Plug.Test
 
-  defmodule ExampleApp do
-    use Plug.Router
-    use Plug.ErrorHandler
-    use Sentry.Plug, request_id_header: "x-request-id"
-
-
-    plug Plug.Parsers, parsers: [:multipart]
-    plug Plug.RequestId
-    plug :match
-    plug :dispatch
-
-    get "/error_route" do
-      _ = conn
-      raise RuntimeError, "Error"
-    end
-
-    match "/error_route" do
-      _ = conn
-      raise RuntimeError, "Error"
-    end
-  end
-
   test "exception makes call to Sentry API" do
    bypass = Bypass.open
    Bypass.expect bypass, fn conn ->
@@ -40,7 +18,7 @@ defmodule Sentry.PlugTest do
 
    assert_raise(RuntimeError, "Error", fn ->
      conn(:get, "/error_route")
-     |> ExampleApp.call([])
+     |> Sentry.ExampleApp.call([])
    end)
   end
 
