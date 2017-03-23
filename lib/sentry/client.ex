@@ -7,14 +7,14 @@ defmodule Sentry.Client do
 
   ### Configuration
 
-  * `:pre_event_send_function` - allows performing operations on the event before
+  * `:before_send_event` - allows performing operations on the event before
     it is sent.  Accepts an anonymous function or a {module, function} tuple, and
     the event will be passed as the only argument.
 
   Example configuration of putting Logger metadata in the extra context:
 
       config :sentry,
-        pre_event_send_function: fn(event) ->
+        before_send_event: fn(event) ->
           metadata = Enum.into(Logger.metadata, %{})
           %{event | extra: Map.merge(event.extra, metadata)}
         end
@@ -44,7 +44,7 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key} = get_dsn!()
 
     auth_headers = authorization_headers(public_key, secret_key)
-    event = maybe_call_pre_send_event_function(event)
+    event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
         Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
@@ -158,8 +158,8 @@ defmodule Sentry.Client do
     |> :timer.sleep()
   end
 
-  defp maybe_call_pre_send_event_function(event) do
-    case Application.get_env(:sentry, :pre_event_send_function) do
+  defp maybe_call_before_send_event(event) do
+    case Application.get_env(:sentry, :before_send_event) do
       function when is_function(function) ->
         function.(event)
       {module, function} ->
@@ -167,7 +167,7 @@ defmodule Sentry.Client do
       nil ->
         event
       _ ->
-        raise ArgumentError, message: ":pre_event_send_function must be an anonymous function or a {Module, Function} tuple"
+        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
     end
   end
 end

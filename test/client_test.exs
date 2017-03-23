@@ -54,7 +54,7 @@ defmodule Sentry.ClientTest do
     assert :error = Sentry.capture_message(unencodable_tuple)
   end
 
-  test "calls anonymous pre_event_send_function" do
+  test "calls anonymous before_send_event" do
     bypass = Bypass.open
     Bypass.expect bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
@@ -67,7 +67,7 @@ defmodule Sentry.ClientTest do
     Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
     Logger.metadata([key: "value", user_id: 1])
 
-    Application.put_env(:sentry, :pre_event_send_function, fn(e) ->
+    Application.put_env(:sentry, :before_send_event, fn(e) ->
       metadata = Enum.into(Logger.metadata, %{})
       {user_id, rest_metadata} = Map.pop(metadata, :user_id)
       %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
@@ -82,10 +82,10 @@ defmodule Sentry.ClientTest do
         end)
     end
 
-    Application.delete_env(:sentry, :pre_event_send_function)
+    Application.delete_env(:sentry, :before_send_event)
   end
 
-  test "calls MFA pre_event_send_function" do
+  test "calls MFA before_send_event" do
     bypass = Bypass.open
     Bypass.expect bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
@@ -96,7 +96,7 @@ defmodule Sentry.ClientTest do
 
     Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
     Logger.metadata([key: "value", user_id: 1])
-    Application.put_env(:sentry, :pre_event_send_function, {Sentry.PreEventSendFunctionTest, :pre_event_send_function})
+    Application.put_env(:sentry, :before_send_event, {Sentry.BeforeSendEventTest, :before_send_event})
 
     try do
       Event.not_a_function
@@ -107,6 +107,6 @@ defmodule Sentry.ClientTest do
         end)
     end
 
-    Application.delete_env(:sentry, :pre_event_send_function)
+    Application.delete_env(:sentry, :before_send_event)
   end
 end

@@ -11,7 +11,7 @@ defmodule Sentry.TestClient do
   end
 
   defp maybe_call_pre_send_event_function(event) do
-    case Application.get_env(:sentry, :pre_event_send_function) do
+    case Application.get_env(:sentry, :before_send_event) do
       function when is_function(function) ->
         function.(event)
       {module, function} ->
@@ -19,7 +19,7 @@ defmodule Sentry.TestClient do
       nil ->
         event
       _ ->
-        raise ArgumentError, message: ":pre_event_send_function must be an anonymous function or a {Module, Function} tuple"
+        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
     end
   end
 end
