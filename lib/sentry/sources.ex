@@ -68,6 +68,18 @@ defmodule Sentry.Sources do
     end)
   end
 
+  @doc """
+  Given the source code map, a filename and a line number, this method retrieves the source code context.
+
+  When reporting source code context to the Sentry API, it expects three separate values.  They are the source code
+  for the specific line the error occurred on, the list of the source code for the lines preceding, and the
+  list of the source code for the lines following.  The number of lines in the lists depends on what is
+  configured in `:context_lines`.  The number configured is how many lines to get on each side of the line that
+  caused the error.  If it is configured to be `3`, the method will attempt to get the 3 lines preceding, the
+  3 lines following, and the line that the error occurred on, for a possible maximum of 7 lines.
+
+  The three values are returned in a three element tuple as `{preceding_source_code_list, source_code_from_error_line, following_source_code_list}`.
+  """
   @spec get_source_context(source_map, String.t, pos_integer()) :: {[String.t], String.t | nil, [String.t]}
   def get_source_context(files, file_name, line_number) do
     context_lines = Application.get_env(:sentry, :context_lines, @default_context_lines)
