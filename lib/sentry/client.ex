@@ -15,7 +15,7 @@ defmodule Sentry.Client do
 
       config :sentry,
         before_send_event: fn(event) ->
-          metadata = Enum.into(Logger.metadata, %{})
+          metadata = Map.new(Logger.metadata)
           %{event | extra: Map.merge(event.extra, metadata)}
         end
   """
