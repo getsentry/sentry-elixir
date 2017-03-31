@@ -37,7 +37,6 @@ Setup the application production environment in your ``config/prod.exs``
   config :sentry,
     dsn: "https://public:secret@app.getsentry.com/1",
     environment_name: :prod,
-    environment_name: :prod,
     enable_source_code_context: true,
     root_source_code_path: File.cwd!,
     tags: %{
