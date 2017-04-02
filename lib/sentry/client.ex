@@ -99,14 +99,14 @@ defmodule Sentry.Client do
   def authorization_header(public_key, secret_key) do
     timestamp = Util.unix_timestamp()
     data = [
-      {"sentry_version", @sentry_version,}
-      {"sentry_client", @sentry_client,}
-      {"sentry_timestamp", to_string(timestamp),}
-      {"sentry_key", public_key,}
+      {"sentry_version", to_string(@sentry_version)},
+      {"sentry_client", @sentry_client},
+      {"sentry_timestamp", to_string(timestamp)},
+      {"sentry_key", public_key},
       {"sentry_secret", secret_key}
     ]
     query = data
-            |> Enum.map(fn {name, value} -> name <> "=" <> value)
+            |> Enum.map(fn {name, value} -> name <> "=" <> value end)
             |> Enum.join(", ")
     "Sentry " <> query
   end
