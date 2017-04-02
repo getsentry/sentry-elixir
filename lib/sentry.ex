@@ -106,7 +106,9 @@ defmodule Sentry do
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
-    if @use_error_logger, do: :error_logger.add_report_handler(Sentry.Logger)
+    if @use_error_logger do
+      :error_logger.add_report_handler(Sentry.Logger)
+    end
 
     Supervisor.start_link(children, opts)
   end
