@@ -56,20 +56,15 @@ defmodule Sentry.Client do
     end
   end
 
-  defp try_request(method, url, headers, body) do
-    do_try_request(method, url, headers, body, 1)
-  end
-
-  defp do_try_request(_method, _url, _headers, _body, current_attempt) when current_attempt > @max_attempts do
-    :error
-  end
-
-  defp do_try_request(method, url, headers, body, current_attempt) when current_attempt <= @max_attempts do
+  defp try_request(method, url, headers, body, current_attempt \\ 1)
+  defp try_request(_, _, _, _, current_attempt)
+    when current_attempt > @max_attempts, do: :error
+  defp try_request(method, url, headers, body, current_attempt) do
     case request(method, url, headers, body) do
       {:ok, id} -> {:ok, id}
       _ ->
         sleep(current_attempt)
-        do_try_request(method, url, headers, body, current_attempt + 1)
+        try_request(method, url, headers, body, current_attempt + 1)
     end
   end
 
@@ -81,17 +76,12 @@ defmodule Sentry.Client do
   def request(method, url, headers, body) do
     hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
                    |> Keyword.put_new(:pool, @hackney_pool_name)
-    case :hackney.request(method, url, headers, body, hackney_opts) do
-      {:ok, 200, _headers, client} ->
-        case :hackney.body(client) do
-          {:ok, body} ->
-            id = Poison.decode!(body)
-                 |> Map.get("id")
-            {:ok, id}
-          _ ->
-            log_api_error(body)
-            :error
-        end
+
+    with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
+         {:ok, body} <- :hackney.body(client),
+         {:ok, json} <- Poison.decode(body) do
+      {:ok, Map.get(json, "id")}
+    else
       {:ok, status, headers, _client} ->
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
@@ -108,7 +98,17 @@ defmodule Sentry.Client do
   @spec authorization_header(String.t, String.t) :: String.t
   def authorization_header(public_key, secret_key) do
     timestamp = Util.unix_timestamp()
-    "Sentry sentry_version=#{@sentry_version}, sentry_client=#{@sentry_client}, sentry_timestamp=#{timestamp}, sentry_key=#{public_key}, sentry_secret=#{secret_key}"
+    data = [
+      {"sentry_version", @sentry_version,}
+      {"sentry_client", @sentry_client,}
+      {"sentry_timestamp", to_string(timestamp),}
+      {"sentry_key", public_key,}
+      {"sentry_secret", secret_key}
+    ]
+    query = data
+            |> Enum.map(fn {name, value} -> name <> "=" <> value)
+            |> Enum.join(", ")
+    "Sentry " <> query
   end
 
   defp authorization_headers(public_key, secret_key) do
