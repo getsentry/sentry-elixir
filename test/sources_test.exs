@@ -1,6 +1,7 @@
 defmodule Sentry.SourcesTest do
   use ExUnit.Case
   use Plug.Test
+  import Sentry.TestEnvironmentHelper
 
   test "exception makes call to Sentry API" do
     correct_context = %{"context_line" => "    raise RuntimeError, \"Error\"",
@@ -23,9 +24,7 @@ defmodule Sentry.SourcesTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-    Application.put_env(:sentry, :included_environments, [:test])
-    Application.put_env(:sentry, :environment_name, :test)
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(RuntimeError, "Error", fn ->
       conn(:get, "/error_route")

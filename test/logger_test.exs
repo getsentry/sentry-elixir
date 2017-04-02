@@ -1,6 +1,7 @@
 defmodule Sentry.LoggerTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
+  import Sentry.TestEnvironmentHelper
 
   test "exception makes call to Sentry API" do
     bypass = Bypass.open
@@ -15,7 +16,7 @@ defmodule Sentry.LoggerTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->
@@ -42,7 +43,7 @@ defmodule Sentry.LoggerTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->
@@ -66,7 +67,7 @@ defmodule Sentry.LoggerTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->
@@ -98,7 +99,7 @@ defmodule Sentry.LoggerTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     :error_logger.add_report_handler(Sentry.Logger)
 
     capture_log fn ->
