@@ -2,7 +2,7 @@
 
 ## master
 
-## 4.0.0 (TBD)
+## 4.0.0 (2017-04-20)
 * Enhancements
   * Bump hackney to a version that isn't retired (#135)
   * Improve Logger reporting (#136)

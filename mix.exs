@@ -4,7 +4,7 @@ defmodule Sentry.Mixfile do
   def project do
     [
       app: :sentry,
-      version: "3.0.0",
+      version: "4.0.0",
       elixir: "~> 1.3",
       description: "The Official Elixir client for Sentry",
       package: package(),
