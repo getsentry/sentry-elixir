@@ -3,6 +3,9 @@
 ## master
 
 ## 4.0.0 (2017-04-20)
+
+See these [`3.0.0` to `4.0.0` upgrade instructions](https://gist.github.com/mitchellhenke/5248b3073f113309fa25550a0e4126d4) to update your existing app.
+
 * Enhancements
   * Bump hackney to a version that isn't retired (#135)
   * Improve Logger reporting (#136)
