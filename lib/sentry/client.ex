@@ -93,7 +93,7 @@ defmodule Sentry.Client do
             :error
         end
       {:ok, status, headers, client} ->
-        :hackney.close(client)
+        :hackney.skip_body(client)
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
         :error
