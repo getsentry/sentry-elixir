@@ -25,6 +25,7 @@ defmodule Sentry.Sources do
 
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
+        enable_source_code_context: true,
         root_source_code_path: File.cwd!,
         context_lines: 5
 
