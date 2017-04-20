@@ -36,7 +36,7 @@ defmodule Sentry.Logger do
 
       Sentry.capture_exception(exception, opts)
     rescue ex ->
-      Logger.warn("Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}")
+      Logger.warn(fn -> "Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}" end)
     end
 
     {:ok, state}

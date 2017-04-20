@@ -91,7 +91,6 @@ defmodule Sentry do
   See `Sentry.Logger`
   """
 
-  @client Application.get_env(:sentry, :client, Sentry.Client)
   @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
   @default_environment_name Mix.env
   @max_hackney_connections Application.get_env(:sentry, :hackney_pool_max_connections, 50)
@@ -153,9 +152,10 @@ defmodule Sentry do
   def send_event(%Event{} = event) do
     included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
     environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
+    client = Application.get_env(:sentry, :client, Sentry.Client)
 
     if environment_name in included_environments do
-      @client.send_event(event)
+      client.send_event(event)
     else
       :ignored
     end
