@@ -53,7 +53,7 @@ defmodule Sentry.Sources do
   @default_context_lines 3
 
   def load_files do
-    root_path = Application.fetch_env!(:sentry, :root_path)
+    root_path = Application.fetch_env!(:sentry, :root_source_code_path)
     path_pattern = Application.get_env(:sentry, :source_code_path_pattern, @default_path_pattern)
     exclude_patterns = Application.get_env(:sentry, :source_code_exclude_patterns, @default_exclude_patterns)
 

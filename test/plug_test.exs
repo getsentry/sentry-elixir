@@ -1,6 +1,7 @@
 defmodule Sentry.PlugTest do
   use ExUnit.Case
   use Plug.Test
+  import Sentry.TestEnvironmentHelper
 
   test "non-existent route exceptions are ignored" do
     exception = %FunctionClauseError{arity: 4,
@@ -15,23 +16,22 @@ defmodule Sentry.PlugTest do
   end
 
   test "exception makes call to Sentry API" do
-   bypass = Bypass.open
-   Bypass.expect bypass, fn conn ->
-     {:ok, body, conn} = Plug.Conn.read_body(conn)
-     assert body =~ "RuntimeError"
-     assert body =~ "ExampleApp"
-     assert conn.request_path == "/api/1/store/"
-     assert conn.method == "POST"
-     Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-   end
-   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-   Application.put_env(:sentry, :included_environments, [:test])
-   Application.put_env(:sentry, :environment_name, :test)
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert body =~ "RuntimeError"
+      assert body =~ "ExampleApp"
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
 
-   assert_raise(RuntimeError, "Error", fn ->
-     conn(:get, "/error_route")
-     |> Sentry.ExampleApp.call([])
-   end)
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    assert_raise(RuntimeError, "Error", fn ->
+      conn(:get, "/error_route")
+      |> Sentry.ExampleApp.call([])
+    end)
   end
 
   test "builds request data" do

@@ -1,11 +1,9 @@
 defmodule SentryTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
+  import Sentry.TestEnvironmentHelper
 
   test "excludes events properly" do
-   Application.put_env(:sentry, :filter, Sentry.TestFilter)
-
-
    bypass = Bypass.open
    Bypass.expect bypass, fn conn ->
      {:ok, body, conn} = Plug.Conn.read_body(conn)
@@ -15,9 +13,7 @@ defmodule SentryTest do
      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
    end
 
-   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-   Application.put_env(:sentry, :included_environments, [:test])
-   Application.put_env(:sentry, :environment_name, :test)
+   modify_env(:sentry, filter: Sentry.TestFilter, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
    assert {:ok, _} = Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug])
    assert :excluded = Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug])
@@ -25,8 +21,6 @@ defmodule SentryTest do
   end
 
   test "errors when taking too long to receive response" do
-   Application.put_env(:sentry, :filter, Sentry.TestFilter)
-
    bypass = Bypass.open
    Bypass.expect bypass, fn conn ->
      :timer.sleep(100)
@@ -36,9 +30,7 @@ defmodule SentryTest do
    end
    Bypass.pass(bypass)
 
-   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-   Application.put_env(:sentry, :included_environments, [:test])
-   Application.put_env(:sentry, :environment_name, :test)
+   modify_env(:sentry, filter: Sentry.TestFilter, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
    assert capture_log(fn ->
      assert :error = Sentry.capture_message("error", [])

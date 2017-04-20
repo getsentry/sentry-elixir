@@ -76,13 +76,13 @@ defmodule Sentry.Client do
   def request(method, url, headers, body) do
     hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
                    |> Keyword.put_new(:pool, @hackney_pool_name)
-
     with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
          {:ok, json} <- Poison.decode(body) do
       {:ok, Map.get(json, "id")}
     else
-      {:ok, status, headers, _client} ->
+      {:ok, status, headers, client} ->
+        :hackney.skip_body(client)
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
         :error
