@@ -39,7 +39,7 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(Event.t) :: Task.t
+  @spec send_event(Event.t) :: {:ok, Task.t} | :error
   def send_event(%Event{} = event) do
     {endpoint, public_key, secret_key} = get_dsn!()
 
@@ -47,9 +47,9 @@ defmodule Sentry.Client do
     event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
-        Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+        {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
           try_request(:post, endpoint, auth_headers, body)
-        end)
+        end)}
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
         :error

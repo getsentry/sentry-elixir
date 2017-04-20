@@ -97,13 +97,14 @@ defmodule Sentry do
   @max_hackney_connections Application.get_env(:sentry, :hackney_pool_max_connections, 50)
   @hackney_timeout Application.get_env(:sentry, :hackney_pool_timeout, 5000)
 
+  @type task :: {:ok, Task.t} | :error | :excluded | :ignored
+
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
       :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: @hackney_timeout, max_connections: @max_hackney_connections])
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
-
 
     if @use_error_logger do
       :error_logger.add_report_handler(Sentry.Logger)
@@ -115,14 +116,16 @@ defmodule Sentry do
   @doc """
     Parses and submits an exception to Sentry if current environment is in included_environments.
   """
-  @spec capture_exception(Exception.t, Keyword.t) :: {:ok, String.t} | :error | :excluded
+  @spec capture_exception(Exception.t, Keyword.t) :: task
   def capture_exception(exception, opts \\ []) do
     filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
     {source, opts} = Keyword.pop(opts, :event_source)
-    if(filter_module.exclude_exception?(exception, source)) do
+
+    if filter_module.exclude_exception?(exception, source) do
       :excluded
     else
-      Event.transform_exception(exception, opts)
+      exception
+      |> Event.transform_exception(opts)
       |> send_event()
     end
   end
@@ -130,7 +133,7 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
   """
-  @spec capture_message(String.t, Keyword.t) :: {:ok, String.t} | :error
+  @spec capture_message(String.t, Keyword.t) :: task
   def capture_message(message, opts \\ []) do
     opts
     |> Keyword.put(:message, message)
@@ -141,20 +144,20 @@ defmodule Sentry do
   @doc """
     Sends a `Sentry.Event`
   """
-  @spec send_event(%Event{}) :: {:ok, String.t} | :error
+  @spec send_event(Event.t) :: task
   def send_event(%Event{message: nil, exception: nil}) do
-    Logger.warn("unable to parse exception")
-    {:ok, "Unable to parse as exception, ignoring..."}
-  end
+    Logger.warn("Sentry: unable to parse exception")
 
+    :ignored
+  end
   def send_event(%Event{} = event) do
     included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
     environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
 
-    if(environment_name in included_environments) do
+    if environment_name in included_environments do
       @client.send_event(event)
     else
-      {:ok, ""}
+      :ignored
     end
   end
 end

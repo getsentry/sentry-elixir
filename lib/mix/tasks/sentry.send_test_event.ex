@@ -44,10 +44,11 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     if env_name in included_envs do
       Mix.shell.info "Sending test event..."
 
-      "Testing sending Sentry event"
-      |> RuntimeError.exception
-      |> Sentry.capture_exception
-      |> Task.await
+      {:ok, task} = "Testing sending Sentry event"
+                    |> RuntimeError.exception
+                    |> Sentry.capture_exception
+
+      Task.await(task)
 
       Mix.shell.info "Test event sent!"
     else
