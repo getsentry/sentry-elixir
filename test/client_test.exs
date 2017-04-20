@@ -8,7 +8,7 @@ defmodule Sentry.ClientTest do
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
     {_endpoint, public_key, private_key} = Client.get_dsn!
-    assert Client.authorization_header(public_key, private_key) =~ ~r/Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret/
+    assert Client.authorization_header(public_key, private_key) =~ ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
   end
 
   test "get dsn with default config" do
