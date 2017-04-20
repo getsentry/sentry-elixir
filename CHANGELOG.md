@@ -10,7 +10,11 @@
   * Add elements to beginning of breadcrumbs list for performance (#141)
   * Close unread hackney responses properly (#149)
   * Improve `Sentry.Client` code style (#147)
+  * Fix invalid specs in `Sentry` methods (#146)
 * Backward incompatible changes
+  * Return `:ignored` instead of `{:ok, ""}` when event is not sent because environment\_name is not in included\_environments in `Sentry.send_event`, `Sentry.capture_exception`, or `Sentry.capture_message` (#146)
+  * Return `:ignored` and log warning instead of returning `{:ok, "Sentry: unable to parse exception"}` when unable to parse exception in `Sentry.send_event`, `Sentry.capture_exception`, or `Sentry.capture_message` (#146)
+  * Return `{:ok, Task}` instead of `Task` when an event is successfully sent with `Sentry.send_event`, `Sentry.capture_exception`, or `Sentry.capture_message` (#146)
   * Ignore non-existent route exceptions (#110)
   * Sending source code as context when reporting errors (#138)
 
