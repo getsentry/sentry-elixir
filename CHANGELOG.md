@@ -2,6 +2,11 @@
 
 ## master
 
+## 4.0.2 (2017-04-26)
+
+* Enhancements
+  * Relax hackney requirements
+
 ## 4.0.1 (2017-04-25)
 
 * Enhancements
