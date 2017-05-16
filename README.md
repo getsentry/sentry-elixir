@@ -67,6 +67,7 @@ config :sentry,
 | `release` | False  | None | |
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
+| `client` | False  | `Sentry.Client` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
 | `hackney_opts` | False  | `[pool: :sentry_pool]` | |
 | `hackney_pool_max_connections` | False  | 50 | |
 | `hackney_pool_timeout` | False  | 5000 | |

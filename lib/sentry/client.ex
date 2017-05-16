@@ -1,4 +1,6 @@
 defmodule Sentry.Client do
+  @behaviour Sentry.HTTPClient
+
   @moduledoc """
   This module is the default client for sending an event to Sentry via HTTP.
 
