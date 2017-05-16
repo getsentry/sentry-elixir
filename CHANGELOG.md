@@ -2,6 +2,9 @@
 
 ## master
 
+* Enhancements
+  * Update and improve Travis build matrix (#155)
+
 ## 4.0.2 (2017-04-26)
 
 * Enhancements
