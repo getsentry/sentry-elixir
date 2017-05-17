@@ -2,8 +2,11 @@
 
 ## master
 
+## 4.0.3 (2017-05-17)
+
 * Enhancements
   * Update and improve Travis build matrix (#155)
+  * Specify behaviour for Sentry HTTP clients (#158)
 
 ## 4.0.2 (2017-04-26)
 
