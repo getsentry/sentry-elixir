@@ -24,7 +24,7 @@ Edit your mix.exs file to add it as a dependency and add the ``:sentry`` package
   end
 
   defp deps do
-    [{:sentry, "~> 4.0.2"}]
+    [{:sentry, "~> 4.0.3"}]
   end
 
 Configuration
