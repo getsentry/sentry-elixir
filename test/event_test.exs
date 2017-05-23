@@ -64,4 +64,15 @@ defmodule Sentry.EventTest do
       tags: %{},
       user: %{}} = Event.create_event(message: "Test message")
   end
+
+  test "only sending fingerprint when set" do
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, [fingerprint: ["hello", "world"]])
+    assert event.fingerprint == ["hello", "world"]
+  end
+  test "not sending fingerprint when unset" do
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, [])
+    assert event.fingerprint == ["{{ default }}"]
+  end
 end

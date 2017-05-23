@@ -81,7 +81,7 @@ defmodule Sentry do
   Simply calling `capture_exception/2` will send the event.
 
       Sentry.capture_exception(my_exception)
-      Sentry.capture_exception(other_exception, [source_name: :my_source])
+      Sentry.capture_exception(other_exception, [event_source: :my_source])
 
   ### Options
     * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
