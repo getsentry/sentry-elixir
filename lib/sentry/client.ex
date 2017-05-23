@@ -167,7 +167,7 @@ defmodule Sentry.Client do
 
   defp sleep(attempt_number) do
     # sleep 2^n seconds
-    :math.pow(attempt_number, 2)
+    :math.pow(2, attempt_number)
     |> Kernel.*(1000)
     |> Kernel.round()
     |> :timer.sleep()
