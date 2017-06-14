@@ -150,6 +150,7 @@ defmodule Sentry.Event do
     stacktrace
     |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
+        arity = arity_to_integer(arity)
         file = Keyword.get(location, :file)
         file = if(file, do: String.Chars.to_string(file), else: file)
         line_number = Keyword.get(location, :line)
@@ -180,4 +181,7 @@ defmodule Sentry.Event do
   @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil
   def culprit_from_stacktrace([]), do: nil
   def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
+
+  defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)
+  defp arity_to_integer(arity), do: arity
 end
