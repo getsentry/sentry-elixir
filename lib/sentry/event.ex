@@ -183,5 +183,5 @@ defmodule Sentry.Event do
   def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
 
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)
-  defp arity_to_integer(arity), do: arity
+  defp arity_to_integer(arity) when is_integer(arity), do: arity
 end
