@@ -125,7 +125,7 @@ defmodule Sentry do
     else
       exception
       |> Event.transform_exception(opts)
-      |> send_event()
+      |> send_event(opts)
     end
   end
 
@@ -137,25 +137,26 @@ defmodule Sentry do
     opts
     |> Keyword.put(:message, message)
     |> Event.create_event()
-    |> send_event()
+    |> send_event(opts)
   end
 
   @doc """
     Sends a `Sentry.Event`
   """
-  @spec send_event(Event.t) :: task
-  def send_event(%Event{message: nil, exception: nil}) do
+  @spec send_event(Event.t, Keyword.t) :: task
+  def send_event(event, opts \\ [])
+  def send_event(%Event{message: nil, exception: nil}, _opts) do
     Logger.warn("Sentry: unable to parse exception")
 
     :ignored
   end
-  def send_event(%Event{} = event) do
+  def send_event(%Event{} = event, opts) do
     included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
     environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
     client = Application.get_env(:sentry, :client, Sentry.Client)
 
     if environment_name in included_environments do
-      client.send_event(event)
+      client.send_event(event, opts)
     else
       :ignored
     end

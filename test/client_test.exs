@@ -67,7 +67,8 @@ defmodule Sentry.ClientTest do
                            metadata = Map.new(Logger.metadata)
                            {user_id, rest_metadata} = Map.pop(metadata, :user_id)
                            %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
-                         end
+                         end,
+                         client: Sentry.Client
                        ]
     )
     Logger.metadata([key: "value", user_id: 1])
@@ -77,7 +78,7 @@ defmodule Sentry.ClientTest do
     rescue
       e ->
         assert capture_log(fn ->
-          Sentry.capture_exception(e)
+          Sentry.capture_exception(e, result: :sync)
         end)
     end
   end
@@ -91,7 +92,7 @@ defmodule Sentry.ClientTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
-    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1", before_send_event: {Sentry.BeforeSendEventTest, :before_send_event}])
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1", before_send_event: {Sentry.BeforeSendEventTest, :before_send_event}, client: Sentry.Client])
     Logger.metadata([key: "value", user_id: 1])
 
     try do
@@ -99,7 +100,7 @@ defmodule Sentry.ClientTest do
     rescue
       e ->
         assert capture_log(fn ->
-          Sentry.capture_exception(e)
+          Sentry.capture_exception(e, result: :sync)
         end)
     end
   end

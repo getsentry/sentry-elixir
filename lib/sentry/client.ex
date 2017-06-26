@@ -41,21 +41,42 @@ defmodule Sentry.Client do
 
   The event is dropped if it all retries fail.
   """
-  @spec send_event(Event.t) :: {:ok, Task.t} | :error
-  def send_event(%Event{} = event) do
-    {endpoint, public_key, secret_key} = get_dsn!()
+  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :ok
+  def send_event(%Event{} = event, opts \\ []) do
+    result = Keyword.get(opts, :result, :async)
 
-    auth_headers = authorization_headers(public_key, secret_key)
     event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
-        {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-          try_request(:post, endpoint, auth_headers, body)
-        end)}
+        do_send_event(body, result)
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
         :error
     end
+  end
+
+  defp do_send_event(body, :async) do
+    {endpoint, public_key, secret_key} = get_dsn!()
+    auth_headers = authorization_headers(public_key, secret_key)
+    {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+      try_request(:post, endpoint, auth_headers, body)
+    end)}
+  end
+
+  defp do_send_event(body, :sync) do
+    {endpoint, public_key, secret_key} = get_dsn!()
+    auth_headers = authorization_headers(public_key, secret_key)
+    try_request(:post, endpoint, auth_headers, body)
+  end
+
+  defp do_send_event(body, :none) do
+    {endpoint, public_key, secret_key} = get_dsn!()
+    auth_headers = authorization_headers(public_key, secret_key)
+    Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
+      try_request(:post, endpoint, auth_headers, body)
+    end)
+
+    :ok
   end
 
   defp try_request(method, url, headers, body, current_attempt \\ 1)
