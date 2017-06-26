@@ -78,10 +78,12 @@ defmodule Sentry do
 
   ## Capturing Exceptions
 
-  Simply calling `capture_exception/2` will send the event.
+  Simply calling `capture_exception/2` will send the event.  By default, the event is sent asynchronously and the result can be awaited upon.  The `:result` option can be used to change this behavior.  See `Sentry.Client.send_event/2` for more information.
 
-      Sentry.capture_exception(my_exception)
-      Sentry.capture_exception(other_exception, [event_source: :my_source])
+      {:ok, task} = Sentry.capture_exception(my_exception)
+      {:ok, event_id} = Task.await(task)
+
+      {:ok, another_event_id} = Sentry.capture_exception(other_exception, [event_source: :my_source, result: :sync])
 
   ### Options
     * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
@@ -113,7 +115,8 @@ defmodule Sentry do
   end
 
   @doc """
-    Parses and submits an exception to Sentry if current environment is in included_environments.
+  Parses and submits an exception to Sentry if current environment is in included_environments.
+  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
   @spec capture_exception(Exception.t, Keyword.t) :: task
   def capture_exception(exception, opts \\ []) do
@@ -131,6 +134,8 @@ defmodule Sentry do
 
   @doc """
   Reports a message to Sentry.
+
+  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
   @spec capture_message(String.t, Keyword.t) :: task
   def capture_message(message, opts \\ []) do
@@ -141,7 +146,9 @@ defmodule Sentry do
   end
 
   @doc """
-    Sends a `Sentry.Event`
+  Sends a `Sentry.Event`
+
+  `opts` argument is passed as the second argument to `send_event/2` of the configured `Sentry.HTTPClient`.  See `Sentry.Client.send_event/2` for more information.
   """
   @spec send_event(Event.t, Keyword.t) :: task
   def send_event(event, opts \\ [])
