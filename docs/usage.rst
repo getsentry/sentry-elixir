@@ -52,6 +52,14 @@ With calls to ``capture_exception`` additional data can be supplied as a keyword
     * error
     * fatal (the most serious)
 
+.. describe:: fingerprint
+
+    The fingerprint for grouping this event.
+
+    .. code-block::elixir
+
+        fingerprint: ["{{ default }}", "other value"]
+
 .. describe:: tags
 
     Tags to index with this event. Must be a mapping of strings.
@@ -84,4 +92,3 @@ breadcrumbs are per-process, if a process dies it might lose its context.
 .. code-block:: elixir
 
     Sentry.Context.add_breadcrumb(%{my: "crumb"})
-

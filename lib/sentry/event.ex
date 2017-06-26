@@ -21,7 +21,8 @@ defmodule Sentry.Event do
             request: %{},
             extra: %{},
             user: %{},
-            breadcrumbs: []
+            breadcrumbs: [],
+            fingerprint: []
 
   @type t :: %__MODULE__{}
 
@@ -41,6 +42,7 @@ defmodule Sentry.Event do
     * `:request` - map of request context
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
+    * `:fingerprint` -  list of the fingerprint for grouping this event
   """
   @spec create_event(keyword()) :: Event.t
   def create_event(opts) do
@@ -55,6 +57,8 @@ defmodule Sentry.Event do
     message = Keyword.get(opts, :message)
 
     stacktrace = Keyword.get(opts, :stacktrace, [])
+
+    fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
 
     extra = extra_context
             |> Map.merge(Keyword.get(opts, :extra, %{}))
@@ -91,7 +95,8 @@ defmodule Sentry.Event do
       tags: tags,
       user: user,
       breadcrumbs: breadcrumbs,
-      request: request
+      request: request,
+      fingerprint: fingerprint
     }
     |> add_metadata()
   end
@@ -106,6 +111,8 @@ defmodule Sentry.Event do
     * `:request` - map of request context
     * `:breadcrumbs` - list of breadcrumbs
     * `:level` - error level
+    * `:fingerprint` -  list of the fingerprint for grouping this event
+
   """
   @spec transform_exception(Exception.t, keyword()) :: Event.t
   def transform_exception(exception, opts) do
