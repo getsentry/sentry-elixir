@@ -1,6 +1,13 @@
 # Changelog
 
 ## master
+* Enhancements
+  * Improve documentation around recompilation for source code context (#171)
+  * Use better arity logic in stacktraces (#170)
+  * Allow custom fingerprinting (#160)
+* Bug Fixes
+  * Fix README typo (#159)
+  * Fix the backoff to really be exponential (#162)
 
 ## 4.0.3 (2017-05-17)
 
