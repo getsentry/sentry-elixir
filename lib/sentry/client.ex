@@ -40,9 +40,9 @@ defmodule Sentry.Client do
   The event is dropped if it all retries fail.
 
   ### Options
-  * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `:ok` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
+  * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
   """
-  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :ok
+  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, :async)
 
@@ -77,7 +77,7 @@ defmodule Sentry.Client do
       try_request(:post, endpoint, auth_headers, body)
     end)
 
-    :ok
+    {:ok, ""}
   end
 
   defp try_request(method, url, headers, body, current_attempt \\ 1)
