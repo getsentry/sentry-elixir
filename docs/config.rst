@@ -60,6 +60,10 @@ Optional settings
   Set this to true if you want to capture all exceptions that occur even outside of a request cycle. This
   defaults to false.
 
+.. describe:: client
+
+  If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module.
+
 .. describe:: filter
 
   Set this to a module that implements the ``Sentry.EventFilter`` behaviour if you would like to prevent

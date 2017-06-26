@@ -29,7 +29,7 @@ defmodule Sentry.TestGenServer do
   end
 
   def handle_info(:invalid_function, state) do
-    Sentry.TestGenServer.not_a_function(1, 2, 3)
+    NaiveDateTime.from_erl({})
     {:ok, state}
   end
 

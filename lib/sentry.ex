@@ -12,7 +12,7 @@ defmodule Sentry do
 
   Add the following to your production config
 
-      config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+      config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
         included_environments: [:prod],
         environment_name: :prod,
         tags: %{
@@ -28,7 +28,7 @@ defmodule Sentry do
   An alternative is to use `Mix.env` in your general configuration file:
 
 
-      config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+      config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
         included_environments: [:prod],
         environment_name: Mix.env
 
@@ -41,7 +41,7 @@ defmodule Sentry do
   to handle this without adding an additional Mix environment, you can set an
   environment variable that determines the release level.
 
-      config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+      config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
         included_environments: ~w(production staging),
         environment_name: System.get_env("RELEASE_LEVEL") || "development"
 

@@ -1,4 +1,6 @@
 defmodule Sentry.Client do
+  @behaviour Sentry.HTTPClient
+
   @moduledoc """
   This module is the default client for sending an event to Sentry via HTTP.
 
@@ -165,7 +167,7 @@ defmodule Sentry.Client do
 
   defp sleep(attempt_number) do
     # sleep 2^n seconds
-    :math.pow(attempt_number, 2)
+    :math.pow(2, attempt_number)
     |> Kernel.*(1000)
     |> Kernel.round()
     |> :timer.sleep()

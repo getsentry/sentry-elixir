@@ -26,7 +26,7 @@ defmodule Sentry.EventTest do
     assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
     assert is_binary(event.server_name)
     assert event.stacktrace == %{frames: Enum.reverse([
-      %{filename: nil, function: "Sentry.Event.not_a_function()", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: []},
+      %{filename: nil, function: "Sentry.Event.not_a_function/0", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: []},
       %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
       %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
       %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: []},

@@ -17,7 +17,7 @@ defp application do
 end
 
 defp deps do
-  [{:sentry, "~> 4.0.2"}]
+  [{:sentry, "~> 4.0.3"}]
 end
 ```
 
@@ -67,6 +67,7 @@ config :sentry,
 | `release` | False  | None | |
 | `server_name` | False  | None | |
 | `use_error_logger` | False  | False | |
+| `client` | False  | `Sentry.Client` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
 | `hackney_opts` | False  | `[pool: :sentry_pool]` | |
 | `hackney_pool_max_connections` | False  | 50 | |
 | `hackney_pool_timeout` | False  | 5000 | |
@@ -101,7 +102,7 @@ specific configuration like `config/prod.exs`.
 Alternatively, you could use Mix.env in your general configuration file:
 
 ```elixir
-config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
   included_environments: [:prod],
   environment_name: Mix.env
 ```
@@ -112,7 +113,7 @@ to handle this without adding an additional Mix environment, you can set an
 environment variable that determines the release level.
 
 ```elixir
-config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
   included_environments: ~w(production staging),
   environment_name: System.get_env("RELEASE_LEVEL") || "development"
 ```
@@ -129,12 +130,12 @@ Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HT
 
 Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
 
-The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.clean sentry, compile`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below would allow one to run `mix.sentry_recompile` which will force recompilation of Sentry so it has the newest source and then compile the project:
+The best way to ensure source code is up to date is to recompile Sentry itself via `mix do clean, compile`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below would allow one to run `mix sentry_recompile` which will force recompilation of Sentry so it has the newest source and then compile the project:
 
 ```elixir
 # mix.exs
 defp aliases do
-  [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+  [sentry_recompile: ["clean", "compile"]]
 end
 ```
 

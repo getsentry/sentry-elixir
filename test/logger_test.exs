@@ -85,11 +85,11 @@ defmodule Sentry.LoggerTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Poison.decode!(body)
       assert List.first(json["exception"])["type"] == "exit"
-      assert List.first(json["exception"])["value"] == "** (exit) :undef"
-      assert List.last(json["stacktrace"]["frames"]) == %{"filename" => nil,
-                                                          "function" => "Sentry.TestGenServer.not_a_function(1, 2, 3)",
-                                                          "lineno" => nil,
-                                                          "module" => "Elixir.Sentry.TestGenServer",
+      assert List.first(json["exception"])["value"] == "** (exit) :function_clause"
+      assert List.last(json["stacktrace"]["frames"]) == %{"filename" => "lib/calendar.ex",
+                                                          "function" => "NaiveDateTime.from_erl/2",
+                                                          "lineno" => 1214,
+                                                          "module" => "Elixir.NaiveDateTime",
                                                           "context_line" => nil,
                                                           "pre_context" => [],
                                                           "post_context" => [],
