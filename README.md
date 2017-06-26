@@ -23,7 +23,7 @@ end
 
 ### Capture Exceptions
 
-Sometimes you want to capture specific exceptions, to do so use the `Sentry.capture_exception/3`.
+Sometimes you want to capture specific exceptions.  To do so, use `Sentry.capture_exception/3`.
 
 ```elixir
 try do
