@@ -1,7 +1,7 @@
 defmodule Sentry.Client do
   @behaviour Sentry.HTTPClient
 
-  @moduledoc """
+  @moduledoc ~S"""
   This module is the default client for sending an event to Sentry via HTTP.
 
   It makes use of `Task.Supervisor` to allow sending tasks synchronously or asynchronously, and defaulting to asynchronous. See `Sentry.Client.send_event/2` for more information.
@@ -12,12 +12,25 @@ defmodule Sentry.Client do
     it is sent.  Accepts an anonymous function or a {module, function} tuple, and
     the event will be passed as the only argument.
 
+  * `:after_send_event` - callback that is called after attempting to send an event.
+    Accepts an anonymous function or a {module, function} tuple. The result of the HTTP call as well as the event will be passed as arguments.
+    The return value of the callback is not returned.
+
   Example configuration of putting Logger metadata in the extra context:
 
       config :sentry,
         before_send_event: fn(event) ->
           metadata = Map.new(Logger.metadata)
           %{event | extra: Map.merge(event.extra, metadata)}
+        end,
+
+        after_send_event: fn(event, result) ->
+          case result do
+            {:ok, id} ->
+              Logger.info("Successfully sent event!")
+            _ ->
+              Logger.info(fn -> "Did not successfully send event! #{inspect(event)}" end)
+          end
         end
   """
 
@@ -49,32 +62,35 @@ defmodule Sentry.Client do
     event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
-        do_send_event(body, result)
+        do_send_event(event, body, result)
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
         :error
     end
   end
 
-  defp do_send_event(body, :async) do
+  defp do_send_event(event, body, :async) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
+      |> maybe_call_after_send_event(event)
     end)}
   end
 
-  defp do_send_event(body, :sync) do
+  defp do_send_event(event, body, :sync) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     try_request(:post, endpoint, auth_headers, body)
+    |> maybe_call_after_send_event(event)
   end
 
-  defp do_send_event(body, :none) do
+  defp do_send_event(event, body, :none) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
+      |> maybe_call_after_send_event(event)
     end)
 
     {:ok, ""}
@@ -155,6 +171,21 @@ defmodule Sentry.Client do
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
 
     {endpoint, public_key, secret_key}
+  end
+
+  def maybe_call_after_send_event(result, event) do
+    case Application.get_env(:sentry, :after_send_event) do
+      function when is_function(function, 2) ->
+        function.(event, result)
+      {module, function} ->
+        apply(module, function, [event, result])
+      nil ->
+        nil
+      _ ->
+        raise ArgumentError, message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
+    end
+
+    result
   end
 
   def maybe_call_before_send_event(event) do
