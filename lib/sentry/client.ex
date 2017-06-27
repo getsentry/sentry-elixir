@@ -1,7 +1,7 @@
 defmodule Sentry.Client do
   @behaviour Sentry.HTTPClient
 
-  @moduledoc """
+  @moduledoc ~S"""
   This module is the default client for sending an event to Sentry via HTTP.
 
   It makes use of `Task.Supervisor` to allow sending tasks synchronously or asynchronously, and defaulting to asynchronous. See `Sentry.Client.send_event/2` for more information.
@@ -12,8 +12,9 @@ defmodule Sentry.Client do
     it is sent.  Accepts an anonymous function or a {module, function} tuple, and
     the event will be passed as the only argument.
 
-  * `:after_send_event` - callback that is called after an event is successfully sent.
-    Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
+  * `:after_send_event` - callback that is called after attempting to send an event.
+    Accepts an anonymous function or a {module, function} tuple. The result of the HTTP call as well as the event will be passed as arguments.
+    The return value of the callback is not returned.
 
   Example configuration of putting Logger metadata in the extra context:
 
@@ -21,6 +22,15 @@ defmodule Sentry.Client do
         before_send_event: fn(event) ->
           metadata = Map.new(Logger.metadata)
           %{event | extra: Map.merge(event.extra, metadata)}
+        end,
+
+        after_send_event: fn(event, result) ->
+          case result do
+            {:ok, id} ->
+              Logger.info("Successfully sent event!")
+            _ ->
+              Logger.info(fn -> "Did not successfully send event! #{inspect(event)}" end)
+          end
         end
   """
 
@@ -163,19 +173,15 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
-  def maybe_call_after_send_event({:ok, _} = result, event) do
+  def maybe_call_after_send_event(result, event) do
     case Application.get_env(:sentry, :after_send_event) do
-      function when is_function(function, 1) -> function.(event)
-      {module, function} -> apply(module, function, [event])
+      function when is_function(function, 2) -> function.(event, result)
+      {module, function} -> apply(module, function, [event, result])
       nil -> nil
       _ ->
         raise ArgumentError, message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
     end
 
-    result
-  end
-
-  def maybe_call_after_send_event(result, _event) do
     result
   end
 

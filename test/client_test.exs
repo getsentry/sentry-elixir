@@ -114,7 +114,7 @@ defmodule Sentry.ClientTest do
     end
 
     modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
-                         after_send_event: fn(_e) ->
+                         after_send_event: fn(_e, _r) ->
                            Logger.error("AFTER_SEND_EVENT")
                          end,
                          client: Sentry.Client
@@ -139,7 +139,7 @@ defmodule Sentry.ClientTest do
     end
 
     modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
-                         after_send_event: fn(_e) ->
+                         after_send_event: fn(_e, _r) ->
                            Logger.error("AFTER_SEND_EVENT")
                          end,
                          client: Sentry.Client

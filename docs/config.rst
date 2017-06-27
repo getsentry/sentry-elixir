@@ -87,7 +87,7 @@ Optional settings
 
 .. describe:: after_send_event
 
-  This option allows performing arbitrary operations after an event is successfully sent by ``Sentry.Client``.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
+  This option allows performing arbitrary operations after attempting to send an event.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the first argument, and the result of sending the event will be passed as the second argument.
 
 .. describe:: context_lines
 
