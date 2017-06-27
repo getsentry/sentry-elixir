@@ -93,6 +93,10 @@ Optional settings
 
   The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
 
+.. describe:: in_app_module_whitelist
+
+  Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is ``MyApp`` and your setting is ``[MyApp]``, that module as well as any submodules like ``MyApp.Submodule`` would be considered part of your app.  Defaults to ``[]``.
+
 .. describe:: context_lines
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.
