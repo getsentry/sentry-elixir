@@ -88,6 +88,7 @@ defmodule Sentry.LoggerTest do
       assert List.first(json["exception"])["value"] == "** (exit) :function_clause"
       assert List.last(json["stacktrace"]["frames"]) == %{"filename" => "lib/calendar.ex",
                                                           "function" => "NaiveDateTime.from_erl/2",
+                                                          "in_app" => false,
                                                           "lineno" => 1214,
                                                           "module" => "Elixir.NaiveDateTime",
                                                           "context_line" => nil,

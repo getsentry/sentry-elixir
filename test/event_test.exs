@@ -26,12 +26,12 @@ defmodule Sentry.EventTest do
     assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
     assert is_binary(event.server_name)
     assert event.stacktrace == %{frames: Enum.reverse([
-      %{filename: nil, function: "Sentry.Event.not_a_function/0", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: []},
-      %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: []}])
+      %{filename: nil, function: "Sentry.Event.not_a_function/0", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false},
+      %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
+      %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
+      %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false},
+      %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false},
+      %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false}])
     }
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
@@ -70,9 +70,58 @@ defmodule Sentry.EventTest do
     event = Sentry.Event.transform_exception(exception, [fingerprint: ["hello", "world"]])
     assert event.fingerprint == ["hello", "world"]
   end
+
   test "not sending fingerprint when unset" do
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [])
     assert event.fingerprint == ["{{ default }}"]
+  end
+
+  test "sets app_frame to true when configured" do
+    modify_env(:sentry, in_app_module_whitelist: [Sentry, :random, Sentry.Submodule])
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, [stacktrace: [{Elixir.Sentry.Fun, :method, 2, []}, {Elixir.Sentry, :other_method, 4, []},
+                                                                      {:other_module, :a_method, 8, []}, {:random, :uniform, 0, []},
+                                                                      {Sentry.Submodule.Fun, :this_method, 0, []}]])
+      assert %{frames: [
+        %{
+          module: Sentry.Submodule.Fun,
+          function: "Sentry.Submodule.Fun.this_method/0",
+          in_app: true,
+          filename: nil, lineno: nil,
+          context_line: nil, post_context: [], pre_context: []
+        },
+        %{
+          module: :random,
+          function: ":random.uniform/0",
+          in_app: true,
+          filename: nil, lineno: nil,
+          context_line: nil, post_context: [], pre_context: []
+        },
+        %{
+          module: :other_module,
+          function: ":other_module.a_method/8",
+          in_app: false,
+          filename: nil, lineno: nil,
+          context_line: nil, post_context: [], pre_context: []
+        },
+        %{
+          module: Sentry,
+          function: "Sentry.other_method/4",
+          in_app: true,
+          filename: nil, lineno: nil,
+          context_line: nil, post_context: [], pre_context: []
+        },
+        %{
+          filename: nil,
+          function: "Sentry.Fun.method/2",
+          module: Sentry.Fun,
+          lineno: nil,
+          in_app: true,
+          context_line: nil,
+          post_context: [],
+          pre_context: []
+        },
+      ]} == event.stacktrace
   end
 end
