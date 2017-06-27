@@ -13,11 +13,11 @@ defmodule SentryTest do
      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
    end
 
-   modify_env(:sentry, filter: Sentry.TestFilter, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+   modify_env(:sentry, filter: Sentry.TestFilter, dsn: "http://public:secret@localhost:#{bypass.port}/1", client: Sentry.Client)
 
-   assert {:ok, _} = Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug])
-   assert :excluded = Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug])
-   assert {:ok, _} = Sentry.capture_message("RuntimeError: error", [event_source: :plug])
+   assert {:ok, _} = Sentry.capture_exception(%RuntimeError{message: "error"}, [event_source: :plug, result: :sync])
+   assert :excluded = Sentry.capture_exception(%ArithmeticError{message: "error"}, [event_source: :plug, result: :sync])
+   assert {:ok, _} = Sentry.capture_message("RuntimeError: error", [event_source: :plug, result: :sync])
   end
 
   test "errors when taking too long to receive response" do

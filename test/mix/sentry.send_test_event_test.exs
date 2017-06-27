@@ -43,7 +43,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     hackney_opts: [recv_timeout: 50]
 
     Sending test event...
-    Test event sent!
+    Test event sent!  Event ID: 340
     """
   end
 end

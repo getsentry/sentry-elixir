@@ -78,10 +78,12 @@ defmodule Sentry do
 
   ## Capturing Exceptions
 
-  Simply calling `capture_exception/2` will send the event.
+  Simply calling `capture_exception/2` will send the event.  By default, the event is sent asynchronously and the result can be awaited upon.  The `:result` option can be used to change this behavior.  See `Sentry.Client.send_event/2` for more information.
 
-      Sentry.capture_exception(my_exception)
-      Sentry.capture_exception(other_exception, [event_source: :my_source])
+      {:ok, task} = Sentry.capture_exception(my_exception)
+      {:ok, event_id} = Task.await(task)
+
+      {:ok, another_event_id} = Sentry.capture_exception(other_exception, [event_source: :my_source, result: :sync])
 
   ### Options
     * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
@@ -113,7 +115,8 @@ defmodule Sentry do
   end
 
   @doc """
-    Parses and submits an exception to Sentry if current environment is in included_environments.
+  Parses and submits an exception to Sentry if current environment is in included_environments.
+  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
   @spec capture_exception(Exception.t, Keyword.t) :: task
   def capture_exception(exception, opts \\ []) do
@@ -125,37 +128,42 @@ defmodule Sentry do
     else
       exception
       |> Event.transform_exception(opts)
-      |> send_event()
+      |> send_event(opts)
     end
   end
 
   @doc """
   Reports a message to Sentry.
+
+  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
   @spec capture_message(String.t, Keyword.t) :: task
   def capture_message(message, opts \\ []) do
     opts
     |> Keyword.put(:message, message)
     |> Event.create_event()
-    |> send_event()
+    |> send_event(opts)
   end
 
   @doc """
-    Sends a `Sentry.Event`
+  Sends a `Sentry.Event`
+
+  `opts` argument is passed as the second argument to `send_event/2` of the configured `Sentry.HTTPClient`.  See `Sentry.Client.send_event/2` for more information.
   """
-  @spec send_event(Event.t) :: task
-  def send_event(%Event{message: nil, exception: nil}) do
+  @spec send_event(Event.t, Keyword.t) :: task
+  def send_event(event, opts \\ [])
+  def send_event(%Event{message: nil, exception: nil}, _opts) do
     Logger.warn("Sentry: unable to parse exception")
 
     :ignored
   end
-  def send_event(%Event{} = event) do
+  def send_event(%Event{} = event, opts) do
     included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
     environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
     client = Application.get_env(:sentry, :client, Sentry.Client)
 
     if environment_name in included_environments do
-      client.send_event(event)
+      client.send_event(event, opts)
     else
       :ignored
     end
