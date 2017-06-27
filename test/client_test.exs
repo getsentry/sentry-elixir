@@ -156,4 +156,46 @@ defmodule Sentry.ClientTest do
         end) =~ "AFTER_SEND_EVENT"
     end
   end
+
+  test "sends event with sample_rate of 1" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
+                         client: Sentry.Client
+                       ]
+    )
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        {:ok, _} = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
+    end
+  end
+
+  test "does not send event with sample_rate of 0" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
+                         client: Sentry.Client
+                       ]
+    )
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        {:ok, _} = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
+        Bypass.down(bypass)
+        :unsampled = Sentry.capture_exception(e, result: :sync, sample_rate: 0.0)
+    end
+  end
 end
