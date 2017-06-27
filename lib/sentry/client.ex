@@ -12,6 +12,9 @@ defmodule Sentry.Client do
     it is sent.  Accepts an anonymous function or a {module, function} tuple, and
     the event will be passed as the only argument.
 
+  * `:after_send_event` - callback that is called after an event is successfully sent.
+    Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
+
   Example configuration of putting Logger metadata in the extra context:
 
       config :sentry,
@@ -49,32 +52,35 @@ defmodule Sentry.Client do
     event = maybe_call_before_send_event(event)
     case Poison.encode(event) do
       {:ok, body} ->
-        do_send_event(body, result)
+        do_send_event(event, body, result)
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
         :error
     end
   end
 
-  defp do_send_event(body, :async) do
+  defp do_send_event(event, body, :async) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
+      |> maybe_call_after_send_event(event)
     end)}
   end
 
-  defp do_send_event(body, :sync) do
+  defp do_send_event(event, body, :sync) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     try_request(:post, endpoint, auth_headers, body)
+    |> maybe_call_after_send_event(event)
   end
 
-  defp do_send_event(body, :none) do
+  defp do_send_event(event, body, :none) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
     Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
+      |> maybe_call_after_send_event(event)
     end)
 
     {:ok, ""}
@@ -155,6 +161,22 @@ defmodule Sentry.Client do
     endpoint = "#{protocol}://#{host}:#{port}/api/#{project_id}/store/"
 
     {endpoint, public_key, secret_key}
+  end
+
+  def maybe_call_after_send_event({:ok, _} = result, event) do
+    case Application.get_env(:sentry, :after_send_event) do
+      function when is_function(function, 1) -> function.(event)
+      {module, function} -> apply(module, function, [event])
+      nil -> nil
+      _ ->
+        raise ArgumentError, message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
+    end
+
+    result
+  end
+
+  def maybe_call_after_send_event(result, _event) do
+    result
   end
 
   def maybe_call_before_send_event(event) do

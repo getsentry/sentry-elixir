@@ -2,6 +2,7 @@ defmodule Sentry.ClientTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
   import Sentry.TestEnvironmentHelper
+  require Logger
 
   alias Sentry.Client
 
@@ -102,6 +103,57 @@ defmodule Sentry.ClientTest do
         assert capture_log(fn ->
           Sentry.capture_exception(e, result: :sync)
         end)
+    end
+  end
+
+  test "calls anonymous after_send_event synchronously" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
+                         after_send_event: fn(_e) ->
+                           Logger.error("AFTER_SEND_EVENT")
+                         end,
+                         client: Sentry.Client
+                       ]
+    )
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        assert capture_log(fn ->
+          Sentry.capture_exception(e, result: :sync)
+        end) =~ "AFTER_SEND_EVENT"
+    end
+  end
+
+  test "calls anonymous after_send_event asynchronously" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:#{bypass.port}/1",
+                         after_send_event: fn(_e) ->
+                           Logger.error("AFTER_SEND_EVENT")
+                         end,
+                         client: Sentry.Client
+                       ]
+    )
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        assert capture_log(fn ->
+          {:ok, task} = Sentry.capture_exception(e, result: :async)
+          Task.await(task)
+        end) =~ "AFTER_SEND_EVENT"
     end
   end
 end

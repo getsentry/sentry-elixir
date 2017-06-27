@@ -85,6 +85,10 @@ Optional settings
 
   This option allows performing operations on the event before it is sent by ``Sentry.Client``.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
 
+.. describe:: after_send_event
+
+  This option allows performing arbitrary operations after an event is successfully sent by ``Sentry.Client``.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the only argument.
+
 .. describe:: context_lines
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.

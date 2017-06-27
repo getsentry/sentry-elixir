@@ -72,6 +72,7 @@ config :sentry,
 | `hackney_pool_max_connections` | False  | 50 | |
 | `hackney_pool_timeout` | False  | 5000 | |
 | `before_send_event` | False | | |
+| `after_send_event` | False | | |
 | `enable_source_code_context` | True | | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
