@@ -175,9 +175,12 @@ defmodule Sentry.Client do
 
   def maybe_call_after_send_event(result, event) do
     case Application.get_env(:sentry, :after_send_event) do
-      function when is_function(function, 2) -> function.(event, result)
-      {module, function} -> apply(module, function, [event, result])
-      nil -> nil
+      function when is_function(function, 2) ->
+        function.(event, result)
+      {module, function} ->
+        apply(module, function, [event, result])
+      nil ->
+        nil
       _ ->
         raise ArgumentError, message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
     end
