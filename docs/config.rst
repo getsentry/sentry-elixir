@@ -89,6 +89,10 @@ Optional settings
 
   This option allows performing arbitrary operations after attempting to send an event.  Accepts an anonymous function or a {module, function} tuple, and the event will be passed as the first argument, and the result of sending the event will be passed as the second argument.
 
+.. describe:: sample_rate
+
+  The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
+
 .. describe:: context_lines
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.

@@ -41,6 +41,7 @@ defmodule Sentry.Client do
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
+  @default_sample_rate 1.0
   @hackney_pool_name :sentry_pool
 
   quote do
@@ -54,12 +55,23 @@ defmodule Sentry.Client do
 
   ### Options
   * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
+  * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
   """
-  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error
+  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :unsampled
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, :async)
+    sample_rate = Keyword.get(opts, :sample_rate) || Application.get_env(:sentry, :sample_rate, @default_sample_rate)
 
     event = maybe_call_before_send_event(event)
+
+    if sample_event?(sample_rate) do
+      encode_and_send(event, result)
+    else
+      :unsampled
+    end
+  end
+
+  defp encode_and_send(event, result) do
     case Poison.encode(event) do
       {:ok, body} ->
         do_send_event(event, body, result)
@@ -224,5 +236,13 @@ defmodule Sentry.Client do
     |> Kernel.*(1000)
     |> Kernel.round()
     |> :timer.sleep()
+  end
+
+  defp sample_event?(1), do: true
+  defp sample_event?(1.0), do: true
+  defp sample_event?(0), do: false
+  defp sample_event?(0.0), do: false
+  defp sample_event?(sample_rate) do
+    :rand.uniform < sample_rate
   end
 end
