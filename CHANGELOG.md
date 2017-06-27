@@ -2,6 +2,7 @@
 
 ## master
 * Enhancements
+  * Allow specifying sync/async/none when getting result of sending event (#174)
   * Improve documentation around recompilation for source code context (#171)
   * Use better arity logic in stacktraces (#170)
   * Allow custom fingerprinting (#160)
