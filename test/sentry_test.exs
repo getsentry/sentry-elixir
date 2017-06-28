@@ -28,12 +28,13 @@ defmodule SentryTest do
      assert conn.method == "POST"
      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
    end
-   Bypass.pass(bypass)
 
    modify_env(:sentry, filter: Sentry.TestFilter, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
    assert capture_log(fn ->
      assert :error = Sentry.capture_message("error", [])
    end) =~ "Failed to send Sentry event"
+
+   Bypass.pass(bypass)
   end
 end
