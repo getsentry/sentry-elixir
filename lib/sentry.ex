@@ -4,7 +4,6 @@ defmodule Sentry do
   alias Sentry.Event
   require Logger
 
-
   @moduledoc """
   Provides the basic functionality to submit a `Sentry.Event` to the Sentry Service.
 
@@ -26,7 +25,6 @@ defmodule Sentry do
   specific configuration `config/prod.exs`.
 
   An alternative is to use `Mix.env` in your general configuration file:
-
 
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
         included_environments: [:prod],

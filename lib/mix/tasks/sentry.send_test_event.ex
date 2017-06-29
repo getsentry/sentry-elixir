@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
   defp hackney_opts, do: Application.get_env(:sentry, :hackney_opts, [])
 
-  defp maybe_send_event() do
+  defp maybe_send_event do
     env_name = environment_name()
     included_envs = included_environments()
 
