@@ -2,6 +2,12 @@ defmodule Sentry.Event do
   @moduledoc """
     Provides an Event Struct as well as transformation of Logger
     entries into Sentry Events.
+
+
+  ### Configuration
+
+  * `:in_app_module_whitelist` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
+
   """
 
   defstruct event_id: nil,
@@ -154,6 +160,7 @@ defmodule Sentry.Event do
 
   @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
   def stacktrace_to_frames(stacktrace) do
+    in_app_module_whitelist = Application.get_env(:sentry, :in_app_module_whitelist, [])
     stacktrace
     |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
@@ -167,6 +174,7 @@ defmodule Sentry.Event do
           function: Exception.format_mfa(mod, function, arity),
           module: mod,
           lineno: line_number,
+          in_app: is_in_app?(mod, in_app_module_whitelist),
         }
         |> put_source_context(file, line_number)
       end)
@@ -191,4 +199,23 @@ defmodule Sentry.Event do
 
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)
   defp arity_to_integer(arity) when is_integer(arity), do: arity
+
+  defp is_in_app?(nil, _in_app_whitelist), do: false
+  defp is_in_app?(_, []), do: false
+  defp is_in_app?(module, in_app_module_whitelist) do
+    split_modules = module_split(module)
+
+    Enum.any?(in_app_module_whitelist, fn(module) ->
+      whitelisted_split_modules = module_split(module)
+
+      count = Enum.count(whitelisted_split_modules)
+      Enum.take(split_modules, count) == whitelisted_split_modules
+    end)
+  end
+
+  defp module_split(module) when is_binary(module) do
+    String.split(module, ".")
+    |> Enum.reject(&(&1 == "Elixir"))
+  end
+  defp module_split(module), do: module_split(String.Chars.to_string(module))
 end

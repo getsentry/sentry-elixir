@@ -30,9 +30,9 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.0", optional: true},
 
       {:dialyxir, "> 0.0.0", only: :dev},
-      {:ex_doc, "~> 0.15.0", only: :dev},
+      {:ex_doc, "~> 0.16.0", only: :dev},
       {:credo, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:bypass, "~> 0.6.0", only: [:test]}
+      {:bypass, "~> 0.7.0", only: [:test]}
     ]
   end
 

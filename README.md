@@ -74,6 +74,7 @@ config :sentry,
 | `before_send_event` | False | | |
 | `after_send_event` | False | | |
 | `sample_rate` | False | 1.0 | |
+| `in_app_module_whitelist` | False | `[]` | |
 | `enable_source_code_context` | True | | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
@@ -92,7 +93,8 @@ config :sentry,
   tags: %{
     env: "production"
   },
-  hackney_opts: [pool: :my_pool]
+  hackney_opts: [pool: :my_pool],
+  in_app_module_whitelist: [MyApp]
 ```
 
 The `environment_name` and `included_environments` work together to determine
