@@ -1,5 +1,4 @@
 defmodule Sentry.Config do
-
   @moduledoc """
   This module provides the functionality for fetching configuration settings and their defaults.
   """
@@ -16,79 +15,149 @@ defmodule Sentry.Config do
   def validate_config! do
   end
 
+  def dsn do
+    get_config(:dsn, check_dsn: false)
+  end
+
   def included_environments do
-    Application.get_env(:sentry, :included_environments, @default_included_environments)
+    get_config(:included_environments, default: @default_included_environments, check_dsn: false)
   end
 
   def environment_name do
-    Application.get_env(:sentry, :environment_name, @default_environment_name)
+    get_config(:environment_name, default: @default_environment_name)
   end
 
   def max_hackney_connections do
-    Application.get_env(:sentry, :hackney_pool_max_connections, @default_max_hackney_connections)
+    get_config(:hackney_pool_max_connections, default: @default_max_hackney_connections, check_dsn: false)
   end
 
   def hackney_timeout do
-    Application.get_env(:sentry, :hackney_pool_timeout, @default_hackney_timeout)
+    get_config(:hackney_pool_timeout, default: @default_hackney_timeout, check_dsn: false)
   end
 
   def tags do
-    Application.get_env(:sentry, :tags, %{})
+    get_config(:tags, default: %{}, check_dsn: false)
   end
 
   def release do
-    Application.get_env(:sentry, :release)
+    get_config(:release)
   end
 
   def server_name do
-    Application.get_env(:sentry, :server_name)
+    get_config(:server_name)
   end
 
   def filter do
-    Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
+    get_config(:filter, default: Sentry.DefaultEventFilter, check_dsn: false)
   end
 
   def client do
-    Application.get_env(:sentry, :client, Sentry.Client)
+    get_config(:client, default: Sentry.Client, check_dsn: false)
   end
 
   def use_error_logger do
-    Application.get_env(:sentry, :use_error_logger, false)
+    get_config(:use_error_logger, default: false, check_dsn: false)
   end
 
-  def root_path do
-    Application.fetch_env!(:sentry, :root_source_code_path)
+  def root_source_code_path do
+    path = get_config(:root_source_code_path)
+
+    if path do
+      path
+    else
+      raise ArgumentError.exception(":root_source_code_path must be configured")
+    end
   end
 
-  def path_pattern do
-    Application.get_env(:sentry, :source_code_path_pattern, @default_path_pattern)
+  def source_code_path_pattern do
+    get_config(:source_code_path_pattern, default: @default_path_pattern)
   end
 
-  def exclude_patterns do
-    Application.get_env(:sentry, :source_code_exclude_patterns, @default_exclude_patterns)
+  def source_code_exclude_patterns do
+    get_config(:source_code_exclude_patterns, default: @default_exclude_patterns, check_dsn: false)
   end
 
   def context_lines do
-    Application.get_env(:sentry, :context_lines, @default_context_lines)
+    get_config(:context_lines, default: @default_context_lines, check_dsn: false)
   end
 
   def in_app_module_whitelist do
-    Application.get_env(:sentry, :in_app_module_whitelist, [])
+    get_config(:in_app_module_whitelist, default: [], check_dsn: false)
   end
 
   def sample_rate do
-    Application.get_env(:sentry, :sample_rate, @default_sample_rate)
+    get_config(:sample_rate, default: @default_sample_rate, check_dsn: false)
   end
 
   def hackney_opts do
-    Application.get_env(:sentry, :hackney_opts, [])
+    get_config(:hackney_opts, default: [], check_dsn: false)
   end
 
   def before_send_event do
-    Application.get_env(:sentry, :before_send_event)
+    get_config(:before_send_event, check_dsn: false)
   end
 
   def after_send_event do
-    Application.get_env(:sentry, :after_send_event)
+    get_config(:after_send_event, check_dsn: false)
+  end
+
+  defp get_config(key, opts \\ []) when is_atom(key) do
+    default = Keyword.get(opts, :default)
+    check_dsn = Keyword.get(opts, :check_dsn, true)
+
+    environment_result = case get_from_application_environment(key) do
+      {:ok, value} -> {:ok, value}
+      :not_found -> get_from_system_environment(config_key_to_system_environment_key(key))
+    end
+
+    result = case environment_result do
+      {:ok, value} -> {:ok, value}
+      :not_found -> if(check_dsn, do: get_from_dsn_query_string(Atom.to_string(key)), else: :not_found)
+    end
+
+    case result do
+      {:ok, value} -> value
+      :not_found -> default
+    end
+  end
+
+  defp get_from_application_environment(key) when is_atom(key) do
+    case Application.fetch_env(:sentry, key) do
+      {:ok, {:system, env_var}} -> get_from_system_environment(env_var)
+      {:ok, value} -> {:ok, value}
+      :error -> :not_found
+    end
+  end
+
+  defp get_from_system_environment(key) when is_binary(key) do
+    case System.get_env(key) do
+      nil -> :not_found
+      value -> {:ok, value}
+    end
+  end
+
+  defp get_from_dsn_query_string(key) when is_binary(key) do
+    sentry_dsn = dsn()
+
+    if sentry_dsn do
+      %URI{query: query} = URI.parse(sentry_dsn)
+      query = query || ""
+      result = URI.decode_query(query)
+               |> Map.fetch(key)
+
+      case result do
+        {:ok, value} -> {:ok, value}
+        :error -> :not_found
+      end
+    else
+      :not_found
+    end
+  end
+
+  defp config_key_to_system_environment_key(key) when is_atom(key) do
+    string_key = Atom.to_string(key)
+                 |> String.upcase
+
+    "SENTRY_#{string_key}"
   end
 end

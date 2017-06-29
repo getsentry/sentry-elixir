@@ -51,9 +51,9 @@ defmodule Sentry.Sources do
   @type source_map :: %{String.t => file_map}
 
   def load_files do
-    root_path = Config.root_path()
-    path_pattern = Config.path_pattern()
-    exclude_patterns = Config.exclude_patterns()
+    root_path = Config.root_source_code_path()
+    path_pattern = Config.source_code_path_pattern()
+    exclude_patterns = Config.source_code_exclude_patterns()
 
     Path.join(root_path, path_pattern)
     |> Path.wildcard()

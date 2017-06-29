@@ -175,7 +175,7 @@ defmodule Sentry.Client do
   @spec get_dsn! :: get_dsn
   def get_dsn! do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(fetch_dsn())
+    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(Config.dsn())
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
     [_, binary_project_id] = String.split(path, "/")
     project_id = String.to_integer(binary_project_id)
@@ -214,13 +214,6 @@ defmodule Sentry.Client do
 
   def hackney_pool_name do
     @hackney_pool_name
-  end
-
-  defp fetch_dsn do
-    case Application.fetch_env!(:sentry, :dsn) do
-      {:system, env_var} -> System.get_env(env_var)
-      value -> value
-    end
   end
 
   defp log_api_error(body) do
