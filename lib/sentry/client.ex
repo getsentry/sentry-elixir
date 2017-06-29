@@ -34,14 +34,13 @@ defmodule Sentry.Client do
         end
   """
 
-  alias Sentry.{Event, Util}
+  alias Sentry.{Event, Util, Config}
 
   require Logger
 
   @type get_dsn :: {String.t, String.t, Integer.t}
   @sentry_version 5
   @max_attempts 4
-  @default_sample_rate 1.0
   @hackney_pool_name :sentry_pool
 
   quote do
@@ -60,7 +59,7 @@ defmodule Sentry.Client do
   @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :unsampled
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, :async)
-    sample_rate = Keyword.get(opts, :sample_rate) || Application.get_env(:sentry, :sample_rate, @default_sample_rate)
+    sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
 
     event = maybe_call_before_send_event(event)
 
@@ -126,7 +125,7 @@ defmodule Sentry.Client do
   Hackney options can be set via the `hackney_opts` configuration option.
   """
   def request(method, url, headers, body) do
-    hackney_opts = Application.get_env(:sentry, :hackney_opts, [])
+    hackney_opts = Config.hackney_opts()
                    |> Keyword.put_new(:pool, @hackney_pool_name)
     with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
@@ -186,7 +185,7 @@ defmodule Sentry.Client do
   end
 
   def maybe_call_after_send_event(result, event) do
-    case Application.get_env(:sentry, :after_send_event) do
+    case Config.after_send_event() do
       function when is_function(function, 2) ->
         function.(event, result)
       {module, function} ->
@@ -201,7 +200,7 @@ defmodule Sentry.Client do
   end
 
   def maybe_call_before_send_event(event) do
-    case Application.get_env(:sentry, :before_send_event) do
+    case Config.before_send_event do
       function when is_function(function, 1) ->
         function.(event)
       {module, function} ->

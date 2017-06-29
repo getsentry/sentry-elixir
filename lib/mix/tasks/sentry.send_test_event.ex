@@ -1,5 +1,6 @@
 defmodule Mix.Tasks.Sentry.SendTestEvent do
   use Mix.Task
+  alias Sentry.Config
 
   @shortdoc "Attempts to send a test event to check Sentry configuration"
   @moduledoc """
@@ -21,8 +22,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     Mix.shell.info "public_key: #{public_key}"
     Mix.shell.info "secret_key: #{secret_key}"
     Mix.shell.info "included_environments: #{inspect included_environments()}"
-    Mix.shell.info "current environment_name: #{inspect environment_name()}"
-    Mix.shell.info "hackney_opts: #{inspect hackney_opts()}\n"
+    Mix.shell.info "current environment_name: #{inspect Config.environment_name()}"
+    Mix.shell.info "hackney_opts: #{inspect Config.hackney_opts()}\n"
   end
 
   defp included_environments do
@@ -33,12 +34,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     end
   end
 
-  defp environment_name, do: Application.get_env(:sentry, :environment_name)
-
-  defp hackney_opts, do: Application.get_env(:sentry, :hackney_opts, [])
-
   defp maybe_send_event do
-    env_name = environment_name()
+    env_name = Config.environment_name()
     included_envs = included_environments()
 
     if env_name in included_envs do

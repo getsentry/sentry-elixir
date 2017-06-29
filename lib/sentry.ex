@@ -1,7 +1,7 @@
 defmodule Sentry do
   use Application
   import Supervisor.Spec
-  alias Sentry.Event
+  alias Sentry.{Event, Config}
   require Logger
 
   @moduledoc """
@@ -91,17 +91,14 @@ defmodule Sentry do
   See `Sentry.Logger`
   """
 
-  @use_error_logger Application.get_env(:sentry, :use_error_logger, false)
-  @default_environment_name Mix.env
-  @max_hackney_connections Application.get_env(:sentry, :hackney_pool_max_connections, 50)
-  @hackney_timeout Application.get_env(:sentry, :hackney_pool_timeout, 5000)
+  @use_error_logger Config.use_error_logger()
 
   @type task :: {:ok, Task.t} | :error | :excluded | :ignored
 
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
-      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: @hackney_timeout, max_connections: @max_hackney_connections])
+      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
@@ -118,7 +115,7 @@ defmodule Sentry do
   """
   @spec capture_exception(Exception.t, Keyword.t) :: task
   def capture_exception(exception, opts \\ []) do
-    filter_module = Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
+    filter_module = Config.filter()
     {source, opts} = Keyword.pop(opts, :event_source)
 
     if filter_module.exclude_exception?(exception, source) do
@@ -156,9 +153,9 @@ defmodule Sentry do
     :ignored
   end
   def send_event(%Event{} = event, opts) do
-    included_environments = Application.get_env(:sentry, :included_environments, [:dev, :test, :prod])
-    environment_name = Application.get_env(:sentry, :environment_name, @default_environment_name)
-    client = Application.get_env(:sentry, :client, Sentry.Client)
+    included_environments = Config.included_environments()
+    environment_name = Config.environment_name()
+    client = Config.client()
 
     if environment_name in included_environments do
       client.send_event(event, opts)

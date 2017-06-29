@@ -1,4 +1,5 @@
 defmodule Sentry.Sources do
+  alias Sentry.Config
   @moduledoc """
   This module is responsible for providing functionality that stores
   the text of source files during compilation for displaying the
@@ -49,14 +50,10 @@ defmodule Sentry.Sources do
   @type file_map :: %{pos_integer() => String.t}
   @type source_map :: %{String.t => file_map}
 
-  @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/"]
-  @default_path_pattern "**/*.ex"
-  @default_context_lines 3
-
   def load_files do
-    root_path = Application.fetch_env!(:sentry, :root_source_code_path)
-    path_pattern = Application.get_env(:sentry, :source_code_path_pattern, @default_path_pattern)
-    exclude_patterns = Application.get_env(:sentry, :source_code_exclude_patterns, @default_exclude_patterns)
+    root_path = Config.root_path()
+    path_pattern = Config.path_pattern()
+    exclude_patterns = Config.exclude_patterns()
 
     Path.join(root_path, path_pattern)
     |> Path.wildcard()
@@ -83,7 +80,7 @@ defmodule Sentry.Sources do
   """
   @spec get_source_context(source_map, String.t, pos_integer()) :: {[String.t], String.t | nil, [String.t]}
   def get_source_context(files, file_name, line_number) do
-    context_lines = Application.get_env(:sentry, :context_lines, @default_context_lines)
+    context_lines = Config.context_lines()
     file = Map.get(files, file_name)
 
     do_get_source_context(file, line_number, context_lines)
