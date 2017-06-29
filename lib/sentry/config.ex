@@ -1,4 +1,9 @@
 defmodule Sentry.Config do
+
+  @moduledoc """
+  This module provides the functionality for fetching configuration settings and their defaults.
+  """
+
   @default_included_environments [:dev, :test, :prod]
   @default_environment_name Mix.env
   @default_max_hackney_connections 50
