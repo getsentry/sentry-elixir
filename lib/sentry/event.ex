@@ -32,7 +32,7 @@ defmodule Sentry.Event do
 
   @type t :: %__MODULE__{}
 
-  alias Sentry.{Event, Util}
+  alias Sentry.{Event, Util, Config}
   @source_code_context_enabled Application.fetch_env!(:sentry, :enable_source_code_context)
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
@@ -70,7 +70,7 @@ defmodule Sentry.Event do
             |> Map.merge(Keyword.get(opts, :extra, %{}))
     user = user_context
            |> Map.merge(Keyword.get(opts, :user, %{}))
-    tags = Application.get_env(:sentry, :tags, %{})
+    tags = Config.tags()
            |> Map.merge(tags_context)
            |> Map.merge(Keyword.get(opts, :tags, %{}))
     request = request_context
@@ -79,11 +79,11 @@ defmodule Sentry.Event do
 
     level = Keyword.get(opts, :level, "error")
 
-    release = Application.get_env(:sentry, :release)
+    release = Config.release()
 
-    server_name = Application.get_env(:sentry, :server_name)
+    server_name = Config.server_name()
 
-    env = Application.get_env(:sentry, :environment_name)
+    env = Config.environment_name()
 
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
@@ -160,7 +160,7 @@ defmodule Sentry.Event do
 
   @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
   def stacktrace_to_frames(stacktrace) do
-    in_app_module_whitelist = Application.get_env(:sentry, :in_app_module_whitelist, [])
+    in_app_module_whitelist = Config.in_app_module_whitelist()
     stacktrace
     |> Enum.map(fn(line) ->
         {mod, function, arity, location} = line
