@@ -21,4 +21,15 @@ defmodule Sentry.Util do
     |> DateTime.to_iso8601()
     |> String.trim_trailing("Z")
   end
+
+  def mix_deps_to_map([%Mix.Dep{} | _rest] = modules) do
+    Enum.reduce(modules, %{}, fn(x, acc) ->
+      case x.status do
+        {:ok, version} -> Map.put(acc, x.app, version)
+        _ -> acc
+      end
+    end)
+  end
+
+  def mix_deps_to_map(modules), do: modules
 end
