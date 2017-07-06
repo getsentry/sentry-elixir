@@ -7,6 +7,7 @@ defmodule Sentry.Event do
   ### Configuration
 
   * `:in_app_module_whitelist` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
+  * `:report_deps` - Flag for whether to include the loaded dependencies when reporting an error. Defaults to true.
 
   """
 
@@ -28,13 +29,17 @@ defmodule Sentry.Event do
             extra: %{},
             user: %{},
             breadcrumbs: [],
-            fingerprint: []
+            fingerprint: [],
+            modules: %{}
 
   @type t :: %__MODULE__{}
 
   alias Sentry.{Event, Util, Config}
   @source_code_context_enabled Application.fetch_env!(:sentry, :enable_source_code_context)
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
+
+  @enable_deps_reporting Config.report_deps()
+  @deps if(@enable_deps_reporting, do: Util.mix_deps_to_map(Mix.Dep.loaded([env: Mix.env])), else: %{})
 
   @doc """
   Creates an Event struct out of context collected and options
@@ -102,7 +107,8 @@ defmodule Sentry.Event do
       user: user,
       breadcrumbs: breadcrumbs,
       request: request,
-      fingerprint: fingerprint
+      fingerprint: fingerprint,
+      modules: @deps,
     }
     |> add_metadata()
   end

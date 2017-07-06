@@ -97,6 +97,10 @@ Optional settings
 
   Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is ``MyApp`` and your setting is ``[MyApp]``, that module as well as any submodules like ``MyApp.Submodule`` would be considered part of your app.  Defaults to ``[]``.
 
+.. describe:: report_deps
+
+  Will attempt to load Mix dependencies at runtime to report alongside events.  Defaults to `true`.
+
 .. describe:: context_lines
 
   The number of lines of source code before and after the line that caused the exception to be included.  Defaults to ``3``.
