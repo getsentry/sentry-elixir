@@ -1,8 +1,14 @@
 # Changelog
 
 ## master
-* Enhancements
+* Backward incompatible changes
   * Allow specifying sync/async/none when getting result of sending event (#174)
+* Enhancements
+  * Modules (#182)
+  * Config from system and DSN (#180)
+  * App Frames (#177)
+  * Sampling (#176)
+  * Post event hook (#175)
   * Improve documentation around recompilation for source code context (#171)
   * Use better arity logic in stacktraces (#170)
   * Allow custom fingerprinting (#160)
