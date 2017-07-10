@@ -1,6 +1,8 @@
 # Changelog
 
 ## master
+
+## 5.0.0 (2017-07-10)
 * Backward incompatible changes
   * Allow specifying sync/async/none when getting result of sending event (#174)
 * Enhancements
