@@ -2,6 +2,10 @@
 
 ## master
 
+## 5.0.1 (2017-07-18)
+* Bug Fixes
+  * Fix logger and context usage (#185)
+
 ## 5.0.0 (2017-07-10)
 * Backward incompatible changes
   * Allow specifying sync/async/none when getting result of sending event (#174)
