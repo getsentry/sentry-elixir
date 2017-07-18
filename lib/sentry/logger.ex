@@ -26,7 +26,7 @@ defmodule Sentry.Logger do
       {kind, exception, stacktrace, module} = get_exception_and_stacktrace(message[:error_info])
                                       |> get_initial_call_and_module(message)
 
-      opts = get_in(message, ~w[dictionary sentry_context]a) || %{}
+      opts = (get_in(message, ~w[dictionary sentry_context]a) || %{})
              |> Map.take(Sentry.Context.context_keys)
              |> Map.to_list()
              |> Keyword.put(:event_source, :logger)
