@@ -173,6 +173,58 @@ current environment_name: :prod
 Sending test event!
 ```
 
+## Docker
+
+There are a couple of important things to keep in mind when building a `Docker` image.
+
+### config files
+
+If you follow [_Best practices for writing Dockerfiles_](https://docs.docker.com/engine/userguide/eng-image/dockerfile_best-practices/), you probably copy just `mix.exs` and `mix.lock` files firstly to leverage caching. Then, you install and compile all dependencies.
+
+```dockerfile
+COPY mix.* ./
+RUN mix do deps.get, deps.compile
+```
+
+In such case, your build will result in the following error:
+
+```bash
+== Compilation error on file lib/sentry/event.ex ==
+** (ArgumentError) application :sentry is not loaded, or the configuration parameter :enable_source_code_context is not set
+    (elixir) lib/application.ex:261: Application.fetch_env!/2
+    lib/sentry/event.ex:38: (module)
+    (stdlib) erl_eval.erl:670: :erl_eval.do_apply/6
+
+could not compile dependency :sentry, "mix compile" failed. You can recompile this dependency with "mix deps.compile sentry", update it with "mix deps.update sentry" or clean it with "mix deps.clean sentry"
+```
+
+This happens because no `config` files are available for `sentry` compilation. To fix the problem, you need an additional step before fetching and compiling `sentry-elixir`:
+
+```dockerfile
+# ...
+COPY config/*.exs ./config/
+
+RUN mix do deps.get, deps.compile
+```
+
+With the entry above you will be able to start compiling `sentry` dependency.
+
+### HOME directory
+
+However, `sentry` itself recursively reads files at compile time in the root project directory and use `File.cwd!/1` for that, so if you put your project in `root` directory (`/`), it will take a lot of time to complete.
+
+To "fix" that, here's an entry to add in your `Dockerfile`:
+
+```dockerfile
+WORKDIR /opt/your-application-name
+```
+
+Once you have this added, you should be able to successfuly build a `Docker` image:
+
+```bash
+docker build -t your_application_name .
+```
+
 ## Docs
 
 To build the docs locally, you'll need the [Sphinx](http://www.sphinx-doc.org/en/stable/):
