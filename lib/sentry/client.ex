@@ -58,15 +58,19 @@ defmodule Sentry.Client do
   """
   @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :unsampled
   def send_event(%Event{} = event, opts \\ []) do
-    result = Keyword.get(opts, :result, :async)
-    sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
-
-    event = maybe_call_before_send_event(event)
-
-    if sample_event?(sample_rate) do
-      encode_and_send(event, result)
-    else
+    if Config.dsn() == "" do
       :unsampled
+    else
+      result = Keyword.get(opts, :result, :async)
+      sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
+
+      event = maybe_call_before_send_event(event)
+
+      if sample_event?(sample_rate) do
+        encode_and_send(event, result)
+      else
+        :unsampled
+      end
     end
   end
 

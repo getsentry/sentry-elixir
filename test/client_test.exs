@@ -198,4 +198,15 @@ defmodule Sentry.ClientTest do
         :unsampled = Sentry.capture_exception(e, result: :sync, sample_rate: 0.0)
     end
   end
+
+  test "does not send event when DSN is an empty string" do
+    modify_env(:sentry, [dsn: "", client: Sentry.Client])
+
+    try do
+      Event.not_a_function
+    rescue
+      e ->
+        :unsampled = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
+    end
+  end
 end
