@@ -17,6 +17,21 @@ If using an environment with Plug or Phoenix add the following to your router:
   use Plug.ErrorHandler
   use Sentry.Plug
 
+If you'd like to capture errors from separate processes like `Task` that may crash, add the line ``:ok = :error_logger.add_report_handler(Sentry.Logger)`` to your application's start function:
+
+.. code-block:: elixir
+  def start(_type, _opts) do
+    children = [
+      supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
+    ]
+    opts = [strategy: :one_for_one, name: Sentry.Supervisor]
+
+    :ok = :error_logger.add_report_handler(Sentry.Logger)
+
+    Supervisor.start_link(children, opts)
+  end
+
 Required settings
 ------------------
 
@@ -54,11 +69,6 @@ Optional settings
 .. describe:: server_name
 
   The name of the server to send with each report. This defaults to nothing.
-
-.. describe:: use_error_logger
-
-  Set this to true if you want to capture all exceptions that occur even outside of a request cycle. This
-  defaults to false.
 
 .. describe:: client
 

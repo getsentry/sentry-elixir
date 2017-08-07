@@ -91,8 +91,6 @@ defmodule Sentry do
   See `Sentry.Logger`
   """
 
-  @use_error_logger Config.use_error_logger()
-
   @type task :: {:ok, Task.t} | :error | :excluded | :ignored
 
   def start(_type, _opts) do
@@ -101,10 +99,6 @@ defmodule Sentry do
       :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
     ]
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
-
-    if @use_error_logger do
-      :error_logger.add_report_handler(Sentry.Logger)
-    end
 
     Supervisor.start_link(children, opts)
   end

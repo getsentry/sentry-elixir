@@ -55,10 +55,6 @@ defmodule Sentry.Config do
     get_config(:client, default: Sentry.Client, check_dsn: false)
   end
 
-  def use_error_logger do
-    get_config(:use_error_logger, default: false, check_dsn: false)
-  end
-
   def root_source_code_path do
     path = get_config(:root_source_code_path)
 
