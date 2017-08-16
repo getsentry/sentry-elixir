@@ -93,35 +93,16 @@ defmodule Sentry.PlugTest do
       "password" => "test",
       "passwd" => "4242424242424242",
       "credit_card" => "4197 7215 7810 8280",
-      "cc" => "4197-7215-7810-8280",
-      "another_cc" => "4197721578108280"})
-
-    request_data = Sentry.Plug.build_request_interface_data(conn, body_scrubber: &Sentry.Plug.default_body_scrubber/1)
-    assert request_data[:method] == "POST"
-    assert request_data[:data] == %{
-      "secret" => "*********",
-      "password" => "*********",
-      "passwd" => "*********",
-      "credit_card" => "*********",
-      "cc" => "*********",
-      "another_cc" => "*********"}
-  end
-
-  test "default data scrubbing of binary" do
-    conn = conn(:post, "/error_route", %{
-      "secret" => "world",
-      "password" => "test",
-      "passwd" => "4242424242424242",
-      "credit_card" => "4197 7215 7810 8280",
       "count" => 334,
       "is_admin" => false,
       "cc" => "4197-7215-7810-8280",
-      "another_cc" => "4197721578108280"})
+      "another_cc" => "4197721578108280",
+      "user" => %{"password" => "mypassword"}})
 
     request_data = Sentry.Plug.build_request_interface_data(conn, body_scrubber: &Sentry.Plug.default_body_scrubber/1)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"secret" => "*********", "password" => "*********", "count" => 334,
       "is_admin" => false, "passwd" => "*********", "credit_card" => "*********", "cc" => "*********",
-      "another_cc" => "*********"}
+      "another_cc" => "*********", "user" => %{"password" => "*********"}}
   end
 end

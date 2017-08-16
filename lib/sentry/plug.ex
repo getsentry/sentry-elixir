@@ -166,12 +166,17 @@ defmodule Sentry.Plug do
 
   @spec default_body_scrubber(Plug.Conn.t) :: map()
   def default_body_scrubber(conn) do
-    Enum.map(conn.params, fn {key, value} ->
+    scrub_map(conn.params)
+  end
+
+  defp scrub_map(map) do
+    Enum.map(map, fn {key, value} ->
       value = cond do
         Enum.member?(@default_scrubbed_param_keys, key) ->
           @scrubbed_value
         is_binary(value) && Regex.match?(@credit_card_regex, value) ->
           @scrubbed_value
+        is_map(value) -> scrub_map(value)
         true -> value
       end
 
