@@ -1,6 +1,8 @@
 # Changelog
 
 ## master
+* Bug Fixes
+  * Fix README error (#197)
 
 ## 5.0.1 (2017-07-18)
 * Bug Fixes
