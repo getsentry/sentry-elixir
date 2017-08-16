@@ -3,6 +3,8 @@
 ## master
 * Bug Fixes
   * Fix README error (#197)
+* Enhancements
+  * Scrubbing of nested maps (#192)
 
 ## 5.0.1 (2017-07-18)
 * Bug Fixes
