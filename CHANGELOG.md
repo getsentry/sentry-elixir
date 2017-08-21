@@ -1,6 +1,8 @@
 # Changelog
 
 ## master
+* Breaking Changes
+  * Remove use\_error\_logger configuration (#196)
 * Bug Fixes
   * Fix README error (#197)
 * Enhancements
