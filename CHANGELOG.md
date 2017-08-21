@@ -5,6 +5,7 @@
   * Fix README error (#197)
 * Enhancements
   * Scrubbing of nested maps (#192)
+  * Allow Hackney 1.9 and later (#199)
 
 ## 5.0.1 (2017-07-18)
 * Bug Fixes
