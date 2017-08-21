@@ -55,6 +55,10 @@ defmodule Sentry.Config do
     get_config(:client, default: Sentry.Client, check_dsn: false)
   end
 
+  def enable_source_code_context do
+    get_config(:root_source_code_path, default: false, check_dsn: false)
+  end
+
   def root_source_code_path do
     path = get_config(:root_source_code_path)
 

@@ -35,7 +35,7 @@ defmodule Sentry.Event do
   @type t :: %__MODULE__{}
 
   alias Sentry.{Event, Util, Config}
-  @source_code_context_enabled Application.fetch_env!(:sentry, :enable_source_code_context)
+  @source_code_context_enabled Config.enable_source_code_context()
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
   @enable_deps_reporting Config.report_deps()

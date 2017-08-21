@@ -43,10 +43,6 @@ Required settings
 
   The DSN provided by Sentry.
 
-.. describe:: enable_source_code_context
-
-  When true, Sentry will read and store source code files to report the source code that caused an exception.
-
 .. describe:: root_source_code_path
 
   This is only required if ``enable_source_code_context`` is enabled.  Should generally be set to ``File.cwd!``.
@@ -110,6 +106,10 @@ Optional settings
 .. describe:: report_deps
 
   Will attempt to load Mix dependencies at runtime to report alongside events.  Defaults to `true`.
+
+.. describe:: enable_source_code_context
+
+  When true, Sentry will read and store source code files to report the source code that caused an exception.
 
 .. describe:: context_lines
 
