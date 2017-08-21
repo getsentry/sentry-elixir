@@ -47,13 +47,22 @@ use Sentry.Plug
 
 ### Capture All Exceptions
 
-This library comes with an extension to capture all Error messages that the Plug handler might not. Simply set `use_error_logger` to true.
+This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
-This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
+To set this up, add `:ok = :error_logger.add_report_handler(Sentry.Logger)` to your application's start function. Example:
 
 ```elixir
-config :sentry,
-  use_error_logger: true
+def start(_type, _opts) do
+  children = [
+    supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+    :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
+  ]
+  opts = [strategy: :one_for_one, name: Sentry.Supervisor]
+
+  :ok = :error_logger.add_report_handler(Sentry.Logger)
+
+  Supervisor.start_link(children, opts)
+end
 ```
 
 ## Configuration
@@ -66,7 +75,6 @@ config :sentry,
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
 | `server_name` | False  | None | |
-| `use_error_logger` | False  | False | |
 | `client` | False  | `Sentry.Client` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
 | `hackney_opts` | False  | `[pool: :sentry_pool]` | |
 | `hackney_pool_max_connections` | False  | 50 | |
