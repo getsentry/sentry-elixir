@@ -20,6 +20,7 @@ If using an environment with Plug or Phoenix add the following to your router:
 If you'd like to capture errors from separate processes like `Task` that may crash, add the line ``:ok = :error_logger.add_report_handler(Sentry.Logger)`` to your application's start function:
 
 .. code-block:: elixir
+
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
