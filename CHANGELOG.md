@@ -3,8 +3,10 @@
 ## master
 * Breaking Changes
   * Remove use\_error\_logger configuration (#196)
+  * enable\_source\_code\_context is no longer required configuration (#201)
 * Bug Fixes
   * Fix README error (#197)
+  * Prevent overwriting server\_name option (#200)
 * Enhancements
   * Scrubbing of nested maps (#192)
   * Allow Hackney 1.9 and later (#199)
