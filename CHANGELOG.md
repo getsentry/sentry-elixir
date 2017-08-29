@@ -1,6 +1,9 @@
 # Changelog
 
-## master
+## 6.0.0 (2017-08-29)
+
+See these [`5.0.0` to `6.0.0` upgrade instructions](https://gist.github.com/mitchellhenke/ffe2048e708fd7dd32d8d0a843daddf3) to update your existing app.
+
 * Breaking Changes
   * Remove use\_error\_logger configuration (#196)
   * enable\_source\_code\_context is no longer required configuration (#201)
