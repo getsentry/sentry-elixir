@@ -84,7 +84,7 @@ end
 | `sample_rate` | False | 1.0 | |
 | `in_app_module_whitelist` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
-| `enable_source_code_context` | True | | |
+| `enable_source_code_context` | False | False | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
