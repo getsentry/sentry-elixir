@@ -71,7 +71,7 @@ end
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
 | `environment_name` | False  | `:dev` | |
-| `included_environments` | False  | `~w(prod test dev)a` | If you need non-standard mix env names you *need* to include it here |
+| `included_environments` | False  | `[:test, :dev, :prod]` | If you need non-standard mix env names you *need* to include it here |
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
 | `server_name` | False  | None | |
