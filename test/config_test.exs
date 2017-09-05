@@ -20,4 +20,10 @@ defmodule Sentry.ConfigTest do
 
     assert "my_server" == Config.server_name()
   end
+
+  test "returns false when dsn is tuple" do
+    modify_env(:sentry, dsn: {1,2})
+
+    assert nil == Config.dsn()
+  end
 end

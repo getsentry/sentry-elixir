@@ -16,7 +16,8 @@ defmodule Sentry.Config do
   end
 
   def dsn do
-    get_config(:dsn, check_dsn: false)
+    dsn = get_config(:dsn, check_dsn: false)
+    if is_tuple(dsn), do: nil, else: dsn
   end
 
   def included_environments do
