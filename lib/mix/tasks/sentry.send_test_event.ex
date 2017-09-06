@@ -7,11 +7,16 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   Send test even to check if Sentry configuration is correct.
   """
 
-  def run(_args) do
+  def run(args) do
+    unless "--no-compile" in args do
+      Mix.Project.compile(args)
+    end
+
     Application.ensure_all_started(:sentry)
 
     Sentry.Client.get_dsn!
     |> print_environment_info()
+
 
     maybe_send_event()
   end
@@ -41,11 +46,17 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     if env_name in included_envs do
       Mix.shell.info "Sending test event..."
 
-      {:ok, id} = "Testing sending Sentry event"
+      result = "Testing sending Sentry event"
                     |> RuntimeError.exception
                     |> Sentry.capture_exception(result: :sync)
 
-      Mix.shell.info "Test event sent!  Event ID: #{id}"
+      case result do
+        {:ok, id} ->
+          Mix.shell.info "Test event sent!  Event ID: #{id}"
+        :excluded ->
+          Mix.shell.info "No test event was sent because the event was excluded by a filter"
+      end
+
     else
       Mix.shell.info "#{inspect env_name} is not in #{inspect included_envs} so no test event will be sent"
     end
