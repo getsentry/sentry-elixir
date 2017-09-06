@@ -130,7 +130,7 @@ defmodule Sentry.EventTest do
     event = Sentry.Event.transform_exception(exception, [])
 
     assert event.modules == %{bunt: "0.2.0", bypass: "0.7.0", certifi: "1.1.0", cowboy: "1.1.2",
-      cowlib: "1.0.2", credo: "0.8.4", hackney: "1.8.0", idna: "4.0.0",
+      cowlib: "1.0.2", credo: "0.8.6", hackney: "1.8.0", idna: "4.0.0",
       metrics: "1.0.1", mime: "1.1.0", mimerl: "1.0.2", plug: "1.3.5",
       poison: "3.1.0", ranch: "1.3.2", ssl_verify_fun: "1.1.1",
       uuid: "1.1.7"}
