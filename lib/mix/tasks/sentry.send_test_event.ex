@@ -7,11 +7,13 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   Send test even to check if Sentry configuration is correct.
   """
 
-  def run(_args) do
+  def run(args) do
+    Mix.Project.compile(args)
     Application.ensure_all_started(:sentry)
 
     Sentry.Client.get_dsn!
     |> print_environment_info()
+
 
     maybe_send_event()
   end
