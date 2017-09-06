@@ -2,6 +2,10 @@
 
 ## master
 
+## 6.0.1 (2017-09-06)
+
+* Bug Fixes
+  * Fix filters and test mix task (#206)
 * Enhancements
   * Improve README clarity (#202)
 
