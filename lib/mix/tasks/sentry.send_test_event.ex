@@ -8,7 +8,10 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   """
 
   def run(args) do
-    Mix.Project.compile(args)
+    unless "--no-compile" in args do
+      Mix.Project.compile(args)
+    end
+
     Application.ensure_all_started(:sentry)
 
     Sentry.Client.get_dsn!
