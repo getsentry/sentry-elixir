@@ -105,4 +105,26 @@ defmodule Sentry.PlugTest do
       "is_admin" => false, "passwd" => "*********", "credit_card" => "*********", "cc" => "*********",
       "another_cc" => "*********", "user" => %{"password" => "*********"}}
   end
+
+  test "handles data scrubbing with file upload" do
+    bypass = Bypass.open
+    Bypass.expect bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert is_map(json["request"]["data"]["image"])
+      assert json["request"]["data"]["password"] == "*********"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    upload = %Plug.Upload{path: "test/fixtures/my_image.png", filename: "my_image.png"}
+
+    assert_raise(RuntimeError, "Error", fn ->
+      conn(:post, "/error_route", %{"image" => upload, "password" => "my_password"})
+      |> put_req_cookie("cookie_key", "cookie_value")
+      |> put_req_header("accept-language", "en-US")
+      |> put_req_header("authorization", "ignorme")
+      |> Sentry.ExampleApp.call([])
+    end)
+  end
 end
