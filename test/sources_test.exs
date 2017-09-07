@@ -5,9 +5,10 @@ defmodule Sentry.SourcesTest do
 
   test "exception makes call to Sentry API" do
     correct_context = %{"context_line" => "    raise RuntimeError, \"Error\"",
-                        "post_context" => ["  end", "", "  match \"/error_route\" do"],
-                        "pre_context" => ["", "  get \"/error_route\" do", "    _ = conn"]
-                        }
+      "post_context" => ["  end", "", "  post \"/error_route\" do"],
+      "pre_context" => ["", "  get \"/error_route\" do",
+                        "    _ = conn"]
+    }
     bypass = Bypass.open
     Bypass.expect bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
