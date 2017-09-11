@@ -2,6 +2,9 @@
 
 ## master
 
+* Bug Fixes
+  * Handle Plug.Upload during scrubbing (#208)
+
 ## 6.0.1 (2017-09-06)
 
 * Bug Fixes
