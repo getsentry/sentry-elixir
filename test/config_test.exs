@@ -20,4 +20,21 @@ defmodule Sentry.ConfigTest do
 
     assert "my_server" == Config.server_name()
   end
+
+  describe "source_code_path_pattern" do
+    test "retrieves from environment" do
+      modify_env(:sentry, source_code_path_pattern: "**/*test.ex")
+      assert "**/*test.ex" == Config.source_code_path_pattern()
+    end
+
+    test "returns default when not configured" do
+      assert "**/*.ex" == Config.source_code_path_pattern()
+    end
+
+    test "does not retrieve from DSN" do
+      dsn = "https://public:super_secret@app.getsentry.com/2?source_code_path_pattern=test"
+      modify_env(:sentry, dsn: dsn)
+      refute "test" == Config.source_code_path_pattern()
+    end
+  end
 end

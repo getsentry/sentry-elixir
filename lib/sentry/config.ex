@@ -70,7 +70,7 @@ defmodule Sentry.Config do
   end
 
   def source_code_path_pattern do
-    get_config(:source_code_path_pattern, default: @default_path_pattern)
+    get_config(:source_code_path_pattern, default: @default_path_pattern, check_dsn: false)
   end
 
   def source_code_exclude_patterns do
