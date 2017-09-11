@@ -14,6 +14,11 @@ defmodule Sentry.ExampleApp do
     raise RuntimeError, "Error"
   end
 
+  post "/error_route" do
+    _ = conn
+    raise RuntimeError, "Error"
+  end
+
   match "/error_route" do
     _ = conn
     raise RuntimeError, "Error"

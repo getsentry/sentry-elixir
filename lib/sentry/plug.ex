@@ -176,8 +176,10 @@ defmodule Sentry.Plug do
           @scrubbed_value
         is_binary(value) && Regex.match?(@credit_card_regex, value) ->
           @scrubbed_value
-        is_map(value) -> scrub_map(value)
-        true -> value
+        is_map(value) && !Map.has_key?(value, :__struct__) ->
+          scrub_map(value)
+        true ->
+          value
       end
 
       {key, value}
