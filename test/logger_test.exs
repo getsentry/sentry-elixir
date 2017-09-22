@@ -94,6 +94,7 @@ defmodule Sentry.LoggerTest do
                                                           "context_line" => nil,
                                                           "pre_context" => [],
                                                           "post_context" => [],
+                                                          "vars" => %{"arg0" => "{}", "arg1" => "{0, 0}"}
                                                         }
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"

@@ -89,7 +89,6 @@ defmodule Sentry.Event do
     server_name = Config.server_name()
 
     env = Config.environment_name()
-    f_args = args_from_stacktrace(stacktrace)
 
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
@@ -101,7 +100,6 @@ defmodule Sentry.Event do
       exception: exception,
       stacktrace: %{
         frames: stacktrace_to_frames(stacktrace),
-        vars: f_args,
       },
       release: release,
       extra: extra,
@@ -173,6 +171,7 @@ defmodule Sentry.Event do
     stacktrace
     |> Enum.map(fn(line) ->
         {mod, function, arity_or_args, location} = line
+        f_args = args_from_stacktrace([line])
         arity = arity_to_integer(arity_or_args)
         file = Keyword.get(location, :file)
         file = if(file, do: String.Chars.to_string(file), else: file)
@@ -184,6 +183,7 @@ defmodule Sentry.Event do
           module: mod,
           lineno: line_number,
           in_app: is_in_app?(mod, in_app_module_whitelist),
+          vars: f_args,
         }
         |> put_source_context(file, line_number)
       end)
