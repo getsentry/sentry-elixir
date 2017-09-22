@@ -5,7 +5,7 @@ defmodule Sentry.EventTest do
 
   def event_generated_by_exception(extra \\ %{}) do
     try do
-      Event.not_a_function
+      Event.not_a_function(1, 2, 3)
     rescue
       e -> Event.transform_exception(e, [stacktrace: System.stacktrace, extra: extra])
     end
@@ -15,23 +15,24 @@ defmodule Sentry.EventTest do
     event = event_generated_by_exception()
 
     assert event.platform == "elixir"
-    assert event.culprit == "Sentry.Event.not_a_function()"
+    assert event.culprit == "Sentry.Event.not_a_function/3"
     assert event.extra == %{}
     assert event.exception == [
       %{type: UndefinedFunctionError,
-       value: "function Sentry.Event.not_a_function/0 is undefined or private",
+       value: "function Sentry.Event.not_a_function/3 is undefined or private",
        module: nil}
     ]
     assert event.level == "error"
-    assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/0 is undefined or private"
+    assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/3 is undefined or private"
     assert is_binary(event.server_name)
-    assert event.stacktrace == %{frames: Enum.reverse([
-      %{filename: nil, function: "Sentry.Event.not_a_function/0", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
-      %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
-      %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false},
-      %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false},
-      %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false}])
+    assert event.stacktrace == %{vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"},
+      frames: Enum.reverse([
+        %{filename: nil, function: "Sentry.Event.not_a_function/3", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false},
+        %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
+        %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false},
+        %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false},
+        %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false},
+        %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false}])
     }
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
@@ -83,7 +84,9 @@ defmodule Sentry.EventTest do
     event = Sentry.Event.transform_exception(exception, [stacktrace: [{Elixir.Sentry.Fun, :method, 2, []}, {Elixir.Sentry, :other_method, 4, []},
                                                                       {:other_module, :a_method, 8, []}, {:random, :uniform, 0, []},
                                                                       {Sentry.Submodule.Fun, :this_method, 0, []}]])
-      assert %{frames: [
+    assert %{
+      vars: %{},
+      frames: [
         %{
           module: Sentry.Submodule.Fun,
           function: "Sentry.Submodule.Fun.this_method/0",
