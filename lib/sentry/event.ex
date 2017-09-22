@@ -89,6 +89,7 @@ defmodule Sentry.Event do
     server_name = Config.server_name()
 
     env = Config.environment_name()
+    f_args = args_from_stacktrace(stacktrace)
 
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
@@ -99,7 +100,8 @@ defmodule Sentry.Event do
       server_name: server_name,
       exception: exception,
       stacktrace: %{
-        frames: stacktrace_to_frames(stacktrace)
+        frames: stacktrace_to_frames(stacktrace),
+        vars: f_args,
       },
       release: release,
       extra: extra,
@@ -170,8 +172,8 @@ defmodule Sentry.Event do
     in_app_module_whitelist = Config.in_app_module_whitelist()
     stacktrace
     |> Enum.map(fn(line) ->
-        {mod, function, arity, location} = line
-        arity = arity_to_integer(arity)
+        {mod, function, arity_or_args, location} = line
+        arity = arity_to_integer(arity_or_args)
         file = Keyword.get(location, :file)
         file = if(file, do: String.Chars.to_string(file), else: file)
         line_number = Keyword.get(location, :line)
@@ -202,7 +204,24 @@ defmodule Sentry.Event do
 
   @spec culprit_from_stacktrace(Exception.stacktrace) :: String.t | nil
   def culprit_from_stacktrace([]), do: nil
-  def culprit_from_stacktrace([{m, f, a, _} | _]), do: Exception.format_mfa(m, f, a)
+  def culprit_from_stacktrace([{m, f, a, _} | _]) do
+    Exception.format_mfa(m, f, arity_to_integer(a))
+  end
+
+  @doc """
+  Builds a map from argument value list.  For Sentry, typically the
+  key in the map would be the name of the variable, but we don't have that
+  available.
+  """
+  @spec args_from_stacktrace(Exception.stacktrace) :: String.t | nil
+  def args_from_stacktrace([{_m, _f, a, _} | _]) when is_list(a) do
+    Enum.with_index(a)
+    |> Enum.map(fn({arg, index}) ->
+      {"arg#{index}", inspect(arg)}
+    end)
+    |> Enum.into(%{})
+  end
+  def args_from_stacktrace(_), do: %{}
 
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)
   defp arity_to_integer(arity) when is_integer(arity), do: arity
