@@ -75,7 +75,7 @@ defmodule Sentry.PlugTest do
     request_data = Sentry.Plug.build_request_interface_data(conn, options)
     assert request_data[:method] == "POST"
     assert request_data[:data] == %{"hello" => "world"}
-    assert request_data[:headers] == %{"cookie" => "cookie_key=cookie_value", "accept-language" => "en-US", "content-type" => "multipart/mixed; charset: utf-8"}
+    assert request_data[:headers] == %{"cookie" => "cookie_key=cookie_value", "accept-language" => "en-US", "content-type" => "multipart/mixed; boundary=plug_conn_test"}
     assert request_data[:cookies] == %{"cookie_key" => "cookie_value"}
   end
 
