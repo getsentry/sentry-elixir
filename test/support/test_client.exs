@@ -1,5 +1,6 @@
 defmodule Sentry.TestClient do
   @behaviour Sentry.HTTPClient
+  require Logger
 
   def send_event(%Sentry.Event{} = event, _opts \\ []) do
     {endpoint, _public_key, _secret_key} = Sentry.Client.get_dsn!
@@ -7,7 +8,8 @@ defmodule Sentry.TestClient do
     case Poison.encode(event) do
       {:ok, body} ->
         Sentry.Client.request(:post, endpoint, [], body)
-      {:error, _error} ->
+      {:error, error} ->
+        Logger.error("Error sending in Sentry.TestClient: #{inspect(error)}")
         :error
     end
   end
