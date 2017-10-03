@@ -18,6 +18,22 @@ defmodule Sentry.Logger do
     Supervisor.start_link(children, opts)
   end
   ```
+
+  Your application will then be running a `Sentry.Logger` event handler that receives error report messages and send them to Sentry.
+
+  It is important to note that the same report handler can be added multiple times.  If you run an umbrella app, and add the report handler in multiple individual applications, the same error will be reported multiple times (one for each handler).  There are two solutions to fix it.
+
+  The first is to ensure that the handler is only added at the primary application entry-point.  This will work, but can be brittle, and will not work for applications running the multiple release style.
+
+  The other solution is to check for existing handlers before trying to add another.  Example:
+
+  ```elixir
+  if !(Sentry.Logger in :gen_event.which_handlers(:error_logger)) do
+    :ok = :error_logger.add_report_handler(Sentry.Logger)
+  end
+  ```
+
+  With this solution, if a `Sentry.Logger` handler is already running, it will not add another.  One can add the code to each application, and there will only ever be one handler created.  This solution is safer, but slightly more complex to manage.
   """
 
   use GenEvent
