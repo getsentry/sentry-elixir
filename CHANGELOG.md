@@ -2,8 +2,14 @@
 
 ## master
 
+## 6.0.2 (2017-10-03)
+
+* Enhancements
+  * Improve Sentry.Logger documentation (#217)
 * Bug Fixes
   * Handle Plug.Upload during scrubbing (#208)
+  * Do not check DSN for source\_code\_path_pattern configuration (#211)
+  * Fix culprit ambiguity (#214)
 
 ## 6.0.1 (2017-09-06)
 
