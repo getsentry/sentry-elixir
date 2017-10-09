@@ -22,9 +22,7 @@ defmodule Sentry.Event do
             environment: nil,
             exception: nil,
             release: nil,
-            stacktrace: %{
-              frames: []
-            },
+            stacktrace: %{frames: []},
             request: %{},
             extra: %{},
             user: %{},
@@ -36,10 +34,10 @@ defmodule Sentry.Event do
 
   alias Sentry.{Event, Util, Config}
   @source_code_context_enabled Config.enable_source_code_context()
-  @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
+  @source_files (if @source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
   @enable_deps_reporting Config.report_deps()
-  @deps if(@enable_deps_reporting, do: Util.mix_deps_to_map(Mix.Dep.loaded([env: Mix.env])), else: %{})
+  @deps (if @enable_deps_reporting, do: Util.mix_deps_to_map(Mix.Dep.loaded([env: Mix.env()])), else: %{})
 
   @doc """
   Creates an Event struct out of context collected and options
@@ -55,13 +53,15 @@ defmodule Sentry.Event do
     * `:level` - error level
     * `:fingerprint` -  list of the fingerprint for grouping this event
   """
-  @spec create_event(keyword()) :: Event.t
+  @spec create_event(keyword) :: Event.t
   def create_event(opts) do
-    %{user: user_context,
+    %{
+      user: user_context,
       tags: tags_context,
       extra: extra_context,
       breadcrumbs: breadcrumbs_context,
-      request: request_context} = Sentry.Context.get_all()
+      request: request_context,
+    } = Sentry.Context.get_all()
 
     exception = Keyword.get(opts, :exception)
 
@@ -71,15 +71,19 @@ defmodule Sentry.Event do
 
     fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
 
-    extra = extra_context
-            |> Map.merge(Keyword.get(opts, :extra, %{}))
-    user = user_context
-           |> Map.merge(Keyword.get(opts, :user, %{}))
-    tags = Config.tags()
-           |> Map.merge(tags_context)
-           |> Map.merge(Keyword.get(opts, :tags, %{}))
-    request = request_context
-              |> Map.merge(Keyword.get(opts, :request, %{}))
+    extra =
+      extra_context
+      |> Map.merge(Keyword.get(opts, :extra, %{}))
+    user =
+      user_context
+      |> Map.merge(Keyword.get(opts, :user, %{}))
+    tags =
+      Config.tags()
+      |> Map.merge(tags_context)
+      |> Map.merge(Keyword.get(opts, :tags, %{}))
+    request =
+      request_context
+      |> Map.merge(Keyword.get(opts, :request, %{}))
     breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
 
     level = Keyword.get(opts, :level, "error")
@@ -89,7 +93,6 @@ defmodule Sentry.Event do
     server_name = Config.server_name()
 
     env = Config.environment_name()
-
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
       message: message,
@@ -98,9 +101,7 @@ defmodule Sentry.Event do
       environment: env,
       server_name: server_name,
       exception: exception,
-      stacktrace: %{
-        frames: stacktrace_to_frames(stacktrace),
-      },
+      stacktrace: %{frames: stacktrace_to_frames(stacktrace)},
       release: release,
       extra: extra,
       tags: tags,
@@ -126,30 +127,32 @@ defmodule Sentry.Event do
     * `:fingerprint` -  list of the fingerprint for grouping this event
 
   """
-  @spec transform_exception(Exception.t, keyword()) :: Event.t
+  @spec transform_exception(Exception.t, keyword) :: Event.t
   def transform_exception(exception, opts) do
     error_type = Keyword.get(opts, :error_type) || :error
     normalized = Exception.normalize(:error, exception)
 
-    type = if(error_type == :error) do
-      normalized.__struct__
-    else
-      error_type
-    end
+    type =
+      if error_type == :error do
+        normalized.__struct__
+      else
+        error_type
+      end
 
-    value = if(error_type == :error) do
-      Exception.message(normalized)
-    else
-      Exception.format_banner(error_type, exception)
-    end
+    value =
+      if error_type == :error do
+        Exception.message(normalized)
+      else
+        Exception.format_banner(error_type, exception)
+      end
 
     module = Keyword.get(opts, :module)
     exception = [%{type: type, value: value, module: module}]
-    message = :error
-              |> Exception.format_banner(normalized)
-              |> String.trim("*")
-              |> String.trim()
-
+    message =
+      :error
+      |> Exception.format_banner(normalized)
+      |> String.trim("*")
+      |> String.trim()
     opts
     |> Keyword.put(:exception, exception)
     |> Keyword.put(:message, message)
@@ -162,37 +165,36 @@ defmodule Sentry.Event do
       event_id: UUID.uuid4(:hex),
       timestamp: Util.iso8601_timestamp(),
     }
-    |> Map.update(:server_name, nil, fn(server_name) -> server_name || to_string(:net_adm.localhost) end)
+    |> Map.update(:server_name, nil, fn server_name -> server_name || to_string(:net_adm.localhost()) end)
   end
 
   @spec stacktrace_to_frames(Exception.stacktrace) :: [map]
   def stacktrace_to_frames(stacktrace) do
     in_app_module_whitelist = Config.in_app_module_whitelist()
     stacktrace
-    |> Enum.map(fn(line) ->
-        {mod, function, arity_or_args, location} = line
-        f_args = args_from_stacktrace([line])
-        arity = arity_to_integer(arity_or_args)
-        file = Keyword.get(location, :file)
-        file = if(file, do: String.Chars.to_string(file), else: file)
-        line_number = Keyword.get(location, :line)
-
-        %{
-          filename: file && to_string(file),
-          function: Exception.format_mfa(mod, function, arity),
-          module: mod,
-          lineno: line_number,
-          in_app: is_in_app?(mod, in_app_module_whitelist),
-          vars: f_args,
-        }
-        |> put_source_context(file, line_number)
-      end)
+    |> Enum.map(fn line ->
+      {mod, function, arity_or_args, location} = line
+      f_args = args_from_stacktrace([line])
+      arity = arity_to_integer(arity_or_args)
+      file = Keyword.get(location, :file)
+      file = (if file, do: String.Chars.to_string(file), else: file)
+      line_number = Keyword.get(location, :line)
+      %{
+        filename: file && to_string(file),
+        function: Exception.format_mfa(mod, function, arity),
+        module: mod,
+        lineno: line_number,
+        in_app: is_in_app?(mod, in_app_module_whitelist),
+        vars: f_args,
+      }
+      |> put_source_context(file, line_number)
+    end)
     |> Enum.reverse()
   end
 
-  @spec put_source_context(map(), String.t, integer()) :: map()
+  @spec put_source_context(map, String.t, integer) :: map
   def put_source_context(frame, file, line_number) do
-    if(@source_code_context_enabled) do
+    if @source_code_context_enabled do
       {pre_context, context, post_context} = Sentry.Sources.get_source_context(@source_files, file, line_number)
       Map.put(frame, :context_line, context)
       |> Map.put(:pre_context, pre_context)
@@ -216,7 +218,7 @@ defmodule Sentry.Event do
   @spec args_from_stacktrace(Exception.stacktrace) :: String.t | nil
   def args_from_stacktrace([{_m, _f, a, _} | _]) when is_list(a) do
     Enum.with_index(a)
-    |> Enum.map(fn({arg, index}) ->
+    |> Enum.map(fn {arg, index} ->
       {"arg#{index}", inspect(arg)}
     end)
     |> Enum.into(%{})
@@ -231,7 +233,7 @@ defmodule Sentry.Event do
   defp is_in_app?(module, in_app_module_whitelist) do
     split_modules = module_split(module)
 
-    Enum.any?(in_app_module_whitelist, fn(module) ->
+    Enum.any?(in_app_module_whitelist, fn module ->
       whitelisted_split_modules = module_split(module)
 
       count = Enum.count(whitelisted_split_modules)

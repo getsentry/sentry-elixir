@@ -8,5 +8,5 @@ defmodule Sentry.HTTPClient do
   See `Sentry.Client` for `Sentry.TestClient` for example implementations.
   """
 
-  @callback send_event(Sentry.Event.t, keyword()) :: any
+  @callback send_event(Sentry.Event.t, keyword) :: any
 end

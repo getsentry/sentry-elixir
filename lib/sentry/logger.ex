@@ -48,20 +48,23 @@ defmodule Sentry.Logger do
 
   def handle_event({:error_report, _gl, {_pid, _type, [message | _]}}, state) when is_list(message) do
     try do
-      {kind, exception, stacktrace, module} = get_exception_and_stacktrace(message[:error_info])
-                                      |> get_initial_call_and_module(message)
+      {kind, exception, stacktrace, module} =
+        get_exception_and_stacktrace(message[:error_info])
+        |> get_initial_call_and_module(message)
 
-      opts = (get_in(message, ~w[dictionary sentry_context]a) || %{})
-             |> Map.take(Sentry.Context.context_keys)
-             |> Map.to_list()
-             |> Keyword.put(:event_source, :logger)
-             |> Keyword.put(:stacktrace, stacktrace)
-             |> Keyword.put(:error_type, kind)
-             |> Keyword.put(:module, module)
+      opts =
+        (get_in(message, ~w[dictionary sentry_context]a) || %{})
+        |> Map.take(Sentry.Context.context_keys())
+        |> Map.to_list()
+        |> Keyword.put(:event_source, :logger)
+        |> Keyword.put(:stacktrace, stacktrace)
+        |> Keyword.put(:error_type, kind)
+        |> Keyword.put(:module, module)
 
       Sentry.capture_exception(exception, opts)
-    rescue ex ->
-      Logger.warn(fn -> "Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}" end)
+    rescue
+      ex ->
+        Logger.warn(fn -> "Unable to notify Sentry due to #{inspect(ex)}! #{inspect(message)}" end)
     end
 
     {:ok, state}
@@ -70,7 +73,6 @@ defmodule Sentry.Logger do
   def handle_event(_, state) do
     {:ok, state}
   end
-
 
   defp get_exception_and_stacktrace({kind, {exception, sub_stack}, _stack}) when is_list(sub_stack) do
     {kind, exception, sub_stack}
@@ -87,8 +89,8 @@ defmodule Sentry.Logger do
     case Keyword.get(error_info, :initial_call) do
       {module, function, arg} ->
         {kind, exception, stacktrace ++ [{module, function, arg, []}], module}
-        _ ->
-          {kind, exception, stacktrace, nil}
+      _ ->
+        {kind, exception, stacktrace, nil}
     end
   end
 end

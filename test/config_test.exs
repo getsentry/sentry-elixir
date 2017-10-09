@@ -34,7 +34,7 @@ defmodule Sentry.ConfigTest do
     test "does not retrieve from DSN" do
       dsn = "https://public:super_secret@app.getsentry.com/2?source_code_path_pattern=test"
       modify_env(:sentry, dsn: dsn)
-      refute "test" == Config.source_code_path_pattern()
+      refute("test" == Config.source_code_path_pattern())
     end
   end
 end

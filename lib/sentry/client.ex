@@ -44,7 +44,7 @@ defmodule Sentry.Client do
   @hackney_pool_name :sentry_pool
 
   quote do
-    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
+    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}")
   end
 
   @doc """
@@ -109,10 +109,11 @@ defmodule Sentry.Client do
 
   defp try_request(method, url, headers, body, current_attempt \\ 1)
   defp try_request(_, _, _, _, current_attempt)
-    when current_attempt > @max_attempts, do: :error
+       when current_attempt > @max_attempts, do: :error
   defp try_request(method, url, headers, body, current_attempt) do
     case request(method, url, headers, body) do
-      {:ok, id} -> {:ok, id}
+      {:ok, id} ->
+        {:ok, id}
       _ ->
         sleep(current_attempt)
         try_request(method, url, headers, body, current_attempt + 1)
@@ -125,8 +126,9 @@ defmodule Sentry.Client do
   Hackney options can be set via the `hackney_opts` configuration option.
   """
   def request(method, url, headers, body) do
-    hackney_opts = Config.hackney_opts()
-                   |> Keyword.put_new(:pool, @hackney_pool_name)
+    hackney_opts =
+      Config.hackney_opts()
+      |> Keyword.put_new(:pool, @hackney_pool_name)
     with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
          {:ok, json} <- Poison.decode(body) do
@@ -154,26 +156,27 @@ defmodule Sentry.Client do
       sentry_client: @sentry_client,
       sentry_timestamp: timestamp,
       sentry_key: public_key,
-      sentry_secret: secret_key
+      sentry_secret: secret_key,
     ]
-    query = data
-            |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
-            |> Enum.join(", ")
+    query =
+      data
+      |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
+      |> Enum.join(", ")
     "Sentry " <> query
   end
 
   defp authorization_headers(public_key, secret_key) do
     [
       {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", authorization_header(public_key, secret_key)}
+      {"X-Sentry-Auth", authorization_header(public_key, secret_key)},
     ]
   end
 
   @doc """
   Get a Sentry DSN which is simply a URI.
   """
-  @spec get_dsn! :: get_dsn
-  def get_dsn! do
+  @spec get_dsn!() :: get_dsn
+  def get_dsn!() do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
     %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(Config.dsn())
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
@@ -200,7 +203,7 @@ defmodule Sentry.Client do
   end
 
   def maybe_call_before_send_event(event) do
-    case Config.before_send_event do
+    case Config.before_send_event() do
       function when is_function(function, 1) ->
         function.(event)
       {module, function} ->
@@ -212,18 +215,15 @@ defmodule Sentry.Client do
     end
   end
 
-  def hackney_pool_name do
+  def hackney_pool_name() do
     @hackney_pool_name
   end
 
   defp log_api_error(body) do
-    Logger.warn(fn ->
-      ["Failed to send Sentry event.", ?\n, body]
-    end)
+    Logger.warn(fn -> ["Failed to send Sentry event.", ?\n, body] end)
   end
 
   defp sleep(attempt_number) do
-    # sleep 2^n seconds
     :math.pow(2, attempt_number)
     |> Kernel.*(1000)
     |> Kernel.round()
@@ -235,6 +235,6 @@ defmodule Sentry.Client do
   defp sample_event?(0), do: false
   defp sample_event?(0.0), do: false
   defp sample_event?(sample_rate) do
-    :rand.uniform < sample_rate
+    :rand.uniform() < sample_rate
   end
 end
