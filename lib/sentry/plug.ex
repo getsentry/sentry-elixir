@@ -113,6 +113,8 @@ defmodule Sentry.Plug do
         exception = Exception.normalize(kind, reason, stack)
         Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
       end
+
+      defoverridable [handle_errors: 2]
     end
   end
 
