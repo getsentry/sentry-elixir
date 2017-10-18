@@ -81,21 +81,44 @@ defmodule Sentry.LoggerTest do
   test "Bad function call causing GenServer crash makes call to Sentry API" do
     Process.flag :trap_exit, true
     bypass = Bypass.open
+    {otp_version, ""} = Float.parse(System.otp_release)
+
     Bypass.expect bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Poison.decode!(body)
-      assert List.first(json["exception"])["type"] == "exit"
-      assert List.first(json["exception"])["value"] == "** (exit) :function_clause"
-      assert List.last(json["stacktrace"]["frames"]) == %{"filename" => "lib/calendar.ex",
-                                                          "function" => "NaiveDateTime.from_erl/2",
-                                                          "in_app" => false,
-                                                          "lineno" => 1214,
-                                                          "module" => "Elixir.NaiveDateTime",
-                                                          "context_line" => nil,
-                                                          "pre_context" => [],
-                                                          "post_context" => [],
-                                                          "vars" => %{"arg0" => "{}", "arg1" => "{0, 0}"}
-                                                        }
+      cond do
+         otp_version >= 20.0 ->
+          assert List.first(json["exception"])["type"] == "Elixir.FunctionClauseError"
+          assert String.starts_with?(List.first(json["exception"])["value"], "no function clause")
+
+        otp_version < 20.0 ->
+          assert List.first(json["exception"])["type"] == "exit"
+          assert List.first(json["exception"])["value"] == "** (exit) :function_clause"
+      end
+
+      cond do
+        Version.match?(System.version, "< 1.4.0") ->
+          assert List.last(json["stacktrace"]["frames"])["vars"] == %{"arg0" => "{}", "arg1" => "{}"}
+          assert List.last(json["stacktrace"]["frames"])["function"] == "NaiveDateTime.from_erl/2"
+          assert List.last(json["stacktrace"]["frames"])["filename"] == "lib/calendar.ex"
+          assert List.last(json["stacktrace"]["frames"])["lineno"] == 878
+        Version.match?(System.version, "< 1.5.0") ->
+          assert List.last(json["stacktrace"]["frames"])["vars"] == %{"arg0" => "{}", "arg1" => "{}"}
+          assert List.last(json["stacktrace"]["frames"])["function"] == "NaiveDateTime.from_erl/2"
+          assert List.last(json["stacktrace"]["frames"])["filename"] == "lib/calendar.ex"
+          assert List.last(json["stacktrace"]["frames"])["lineno"] == 1214
+        Version.match?(System.version, ">= 1.5.0") ->
+          assert List.last(json["stacktrace"]["frames"])["vars"] == %{"arg0" => "{}", "arg1" => "{}", "arg2" => "{}"}
+          assert List.last(json["stacktrace"]["frames"])["filename"] == "lib/calendar/naive_datetime.ex"
+          assert List.last(json["stacktrace"]["frames"])["function"] == "NaiveDateTime.from_erl/3"
+          assert List.last(json["stacktrace"]["frames"])["lineno"] == 522
+      end
+
+      assert %{"in_app" => false,
+               "module" => "Elixir.NaiveDateTime",
+               "context_line" => nil,
+               "pre_context" => [],
+               "post_context" => []} = List.last(json["stacktrace"]["frames"])
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
