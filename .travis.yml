@@ -9,6 +9,9 @@ otp_release:
   - 20.0
 
 matrix:
+  exclude:
+    - elixir: 1.3
+      otp_release: 20.0
   allow_failures:
     - elixir: 1.3.4
 
