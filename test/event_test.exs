@@ -11,6 +11,39 @@ defmodule Sentry.EventTest do
     end
   end
 
+  def get_stacktrace_frames_for_elixir() do
+    cond do
+      Version.match?(System.version, "< 1.4.0") ->
+        [
+          %{filename: nil, function: "Sentry.Event.not_a_function/3", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 48, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 296, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 246, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+        ]
+      Version.match?(System.version, "< 1.5.0") ->
+        [
+          %{filename: nil, function: "Sentry.Event.not_a_function/3", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 48, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+        ]
+      Version.match?(System.version, ">= 1.5.0") ->
+        [
+          %{filename: nil, function: "Sentry.Event.not_a_function/3", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 48, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 292, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+          %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 240, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
+        ]
+    end
+  end
+
+
   test "parses error exception" do
     event = event_generated_by_exception()
 
@@ -26,13 +59,7 @@ defmodule Sentry.EventTest do
     assert event.message == "(UndefinedFunctionError) function Sentry.Event.not_a_function/3 is undefined or private"
     assert is_binary(event.server_name)
     assert event.stacktrace == %{
-      frames: Enum.reverse([
-        %{filename: nil, function: "Sentry.Event.not_a_function/3", lineno: nil, module: Sentry.Event, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}},
-        %{filename: "test/event_test.exs", function: "Sentry.EventTest.event_generated_by_exception/1", lineno: 8, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
-        %{filename: "test/event_test.exs", function: "Sentry.EventTest.\"test parses error exception\"/1", lineno: 15, module: Sentry.EventTest, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
-        %{filename: "lib/ex_unit/runner.ex", function: "ExUnit.Runner.exec_test/1", lineno: 302, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
-        %{filename: "timer.erl", function: ":timer.tc/1", lineno: 166, module: :timer, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}},
-        %{filename: "lib/ex_unit/runner.ex", function: "anonymous fn/3 in ExUnit.Runner.spawn_test/3", lineno: 250, module: ExUnit.Runner, context_line: nil, post_context: [], pre_context: [], in_app: false, vars: %{}}])
+      frames: get_stacktrace_frames_for_elixir() |> Enum.reverse
     }
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/

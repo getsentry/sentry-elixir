@@ -29,7 +29,12 @@ defmodule Sentry.TestGenServer do
   end
 
   def handle_info(:invalid_function, state) do
-    NaiveDateTime.from_erl({})
+    cond do
+      Version.match?(System.version, ">= 1.5.0") ->
+        NaiveDateTime.from_erl({}, {}, {})
+      Version.match?(System.version, "< 1.5.0") ->
+        NaiveDateTime.from_erl({}, {})
+    end
     {:ok, state}
   end
 
