@@ -63,6 +63,7 @@ defmodule Sentry.ClientTest do
       request_map = Poison.decode!(body)
       assert request_map["extra"] == %{"key" => "value"}
       assert request_map["user"]["id"] == 1
+      assert is_nil(request_map["stacktrace"]["frames"])
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 

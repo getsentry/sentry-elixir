@@ -71,7 +71,9 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(event, result) do
-    case Poison.encode(event) do
+    render_event(event)
+    |> Poison.encode()
+    |> case do
       {:ok, body} ->
         do_send_event(event, body, result)
       {:error, error} ->
@@ -214,6 +216,35 @@ defmodule Sentry.Client do
 
   def hackney_pool_name do
     @hackney_pool_name
+  end
+
+  def render_event(%Event{} = event) do
+    map =  %{
+      event_id: event.event_id,
+      culprit: event.culprit,
+      timestamp: event.timestamp,
+      message: event.message,
+      tags: event.tags,
+      level: event.level,
+      platform: event.platform,
+      server_name: event.server_name,
+      environment: event.environment,
+      exception: event.exception,
+      release: event.release,
+      request: event.request,
+      extra: event.extra,
+      user: event.user,
+      breadcrumbs: event.breadcrumbs,
+      fingerprint: event.fingerprint,
+      modules: event.modules,
+    }
+
+    case event.stacktrace do
+      %{frames: [_ | _]} ->
+        Map.put(map, :stacktrace, event.stacktrace)
+      _ ->
+        map
+    end
   end
 
   defp log_api_error(body) do
