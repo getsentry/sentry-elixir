@@ -218,6 +218,13 @@ defmodule Sentry.Client do
     @hackney_pool_name
   end
 
+  @doc """
+  Transform the Event struct into JSON map.
+
+  Most Event attributes map directly to JSON map, with stacktrace being the
+  exception.  If the event does not have stacktrace frames, it should not
+  be included in the JSON body.
+  """
   def render_event(%Event{} = event) do
     map =  %{
       event_id: event.event_id,
