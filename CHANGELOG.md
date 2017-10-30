@@ -2,6 +2,11 @@
 
 ## master
 
+* Enhancements
+  * Fix tests for differing versions of Erlang/Elixir (#221)
+* Bug Fixes
+  * Fix invalid value for stacktrace via Event rendering layer (#224)
+
 ## 6.0.2 (2017-10-03)
 
 * Enhancements
