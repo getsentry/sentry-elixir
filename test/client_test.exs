@@ -63,6 +63,7 @@ defmodule Sentry.ClientTest do
       request_map = Poison.decode!(body)
       assert request_map["extra"] == %{"key" => "value"}
       assert request_map["user"]["id"] == 1
+      assert is_nil(request_map["stacktrace"]["frames"])
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
@@ -163,7 +164,9 @@ defmodule Sentry.ClientTest do
   test "sends event with sample_rate of 1" do
     bypass = Bypass.open
     Bypass.expect bypass, fn conn ->
-      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request_map = Poison.decode!(body)
+      assert Enum.count(request_map["stacktrace"]["frames"]) > 0
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end
 
@@ -176,7 +179,8 @@ defmodule Sentry.ClientTest do
       Event.not_a_function
     rescue
       e ->
-        {:ok, _} = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
+        {:ok, _} = Sentry.capture_exception(e, stacktrace: System.stacktrace,
+                                            result: :sync, sample_rate: 1)
     end
   end
 
