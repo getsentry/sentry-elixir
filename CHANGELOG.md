@@ -2,6 +2,8 @@
 
 ## master
 
+## 6.0.3 (2016-11-01)
+
 * Enhancements
   * Fix tests for differing versions of Erlang/Elixir (#221)
 * Bug Fixes
