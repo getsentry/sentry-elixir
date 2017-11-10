@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.Sentry.SendTestEventTest do
   use ExUnit.Case
   import ExUnit.CaptureIO
+  import ExUnit.CaptureLog
   import Sentry.TestEnvironmentHelper
 
   test "prints if environment_name is not in included_environments" do
@@ -45,5 +46,25 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     Sending test event...
     Test event sent!  Event ID: 340
     """
+  end
+
+  test "handles :error when Sentry server is unreachable" do
+    modify_env(:sentry, [dsn: "http://public:secret@localhost:0/1"])
+    capture_log(fn ->
+      assert capture_io(fn ->
+        Mix.Tasks.Sentry.SendTestEvent.run([])
+      end) == """
+      Client configuration:
+      server: http://localhost:0/api/1/store/
+      public_key: public
+      secret_key: secret
+      included_environments: [:test]
+      current environment_name: :test
+      hackney_opts: [recv_timeout: 50]
+
+      Sending test event...
+      Error sending event!
+      """
+    end)
   end
 end
