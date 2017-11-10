@@ -139,8 +139,8 @@ defmodule Sentry.Client do
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
         :error
-      _ ->
-        log_api_error(body)
+      e ->
+        log_api_error("#{inspect(e)}\n#{body}")
         :error
     end
   end

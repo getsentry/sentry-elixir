@@ -50,7 +50,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
   test "handles :error when Sentry server is unreachable" do
     modify_env(:sentry, [dsn: "http://public:secret@localhost:0/1"])
-    capture_log(fn ->
+    assert capture_log(fn ->
       assert capture_io(fn ->
         Mix.Tasks.Sentry.SendTestEvent.run([])
       end) == """
@@ -65,6 +65,6 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Sending test event...
       Error sending event!
       """
-    end)
+    end) =~ "Failed to send Sentry event"
   end
 end
