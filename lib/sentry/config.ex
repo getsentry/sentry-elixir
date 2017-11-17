@@ -1,6 +1,8 @@
 defmodule Sentry.Config do
   @moduledoc """
   This module provides the functionality for fetching configuration settings and their defaults.
+
+  Sentry supports loading config at runtime, via `{:system, SYSTEM_ENV_KEY}` tuples, where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system environment at runtime.
   """
 
   @default_included_environments [:dev, :test, :prod]
@@ -19,8 +21,11 @@ defmodule Sentry.Config do
     get_config(:dsn, check_dsn: false)
   end
 
+  @doc """
+  The `:included_environments` config key expects a list, but if given a string, it will split the string on commas to create a list.
+  """
   def included_environments do
-    get_config(:included_environments, default: @default_included_environments, check_dsn: false)
+    get_config(:included_environments, default: @default_included_environments, check_dsn: false, type: :list)
   end
 
   def environment_name do
@@ -108,6 +113,7 @@ defmodule Sentry.Config do
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)
     check_dsn = Keyword.get(opts, :check_dsn, true)
+    type = Keyword.get(opts, :type)
 
     environment_result = case get_from_application_environment(key) do
       {:ok, value} -> {:ok, value}
@@ -120,10 +126,14 @@ defmodule Sentry.Config do
     end
 
     case result do
-      {:ok, value} -> value
+      {:ok, value} -> convert_type(value, type)
       :not_found -> default
     end
   end
+
+  defp convert_type(value, nil), do: value
+  defp convert_type(value, :list) when is_list(value), do: value
+  defp convert_type(value, :list) when is_binary(value), do: String.split(value, ",")
 
   defp get_from_application_environment(key) when is_atom(key) do
     case Application.fetch_env(:sentry, key) do
