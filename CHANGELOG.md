@@ -2,7 +2,14 @@
 
 ## master
 
-## 6.0.3 (2016-11-01)
+## 6.0.4 (2017-11-20)
+
+* Enhancements
+  * Allow string for included_environments by splitting on commas (#234)
+* Bug Fixes
+  * Handle :error when sending test event (#228)
+
+## 6.0.3 (2017-11-01)
 
 * Enhancements
   * Fix tests for differing versions of Erlang/Elixir (#221)
