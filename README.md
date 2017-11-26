@@ -54,10 +54,11 @@ To set this up, add `:ok = :error_logger.add_report_handler(Sentry.Logger)` to y
 ```elixir
 def start(_type, _opts) do
   children = [
-    supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
-    :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
+    MyApp.Repo,
+    MyApp.Web.Endpoint,
   ]
-  opts = [strategy: :one_for_one, name: Sentry.Supervisor]
+  
+  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
 
   :ok = :error_logger.add_report_handler(Sentry.Logger)
 
