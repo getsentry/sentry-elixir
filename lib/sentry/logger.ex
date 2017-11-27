@@ -36,9 +36,9 @@ defmodule Sentry.Logger do
   With this solution, if a `Sentry.Logger` handler is already running, it will not add another.  One can add the code to each application, and there will only ever be one handler created.  This solution is safer, but slightly more complex to manage.
   """
 
-  use GenEvent
+  @behaviour :gen_event
 
-  def init(_mod, []), do: {:ok, []}
+  def init(_mod), do: {:ok, []}
 
   def handle_call({:configure, new_keys}, _state), do: {:ok, :ok, new_keys}
 
