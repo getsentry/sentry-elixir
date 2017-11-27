@@ -54,8 +54,8 @@ To set this up, add `:ok = :error_logger.add_report_handler(Sentry.Logger)` to y
 ```elixir
 def start(_type, _opts) do
   children = [
-    MyApp.Repo,
-    MyApp.Web.Endpoint,
+    supervisor(MyApp.Repo, []),
+    supervisor(MyAppWeb.Endpoint, [])
   ]
   
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
