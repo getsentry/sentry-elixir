@@ -111,7 +111,8 @@ defmodule Sentry.Plug do
                  request_id_header: unquote(request_id_header)]
         request = Sentry.Plug.build_request_interface_data(conn, opts)
         exception = Exception.normalize(kind, reason, stack)
-        Sentry.capture_exception(exception, [stacktrace: stack, request: request, event_source: :plug])
+        Sentry.capture_exception(exception, [stacktrace: stack, request: request,
+                                             event_source: :plug, error_type: kind])
       end
     end
   end
