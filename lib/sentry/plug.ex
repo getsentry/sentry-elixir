@@ -114,6 +114,8 @@ defmodule Sentry.Plug do
         Sentry.capture_exception(exception, [stacktrace: stack, request: request,
                                              event_source: :plug, error_type: kind])
       end
+
+      defoverridable [handle_errors: 2]
     end
   end
 
