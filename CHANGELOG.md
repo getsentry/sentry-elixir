@@ -2,9 +2,11 @@
 
 ## master
 
+## 6.0.5 (2017-12-7)
+
 * Enhancements
   * Improve README documentation (#236)
-  * Fix GenEvent warning (#237)
+  * Fix GenEvent warning (#237, #239)
 * Bug Fixes
   * Fix error\_type reported in Sentry.Plug (#238)
 
