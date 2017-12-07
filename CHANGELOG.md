@@ -2,7 +2,7 @@
 
 ## master
 
-## 6.0.5 (2017-12-7)
+## 6.0.5 (2017-12-07)
 
 * Enhancements
   * Improve README documentation (#236)
