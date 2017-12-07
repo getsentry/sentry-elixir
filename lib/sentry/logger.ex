@@ -71,6 +71,17 @@ defmodule Sentry.Logger do
     {:ok, state}
   end
 
+  def handle_info(_msg, state) do
+    {:ok, state}
+  end
+
+  def code_change(_old, state, _extra) do
+    {:ok, state}
+  end
+
+  def terminate(_reason, _state) do
+    :ok
+  end
 
   defp get_exception_and_stacktrace({kind, {exception, sub_stack}, _stack}) when is_list(sub_stack) do
     {kind, exception, sub_stack}
