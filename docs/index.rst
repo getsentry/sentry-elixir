@@ -159,7 +159,7 @@ To enable, set ``:enable_source_code_context`` and ``root_source_code_path``:
     enable_source_code_context: true,
     root_source_code_path: File.cwd!
 
-For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
+For more documentation, see `Sentry.Sources <https://hexdocs.pm/sentry/Sentry.Sources.html>`_.
 
 Deep Dive
 ---------
