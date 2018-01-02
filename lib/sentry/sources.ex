@@ -37,13 +37,13 @@ defmodule Sentry.Sources do
   it will still report old source code.
 
   The best way to ensure source code is up to date is to recompile Sentry
-  itself via `mix do clean, compile`.  It's possible to create a Mix
+  itself via `mix deps.compile sentry --force`.  It's possible to create a Mix
   Task alias in `mix.exs` to do this.  The example below would allow one to
   run `mix.sentry_recompile` which will force recompilation of Sentry so
   it has the newest source and then compile the project:
 
       defp aliases do
-        [sentry_recompile: ["clean", "compile"]]
+        [sentry_recompile: ["deps.compile sentry --force", "compile"]]
       end
 
   """
