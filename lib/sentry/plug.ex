@@ -7,13 +7,13 @@ defmodule Sentry.Plug do
   @scrubbed_value "*********"
 
   @moduledoc """
-  Provides basic funcitonality to handle Plug.ErrorHandler
+  Provides basic functionality to handle Plug.ErrorHandler
 
   #### Usage
 
   Add the following to your router.ex:
 
-      use Plug.ErrorLogger
+      use Plug.ErrorHandler
       use Sentry.Plug
 
   ### Sending Post Body Params
