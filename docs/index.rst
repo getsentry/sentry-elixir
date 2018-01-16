@@ -64,7 +64,7 @@ atom is, but it will only send events if the current environment is ``:prod``,
 since that is the only entry in the ``included_environments`` key.
 
 You can even rely on more custom determinations of the environment name. It's
-not uncommmon for most applications to have a "staging" environment. In order
+not uncommon for most applications to have a "staging" environment. In order
 to handle this without adding an additional Mix environment, you can set an
 environment variable that determines the release level.
 

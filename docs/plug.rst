@@ -1,7 +1,7 @@
 Sentry.Plug
 =============
 
-Sentry.Plug provides basic funcitonality to handle Plug.ErrorHandler.
+Sentry.Plug provides basic functionality to handle Plug.ErrorHandler.
 
 To capture errors, simply put the following in your router:
 
