@@ -3,7 +3,7 @@ elixir:
   - 1.3.4
   - 1.4
   - 1.5
-  - 1.6.0-rc.0
+  - 1.6.0
 otp_release:
   - 18.3
   - 19.3
@@ -12,7 +12,8 @@ otp_release:
 matrix:
   allow_failures:
     - elixir: 1.3.4
-    - elixir: 1.6.0-rc.0
+    - elixir: 1.4
+    - elixir: 1.5
 
 notifications:
   email:
@@ -20,3 +21,4 @@ notifications:
 script:
   - mix test
   - mix credo
+  - mix format --dry-run --check-formatted
