@@ -111,7 +111,7 @@ defmodule Sentry.LoggerTest do
           assert List.last(json["stacktrace"]["frames"])["vars"] == %{"arg0" => "{}", "arg1" => "{}", "arg2" => "{}"}
           assert List.last(json["stacktrace"]["frames"])["filename"] == "lib/calendar/naive_datetime.ex"
           assert List.last(json["stacktrace"]["frames"])["function"] == "NaiveDateTime.from_erl/3"
-          assert List.last(json["stacktrace"]["frames"])["lineno"] == 522
+          assert List.last(json["stacktrace"]["frames"])["lineno"] == 625
       end
 
       assert %{"in_app" => false,
