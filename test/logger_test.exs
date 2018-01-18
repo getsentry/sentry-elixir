@@ -138,6 +138,7 @@ defmodule Sentry.LoggerTest do
 
           assert List.last(json["stacktrace"]["frames"])["function"] == "NaiveDateTime.from_erl/3"
           assert List.last(json["stacktrace"]["frames"])["lineno"] == 522
+
         Version.match?(System.version(), ">= 1.5.0") ->
           assert List.last(json["stacktrace"]["frames"])["vars"] == %{
                    "arg0" => "{}",
