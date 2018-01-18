@@ -8,7 +8,9 @@ otp_release:
   - 18.3
   - 19.3
   - 20.0
-
+env:
+  - MIX_FORMAT=true
+  - MIX_FORMAT=false
 matrix:
   exclude:
     - elixir: 1.6.0
