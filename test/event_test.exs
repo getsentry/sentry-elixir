@@ -40,7 +40,7 @@ defmodule Sentry.EventTest do
           %{
             filename: "test/event_test.exs",
             function: "Sentry.EventTest.\"test parses error exception\"/1",
-            lineno: 48,
+            lineno: 299,
             module: Sentry.EventTest,
             context_line: nil,
             post_context: [],
@@ -180,7 +180,7 @@ defmodule Sentry.EventTest do
           %{
             filename: "test/event_test.exs",
             function: "Sentry.EventTest.\"test parses error exception\"/1",
-            lineno: 48,
+            lineno: 299,
             module: Sentry.EventTest,
             context_line: nil,
             post_context: [],
