@@ -10,10 +10,15 @@ otp_release:
   - 20.0
 
 matrix:
-  include:
-    - elixir: 1.6.0
-      env: MIX_FORMAT=true
   exclude:
+    - elixir: 1.6.0
+      env: MIX_FORMAT=false
+    - elixir: 1.3.4
+      env: MIX_FORMAT=true
+    - elixir: 1.4
+      env: MIX_FORMAT=true
+    - elixir: 1.5
+      env: MIX_FORMAT=true
     - elixir: 1.6.0
       otp_release: 18.3
     - elixir: 1.3.4
