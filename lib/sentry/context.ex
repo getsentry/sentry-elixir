@@ -20,12 +20,13 @@ defmodule Sentry.Context do
 
   def get_all do
     context = get_context()
+
     %{
       user: Map.get(context, @user_key, %{}),
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
       request: Map.get(context, @request_key, %{}),
-      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse |> Enum.to_list
+      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse() |> Enum.to_list()
     }
   end
 
@@ -60,18 +61,22 @@ defmodule Sentry.Context do
   def add_breadcrumb(list) when is_list(list) do
     add_breadcrumb(Enum.into(list, %{}))
   end
+
   def add_breadcrumb(map) when is_map(map) do
     map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
-    context = get_context()
-              |> Map.update(@breadcrumbs_key, [map], &([map | &1]))
+
+    context =
+      get_context()
+      |> Map.update(@breadcrumbs_key, [map], &[map | &1])
 
     Process.put(@process_dictionary_key, context)
   end
 
   defp set_context(current, key, new) when is_map(current) and is_map(new) do
-    merged_context = current
-                      |> Map.get(key, %{})
-                      |> Map.merge(new)
+    merged_context =
+      current
+      |> Map.get(key, %{})
+      |> Map.merge(new)
 
     new_context = Map.put(current, key, merged_context)
     Process.put(@process_dictionary_key, new_context)

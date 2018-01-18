@@ -1,4 +1,3 @@
 use Mix.Config
 
-config :sentry,
-  environment_name: :dev
+config :sentry, environment_name: :dev

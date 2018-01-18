@@ -38,13 +38,13 @@ defmodule Sentry.Client do
 
   require Logger
 
-  @type get_dsn :: {String.t, String.t, Integer.t}
+  @type get_dsn :: {String.t(), String.t(), Integer.t()}
   @sentry_version 5
   @max_attempts 4
   @hackney_pool_name :sentry_pool
 
   quote do
-    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config[:version]}")
+    unquote(@sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}")
   end
 
   @doc """
@@ -56,7 +56,7 @@ defmodule Sentry.Client do
   * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
   * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
   """
-  @spec send_event(Event.t) :: {:ok, Task.t | String.t} | :error | :unsampled
+  @spec send_event(Event.t()) :: {:ok, Task.t() | String.t()} | :error | :unsampled
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, :async)
     sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
@@ -76,6 +76,7 @@ defmodule Sentry.Client do
     |> case do
       {:ok, body} ->
         do_send_event(event, body, result)
+
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
         :error
@@ -85,15 +86,18 @@ defmodule Sentry.Client do
   defp do_send_event(event, body, :async) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
-    {:ok, Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-      try_request(:post, endpoint, auth_headers, body)
-      |> maybe_call_after_send_event(event)
-    end)}
+
+    {:ok,
+     Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+       try_request(:post, endpoint, auth_headers, body)
+       |> maybe_call_after_send_event(event)
+     end)}
   end
 
   defp do_send_event(event, body, :sync) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
+
     try_request(:post, endpoint, auth_headers, body)
     |> maybe_call_after_send_event(event)
   end
@@ -101,6 +105,7 @@ defmodule Sentry.Client do
   defp do_send_event(event, body, :none) do
     {endpoint, public_key, secret_key} = get_dsn!()
     auth_headers = authorization_headers(public_key, secret_key)
+
     Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
       try_request(:post, endpoint, auth_headers, body)
       |> maybe_call_after_send_event(event)
@@ -110,11 +115,16 @@ defmodule Sentry.Client do
   end
 
   defp try_request(method, url, headers, body, current_attempt \\ 1)
+
   defp try_request(_, _, _, _, current_attempt)
-    when current_attempt > @max_attempts, do: :error
+       when current_attempt > @max_attempts,
+       do: :error
+
   defp try_request(method, url, headers, body, current_attempt) do
     case request(method, url, headers, body) do
-      {:ok, id} -> {:ok, id}
+      {:ok, id} ->
+        {:ok, id}
+
       _ ->
         sleep(current_attempt)
         try_request(method, url, headers, body, current_attempt + 1)
@@ -127,8 +137,10 @@ defmodule Sentry.Client do
   Hackney options can be set via the `hackney_opts` configuration option.
   """
   def request(method, url, headers, body) do
-    hackney_opts = Config.hackney_opts()
-                   |> Keyword.put_new(:pool, @hackney_pool_name)
+    hackney_opts =
+      Config.hackney_opts()
+      |> Keyword.put_new(:pool, @hackney_pool_name)
+
     with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
          {:ok, json} <- Poison.decode(body) do
@@ -139,6 +151,7 @@ defmodule Sentry.Client do
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
         :error
+
       e ->
         log_api_error("#{inspect(e)}\n#{body}")
         :error
@@ -148,9 +161,10 @@ defmodule Sentry.Client do
   @doc """
   Generates a Sentry API authorization header.
   """
-  @spec authorization_header(String.t, String.t) :: String.t
+  @spec authorization_header(String.t(), String.t()) :: String.t()
   def authorization_header(public_key, secret_key) do
     timestamp = Util.unix_timestamp()
+
     data = [
       sentry_version: @sentry_version,
       sentry_client: @sentry_client,
@@ -158,9 +172,12 @@ defmodule Sentry.Client do
       sentry_key: public_key,
       sentry_secret: secret_key
     ]
-    query = data
-            |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
-            |> Enum.join(", ")
+
+    query =
+      data
+      |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
+      |> Enum.join(", ")
+
     "Sentry " <> query
   end
 
@@ -177,7 +194,9 @@ defmodule Sentry.Client do
   @spec get_dsn! :: get_dsn
   def get_dsn! do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
-    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} = URI.parse(Config.dsn())
+    %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} =
+      URI.parse(Config.dsn())
+
     [public_key, secret_key] = String.split(userinfo, ":", parts: 2)
     [_, binary_project_id] = String.split(path, "/")
     project_id = String.to_integer(binary_project_id)
@@ -190,27 +209,36 @@ defmodule Sentry.Client do
     case Config.after_send_event() do
       function when is_function(function, 2) ->
         function.(event, result)
+
       {module, function} ->
         apply(module, function, [event, result])
+
       nil ->
         nil
+
       _ ->
-        raise ArgumentError, message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
+        raise ArgumentError,
+          message: ":after_send_event must be an anonymous function or a {Module, Function} tuple"
     end
 
     result
   end
 
   def maybe_call_before_send_event(event) do
-    case Config.before_send_event do
+    case Config.before_send_event() do
       function when is_function(function, 1) ->
         function.(event)
+
       {module, function} ->
         apply(module, function, [event])
+
       nil ->
         event
+
       _ ->
-        raise ArgumentError, message: ":before_send_event must be an anonymous function or a {Module, Function} tuple"
+        raise ArgumentError,
+          message:
+            ":before_send_event must be an anonymous function or a {Module, Function} tuple"
     end
   end
 
@@ -226,7 +254,7 @@ defmodule Sentry.Client do
   be included in the JSON body.
   """
   def render_event(%Event{} = event) do
-    map =  %{
+    map = %{
       event_id: event.event_id,
       culprit: event.culprit,
       timestamp: event.timestamp,
@@ -243,12 +271,13 @@ defmodule Sentry.Client do
       user: event.user,
       breadcrumbs: event.breadcrumbs,
       fingerprint: event.fingerprint,
-      modules: event.modules,
+      modules: event.modules
     }
 
     case event.stacktrace do
       %{frames: [_ | _]} ->
         Map.put(map, :stacktrace, event.stacktrace)
+
       _ ->
         map
     end
@@ -272,7 +301,8 @@ defmodule Sentry.Client do
   defp sample_event?(1.0), do: true
   defp sample_event?(0), do: false
   defp sample_event?(0.0), do: false
+
   defp sample_event?(sample_rate) do
-    :rand.uniform < sample_rate
+    :rand.uniform() < sample_rate
   end
 end

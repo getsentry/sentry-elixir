@@ -6,7 +6,7 @@ defmodule Sentry.Util do
   @doc """
     Generates a unix timestamp
   """
-  @spec unix_timestamp :: Integer.t
+  @spec unix_timestamp :: Integer.t()
   def unix_timestamp do
     :os.system_time(:seconds)
   end
@@ -14,7 +14,7 @@ defmodule Sentry.Util do
   @doc """
     Generates a iso8601_timestamp without microseconds and timezone
   """
-  @spec iso8601_timestamp :: String.t
+  @spec iso8601_timestamp :: String.t()
   def iso8601_timestamp do
     DateTime.utc_now()
     |> Map.put(:microsecond, {0, 0})
@@ -23,7 +23,7 @@ defmodule Sentry.Util do
   end
 
   def mix_deps_to_map([%Mix.Dep{} | _rest] = modules) do
-    Enum.reduce(modules, %{}, fn(x, acc) ->
+    Enum.reduce(modules, %{}, fn x, acc ->
       case x.status do
         {:ok, version} -> Map.put(acc, x.app, version)
         _ -> acc

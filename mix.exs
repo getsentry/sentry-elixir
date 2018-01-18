@@ -9,7 +9,7 @@ defmodule Sentry.Mixfile do
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
-      elixirc_paths: elixirc_paths(Mix.env),
+      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [plt_add_deps: :transitive],
       docs: [extras: ["README.md"], main: "readme"]
     ]
@@ -28,7 +28,6 @@ defmodule Sentry.Mixfile do
       {:uuid, "~> 1.0"},
       {:poison, "~> 1.5 or ~> 2.0 or ~> 3.0"},
       {:plug, "~> 1.0", optional: true},
-
       {:dialyxir, "> 0.0.0", only: :dev},
       {:ex_doc, "~> 0.18.0", only: :dev},
       {:credo, "~> 0.8", only: [:dev, :test], runtime: false},
