@@ -1,5 +1,4 @@
 defmodule Sentry.TestGenServer do
-
   def start_link(pid) do
     GenServer.start_link(__MODULE__, pid)
   end
@@ -30,11 +29,13 @@ defmodule Sentry.TestGenServer do
 
   def handle_info(:invalid_function, state) do
     cond do
-      Version.match?(System.version, ">= 1.5.0") ->
+      Version.match?(System.version(), ">= 1.5.0") ->
         NaiveDateTime.from_erl({}, {}, {})
-      Version.match?(System.version, "< 1.5.0") ->
+
+      Version.match?(System.version(), "< 1.5.0") ->
         NaiveDateTime.from_erl({}, {})
     end
+
     {:ok, state}
   end
 
@@ -42,4 +43,3 @@ defmodule Sentry.TestGenServer do
     send(state, "terminating")
   end
 end
-

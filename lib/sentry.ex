@@ -91,13 +91,18 @@ defmodule Sentry do
   See `Sentry.Logger`
   """
 
-  @type task :: {:ok, Task.t} | :error | :excluded | :ignored
+  @type task :: {:ok, Task.t()} | :error | :excluded | :ignored
 
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
-      :hackney_pool.child_spec(Sentry.Client.hackney_pool_name(),  [timeout: Config.hackney_timeout(), max_connections: Config.max_hackney_connections()])
+      :hackney_pool.child_spec(
+        Sentry.Client.hackney_pool_name(),
+        timeout: Config.hackney_timeout(),
+        max_connections: Config.max_hackney_connections()
+      )
     ]
+
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
 
     Supervisor.start_link(children, opts)
@@ -107,7 +112,7 @@ defmodule Sentry do
   Parses and submits an exception to Sentry if current environment is in included_environments.
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
-  @spec capture_exception(Exception.t, Keyword.t) :: task
+  @spec capture_exception(Exception.t(), Keyword.t()) :: task
   def capture_exception(exception, opts \\ []) do
     filter_module = Config.filter()
     {source, opts} = Keyword.pop(opts, :event_source)
@@ -126,7 +131,7 @@ defmodule Sentry do
 
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
-  @spec capture_message(String.t, Keyword.t) :: task
+  @spec capture_message(String.t(), Keyword.t()) :: task
   def capture_message(message, opts \\ []) do
     opts
     |> Keyword.put(:message, message)
@@ -139,13 +144,15 @@ defmodule Sentry do
 
   `opts` argument is passed as the second argument to `send_event/2` of the configured `Sentry.HTTPClient`.  See `Sentry.Client.send_event/2` for more information.
   """
-  @spec send_event(Event.t, Keyword.t) :: task
+  @spec send_event(Event.t(), Keyword.t()) :: task
   def send_event(event, opts \\ [])
+
   def send_event(%Event{message: nil, exception: nil}, _opts) do
     Logger.warn("Sentry: unable to parse exception")
 
     :ignored
   end
+
   def send_event(%Event{} = event, opts) do
     included_environments = Config.included_environments()
     environment_name = Config.environment_name()

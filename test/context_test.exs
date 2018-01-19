@@ -58,7 +58,7 @@ defmodule Sentry.ContextTest do
     Sentry.Context.set_http_context(%{"url" => "https://wow"})
 
     exception = RuntimeError.exception("error")
-    event = Sentry.Event.transform_exception(exception, [request: %{"method" => "GET"}])
+    event = Sentry.Event.transform_exception(exception, request: %{"method" => "GET"})
 
     assert event.request == %{"url" => "https://wow", "method" => "GET"}
   end
@@ -67,7 +67,7 @@ defmodule Sentry.ContextTest do
     Sentry.Context.set_extra_context(%{"key" => "345", "key1" => "123"})
 
     exception = RuntimeError.exception("error")
-    event = Sentry.Event.transform_exception(exception, [extra: %{"key" => "123"}])
+    event = Sentry.Event.transform_exception(exception, extra: %{"key" => "123"})
 
     assert event.extra == %{"key" => "123", "key1" => "123"}
     assert event.tags == %{}
@@ -79,7 +79,7 @@ defmodule Sentry.ContextTest do
     modify_env(:sentry, tags: %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})
 
     exception = RuntimeError.exception("error")
-    event = Sentry.Event.transform_exception(exception, [tags: %{"key" => "123"}])
+    event = Sentry.Event.transform_exception(exception, tags: %{"key" => "123"})
 
     assert event.tags == %{"key" => "123", "key1" => "123", "key2" => "1234", "key3" => "12345"}
     assert event.extra == %{}
@@ -90,7 +90,7 @@ defmodule Sentry.ContextTest do
     Sentry.Context.set_user_context(%{"key" => "345", "key1" => "123"})
 
     exception = RuntimeError.exception("error")
-    event = Sentry.Event.transform_exception(exception, [user: %{"key" => "123"}])
+    event = Sentry.Event.transform_exception(exception, user: %{"key" => "123"})
 
     assert event.user == %{"key" => "123", "key1" => "123"}
     assert event.extra == %{}

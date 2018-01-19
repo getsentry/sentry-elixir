@@ -1,5 +1,6 @@
 defmodule Sentry.Sources do
   alias Sentry.Config
+
   @moduledoc """
   This module is responsible for providing functionality that stores
   the text of source files during compilation for displaying the
@@ -47,8 +48,8 @@ defmodule Sentry.Sources do
       end
 
   """
-  @type file_map :: %{pos_integer() => String.t}
-  @type source_map :: %{String.t => file_map}
+  @type file_map :: %{pos_integer() => String.t()}
+  @type source_map :: %{String.t() => file_map}
 
   def load_files do
     root_path = Config.root_source_code_path()
@@ -58,7 +59,7 @@ defmodule Sentry.Sources do
     Path.join(root_path, path_pattern)
     |> Path.wildcard()
     |> exclude_files(exclude_patterns)
-    |> Enum.reduce(%{}, fn(path, acc) ->
+    |> Enum.reduce(%{}, fn path, acc ->
       key = Path.relative_to(path, root_path)
       value = source_to_lines(File.read!(path))
 
@@ -78,7 +79,8 @@ defmodule Sentry.Sources do
 
   The three values are returned in a three element tuple as `{preceding_source_code_list, source_code_from_error_line, following_source_code_list}`.
   """
-  @spec get_source_context(source_map, String.t, pos_integer()) :: {[String.t], String.t | nil, [String.t]}
+  @spec get_source_context(source_map, String.t(), pos_integer()) ::
+          {[String.t()], String.t() | nil, [String.t()]}
   def get_source_context(files, file_name, line_number) do
     context_lines = Config.context_lines()
     file = Map.get(files, file_name)
@@ -87,20 +89,24 @@ defmodule Sentry.Sources do
   end
 
   defp do_get_source_context(nil, _, _), do: {[], nil, []}
+
   defp do_get_source_context(file, line_number, context_lines) do
     context_line_indices = 0..(2 * context_lines)
 
-    Enum.reduce(context_line_indices, {[], nil, []}, fn(i, {pre_context, context, post_context}) ->
+    Enum.reduce(context_line_indices, {[], nil, []}, fn i, {pre_context, context, post_context} ->
       context_line_number = line_number - context_lines + i
       source = Map.get(file, context_line_number)
 
       cond do
         context_line_number == line_number && source ->
           {pre_context, source, post_context}
+
         context_line_number < line_number && source ->
           {pre_context ++ [source], context, post_context}
+
         context_line_number > line_number && source ->
           {pre_context, context, post_context ++ [source]}
+
         true ->
           {pre_context, context, post_context}
       end
@@ -108,16 +114,17 @@ defmodule Sentry.Sources do
   end
 
   defp exclude_files(file_names, []), do: file_names
+
   defp exclude_files(file_names, [exclude_pattern | rest]) do
-    Enum.reject(file_names, &(String.match?(&1, exclude_pattern)))
+    Enum.reject(file_names, &String.match?(&1, exclude_pattern))
     |> exclude_files(rest)
   end
 
   defp source_to_lines(source) do
     String.replace_suffix(source, "\n", "")
     |> String.split("\n")
-    |> Enum.with_index
-    |> Enum.reduce(%{}, fn({line_string, line_number}, acc) ->
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {line_string, line_number}, acc ->
       Map.put(acc, line_number + 1, line_string)
     end)
   end

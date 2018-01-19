@@ -16,7 +16,10 @@ defmodule Sentry.ConfigTest do
   end
 
   test "retrieves from DSN query string" do
-    modify_env(:sentry, dsn: "https://public:super_secret@app.getsentry.com/2?server_name=my_server")
+    modify_env(
+      :sentry,
+      dsn: "https://public:super_secret@app.getsentry.com/2?server_name=my_server"
+    )
 
     assert "my_server" == Config.server_name()
   end
