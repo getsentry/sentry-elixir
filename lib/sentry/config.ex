@@ -70,7 +70,7 @@ defmodule Sentry.Config do
   end
 
   def enable_source_code_context do
-    get_config(:root_source_code_path, default: false, check_dsn: false)
+    get_config(:enable_source_code_context, default: false, check_dsn: false)
   end
 
   def root_source_code_path do
