@@ -6,7 +6,7 @@ defmodule Sentry.Util do
   @doc """
     Generates a unix timestamp
   """
-  @spec unix_timestamp :: Integer.t()
+  @spec unix_timestamp :: pos_integer()
   def unix_timestamp do
     :os.system_time(:seconds)
   end
@@ -22,6 +22,7 @@ defmodule Sentry.Util do
     |> String.trim_trailing("Z")
   end
 
+  @spec mix_deps_to_map([Mix.Dep.t()]) :: map()
   def mix_deps_to_map([%Mix.Dep{} | _rest] = modules) do
     Enum.reduce(modules, %{}, fn x, acc ->
       case x.status do

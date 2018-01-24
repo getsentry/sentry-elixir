@@ -234,7 +234,7 @@ defmodule Sentry.Event do
   key in the map would be the name of the variable, but we don't have that
   available.
   """
-  @spec args_from_stacktrace(Exception.stacktrace()) :: String.t() | nil
+  @spec args_from_stacktrace(Exception.stacktrace()) :: map()
   def args_from_stacktrace([{_m, _f, a, _} | _]) when is_list(a) do
     Enum.with_index(a)
     |> Enum.map(fn {arg, index} ->
