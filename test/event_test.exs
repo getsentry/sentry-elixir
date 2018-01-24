@@ -450,12 +450,12 @@ defmodule Sentry.EventTest do
     assert event.modules == %{
              bunt: "0.2.0",
              bypass: "0.8.1",
-             certifi: "1.1.0",
+             certifi: "1.2.1",
              cowboy: "1.1.2",
              cowlib: "1.0.2",
              credo: "0.8.10",
-             hackney: "1.8.0",
-             idna: "4.0.0",
+             hackney: "1.8.6",
+             idna: "5.0.2",
              metrics: "1.0.1",
              mime: "1.1.0",
              mimerl: "1.0.2",
@@ -463,6 +463,7 @@ defmodule Sentry.EventTest do
              poison: "3.1.0",
              ranch: "1.3.2",
              ssl_verify_fun: "1.1.1",
+             unicode_util_compat: "0.2.0",
              uuid: "1.1.8"
            }
   end
