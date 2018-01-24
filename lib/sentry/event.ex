@@ -185,7 +185,7 @@ defmodule Sentry.Event do
   defmacrop put_source_context(frame, file, line_number) do
     if Config.enable_source_code_context() do
       quote do
-        macro_put_source_context(unquote(frame), unquote(file), unquote(line_number))
+        do_put_source_context(unquote(frame), unquote(file), unquote(line_number))
       end
     else
       frame
@@ -218,12 +218,12 @@ defmodule Sentry.Event do
     |> Enum.reverse()
   end
 
-  @spec macro_put_source_context(map(), String.t(), integer()) :: map()
-  def macro_put_source_context(frame, file, line_number) do
+  defp do_put_source_context(frame, file, line_number) do
     {pre_context, context, post_context} =
       Sentry.Sources.get_source_context(@source_files, file, line_number)
 
-    Map.put(frame, :context_line, context)
+    frame
+    |> Map.put(:context_line, context)
     |> Map.put(:pre_context, pre_context)
     |> Map.put(:post_context, post_context)
   end
