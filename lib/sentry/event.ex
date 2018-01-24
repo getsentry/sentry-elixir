@@ -182,6 +182,18 @@ defmodule Sentry.Event do
     end)
   end
 
+  defmacrop put_source_context(frame, file, line_number) do
+    if Config.enable_source_code_context() do
+      quote do
+        do_put_source_context(unquote(frame), unquote(file), unquote(line_number))
+      end
+    else
+      quote do
+        unquote(frame)
+      end
+    end
+  end
+
   @spec stacktrace_to_frames(Exception.stacktrace()) :: [map]
   def stacktrace_to_frames(stacktrace) do
     in_app_module_whitelist = Config.in_app_module_whitelist()
@@ -208,18 +220,15 @@ defmodule Sentry.Event do
     |> Enum.reverse()
   end
 
-  @spec put_source_context(map(), String.t(), integer()) :: map()
-  def put_source_context(frame, file, line_number) do
-    if @source_code_context_enabled do
-      {pre_context, context, post_context} =
-        Sentry.Sources.get_source_context(@source_files, file, line_number)
+  @spec do_put_source_context(map(), String.t(), integer()) :: map()
+  def do_put_source_context(frame, file, line_number) do
+    {pre_context, context, post_context} =
+      Sentry.Sources.get_source_context(@source_files, file, line_number)
 
-      Map.put(frame, :context_line, context)
-      |> Map.put(:pre_context, pre_context)
-      |> Map.put(:post_context, post_context)
-    else
-      frame
-    end
+    frame
+    |> Map.put(:context_line, context)
+    |> Map.put(:pre_context, pre_context)
+    |> Map.put(:post_context, post_context)
   end
 
   @spec culprit_from_stacktrace(Exception.stacktrace()) :: String.t() | nil
