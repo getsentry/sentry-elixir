@@ -188,7 +188,9 @@ defmodule Sentry.Event do
         do_put_source_context(unquote(frame), unquote(file), unquote(line_number))
       end
     else
-      frame
+      quote do
+        unquote(frame)
+      end
     end
   end
 
@@ -218,7 +220,8 @@ defmodule Sentry.Event do
     |> Enum.reverse()
   end
 
-  defp do_put_source_context(frame, file, line_number) do
+  @spec do_put_source_context(map(), String.t(), integer()) :: map()
+  def do_put_source_context(frame, file, line_number) do
     {pre_context, context, post_context} =
       Sentry.Sources.get_source_context(@source_files, file, line_number)
 
