@@ -38,7 +38,8 @@ defmodule Sentry.Client do
 
   require Logger
 
-  @type get_dsn :: {String.t(), String.t(), Integer.t()}
+  @type dsn :: {String.t(), String.t(), String.t()}
+  @type send_event_result :: {:ok, Task.t() | String.t() | pid()} | :error | :unsampled
   @sentry_version 5
   @max_attempts 4
   @hackney_pool_name :sentry_pool
@@ -56,7 +57,7 @@ defmodule Sentry.Client do
   * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
   * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
   """
-  @spec send_event(Event.t()) :: {:ok, Task.t() | String.t()} | :error | :unsampled
+  @spec send_event(Event.t()) :: send_event_result
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, :async)
     sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
@@ -125,7 +126,7 @@ defmodule Sentry.Client do
       {:ok, id} ->
         {:ok, id}
 
-      _ ->
+      :error ->
         sleep(current_attempt)
         try_request(method, url, headers, body, current_attempt + 1)
     end
@@ -136,6 +137,8 @@ defmodule Sentry.Client do
 
   Hackney options can be set via the `hackney_opts` configuration option.
   """
+  @spec request(atom(), String.t(), list({String.t(), String.t()}), String.t()) ::
+          {:ok, String.t()} | :error
   def request(method, url, headers, body) do
     hackney_opts =
       Config.hackney_opts()
@@ -191,7 +194,7 @@ defmodule Sentry.Client do
   @doc """
   Get a Sentry DSN which is simply a URI.
   """
-  @spec get_dsn! :: get_dsn
+  @spec get_dsn! :: dsn
   def get_dsn! do
     # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
     %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol} =
@@ -205,6 +208,7 @@ defmodule Sentry.Client do
     {endpoint, public_key, secret_key}
   end
 
+  @spec maybe_call_after_send_event(send_event_result, Event.t()) :: Event.t()
   def maybe_call_after_send_event(result, event) do
     case Config.after_send_event() do
       function when is_function(function, 2) ->
@@ -224,6 +228,7 @@ defmodule Sentry.Client do
     result
   end
 
+  @spec maybe_call_before_send_event(Event.t()) :: Event.t()
   def maybe_call_before_send_event(event) do
     case Config.before_send_event() do
       function when is_function(function, 1) ->
@@ -253,6 +258,7 @@ defmodule Sentry.Client do
   exception.  If the event does not have stacktrace frames, it should not
   be included in the JSON body.
   """
+  @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
     map = %{
       event_id: event.event_id,
