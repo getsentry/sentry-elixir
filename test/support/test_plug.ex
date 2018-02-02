@@ -19,6 +19,14 @@ defmodule Sentry.ExampleApp do
     raise RuntimeError, "Error"
   end
 
+  get "/spawn_error_route" do
+    spawn(fn ->
+      raise "Error"
+    end)
+
+    send_resp(conn, 200, "")
+  end
+
   match "/error_route" do
     _ = conn
     raise RuntimeError, "Error"
