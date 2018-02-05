@@ -47,6 +47,23 @@ defmodule Sentry.Logger do
     {:ok, state}
   end
 
+  def handle_event({:error, _gl, {_pid, _type, [pid, {exception, stack}]} = info}, state)
+      when is_list(stack) and is_pid(pid) do
+    try do
+      opts =
+        Keyword.put([], :event_source, :logger)
+        |> Keyword.put(:stacktrace, stack)
+        |> Keyword.put(:error_type, :error)
+
+      Sentry.capture_exception(exception, opts)
+    rescue
+      ex ->
+        Logger.warn(fn -> "Unable to notify Sentry due to #{inspect(ex)}! #{inspect(info)}" end)
+    end
+
+    {:ok, state}
+  end
+
   def handle_event({:error_report, _gl, {_pid, _type, [message | _]}}, state)
       when is_list(message) do
     try do

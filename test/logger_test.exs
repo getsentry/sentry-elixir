@@ -206,4 +206,29 @@ defmodule Sentry.LoggerTest do
 
     :error_logger.delete_report_handler(Sentry.Logger)
   end
+
+  test "captures errors from spawn() in Plug app" do
+    bypass = Bypass.open()
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert length(json["stacktrace"]["frames"]) == 1
+      assert List.first(json["stacktrace"]["frames"])["filename"] == "test/support/test_plug.ex"
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    :error_logger.add_report_handler(Sentry.Logger)
+
+    capture_log(fn ->
+      Plug.Test.conn(:get, "/spawn_error_route")
+      |> Sentry.ExampleApp.call([])
+
+      assert_receive "API called"
+      :error_logger.delete_report_handler(Sentry.Logger)
+    end)
+  end
 end
