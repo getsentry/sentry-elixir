@@ -2,6 +2,18 @@
 
 ## master
 
+## 6.1.0 (2017-12-07)
+
+* Enhancements
+  * Elixir 1.6.0 formatted (#246)
+  * Improve documentation around source code compilation (#242)
+  * Update typespecs (#249)
+  * Report errors from :kernel.spawn processes (#251)
+* Bug Fixes
+  * Fix doc typos (#245)
+  * Remove Sentry.Event compile warning (#248)
+  * Fix enable\_source\_code\_context configuration (#247)
+
 ## 6.0.5 (2017-12-07)
 
 * Enhancements
