@@ -169,4 +169,45 @@ defmodule Sentry.PlugTest do
       |> Sentry.ExampleApp.call([])
     end)
   end
+
+  test "default cookie scrubbing" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert json["request"]["cookies"] == %{}
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    assert_raise(RuntimeError, "Error", fn ->
+      conn(:get, "/error_route")
+      |> put_req_cookie("cookie_key", "cookie_value")
+      |> Sentry.ExampleApp.call([])
+    end)
+  end
+
+  test "custom cookie scrubbing" do
+    conn =
+      conn(:get, "/error_route")
+      |> put_req_cookie("cookie_key", "cookie_value")
+      |> put_req_cookie("cookie_key2", "cookie_value2")
+      |> put_req_cookie("secret", "value")
+
+    request_data =
+      Sentry.Plug.build_request_interface_data(
+        conn,
+        cookie_scrubber: fn(conn) ->
+          conn.req_cookies
+          |> Map.take(["cookie_key", "cookie_key2"])
+        end
+      )
+
+    assert request_data[:cookies] == %{
+      "cookie_key" => "cookie_value",
+      "cookie_key2" => "cookie_value2"
+    }
+  end
 end
