@@ -1,7 +1,7 @@
 if Code.ensure_loaded?(Plug) do
   defmodule Sentry.Plug do
     @default_scrubbed_param_keys ["password", "passwd", "secret"]
-    @default_scrubbed_header_keys ["authorization", "authentication"]
+    @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
     @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
     @scrubbed_value "*********"
 

@@ -1,10 +1,7 @@
 defmodule Sentry.ExampleApp do
   use Plug.Router
-  use Plug.ErrorHandler
-  use Sentry.Plug, request_id_header: "x-request-id", cookie_scrubber: &Sentry.ExampleApp.allow_all_cookie_scrubber/1
 
   plug Plug.Parsers, parsers: [:multipart]
-  plug Plug.RequestId
   plug :match
   plug :dispatch
 
@@ -29,9 +26,5 @@ defmodule Sentry.ExampleApp do
   match "/error_route" do
     _ = conn
     raise RuntimeError, "Error"
-  end
-
-  def all_cookie_scrubber(conn) do
-    conn.req_cookies
   end
 end
