@@ -90,6 +90,7 @@ end
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
+| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) | 
 
 An example production config might look like this:
 
