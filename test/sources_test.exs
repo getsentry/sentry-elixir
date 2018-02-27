@@ -4,6 +4,18 @@ defmodule Sentry.SourcesTest do
   import Sentry.TestEnvironmentHelper
 
   test "exception makes call to Sentry API" do
+    Code.compile_string("""
+      defmodule SourcesApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug
+
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
     correct_context = %{
       "context_line" => "    raise RuntimeError, \"Error\"",
       "post_context" => ["  end", "", "  post \"/error_route\" do"],
@@ -35,7 +47,7 @@ defmodule Sentry.SourcesTest do
 
     assert_raise(RuntimeError, "Error", fn ->
       conn(:get, "/error_route")
-      |> Sentry.ExampleApp.call([])
+      |> SourcesApp.call([])
     end)
   end
 end

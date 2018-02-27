@@ -17,137 +17,62 @@ defmodule Sentry.PlugTest do
              )
   end
 
-  test "exception makes call to Sentry API" do
+  test "default data scrubbing" do
+    Code.compile_string("""
+      defmodule DefaultConfigApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "RuntimeError"
-      assert body =~ "ExampleApp"
-      assert conn.request_path == "/api/1/store/"
-      assert conn.method == "POST"
+      json = Poison.decode!(body)
+      assert json["request"]["cookies"] == %{}
+      assert json["request"]["headers"] == %{"content-type" => "application/json"}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(RuntimeError, "Error", fn ->
-      conn(:get, "/error_route")
-      |> Sentry.ExampleApp.call([])
-    end)
-  end
-
-  test "builds request data" do
-    conn =
-      conn(:get, "/error_route?key=value")
-      |> put_req_cookie("cookie_key", "cookie_value")
-      |> put_req_header("accept-language", "en-US")
-
-    request_data =
-      Sentry.Plug.build_request_interface_data(
-        conn,
-        header_scrubber: &Sentry.Plug.default_header_scrubber/1
-      )
-
-    assert request_data[:url] =~ ~r/\/error_route$/
-    assert request_data[:method] == "GET"
-    assert request_data[:data] == %{}
-
-    assert request_data[:headers] == %{
-             "cookie" => "cookie_key=cookie_value",
-             "accept-language" => "en-US"
-           }
-
-    assert request_data[:cookies] == %{"cookie_key" => "cookie_value"}
-    assert request_data[:query_string] == "key=value"
-    assert is_binary(request_data[:env]["REMOTE_ADDR"])
-    assert is_integer(request_data[:env]["REMOTE_PORT"])
-    assert is_binary(request_data[:env]["SERVER_NAME"])
-    assert is_integer(request_data[:env]["SERVER_PORT"])
-  end
-
-  test "handles data scrubbing" do
-    conn =
-      conn(:post, "/error_route", %{
-        "hello" => "world",
-        "password" => "test",
-        "cc" => "4242424242424242"
-      })
-      |> put_req_cookie("cookie_key", "cookie_value")
-      |> put_req_header("accept-language", "en-US")
-      |> put_req_header("authorization", "ignorme")
-
-    scrubber = fn conn ->
-      conn.params
-      |> Enum.filter(fn {key, val} ->
-        # Matches Credit Cards
-        !(key in ~w(password passwd secret credit_card) ||
-            Regex.match?(~r/^(?:\d[ -]*?){13,16}$/, val))
-      end)
-      |> Enum.into(%{})
-    end
-
-    options = [body_scrubber: scrubber, header_scrubber: &Sentry.Plug.default_header_scrubber/1]
-    request_data = Sentry.Plug.build_request_interface_data(conn, options)
-    assert request_data[:method] == "POST"
-    assert request_data[:data] == %{"hello" => "world"}
-
-    assert request_data[:headers] == %{
-             "cookie" => "cookie_key=cookie_value",
-             "accept-language" => "en-US",
-             "content-type" => "multipart/mixed; boundary=plug_conn_test"
-           }
-
-    assert request_data[:cookies] == %{"cookie_key" => "cookie_value"}
-  end
-
-  test "gets request_id" do
-    conn =
-      conn(:get, "/error_route")
-      |> Plug.Conn.put_resp_header("x-request-id", "my_request_id")
-
-    request_data =
-      Sentry.Plug.build_request_interface_data(conn, request_id_header: "x-request-id")
-
-    assert request_data[:env]["REQUEST_ID"] == "my_request_id"
-  end
-
-  test "default data scrubbing" do
-    conn =
       conn(:post, "/error_route", %{
         "secret" => "world",
         "password" => "test",
         "passwd" => "4242424242424242",
         "credit_card" => "4197 7215 7810 8280",
         "count" => 334,
-        "is_admin" => false,
         "cc" => "4197-7215-7810-8280",
         "another_cc" => "4197721578108280",
         "user" => %{"password" => "mypassword"}
       })
-
-    request_data =
-      Sentry.Plug.build_request_interface_data(
-        conn,
-        body_scrubber: &Sentry.Plug.default_body_scrubber/1
-      )
-
-    assert request_data[:method] == "POST"
-
-    assert request_data[:data] == %{
-             "secret" => "*********",
-             "password" => "*********",
-             "count" => 334,
-             "is_admin" => false,
-             "passwd" => "*********",
-             "credit_card" => "*********",
-             "cc" => "*********",
-             "another_cc" => "*********",
-             "user" => %{"password" => "*********"}
-           }
+      |> update_req_cookie("secret", "secretvalue")
+      |> update_req_cookie("regular", "value")
+      |> put_req_header("authorization", "secrets")
+      |> put_req_header("authentication", "secrets")
+      |> put_req_header("content-type", "application/json")
+      |> DefaultConfigApp.call([])
+    end)
   end
 
   test "handles data scrubbing with file upload" do
+    Code.compile_string("""
+      defmodule ScrubbingWithFileApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -166,7 +91,57 @@ defmodule Sentry.PlugTest do
       |> put_req_cookie("cookie_key", "cookie_value")
       |> put_req_header("accept-language", "en-US")
       |> put_req_header("authorization", "ignorme")
-      |> Sentry.ExampleApp.call([])
+      |> ScrubbingWithFileApp.call([])
     end)
+  end
+
+  test "custom cookie scrubbing" do
+    Code.compile_string("""
+      defmodule CustomCookieScrubberApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug, cookie_scrubber: fn(conn) ->
+          Map.take(conn.req_cookies, ["regular"])
+        end
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Poison.decode!(body)
+      assert json["request"]["cookies"] == %{"regular" => "value"}
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    assert_raise(RuntimeError, "Error", fn ->
+      conn(:get, "/error_route")
+      |> update_req_cookie("secret", "secretvalue")
+      |> update_req_cookie("regular", "value")
+      |> CustomCookieScrubberApp.call([])
+    end)
+  end
+
+  defp update_req_cookie(conn, name, value) do
+    req_headers =
+      conn.req_headers
+      |> Enum.into(%{})
+      |> Map.update("cookie", "#{name}=#{value}", fn val ->
+        Plug.Conn.Cookies.decode(val)
+        |> Map.put(name, value)
+        |> Enum.map(fn {cookie_name, cookie_value} ->
+          "#{cookie_name}=#{cookie_value}"
+        end)
+        |> Enum.join("; ")
+      end)
+      |> Enum.into([])
+
+    %Plug.Conn{conn | req_headers: req_headers}
   end
 end

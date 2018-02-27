@@ -1,7 +1,7 @@
 if Code.ensure_loaded?(Plug) do
   defmodule Sentry.Plug do
     @default_scrubbed_param_keys ["password", "passwd", "secret"]
-    @default_scrubbed_header_keys ["authorization", "authentication"]
+    @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
     @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
     @scrubbed_value "*********"
 
@@ -68,9 +68,15 @@ if Code.ensure_loaded?(Plug) do
 
         use Sentry.Plug, header_scrubber: {MyModule, :scrub_headers}
 
-    To configure scrubbing body and header data, we can set both configuration keys:
+    ### Cookie Scrubber
 
-        use Sentry.Plug, header_scrubber: &scrub_headers/1, body_scrubber: &scrub_params/1
+    By default Sentry will scrub all cookies before sending events.
+    It can be configured similarly to the headers scrubber, but is configured with the `:cookie_scrubber` key.
+
+    To configure scrubbing, we can set all configuration keys:
+
+    use Sentry.Plug, header_scrubber: &scrub_headers/1,
+      body_scrubber: &scrub_params/1, cookie_scrubber: &scrub_cookies/1
 
     ### Including Request Identifiers
 
@@ -89,6 +95,7 @@ if Code.ensure_loaded?(Plug) do
       body_scrubber = Keyword.get(env, :body_scrubber, {__MODULE__, :default_body_scrubber})
 
       header_scrubber = Keyword.get(env, :header_scrubber, {__MODULE__, :default_header_scrubber})
+      cookie_scrubber = Keyword.get(env, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
 
       request_id_header = Keyword.get(env, :request_id_header)
 
@@ -109,6 +116,7 @@ if Code.ensure_loaded?(Plug) do
           opts = [
             body_scrubber: unquote(body_scrubber),
             header_scrubber: unquote(header_scrubber),
+            cookie_scrubber: unquote(cookie_scrubber),
             request_id_header: unquote(request_id_header)
           ]
 
@@ -130,6 +138,7 @@ if Code.ensure_loaded?(Plug) do
     def build_request_interface_data(%Plug.Conn{} = conn, opts) do
       body_scrubber = Keyword.get(opts, :body_scrubber)
       header_scrubber = Keyword.get(opts, :header_scrubber)
+      cookie_scrubber = Keyword.get(opts, :cookie_scrubber)
       request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
       conn =
@@ -141,7 +150,7 @@ if Code.ensure_loaded?(Plug) do
         method: conn.method,
         data: handle_data(conn, body_scrubber),
         query_string: conn.query_string,
-        cookies: conn.req_cookies,
+        cookies: handle_data(conn, cookie_scrubber),
         headers: handle_data(conn, header_scrubber),
         env: %{
           "REMOTE_ADDR" => remote_address(conn.remote_ip),
@@ -169,6 +178,11 @@ if Code.ensure_loaded?(Plug) do
 
     defp handle_data(conn, fun) when is_function(fun) do
       fun.(conn)
+    end
+
+    @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
+    def default_cookie_scrubber(_conn) do
+      %{}
     end
 
     @spec default_header_scrubber(Plug.Conn.t()) :: map()
