@@ -91,7 +91,7 @@ defmodule Sentry do
   See `Sentry.Logger`
   """
 
-  @type send_result :: Sentry.Client.send_result() | :excluded | :ignored
+  @type send_result :: Sentry.Client.send_event_result() | :excluded | :ignored
 
   def start(_type, _opts) do
     children = [

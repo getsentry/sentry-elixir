@@ -457,7 +457,7 @@ defmodule Sentry.EventTest do
              hackney: "1.8.6",
              idna: "5.0.2",
              metrics: "1.0.1",
-             mime: "1.1.0",
+             mime: "1.2.0",
              mimerl: "1.0.2",
              plug: "1.4.3",
              poison: "3.1.0",

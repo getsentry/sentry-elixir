@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
     Application.ensure_all_started(:sentry)
 
-    Sentry.Client.get_dsn!()
+    Sentry.Client.get_dsn()
     |> print_environment_info()
 
     maybe_send_event()

@@ -10,7 +10,7 @@ defmodule Sentry.Mixfile do
       package: package(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      dialyzer: [plt_add_deps: :transitive],
+      dialyzer: [plt_add_deps: :transitive, plt_add_apps: [:mix]],
       docs: [extras: ["README.md"], main: "readme"]
     ]
   end

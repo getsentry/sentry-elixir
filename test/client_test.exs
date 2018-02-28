@@ -8,7 +8,7 @@ defmodule Sentry.ClientTest do
 
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
-    {_endpoint, public_key, private_key} = Client.get_dsn!()
+    {_endpoint, public_key, private_key} = Client.get_dsn()
 
     assert Client.authorization_header(public_key, private_key) =~
              ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
@@ -20,7 +20,7 @@ defmodule Sentry.ClientTest do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
 
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-             Sentry.Client.get_dsn!()
+             Sentry.Client.get_dsn()
   end
 
   test "get dsn with system config" do
@@ -28,7 +28,31 @@ defmodule Sentry.ClientTest do
     modify_system_env(%{"SYSTEM_KEY" => "https://public:secret@app.getsentry.com/1"})
 
     assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
-             Sentry.Client.get_dsn!()
+             Sentry.Client.get_dsn()
+  end
+
+  test "errors on bad public/secret keys" do
+    modify_env(:sentry, dsn: "https://public@app.getsentry.com/1")
+
+    capture_log(fn ->
+      assert :error = Sentry.Client.get_dsn()
+    end)
+  end
+
+  test "errors on non-integer project_id" do
+    modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/Mitchell")
+
+    capture_log(fn ->
+      assert :error = Sentry.Client.get_dsn()
+    end)
+  end
+
+  test "errors on no project_id" do
+    modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com")
+
+    capture_log(fn ->
+      assert :error = Sentry.Client.get_dsn()
+    end)
   end
 
   test "logs api errors" do
