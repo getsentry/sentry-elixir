@@ -31,4 +31,5 @@ notifications:
 script:
   - mix test
   - mix credo
+  - mix dialyzer
   - if [ "$MIX_FORMAT" = "true" ]; then mix format --dry-run --check-formatted; fi
