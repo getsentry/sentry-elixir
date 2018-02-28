@@ -2,6 +2,11 @@
 
 ## master
 
+* Bug Fixes
+  * Default to not sending cookies, but allow configuration to send (#254)
+  * Add filter option to configuration table in README (#255)
+  * Do not raise on invalid DSN (#218)
+
 ## 6.1.0 (2017-12-07)
 
 * Enhancements
