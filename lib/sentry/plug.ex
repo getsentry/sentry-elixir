@@ -15,6 +15,16 @@ if Code.ensure_loaded?(Plug) do
         use Plug.ErrorHandler
         use Sentry.Plug
 
+    Note that using Sentry.Plug will override default behaviour of Plug.ErrorHandler - it will
+    no longer write "Something went wrong" as a response.
+    If you want to retain this behaviour, or in general to add custom logic on top of sending event to sentry,
+    you can do it like this:
+
+        defp handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack} = error) do
+          super(conn, error)
+          send_resp(conn, conn.status, "Something went wrong")
+        end
+
     ### Sending Post Body Params
 
     In order to send post body parameters you should first scrub them of sensitive
@@ -131,6 +141,8 @@ if Code.ensure_loaded?(Plug) do
             error_type: kind
           )
         end
+
+        defoverridable handle_errors: 2
       end
     end
 
