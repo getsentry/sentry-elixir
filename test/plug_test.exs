@@ -17,6 +17,40 @@ defmodule Sentry.PlugTest do
              )
   end
 
+  test "overriding handle_errors/2" do
+    Code.compile_string("""
+      defmodule DefaultConfigApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+
+        defp handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack} = error) do
+          super(conn, error)
+          send_resp(conn, conn.status, "Something went terribly wrong")
+        end
+      end
+    """)
+
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    conn = conn(:post, "/error_route", %{})
+
+    assert_raise(RuntimeError, "Error", fn ->
+      DefaultConfigApp.call(conn, [])
+    end)
+
+    assert {500, _headers, "Something went terribly wrong"} = sent_resp(conn)
+  end
+
   test "default data scrubbing" do
     Code.compile_string("""
       defmodule DefaultConfigApp do
