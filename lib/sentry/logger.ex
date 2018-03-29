@@ -43,10 +43,6 @@ defmodule Sentry.Logger do
 
   def handle_call({:configure, new_keys}, _state), do: {:ok, :ok, new_keys}
 
-  def handle_event({_level, gl, _event}, state) when node(gl) != node() do
-    {:ok, state}
-  end
-
   def handle_event({:error, _gl, {_pid, _type, [pid, {exception, stack}]} = info}, state)
       when is_list(stack) and is_pid(pid) do
     try do
