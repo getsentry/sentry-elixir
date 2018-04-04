@@ -1,8 +1,10 @@
 defmodule Sentry.Phoenix.Endpoint do
   @moduledoc """
-  Provides basic functionality to handle errors in a Phoenix Endpoint. Errors occurring within a Phoenix request before it reaches the Router will not be captured by `Sentry.Plug` due to the internal workings of Phoenix.
+  Provides basic functionality to handle errors in a Phoenix Endpoint. Errors occurring within a Phoenix request before it reaches the Router will not be captured by `Sentry.Plug` due to the internal functionality of Phoenix.
 
-  For more information, see https://github.com/getsentry/sentry-elixir/issues/229.
+  It is recommended to include `Sentry.Phoenix.Endpoint` in your Phoenix app if you would like to receive errors occurring in the previously mentioned circumstances.
+
+  For more information, see https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791.
 
 
   #### Usage

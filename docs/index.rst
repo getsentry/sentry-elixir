@@ -115,7 +115,7 @@ Filtering Events
 If you would like to prevent certain exceptions, the ``:filter`` configuration option
 allows you to implement the ``Sentry.EventFilter`` behaviour.  The first argument is the
 exception to be sent, and the second is the source of the event.  ``Sentry.Plug``
-will have a source of ``:plug``, and ``Sentry.Logger`` will have a source of ``:logger``.
+will have a source of ``:plug``, ``Sentry.Logger`` will have a source of ``:logger``, and ``Sentry.Phoenix.Endpoint`` will have a source of ``:endpoint``.
 If an exception does not come from either of those sources, the source will be nil
 unless the ``:event_source`` option is passed to ``Sentry.capture_exception/2``
 

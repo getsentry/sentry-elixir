@@ -38,12 +38,21 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 
 ### Setup with Plug or Phoenix
 
-In your router add the following lines:
+In your Plug.Router or Phoenix.Router, add the following lines:
 
 ```elixir
 use Plug.ErrorHandler
 use Sentry.Plug
 ```
+
+If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
+
+```elixir
+use Phoenix.Endpoint, otp_app: :my_app
+use Sentry.Phoenix.Endpoint
+```
+
+More information on why this may be necessary can be found here: https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791
 
 ### Capture All Exceptions
 
