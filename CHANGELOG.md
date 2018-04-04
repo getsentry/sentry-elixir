@@ -2,9 +2,15 @@
 
 ## master
 
+## 6.2.0 (2018-04-04)
+
+* Enhancements
+  * Allow overriding in Sentry.Plug(#261)
+  * Implement Sentry.Phoenix.Endpoint to capture errors in Phoenix.Endpoint (#259)
 * Bug Fixes
-  * Default to not sending cookies, but allow configuration to send (#254)
+  * Fix sending events from remote\_console (#262)
   * Add filter option to configuration table in README (#255)
+  * Default to not sending cookies, but allow configuration to send (#254)
   * Do not raise on invalid DSN (#218)
 
 ## 6.1.0 (2017-12-07)
