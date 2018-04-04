@@ -1,7 +1,5 @@
 defmodule Sentry.EventFilter do
-  @moduledoc """
-
-  """
+  @moduledoc false
 
   @callback exclude_exception?(Exception.t(), atom) :: any
 end
