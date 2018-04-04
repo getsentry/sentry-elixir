@@ -148,9 +148,14 @@ if Code.ensure_loaded?(Plug) do
 
     @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: map()
     def build_request_interface_data(%Plug.Conn{} = conn, opts) do
-      body_scrubber = Keyword.get(opts, :body_scrubber)
-      header_scrubber = Keyword.get(opts, :header_scrubber)
-      cookie_scrubber = Keyword.get(opts, :cookie_scrubber)
+      body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
+
+      header_scrubber =
+        Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
+
+      cookie_scrubber =
+        Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
+
       request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
       conn =

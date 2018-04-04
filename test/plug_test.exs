@@ -19,7 +19,7 @@ defmodule Sentry.PlugTest do
 
   test "overriding handle_errors/2" do
     Code.compile_string("""
-      defmodule DefaultConfigApp do
+      defmodule OverrideApp do
         use Plug.Router
         use Plug.ErrorHandler
         use Sentry.Plug
@@ -45,7 +45,7 @@ defmodule Sentry.PlugTest do
     conn = conn(:post, "/error_route", %{})
 
     assert_raise(RuntimeError, "Error", fn ->
-      DefaultConfigApp.call(conn, [])
+      OverrideApp.call(conn, [])
     end)
 
     assert {500, _headers, "Something went terribly wrong"} = sent_resp(conn)
