@@ -187,6 +187,7 @@ defmodule Sentry.Client do
 
     query =
       data
+      |> Enum.filter(fn {_, value} -> value != nil end)
       |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
       |> Enum.join(", ")
 
@@ -203,15 +204,15 @@ defmodule Sentry.Client do
   @doc """
   Get a Sentry DSN which is simply a URI.
 
-  {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}
+  {PROTOCOL}://{PUBLIC_KEY}[:{SECRET_KEY}]@{HOST}/{PATH}{PROJECT_ID}
   """
   @spec get_dsn :: dsn
   def get_dsn do
     dsn = Config.dsn()
 
     with %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
-         when is_binary(path) <- URI.parse(dsn),
-         [public_key, secret_key] <- String.split(userinfo, ":", parts: 2),
+         when is_binary(path) and is_binary(userinfo) <- URI.parse(dsn),
+         [public_key, secret_key | _] <- String.split(userinfo, ":", parts: 2) ++ [nil],
          [_, binary_project_id] <- String.split(path, "/"),
          {project_id, ""} <- Integer.parse(binary_project_id),
          endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/store/" do
