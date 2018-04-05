@@ -35,7 +35,7 @@ Setup the application production environment in your ``config/prod.exs``
 .. code-block:: elixir
 
   config :sentry,
-    dsn: "https://public:secret@app.getsentry.com/1",
+    dsn: "___PUBLIC_DSN___",
     environment_name: :prod,
     enable_source_code_context: true,
     root_source_code_path: File.cwd!,
@@ -55,7 +55,7 @@ An alternative is to use ``Mix.env`` in your general configuration file:
 
 .. code-block:: elixir
 
-  config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+  config :sentry, dsn: "___PUBLIC_DSN___"
      included_environments: [:prod],
      environment_name: Mix.env
 
@@ -70,7 +70,7 @@ environment variable that determines the release level.
 
 .. code-block:: elixir
 
-  config :sentry, dsn: "https://public:secret@app.getsentry.com/1"
+  config :sentry, dsn: "___PUBLIC_DSN___"
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
 
