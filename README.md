@@ -105,7 +105,7 @@ An example production config might look like this:
 
 ```elixir
 config :sentry,
-  dsn: "https://public:secret@app.getsentry.com/1",
+  dsn: "___PUBLIC_DSN___",
   environment_name: :prod,
   included_environments: [:prod],
   enable_source_code_context: true,
@@ -126,7 +126,7 @@ specific configuration like `config/prod.exs`.
 Alternatively, you could use Mix.env in your general configuration file:
 
 ```elixir
-config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
+config :sentry, dsn: "___PUBLIC_DSN___",
   included_environments: [:prod],
   environment_name: Mix.env
 ```
@@ -137,7 +137,7 @@ to handle this without adding an additional Mix environment, you can set an
 environment variable that determines the release level.
 
 ```elixir
-config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
+config :sentry, dsn: "___PUBLIC_DSN___",
   included_environments: ~w(production staging),
   environment_name: System.get_env("RELEASE_LEVEL") || "development"
 ```
