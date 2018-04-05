@@ -2,10 +2,14 @@
 
 ## master
 
+* Enhancements
+  * Accept public key DSNs (#263)
+
+
 ## 6.2.0 (2018-04-04)
 
 * Enhancements
-  * Allow overriding in Sentry.Plug(#261)
+  * Allow overriding in Sentry.Plug (#261)
   * Implement Sentry.Phoenix.Endpoint to capture errors in Phoenix.Endpoint (#259)
 * Bug Fixes
   * Fix sending events from remote\_console (#262)
