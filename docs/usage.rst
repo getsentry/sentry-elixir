@@ -11,7 +11,7 @@ Otherwise we provide a simple way to capture exceptions:
 
 .. code-block:: elixir
 
-    do
+    try do
       ThisWillError.reall()
     rescue
       my_exception ->

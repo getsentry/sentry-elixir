@@ -16,6 +16,16 @@ defmodule Sentry.ClientTest do
              }, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
   end
 
+  test "authorization without secret" do
+    modify_env(:sentry, dsn: "https://public@app.getsentry.com/1")
+    {_endpoint, public_key, private_key} = Client.get_dsn()
+
+    assert Client.authorization_header(public_key, private_key) =~
+             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
+               Application.spec(:sentry, :vsn)
+             }, sentry_timestamp=\d{10}, sentry_key=public$/
+  end
+
   test "get dsn with default config" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
 
@@ -31,8 +41,8 @@ defmodule Sentry.ClientTest do
              Sentry.Client.get_dsn()
   end
 
-  test "errors on bad public/secret keys" do
-    modify_env(:sentry, dsn: "https://public@app.getsentry.com/1")
+  test "errors on bad public keys" do
+    modify_env(:sentry, dsn: "https://app.getsentry.com/1")
 
     capture_log(fn ->
       assert :error = Sentry.Client.get_dsn()

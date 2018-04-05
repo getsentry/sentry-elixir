@@ -8,7 +8,7 @@ Simply add configuration to the ``:sentry`` key in the file ``config/prod.exs``:
 .. code-block:: elixir
 
   config :sentry,
-    dsn: "https://public:secret@app.getsentry.com/1"
+    dsn: "___PUBLIC_DSN___"
 
 If using an environment with Plug or Phoenix add the following to your router:
 
