@@ -2,9 +2,10 @@
 
 ## master
 
+## 6.2.1 (2018-04-24)
+
 * Enhancements
   * Accept public key DSNs (#263)
-
 
 ## 6.2.0 (2018-04-04)
 
