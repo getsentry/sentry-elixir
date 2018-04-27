@@ -143,7 +143,7 @@ defmodule Sentry.Event do
   @spec transform_exception(Exception.t(), keyword()) :: Event.t()
   def transform_exception(exception, opts) do
     error_type = Keyword.get(opts, :error_type) || :error
-    normalized = Exception.normalize(:error, exception)
+    normalized = Exception.normalize(:error, exception, Keyword.get(opts, :stacktrace, nil))
 
     type =
       if error_type == :error do
