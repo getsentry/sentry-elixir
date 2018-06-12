@@ -136,7 +136,7 @@ defmodule Sentry.Client do
         {:ok, id}
 
       :error ->
-        sleep(current_attempt)
+        if current_attempt < @max_attempts, do: sleep(current_attempt)
         try_request(method, url, headers, body, current_attempt + 1)
     end
   end
