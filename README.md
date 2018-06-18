@@ -34,6 +34,14 @@ rescue
 end
 ```
 
+### Capture Non-Exception Events
+
+Sometimes you want to capture arbitrary messages that are not Exceptions.
+
+```elixir
+    Sentry.capture_message("custom_event_name", extra: %{extra: information})
+```
+
 For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 
 ### Setup with Plug or Phoenix
@@ -66,7 +74,7 @@ def start(_type, _opts) do
     supervisor(MyApp.Repo, []),
     supervisor(MyAppWeb.Endpoint, [])
   ]
-  
+
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
 
   :ok = :error_logger.add_report_handler(Sentry.Logger)
@@ -99,7 +107,7 @@ end
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
-| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) | 
+| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 
 An example production config might look like this:
 
