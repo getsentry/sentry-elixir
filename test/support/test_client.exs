@@ -10,7 +10,21 @@ defmodule Sentry.TestClient do
     |> Poison.encode()
     |> case do
       {:ok, body} ->
-        Sentry.Client.request(:post, endpoint, [], body)
+        case Sentry.Client.request(endpoint, [], body) do
+          {:ok, id} ->
+            {:ok, id}
+
+          {:error, error} ->
+            Logger.warn(fn ->
+              [
+                "Failed to send Sentry event.",
+                ?\n,
+                "Event ID: #{event.event_id} - #{inspect(error)} - #{body}"
+              ]
+            end)
+
+            :error
+        end
 
       {:error, error} ->
         Logger.error("Error sending in Sentry.TestClient: #{inspect(error)}")

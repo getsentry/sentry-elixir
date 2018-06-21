@@ -89,7 +89,7 @@ defmodule Sentry.Client do
       {endpoint, auth_headers} ->
         {:ok,
          Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-           try_request(:post, endpoint, auth_headers, body)
+           try_request(endpoint, auth_headers, {event, body})
            |> maybe_call_after_send_event(event)
          end)}
 
@@ -101,7 +101,7 @@ defmodule Sentry.Client do
   defp do_send_event(event, body, :sync) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} ->
-        try_request(:post, endpoint, auth_headers, body)
+        try_request(endpoint, auth_headers, {event, body})
         |> maybe_call_after_send_event(event)
 
       _ ->
@@ -113,7 +113,7 @@ defmodule Sentry.Client do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} ->
         Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
-          try_request(:post, endpoint, auth_headers, body)
+          try_request(endpoint, auth_headers, {event, body})
           |> maybe_call_after_send_event(event)
         end)
 
@@ -124,20 +124,27 @@ defmodule Sentry.Client do
     end
   end
 
-  defp try_request(method, url, headers, body, current_attempt \\ 1)
+  defp try_request(url, headers, event_body_tuple, current_attempt \\ 1)
 
-  defp try_request(_, _, _, _, current_attempt)
+  defp try_request(_, _, _, current_attempt)
        when current_attempt > @max_attempts,
        do: :error
 
-  defp try_request(method, url, headers, body, current_attempt) do
-    case request(method, url, headers, body) do
+  defp try_request(url, headers, {event, body}, current_attempt) do
+    case request(url, headers, body) do
       {:ok, id} ->
         {:ok, id}
 
-      :error ->
-        sleep(current_attempt)
-        try_request(method, url, headers, body, current_attempt + 1)
+      {:error, error} ->
+        if(current_attempt == 1) do
+          log_api_error("Event ID: #{event.event_id} - #{inspect(error)} - #{body}")
+        else
+          log_api_error("Event ID: #{event.event_id} - #{inspect(error)}")
+        end
+
+        if current_attempt < @max_attempts, do: sleep(current_attempt)
+
+        try_request(url, headers, {event, body}, current_attempt + 1)
     end
   end
 
@@ -146,14 +153,14 @@ defmodule Sentry.Client do
 
   Hackney options can be set via the `hackney_opts` configuration option.
   """
-  @spec request(atom(), String.t(), list({String.t(), String.t()}), String.t()) ::
+  @spec request(String.t(), list({String.t(), String.t()}), String.t()) ::
           {:ok, String.t()} | :error
-  def request(method, url, headers, body) do
+  def request(url, headers, body) do
     hackney_opts =
       Config.hackney_opts()
       |> Keyword.put_new(:pool, @hackney_pool_name)
 
-    with {:ok, 200, _, client} <- :hackney.request(method, url, headers, body, hackney_opts),
+    with {:ok, 200, _, client} <- :hackney.request(:post, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
          {:ok, json} <- Poison.decode(body) do
       {:ok, Map.get(json, "id")}
@@ -161,12 +168,11 @@ defmodule Sentry.Client do
       {:ok, status, headers, client} ->
         :hackney.skip_body(client)
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
-        log_api_error("#{body}\nReceived #{status} from Sentry server: #{error_header}")
-        :error
+        error = "Received #{status} from Sentry server: #{error_header}"
+        {:error, error}
 
       e ->
-        log_api_error("#{inspect(e)}\n#{body}")
-        :error
+        {:error, e}
     end
   end
 
@@ -329,13 +335,10 @@ defmodule Sentry.Client do
     end)
   end
 
-  defp sleep(attempt_number) do
-    # sleep 2^n seconds
-    :math.pow(2, attempt_number)
-    |> Kernel.*(1000)
-    |> Kernel.round()
-    |> :timer.sleep()
-  end
+  defp sleep(1), do: :timer.sleep(2000)
+  defp sleep(2), do: :timer.sleep(4000)
+  defp sleep(3), do: :timer.sleep(8000)
+  defp sleep(_), do: :timer.sleep(8000)
 
   defp sample_event?(1), do: true
   defp sample_event?(1.0), do: true
