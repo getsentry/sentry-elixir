@@ -140,7 +140,7 @@ config :sentry, dsn: "https://public_key@app.getsentry.com/1",
 ```
 
 You can even rely on more custom determinations of the environment name. It's
-not uncommmon for most applications to have a "staging" environment. In order
+not uncommon for most applications to have a "staging" environment. In order
 to handle this without adding an additional Mix environment, you can set an
 environment variable that determines the release level.
 
