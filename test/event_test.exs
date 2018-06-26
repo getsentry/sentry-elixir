@@ -448,18 +448,18 @@ defmodule Sentry.EventTest do
     event = Sentry.Event.transform_exception(exception, [])
 
     assert event.modules == %{
-             phoenix: "1.3.2",
+             phoenix: "1.3.3",
              phoenix_pubsub: "1.0.2",
              bunt: "0.2.0",
              bypass: "0.8.1",
              certifi: "2.3.1",
              cowboy: "1.1.2",
              cowlib: "1.0.2",
-             credo: "0.9.0",
+             credo: "0.9.3",
              hackney: "1.12.1",
              idna: "5.1.1",
              metrics: "1.0.1",
-             mime: "1.2.0",
+             mime: "1.3.0",
              mimerl: "1.0.2",
              parse_trans: "3.2.0",
              plug: "1.6.0",
