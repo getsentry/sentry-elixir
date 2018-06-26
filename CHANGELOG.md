@@ -2,6 +2,18 @@
 
 ## master
 
+
+## 6.3.0 (2018-04-24)
+
+* Enhancements
+  * Use the stacktrace passed to Sentry.Event.transform_exception/2 when calling Exception.normalize/3 (#266)
+  * Reduce Logger noise in HTTP Client (#274)
+  * Use `Plug.Conn.get_peer_data/1` (#273)
+
+* Bug Fixes
+  * Add documentation for capturing arbitrary events (#272)
+  * Fix typo in README.md (#277)
+
 ## 6.2.1 (2018-04-24)
 
 * Enhancements
