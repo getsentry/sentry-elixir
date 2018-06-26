@@ -462,7 +462,7 @@ defmodule Sentry.EventTest do
              mime: "1.2.0",
              mimerl: "1.0.2",
              parse_trans: "3.2.0",
-             plug: "1.5.0",
+             plug: "1.6.0",
              poison: "3.1.0",
              ranch: "1.3.2",
              ssl_verify_fun: "1.1.1",
