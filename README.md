@@ -268,6 +268,26 @@ You can then view the docs in your browser:
 $ open docs/_build/html/index.html
 ```
 
+## Testing with Sentry
+
+In some cases, users may want to test that certain actions in their application cause a report to be sent to Sentry.  Sentry itself does this by using [Bypass](https://github.com/PSPDFKit-labs/bypass).  It is important to note that when modifying the environment configuration the test case should not be run asynchronously.  Not returning the environment configuration to its original state could also affect other tests depending on how the Sentry configuration interacts with them.
+
+Example:
+
+```elixir
+test "add/2 does not raise but sends an event to Sentry when given bad input" do
+  bypass = Bypass.open()
+
+  Bypass.expect(bypass, fn conn ->
+    {:ok, _body, conn} = Plug.Conn.read_body(conn)
+    Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+  end)
+
+  Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+  MyModule.add(1, "a")
+end
+```
+
 ## License
 
 This project is Licensed under the [MIT License](https://github.com/getsentry/sentry-elixir/blob/master/LICENSE).
