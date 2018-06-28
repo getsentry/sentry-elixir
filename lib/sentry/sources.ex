@@ -47,6 +47,10 @@ defmodule Sentry.Sources do
         [sentry_recompile: ["deps.compile sentry --force", "compile"]]
       end
 
+  This is an important to note especially when building for production. If your
+  build or deployment system caches prior builds, it may not recompile Sentry
+  and could cause issues with reported source code being out of date.
+
   Due to Sentry reading the file system and defaulting to a recursive search
   of directories, it is important to check your configuration and compilation
   environment to avoid a folder recursion issue. Problems may be seen when
