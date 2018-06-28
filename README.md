@@ -158,6 +158,30 @@ default value is not in the list of `included_environments`.
 
 Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
 
+### Context and Breadcrumbs
+
+Sentry has multiple options for including contextual information. They are organized into "Tags", "User", and "Extra", and Sentry's documentation on them is [here](https://docs.sentry.io/learn/context/).  Breadcrumbs are a similar concept and Sentry's documentation covers them [here](https://docs.sentry.io/learn/breadcrumbs/).
+
+In Elixir this can be complicated due to processes being isolated from one another. Tags context can be set globally through configuration, and all contexts can be set within a process, and on individual events.  If an event is sent within a process that has some context configured it will include that context in the event.  Examples of each are below, and for more information see the documentation of [Sentry.Context](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions).
+
+```elixir
+# Global Tags context via configuration:
+
+config :sentry,
+  tags: %{my_app_version: "14.30.10"}
+  # ...
+
+# Process-based Context
+Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+Sentry.Context.set_user_context(%{id: 24, username: "user_username", has_subscription: true})
+Sentry.Context.set_tags_context(%{locale: "en-us"})
+Sentry.Context.add_breadcrumb(%{category: "web.request"})
+
+# Event-based Context
+Sentry.capture_exception(exception, [tags: %{locale: "en-us", }, user: %{id: 34},
+  extra: %{day_of_week: "Friday"}, breadcrumbs: [%{timestamp: 1461185753845, category: "web.request"}]]
+```
+
 ### Fingerprinting
 
 By default, Sentry aggregates reported events according to the attributes of the event, but users may need to override this functionality via [fingerprinting](https://docs.sentry.io/learn/rollups/#customize-grouping-with-fingerprints).

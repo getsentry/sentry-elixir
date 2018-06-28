@@ -88,27 +88,6 @@ If using an environment with Plug or Phoenix add the following to your router:
   use Sentry.Plug
 
 
-Adding Context
---------------
-
-Sentry allows a user to provide context to all error reports, Elixir being multi-process makes this a special
-case. When setting a context we store that context in the process dictionary, which means if you spin up a
-new process and it fails you might lose your context. That said using the context is simple:
-
-.. code-block:: elixir
-
-  # sets the logged in user
-  Sentry.Context.set_user_context(%{email: "foo@example.com"})
-
-  # sets the tag of interesting
-  Sentry.Context.set_tags_context(%{interesting: "yes"})
-
-  # sends any additional context
-  Sentry.Context.set_extra_context(%{my: "context"})
-
-  # adds an breadcrumb to the request to help debug
-  Sentry.Context.add_breadcrumb(%{my: "crumb"})
-
 Filtering Events
 ----------------
 
@@ -136,6 +115,36 @@ allows other exceptions to be sent.
   config :sentry, filter: MyApp.SentryEventFilter,
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
+
+Context and Breadcrumbs
+----------------
+
+Sentry has multiple options for including contextual information. They are organized into
+"Tags", "User", and "Extra", and Sentry's documentation on them is `here <https://docs.sentry.io/learn/context/>`_.
+Breadcrumbs are a similar concept and Sentry's documentation covers them `here <https://docs.sentry.io/learn/breadcrumbs/>`_.
+
+In Elixir this can be complicated due to processes being isolated from one another.  Tags
+context can be set globally through configuration, and all contexts can be set within a
+process, and on individual events.  If an event is sent within a process that has some context
+configured it will include that context in the event. Examples of each are below,
+and for more information see the documentation of `Sentry.Context <https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions>`_.
+
+.. code-block:: elixir
+  # Global Tags context via configuration:
+
+  config :sentry,
+    tags: %{my_app_version: "14.30.10"}
+    # ...
+
+  # Process-based Context
+  Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+  Sentry.Context.set_user_context(%{id: 24, username: "user_username", has_subscription: true})
+  Sentry.Context.set_tags_context(%{locale: "en-us"})
+  Sentry.Context.add_breadcrumb(%{category: "web.request"})
+
+  # Event-based Context
+  Sentry.capture_exception(exception, [tags: %{locale: "en-us", }, user: %{id: 34},
+    extra: %{day_of_week: "Friday"}, breadcrumbs: [%{timestamp: 1461185753845, category: "web.request"}]]
 
 Fingerprinting
 ----------------
