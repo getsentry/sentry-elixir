@@ -1,15 +1,25 @@
 defmodule Sentry.Context do
   @moduledoc """
-    Provides a method to store user, tags, and extra context when an
-    event is reported. The contexts will be fetched and merged into
-    the event.
+    Provides functionality to store user, tags, extra, and breadcrumbs context when an
+    event is reported. The contexts will be fetched and merged into the event when it is sent.
 
-    Sentry.Context uses the Process Dictionary to store this state.
-    This imposes some limitations. The state will only exist within 
+    When calling Sentry.Context, the Process Dictionary is used to store this state.
+    This imposes some limitations. The state will only exist within
     the current process, and the context will die with the process.
 
-    For example, if you add context inside your controller and an 
-    error happens in a Task the context won't send.
+    For example, if you add context inside your controller and an
+    error happens in a Task, that context will not be included.
+
+    A common use-case is to set context within Plug or Phoenix applications, as each
+    request is its own process, and so any stored context will be included should an
+    error be reported within that request process. Example:
+
+      # post_controller.ex
+      def index(conn, _params) do
+        Sentry.Context.set_user_context(%{id: conn.assigns.user_id})
+        posts = Blog.list_posts()
+        render(conn, "index.html", posts: posts)
+      end
   """
   @process_dictionary_key :sentry_context
   @user_key :user
