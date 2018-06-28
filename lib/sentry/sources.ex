@@ -47,6 +47,14 @@ defmodule Sentry.Sources do
         [sentry_recompile: ["deps.compile sentry --force", "compile"]]
       end
 
+  Due to Sentry reading the file system and defaulting to a recursive search
+  of directories, it is important to check your configuration and compilation
+  environment to avoid a folder recursion issue. Problems may be seen when
+  deploying to the root folder, so it is best to follow the practice of
+  compiling your application in its own folder. Modifying the
+  `source_code_path_pattern` configuration option from its default is also
+  an avenue to avoid compile problems.
+
   """
   @type file_map :: %{pos_integer() => String.t()}
   @type source_map :: %{String.t() => file_map}
