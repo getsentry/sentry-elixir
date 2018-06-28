@@ -1,5 +1,7 @@
 defmodule Sentry.Client do
   @behaviour Sentry.HTTPClient
+  # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
+  @max_message_length 8_192
 
   @moduledoc ~S"""
   This module is the default client for sending an event to Sentry via HTTP.
@@ -286,7 +288,7 @@ defmodule Sentry.Client do
       event_id: event.event_id,
       culprit: event.culprit,
       timestamp: event.timestamp,
-      message: event.message,
+      message: String.slice(event.message, 0, @max_message_length),
       tags: event.tags,
       level: event.level,
       platform: event.platform,
