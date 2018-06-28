@@ -95,10 +95,10 @@ defmodule Sentry.ClientTest do
 
   test "errors when attempting to report invalid JSON" do
     modify_env(:sentry, dsn: "http://public:secret@localhost:3000/1")
-    unencodable_tuple = {:a, :b, :c}
+    unencodable_event = %Sentry.Event{message: "error", level: {:a, :b}}
 
     capture_log(fn ->
-      assert :error = Sentry.capture_message(unencodable_tuple)
+      assert :error = Sentry.Client.send_event(unencodable_event)
     end)
   end
 

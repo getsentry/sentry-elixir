@@ -132,7 +132,7 @@ defmodule Sentry do
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
   @spec capture_message(String.t(), Keyword.t()) :: send_result
-  def capture_message(message, opts \\ []) do
+  def capture_message(message, opts \\ []) when is_binary(message) do
     opts
     |> Keyword.put(:message, message)
     |> Event.create_event()
