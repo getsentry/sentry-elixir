@@ -158,6 +158,30 @@ default value is not in the list of `included_environments`.
 
 Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
 
+### Fingerprinting
+
+By default, Sentry aggregates reported events according to the attributes of the event, but users may need to override this functionality via [fingerprinting](https://docs.sentry.io/learn/rollups/#customize-grouping-with-fingerprints).
+
+To achieve that in Sentry Elixir, one can use the `before_send_event` configuration callback. If there are certain types of errors you would like to have grouped differently, they can be matched on in the callback, and have the fingerprint attribute changed before the event is sent. An example configuration and implementation could look like:
+
+```elixir
+# lib/sentry.ex
+defmodule MyApp.Sentry
+  def before_send(%{exception: [%{type: DBConnection.ConnectionError}]} = event) do
+    %{event | fingerprint: ["ecto", "db_connection", "timeout"]}
+  end
+
+  def before_send(event) do
+    event
+  end
+end
+
+# config.exs
+config :sentry,
+  before_send_event: {MyApp.Sentry, :before_send},
+  # ...
+```
+
 ### Reporting Exceptions with Source Code
 
 Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.

@@ -137,6 +137,34 @@ allows other exceptions to be sent.
     included_environments: ~w(production staging),
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
 
+Fingerprinting
+----------------
+By default, Sentry aggregates reported events according to the attributes of the event,
+but users may need to override this functionality via `fingerprinting <https://docs.sentry.io/learn/rollups/#customize-grouping-with-fingerprints>`_.
+
+To achieve that in Sentry Elixir, one can use the ``before_send_event`` configuration callback.
+If there are certain types of errors you would like to have grouped differently,
+they can be matched on in the callback, and have the fingerprint attribute changed before the event is sent.
+
+An example configuration and implementation could look like:
+
+.. code-block:: elixir
+  # sentry.ex
+  defmodule MyApp.Sentry
+    def before_send(%{exception: [%{type: DBConnection.ConnectionError}]} = event) do
+      %{event | fingerprint: ["ecto", "db_connection", "timeout"]}
+    end
+
+    def before_send(event) do
+      event
+    end
+  end
+
+  # config.exs
+  config :sentry,
+    before_send_event: {MyApp.Sentry, :before_send},
+    # ...
+
 Including Source Code
 ---------------------
 
