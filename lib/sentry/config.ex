@@ -120,7 +120,7 @@ defmodule Sentry.Config do
   end
 
   def report_deps do
-    get_config(:report_deps, default: true, check_dsn: false)
+    get_config(:report_deps, default: false, check_dsn: false)
   end
 
   defp get_config(key, opts \\ []) when is_atom(key) do
