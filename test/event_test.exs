@@ -467,7 +467,7 @@ defmodule Sentry.EventTest do
              ranch: "1.3.2",
              ssl_verify_fun: "1.1.1",
              unicode_util_compat: "0.3.1",
-             uuid: "1.1.8"
+             elixir_uuid: "1.2.0"
            }
   end
 end
