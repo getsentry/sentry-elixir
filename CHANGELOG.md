@@ -2,8 +2,22 @@
 
 ## master
 
+## 6.4.0 (2018-07-02)
 
-## 6.3.0 (2018-04-24)
+* Enhancements
+  * Add documentation detail around including source code (#287)
+  * Document fingerprinting (#288)
+  * Document `Sentry.Context` (#289)
+  * Add CONTRIBUTING.md (#290)
+  * Document cookie scrubber (#291)
+  * Document testing with Sentry (#292)
+
+* Bug Fixes
+  * Change `report_deps` default value to false to avoid compiler bug (#285)
+  * Limit size of messages (#293)
+  * Use `elixir_uuid` instead of `uuid` (#295)
+
+## 6.3.0 (2018-06-26)
 
 * Enhancements
   * Use the stacktrace passed to Sentry.Event.transform_exception/2 when calling Exception.normalize/3 (#266)
