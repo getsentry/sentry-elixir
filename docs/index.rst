@@ -117,7 +117,7 @@ allows other exceptions to be sent.
     environment_name: System.get_env("RELEASE_LEVEL") || "development"
 
 Context and Breadcrumbs
-----------------
+-----------------------
 
 Sentry has multiple options for including contextual information. They are organized into
 "Tags", "User", and "Extra", and Sentry's documentation on them is `here <https://docs.sentry.io/learn/context/>`_.
