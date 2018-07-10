@@ -130,6 +130,7 @@ configured it will include that context in the event. Examples of each are below
 and for more information see the documentation of `Sentry.Context <https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions>`_.
 
 .. code-block:: elixir
+
   # Global Tags context via configuration:
 
   config :sentry,
@@ -159,6 +160,7 @@ they can be matched on in the callback, and have the fingerprint attribute chang
 An example configuration and implementation could look like:
 
 .. code-block:: elixir
+
   # sentry.ex
   defmodule MyApp.Sentry
     def before_send(%{exception: [%{type: DBConnection.ConnectionError}]} = event) do
