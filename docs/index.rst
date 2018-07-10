@@ -120,8 +120,8 @@ Context and Breadcrumbs
 -----------------------
 
 Sentry has multiple options for including contextual information. They are organized into
-"Tags", "User", and "Extra", and Sentry's documentation on them is `here <https://docs.sentry.io/learn/context/>`_.
-Breadcrumbs are a similar concept and Sentry's documentation covers them `here <https://docs.sentry.io/learn/breadcrumbs/>`_.
+"Tags", "User", and "Extra", and Sentry's documentation on them is `here <https://docs.sentry.io/learn/context/>`__.
+Breadcrumbs are a similar concept and Sentry's documentation covers them `here <https://docs.sentry.io/learn/breadcrumbs/>`__.
 
 In Elixir this can be complicated due to processes being isolated from one another.  Tags
 context can be set globally through configuration, and all contexts can be set within a
