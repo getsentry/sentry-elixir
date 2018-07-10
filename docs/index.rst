@@ -147,7 +147,8 @@ and for more information see the documentation of `Sentry.Context <https://hexdo
     extra: %{day_of_week: "Friday"}, breadcrumbs: [%{timestamp: 1461185753845, category: "web.request"}]]
 
 Fingerprinting
-----------------
+--------------
+
 By default, Sentry aggregates reported events according to the attributes of the event,
 but users may need to override this functionality via `fingerprinting <https://docs.sentry.io/learn/rollups/#customize-grouping-with-fingerprints>`_.
 
