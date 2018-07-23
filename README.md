@@ -21,29 +21,6 @@ defp deps do
 end
 ```
 
-### Capture Exceptions
-
-Sometimes you want to capture specific exceptions.  To do so, use `Sentry.capture_exception/2`.
-
-```elixir
-try do
-  ThisWillError.reall()
-rescue
-  my_exception ->
-    Sentry.capture_exception(my_exception, [stacktrace: System.stacktrace(), extra: %{extra: information}])
-end
-```
-
-### Capture Non-Exception Events
-
-Sometimes you want to capture arbitrary messages that are not Exceptions.
-
-```elixir
-    Sentry.capture_message("custom_event_name", extra: %{extra: information})
-```
-
-For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
-
 ### Setup with Plug or Phoenix
 
 In your Plug.Router or Phoenix.Router, add the following lines:
@@ -62,7 +39,7 @@ use Sentry.Phoenix.Endpoint
 
 More information on why this may be necessary can be found here: https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791
 
-### Capture All Exceptions
+### Capture Crashed Process Exceptions
 
 This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
 
@@ -82,6 +59,30 @@ def start(_type, _opts) do
   Supervisor.start_link(children, opts)
 end
 ```
+
+### Capture Arbitrary Exceptions
+
+Sometimes you want to capture specific exceptions.  To do so, use `Sentry.capture_exception/2`.
+
+```elixir
+try do
+  ThisWillError.reall()
+rescue
+  my_exception ->
+    Sentry.capture_exception(my_exception, [stacktrace: System.stacktrace(), extra: %{extra: information}])
+end
+```
+
+### Capture Non-Exception Events
+
+Sometimes you want to capture messages that are not Exceptions.
+
+```elixir
+    Sentry.capture_message("custom_event_name", extra: %{extra: information})
+```
+
+For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
+
 
 ## Configuration
 
