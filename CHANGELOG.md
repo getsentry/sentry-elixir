@@ -2,6 +2,12 @@
 
 ## master
 
+## 6.4.1 (2018-07-26)
+
+* Bug Fixes
+  * Remove UUID dependency (#298)
+  * Fix link in documentation (#300)
+
 ## 6.4.0 (2018-07-02)
 
 * Enhancements
