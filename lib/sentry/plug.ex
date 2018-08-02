@@ -212,7 +212,7 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp scrub_map(map) do
-      Enum.map(map, fn {key, value} ->
+      Enum.into(map, %{}, fn {key, value} ->
         value =
           cond do
             Enum.member?(@default_scrubbed_param_keys, key) ->
@@ -230,7 +230,6 @@ if Code.ensure_loaded?(Plug) do
 
         {key, value}
       end)
-      |> Enum.into(%{})
     end
   end
 end
