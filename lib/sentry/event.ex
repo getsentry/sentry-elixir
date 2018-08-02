@@ -41,7 +41,7 @@ defmodule Sentry.Event do
   @enable_deps_reporting Config.report_deps()
   @deps if(
           @enable_deps_reporting,
-          do: Util.mix_deps_to_map(Mix.Dep.loaded(env: Mix.env())),
+          do: Util.mix_deps(),
           else: %{}
         )
 
