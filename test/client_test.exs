@@ -244,7 +244,7 @@ defmodule Sentry.ClientTest do
         {:ok, _} =
           Sentry.capture_exception(
             e,
-            stacktrace: System.stacktrace(),
+            stacktrace: __STACKTRACE__,
             result: :sync,
             sample_rate: 1
           )

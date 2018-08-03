@@ -4,8 +4,8 @@ defmodule Sentry.Mixfile do
   def project do
     [
       app: :sentry,
-      version: "6.4.2",
-      elixir: "~> 1.3",
+      version: "6.4.1",
+      elixir: "~> 1.7",
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
@@ -29,8 +29,8 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.6", optional: true},
       {:phoenix, "~> 1.3", optional: true},
       {:dialyxir, "> 0.0.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.18.0", only: :dev},
-      {:credo, "~> 0.9.0", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.19.0", only: :dev},
+      {:credo, "~> 0.10.0", only: [:dev, :test], runtime: false},
       {:bypass, "~> 0.8.0", only: [:test]}
     ]
   end

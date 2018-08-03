@@ -1,4 +1,7 @@
 if Code.ensure_loaded?(Plug) do
+  require Protocol
+  Protocol.derive(Jason.Encoder, Plug.Upload)
+
   defmodule Sentry.Plug do
     @default_scrubbed_param_keys ["password", "passwd", "secret"]
     @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
