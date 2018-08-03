@@ -156,7 +156,7 @@ defmodule Sentry.Client do
   Hackney options can be set via the `hackney_opts` configuration option.
   """
   @spec request(String.t(), list({String.t(), String.t()}), String.t()) ::
-          {:ok, String.t()} | :error
+          {:ok, String.t()} | {:error, term()}
   def request(url, headers, body) do
     hackney_opts =
       Config.hackney_opts()
