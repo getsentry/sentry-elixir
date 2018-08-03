@@ -25,7 +25,7 @@ defmodule Sentry.PhoenixEndpointTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Poison.decode!(body)
+      json = Jason.decode!(body)
       assert json["culprit"] == "Sentry.PhoenixEndpointTest.Endpoint.error/2"
       assert json["message"] == "(RuntimeError) EndpointError"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)

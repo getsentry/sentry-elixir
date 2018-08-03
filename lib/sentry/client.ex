@@ -75,7 +75,7 @@ defmodule Sentry.Client do
 
   defp encode_and_send(event, result) do
     render_event(event)
-    |> Poison.encode()
+    |> Jason.encode()
     |> case do
       {:ok, body} ->
         do_send_event(event, body, result)
@@ -164,7 +164,7 @@ defmodule Sentry.Client do
 
     with {:ok, 200, _, client} <- :hackney.request(:post, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
-         {:ok, json} <- Poison.decode(body) do
+         {:ok, json} <- Jason.decode(body) do
       {:ok, Map.get(json, "id")}
     else
       {:ok, status, headers, client} ->

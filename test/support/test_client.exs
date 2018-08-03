@@ -7,7 +7,7 @@ defmodule Sentry.TestClient do
     event = Sentry.Client.maybe_call_before_send_event(event)
 
     Sentry.Client.render_event(event)
-    |> Poison.encode()
+    |> Jason.encode()
     |> case do
       {:ok, body} ->
         case Sentry.Client.request(endpoint, [], body) do

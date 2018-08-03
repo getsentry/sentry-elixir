@@ -107,7 +107,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Poison.decode!(body)
+      request_map = Jason.decode!(body)
       assert request_map["extra"] == %{"key" => "value"}
       assert request_map["user"]["id"] == 1
       assert is_nil(request_map["stacktrace"]["frames"])
@@ -142,7 +142,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Poison.decode!(body)
+      request_map = Jason.decode!(body)
       assert request_map["extra"] == %{"key" => "value", "user_id" => 1}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -226,7 +226,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Poison.decode!(body)
+      request_map = Jason.decode!(body)
       assert Enum.count(request_map["stacktrace"]["frames"]) > 0
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
