@@ -25,17 +25,14 @@ defmodule Sentry.Util do
     |> String.trim_trailing("Z")
   end
 
-  @spec mix_deps_to_map([Mix.Dep.t()]) :: map()
-  def mix_deps_to_map([%Mix.Dep{} | _rest] = modules) do
-    Enum.reduce(modules, %{}, fn x, acc ->
-      case x.status do
-        {:ok, version} -> Map.put(acc, x.app, version)
-        _ -> acc
-      end
+  @spec mix_deps() :: map()
+  def mix_deps() do
+    Mix.Project.deps_paths()
+    |> Map.keys()
+    |> Enum.reduce(%{}, fn app, acc ->
+      Map.put(acc, app, Application.spec(app, :vsn))
     end)
   end
-
-  def mix_deps_to_map(modules), do: modules
 
   @doc """
   Per http://www.ietf.org/rfc/rfc4122.txt

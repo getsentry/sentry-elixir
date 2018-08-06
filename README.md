@@ -102,7 +102,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `after_send_event` | False | | |
 | `sample_rate` | False | 1.0 | |
 | `in_app_module_whitelist` | False | `[]` | |
-| `report_deps` | False | False | Will attempt to load Mix dependencies at compile time to report alongside events. This was switched to default to false following a bug in the parallel compiler ([#232](https://github.com/getsentry/sentry-elixir/issues/232) / [elixir-lang/elixir#7699](https://github.com/elixir-lang/elixir/issues/7699)) |
+| `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
 | `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
 | `context_lines` | False  | 3 | |
