@@ -249,26 +249,6 @@ current environment_name: :prod
 Sending test event!
 ```
 
-## Docs
-
-To build the docs locally, you'll need the [Sphinx](http://www.sphinx-doc.org/en/stable/):
-
-```
-$ pip install sphinx
-```
-
-Once Sphinx is available building the docs is simply:
-
-```
-$ make docs
-```
-
-You can then view the docs in your browser:
-
-```
-$ open docs/_build/html/index.html
-```
-
 ## Testing with Sentry
 
 In some cases, users may want to test that certain actions in their application cause a report to be sent to Sentry.  Sentry itself does this by using [Bypass](https://github.com/PSPDFKit-labs/bypass).  It is important to note that when modifying the environment configuration the test case should not be run asynchronously.  Not returning the environment configuration to its original state could also affect other tests depending on how the Sentry configuration interacts with them.
