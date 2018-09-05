@@ -1,6 +1,8 @@
 if Code.ensure_loaded?(Plug) do
-  require Protocol
-  Protocol.derive(Jason.Encoder, Plug.Upload)
+  if Code.ensure_loaded?(Jason) do
+    require Protocol
+    Protocol.derive(Jason.Encoder, Plug.Upload)
+  end
 
   defmodule Sentry.Plug do
     @default_scrubbed_param_keys ["password", "passwd", "secret"]

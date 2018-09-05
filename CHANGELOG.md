@@ -5,7 +5,7 @@
 ## 7.0.0 (2018-09-05)
 
 * Enhancements
-  * Replace Poison with Jason
+  * Replace Poison with configurable JSON library
   * Implement `Sentry.LoggerBackend`
 
 * Breaking Changes

@@ -17,13 +17,14 @@ If you would like to upgrade a project to use Sentry 7.x, see [here](https://gis
 
 ## Installation
 
-To use Sentry with your projects, edit your mix.exs file and add it as a dependency:
+To use Sentry with your projects, edit your mix.exs file and add it as a dependency.  Sentry defaults to trying to use Jason for JSON operations, but can be configured to use other ones.
 
 ```elixir
 defp deps do
   [
     # ...
     {:sentry, "~> 7.0"},
+    {:jason, "~> 1.1"},
   ]
 end
 ```
@@ -116,6 +117,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
+| `json_library` | False | `Jason` | |
 
 An example production config might look like this:
 
