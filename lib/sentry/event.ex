@@ -42,7 +42,7 @@ defmodule Sentry.Event do
   @deps if(
           @enable_deps_reporting,
           do: Util.mix_deps(),
-          else: %{}
+          else: []
         )
 
   @doc """
@@ -122,7 +122,7 @@ defmodule Sentry.Event do
       breadcrumbs: breadcrumbs,
       request: request,
       fingerprint: fingerprint,
-      modules: @deps
+      modules: Util.mix_deps_versions(@deps)
     }
     |> add_metadata()
   end
