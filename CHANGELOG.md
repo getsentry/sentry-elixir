@@ -2,6 +2,11 @@
 
 ## master
 
+## 6.4.2 (2018-09-05)
+
+* Enhancements
+  * Add deps reporting back (#305 / #301)
+
 ## 6.4.1 (2018-07-26)
 
 * Bug Fixes
