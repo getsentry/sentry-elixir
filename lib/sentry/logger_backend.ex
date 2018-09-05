@@ -37,7 +37,7 @@ defmodule Sentry.LoggerBackend do
 
         Sentry.capture_exception(reason, opts)
 
-      reason when is_atom(reason) ->
+      reason when is_atom(reason) and not is_nil(reason) ->
         Sentry.capture_exception(reason, event_source: :logger)
 
       _ ->
