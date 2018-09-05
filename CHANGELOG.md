@@ -2,6 +2,16 @@
 
 ## master
 
+## 7.0.0 (2018-09-05)
+
+* Enhancements
+  * Replace Poison with Jason
+  * Implement `Sentry.LoggerBackend`
+
+* Breaking Changes
+  * Require Elixir 1.7+
+  * Remove `Sentry.Logger`
+
 ## 6.4.2 (2018-09-05)
 
 * Enhancements
