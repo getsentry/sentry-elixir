@@ -25,12 +25,16 @@ defmodule Sentry.Util do
     |> String.trim_trailing("Z")
   end
 
-  @spec mix_deps() :: map()
+  @spec mix_deps() :: list(atom())
   def mix_deps() do
     Mix.Project.deps_paths()
     |> Map.keys()
-    |> Enum.reduce(%{}, fn app, acc ->
-      Map.put(acc, app, Application.spec(app, :vsn))
+  end
+
+  @spec mix_deps_versions(list(atom())) :: map()
+  def mix_deps_versions(deps) when is_list(deps) do
+    Enum.reduce(deps, %{}, fn app, acc ->
+      Map.put(acc, app, to_string(Application.spec(app, :vsn)))
     end)
   end
 
