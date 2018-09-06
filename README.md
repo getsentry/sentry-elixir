@@ -17,7 +17,7 @@ If you would like to upgrade a project to use Sentry 7.x, see [here](https://gis
 
 ## Installation
 
-To use Sentry with your projects, edit your mix.exs file and add it as a dependency.  Sentry defaults to trying to use Jason for JSON operations, but can be configured to use other ones.
+To use Sentry with your projects, edit your mix.exs file and add it as a dependency.  Sentry does not install a JSON library itself, and requires users to have one available.  Sentry will default to trying to use Jason for JSON operations, but can be configured to use other ones.
 
 ```elixir
 defp deps do
