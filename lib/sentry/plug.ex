@@ -1,9 +1,4 @@
 if Code.ensure_loaded?(Plug) do
-  if Code.ensure_loaded?(Jason) do
-    require Protocol
-    Protocol.derive(Jason.Encoder, Plug.Upload)
-  end
-
   defmodule Sentry.Plug do
     @default_scrubbed_param_keys ["password", "passwd", "secret"]
     @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
@@ -226,7 +221,11 @@ if Code.ensure_loaded?(Plug) do
             is_binary(value) && Regex.match?(@credit_card_regex, value) ->
               @scrubbed_value
 
-            is_map(value) && !Map.has_key?(value, :__struct__) ->
+            is_map(value) && Map.has_key?(value, :__struct__) ->
+              Map.from_struct(value)
+              |> scrub_map()
+
+            is_map(value) ->
               scrub_map(value)
 
             true ->
