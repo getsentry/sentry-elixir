@@ -28,7 +28,7 @@ defmodule Sentry.SourcesTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       frames =
-        Poison.decode!(body)
+        Jason.decode!(body)
         |> get_in(["stacktrace", "frames"])
         |> Enum.reverse()
 

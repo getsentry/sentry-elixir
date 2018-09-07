@@ -29,7 +29,7 @@ defmodule Sentry.Phoenix.Endpoint do
           super(conn, opts)
         catch
           kind, reason ->
-            stacktrace = System.stacktrace()
+            stacktrace = __STACKTRACE__
             request = Sentry.Plug.build_request_interface_data(conn, [])
             exception = Exception.normalize(kind, reason, stacktrace)
 

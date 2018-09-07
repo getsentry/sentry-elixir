@@ -74,8 +74,10 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(event, result) do
+    json_library = Config.json_library()
+
     render_event(event)
-    |> Poison.encode()
+    |> json_library.encode()
     |> case do
       {:ok, body} ->
         do_send_event(event, body, result)
@@ -156,15 +158,17 @@ defmodule Sentry.Client do
   Hackney options can be set via the `hackney_opts` configuration option.
   """
   @spec request(String.t(), list({String.t(), String.t()}), String.t()) ::
-          {:ok, String.t()} | :error
+          {:ok, String.t()} | {:error, term()}
   def request(url, headers, body) do
+    json_library = Config.json_library()
+
     hackney_opts =
       Config.hackney_opts()
       |> Keyword.put_new(:pool, @hackney_pool_name)
 
     with {:ok, 200, _, client} <- :hackney.request(:post, url, headers, body, hackney_opts),
          {:ok, body} <- :hackney.body(client),
-         {:ok, json} <- Poison.decode(body) do
+         {:ok, json} <- json_library.decode(body) do
       {:ok, Map.get(json, "id")}
     else
       {:ok, status, headers, client} ->

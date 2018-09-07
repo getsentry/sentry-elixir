@@ -67,7 +67,7 @@ defmodule Sentry.PlugTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Poison.decode!(body)
+      json = Jason.decode!(body)
       assert json["request"]["cookies"] == %{}
       assert json["request"]["headers"] == %{"content-type" => "application/json"}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -111,7 +111,7 @@ defmodule Sentry.PlugTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Poison.decode!(body)
+      json = Jason.decode!(body)
       assert is_map(json["request"]["data"]["image"])
       assert json["request"]["data"]["password"] == "*********"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -147,7 +147,7 @@ defmodule Sentry.PlugTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Poison.decode!(body)
+      json = Jason.decode!(body)
       assert json["request"]["cookies"] == %{"regular" => "value"}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)

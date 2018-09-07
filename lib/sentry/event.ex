@@ -246,10 +246,9 @@ defmodule Sentry.Event do
   @spec args_from_stacktrace(Exception.stacktrace()) :: map()
   def args_from_stacktrace([{_m, _f, a, _} | _]) when is_list(a) do
     Enum.with_index(a)
-    |> Enum.map(fn {arg, index} ->
+    |> Enum.into(%{}, fn {arg, index} ->
       {"arg#{index}", inspect(arg)}
     end)
-    |> Enum.into(%{})
   end
 
   def args_from_stacktrace(_), do: %{}

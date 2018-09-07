@@ -7,17 +7,25 @@ The Official Sentry Client for Elixir which provides a simple API to capture exc
 
 [Documentation](https://hexdocs.pm/sentry/readme.html)
 
+## Note on upgrading from Sentry 6.x to 7.x
+
+Elixir 1.7 and Erlang/OTP 21 significantly changed how errors are transmitted (See "Erlang/OTP logger integration" [here](https://elixir-lang.org/blog/2018/07/25/elixir-v1-7-0-released/)).  Sentry integrated heavily with Erlang's `:error_logger` module, but it is no longer the suggested path towards handling errors.
+
+Sentry 7.x requires Elixir 1.7 and Sentry 6.x will be maintained for applications running prior versions.  Documentation for Sentry 6.x can be found [here](https://hexdocs.pm/sentry/6.4.2/readme.html).
+
+If you would like to upgrade a project to use Sentry 7.x, see [here](https://gist.github.com/mitchellhenke/4ab6dd8d0ebeaaf9821fb625e0037a4d).
+
 ## Installation
 
-To use Sentry with your projects, edit your mix.exs file to add it as a dependency and add the `:sentry` package to your applications:
+To use Sentry with your projects, edit your mix.exs file and add it as a dependency.  Sentry does not install a JSON library itself, and requires users to have one available.  Sentry will default to trying to use Jason for JSON operations, but can be configured to use other ones.
 
 ```elixir
-defp application do
-  [applications: [:sentry, :logger]]
-end
-
 defp deps do
-  [{:sentry, "~> 6.4"}]
+  [
+    # ...
+    {:sentry, "~> 7.0"},
+    {:jason, "~> 1.1"},
+  ]
 end
 ```
 
@@ -41,9 +49,9 @@ More information on why this may be necessary can be found here: https://github.
 
 ### Capture Crashed Process Exceptions
 
-This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on the Erlang [error_logger](http://erlang.org/doc/man/error_logger.html).
+This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends).
 
-To set this up, add `:ok = :error_logger.add_report_handler(Sentry.Logger)` to your application's start function. Example:
+To set this up, add `{:ok, _} = Logger.add_backend(Sentry.LoggerBackend)` to your application's start function. Example:
 
 ```elixir
 def start(_type, _opts) do
@@ -54,7 +62,7 @@ def start(_type, _opts) do
 
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
 
-  :ok = :error_logger.add_report_handler(Sentry.Logger)
+  {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
   Supervisor.start_link(children, opts)
 end
@@ -69,7 +77,7 @@ try do
   ThisWillError.reall()
 rescue
   my_exception ->
-    Sentry.capture_exception(my_exception, [stacktrace: System.stacktrace(), extra: %{extra: information}])
+    Sentry.capture_exception(my_exception, [stacktrace: __STACKTRACE__, extra: %{extra: information}])
 end
 ```
 
@@ -109,6 +117,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
+| `json_library` | False | `Jason` | |
 
 An example production config might look like this:
 

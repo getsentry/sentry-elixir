@@ -123,6 +123,10 @@ defmodule Sentry.Config do
     get_config(:report_deps, default: true, check_dsn: false)
   end
 
+  def json_library do
+    get_config(:json_library, default: Jason, check_dsn: false)
+  end
+
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)
     check_dsn = Keyword.get(opts, :check_dsn, true)
