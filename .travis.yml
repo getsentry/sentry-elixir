@@ -19,7 +19,7 @@ notifications:
 script:
   - if [ "$STRICT" = "true" ]; then mix compile --warnings-as-errors; fi
   - mix test
-  - MIX_ENV=test mix credo
+  - mix credo
   - if [ "$STRICT" = "true" ]; then travis_wait mix dialyzer; fi
   - if [ "$STRICT" = "true" ]; then mix format --dry-run --check-formatted; fi
 cache:
