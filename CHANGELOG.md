@@ -2,13 +2,13 @@
 
 ## master
 
-## 7.0.0 (2018-09-05)
+## 7.0.0 (2018-09-07)
 
 * Enhancements
-  * Replace Poison with configurable JSON library
   * Implement `Sentry.LoggerBackend`
 
 * Breaking Changes
+  * Replace Poison with configurable JSON library
   * Require Elixir 1.7+
   * Remove `Sentry.Logger`
 
