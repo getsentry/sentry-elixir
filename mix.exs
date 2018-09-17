@@ -18,7 +18,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry, []},
-      applications: [:hackney, :poison, :logger]
+      applications: [:hackney, :logger]
     ]
   end
 
