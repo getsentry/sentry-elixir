@@ -27,11 +27,12 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.8 or 1.6.5"},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
+      {:plug_cowboy, "~> 1.0", optional: true},
       {:phoenix, "~> 1.3", optional: true},
       {:dialyxir, "> 0.0.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.19.0", only: :dev},
       {:credo, "~> 0.10.0", only: [:dev, :test], runtime: false},
-      {:bypass, "~> 0.8.0", only: [:test]}
+      {:bypass, "~> 0.9.0", only: [:test]}
     ]
   end
 
