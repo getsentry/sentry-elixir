@@ -2,10 +2,15 @@
 
 ## master
 
+## 7.0.2 (2018-11-01)
+
+* Bug Fixes
+  * Fix sending Phoenix.Router.NoRouteError when using Sentry.Phoenix.Endpoint (#309)
+
 ## 7.0.1 (2018-10-01)
 
 * Enhancements
-  * Remove poison from applications list(#306)
+  * Remove Poison from applications list (#306)
 
 ## 7.0.0 (2018-09-07)
 
