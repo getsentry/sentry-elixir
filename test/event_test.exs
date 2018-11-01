@@ -255,6 +255,8 @@ defmodule Sentry.EventTest do
              :phoenix,
              :phoenix_pubsub,
              :plug,
+             :plug_cowboy,
+             :plug_crypto,
              :poison,
              :ranch,
              :ssl_verify_fun,
