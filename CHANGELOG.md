@@ -2,6 +2,12 @@
 
 ## master
 
+## 7.0.3 (2018-11-14)
+
+* Bug Fixes
+  * Fix issue from using spawn\_link stacktrace (#315)
+  * Relax plug\_cowboy versions (#314)
+
 ## 7.0.2 (2018-11-01)
 
 * Bug Fixes
