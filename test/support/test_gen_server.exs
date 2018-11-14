@@ -19,6 +19,11 @@ defmodule Sentry.TestGenServer do
     {:ok, pid}
   end
 
+  def handle_call({:sleep, milliseconds}, _from, state) do
+    :timer.sleep(milliseconds)
+    {:reply, :ok, state}
+  end
+
   def handle_info(:throw, _state) do
     throw("I am throwing")
   end
