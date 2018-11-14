@@ -73,7 +73,9 @@ defmodule Sentry.Event do
 
     message = Keyword.get(opts, :message)
 
-    stacktrace = Keyword.get(opts, :stacktrace, [])
+    stacktrace =
+      Keyword.get(opts, :stacktrace, [])
+      |> coerce_stacktrace()
 
     fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
 
@@ -238,6 +240,10 @@ defmodule Sentry.Event do
     Exception.format_mfa(m, f, arity_to_integer(a))
   end
 
+  def culprit_from_stacktrace([{m, f, a} | _]) do
+    Exception.format_mfa(m, f, arity_to_integer(a))
+  end
+
   @doc """
   Builds a map from argument value list.  For Sentry, typically the
   key in the map would be the name of the variable, but we don't have that
@@ -276,4 +282,7 @@ defmodule Sentry.Event do
   end
 
   defp module_split(module), do: module_split(String.Chars.to_string(module))
+
+  defp coerce_stacktrace({m, f, a}), do: [{m, f, a, []}]
+  defp coerce_stacktrace(stacktrace), do: stacktrace
 end
