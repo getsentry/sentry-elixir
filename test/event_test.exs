@@ -257,7 +257,6 @@ defmodule Sentry.EventTest do
              :plug,
              :plug_cowboy,
              :plug_crypto,
-             :poison,
              :ranch,
              :ssl_verify_fun,
              :unicode_util_compat
