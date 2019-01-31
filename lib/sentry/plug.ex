@@ -171,7 +171,7 @@ if Code.ensure_loaded?(Plug) do
         headers: handle_data(conn, header_scrubber),
         env: %{
           "REMOTE_ADDR" => remote_address(conn.remote_ip),
-          "REMOTE_PORT" => Plug.Conn.get_peer_data(conn).port,
+          "REMOTE_PORT" => remote_port(conn),
           "SERVER_NAME" => conn.host,
           "SERVER_PORT" => conn.port,
           "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first()
@@ -179,10 +179,26 @@ if Code.ensure_loaded?(Plug) do
       }
     end
 
+    defp remote_port(conn) do
+      case Plug.Conn.get_peer_data(conn) do
+        %{port: port} ->
+          port
+
+        _ ->
+          ""
+      end
+    end
+
     defp remote_address(address) do
       address
       |> :inet.ntoa()
-      |> to_string()
+      |> case do
+        {:error, _} ->
+          ""
+
+        address ->
+          to_string(address)
+      end
     end
 
     defp handle_data(_conn, nil), do: %{}
