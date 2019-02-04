@@ -84,7 +84,7 @@ defmodule Sentry do
       {:ok, another_event_id} = Sentry.capture_exception(other_exception, [event_source: :my_source, result: :sync])
 
   ### Options
-    * `:event_source` - The source passed as the first argument to `Sentry.EventFilter.exclude_exception?/2`
+    * `:event_source` - The source passed as the first argument to `c:Sentry.EventFilter.exclude_exception?/2`
 
   ## Configuring The `Logger` Backend
 
