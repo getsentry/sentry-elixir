@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.0.4 (2019-02-12)
+
+* Bug Fixes
+  * Do not error if you cannot format the remote IP or port (#326)
+
 ## 7.0.3 (2018-11-14)
 
 * Bug Fixes
