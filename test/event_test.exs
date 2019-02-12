@@ -36,14 +36,14 @@ defmodule Sentry.EventTest do
 
     assert is_binary(event.server_name)
 
-    assert event.stacktrace == %{
+    assert %{
              frames: [
                %{
                  context_line: nil,
                  filename: "lib/ex_unit/runner.ex",
-                 function: "anonymous fn/4 in ExUnit.Runner.spawn_test/3",
+                 function: _,
                  in_app: false,
-                 lineno: 251,
+                 lineno: _,
                  module: ExUnit.Runner,
                  post_context: [],
                  pre_context: [],
@@ -65,7 +65,7 @@ defmodule Sentry.EventTest do
                  filename: "lib/ex_unit/runner.ex",
                  function: "ExUnit.Runner.exec_test/1",
                  in_app: false,
-                 lineno: 312,
+                 lineno: _,
                  module: ExUnit.Runner,
                  post_context: [],
                  pre_context: [],
@@ -105,7 +105,7 @@ defmodule Sentry.EventTest do
                  vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}
                }
              ]
-           }
+           } = event.stacktrace
 
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
