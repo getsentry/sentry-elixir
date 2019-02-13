@@ -2,7 +2,7 @@ defmodule Sentry.Config do
   @moduledoc """
   This module provides the functionality for fetching configuration settings and their defaults.
 
-  Sentry supports loading config at runtime, via `{:system, SYSTEM_ENV_KEY}` tuples, where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system environment at runtime.
+  Sentry supports loading config at runtime, via `{:system, "SYSTEM_ENV_KEY"}` tuples, where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system environment at runtime.
   """
 
   @default_included_environments [:dev, :test, :prod]
