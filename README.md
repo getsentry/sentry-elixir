@@ -112,7 +112,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `in_app_module_whitelist` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
-| `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!`|
+| `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd()!`|
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
@@ -127,7 +127,7 @@ config :sentry,
   environment_name: :prod,
   included_environments: [:prod],
   enable_source_code_context: true,
-  root_source_code_path: File.cwd!,
+  root_source_code_path: File.cwd()!,
   tags: %{
     env: "production"
   },
