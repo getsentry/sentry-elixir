@@ -23,7 +23,7 @@ defmodule Sentry.EventTest do
 
     assert event.exception == [
              %{
-               type: UndefinedFunctionError,
+               type: "UndefinedFunctionError",
                value: "function Sentry.Event.not_a_function/3 is undefined or private",
                module: nil
              }

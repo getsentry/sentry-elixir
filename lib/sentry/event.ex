@@ -150,6 +150,8 @@ defmodule Sentry.Event do
     type =
       if error_type == :error do
         normalized.__struct__
+        |> to_string()
+        |> String.trim_leading("Elixir.")
       else
         error_type
       end

@@ -73,7 +73,7 @@ defmodule Sentry.LoggerBackendTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
-      assert List.first(json["exception"])["type"] == "Elixir.ErlangError"
+      assert List.first(json["exception"])["type"] == "ErlangError"
       assert List.first(json["exception"])["value"] == "Erlang error: :bad_exit"
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
@@ -108,7 +108,7 @@ defmodule Sentry.LoggerBackendTest do
                "post_context" => []
              } = List.last(json["stacktrace"]["frames"])
 
-      assert List.first(json["exception"])["type"] == "Elixir.FunctionClauseError"
+      assert List.first(json["exception"])["type"] == "FunctionClauseError"
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
       send(self_pid, "API called")
