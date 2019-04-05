@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.0.5 (2019-04-05)
+
+* Bug Fixes
+  * Strip leading "Elixir." from module name on error type (#330)
+
 ## 7.0.4 (2019-02-12)
 
 * Bug Fixes
