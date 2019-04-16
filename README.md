@@ -118,6 +118,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
+| `log_level` | False | `:warn` | |
 
 An example production config might look like this:
 
