@@ -14,6 +14,8 @@ defmodule Sentry.Config do
   @default_context_lines 3
   @default_sample_rate 1.0
 
+  @permitted_log_level_values ~w(debug info warn error)a
+
   def validate_config! do
   end
 
@@ -126,6 +128,12 @@ defmodule Sentry.Config do
   def json_library do
     get_config(:json_library, default: Jason, check_dsn: false)
   end
+
+  def log_level do
+    get_config(:log_level, default: :warn, check_dsn: false)
+  end
+
+  def permitted_log_level_values, do: @permitted_log_level_values
 
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)

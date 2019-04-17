@@ -104,6 +104,7 @@ defmodule Sentry do
     ]
 
     validate_json_config!()
+    validate_log_level_config!()
 
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
     Supervisor.start_link(children, opts)
@@ -149,7 +150,7 @@ defmodule Sentry do
   def send_event(event, opts \\ [])
 
   def send_event(%Event{message: nil, exception: nil}, _opts) do
-    Logger.warn("Sentry: unable to parse exception")
+    Logger.log(Config.log_level(), "Sentry: unable to parse exception")
 
     :ignored
   end
@@ -190,6 +191,16 @@ defmodule Sentry do
                     """),
                     __STACKTRACE__
         end
+    end
+  end
+
+  defp validate_log_level_config!() do
+    value = Config.log_level()
+
+    if value in Config.permitted_log_level_values() do
+      :ok
+    else
+      raise ArgumentError.exception("#{inspect(value)} is not a valid :log_level configuration")
     end
   end
 end

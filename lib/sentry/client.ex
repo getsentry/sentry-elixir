@@ -336,9 +336,12 @@ defmodule Sentry.Client do
   end
 
   defp log_api_error(body) do
-    Logger.warn(fn ->
-      ["Failed to send Sentry event.", ?\n, body]
-    end)
+    Logger.log(
+      Config.log_level(),
+      fn ->
+        ["Failed to send Sentry event.", ?\n, body]
+      end
+    )
   end
 
   defp sleep(1), do: :timer.sleep(2000)
