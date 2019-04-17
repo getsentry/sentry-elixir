@@ -130,10 +130,7 @@ defmodule Sentry.Config do
   end
 
   def log_level do
-    case get_config(:log_level, default: :warn, check_dsn: false) do
-      value when value in @permitted_log_level_values -> value
-      value -> value
-    end
+    get_config(:log_level, default: :warn, check_dsn: false)
   end
 
   def permitted_log_level_values, do: @permitted_log_level_values
