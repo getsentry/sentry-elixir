@@ -15,19 +15,26 @@ defmodule Sentry.TestClient do
             {:ok, id}
 
           {:error, error} ->
-            Logger.warn(fn ->
-              [
-                "Failed to send Sentry event.",
-                ?\n,
-                "Event ID: #{event.event_id} - #{inspect(error)} - #{body}"
-              ]
-            end)
+            Logger.log(
+              Sentry.Config.log_level(),
+              fn ->
+                [
+                  "Failed to send Sentry event.",
+                  ?\n,
+                  "Event ID: #{event.event_id} - #{inspect(error)} - #{body}"
+                ]
+              end
+            )
 
             :error
         end
 
       {:error, error} ->
-        Logger.error("Error sending in Sentry.TestClient: #{inspect(error)}")
+        Logger.log(
+          Sentry.Config.log_level(),
+          "Error sending in Sentry.TestClient: #{inspect(error)}"
+        )
+
         :error
     end
   end

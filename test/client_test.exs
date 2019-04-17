@@ -274,4 +274,49 @@ defmodule Sentry.ClientTest do
         :unsampled = Sentry.capture_exception(e, result: :sync, sample_rate: 0.0)
     end
   end
+
+  test "logs errors at configured log_level" do
+    bypass = Bypass.open()
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+
+      conn =
+        conn
+        |> Plug.Conn.put_resp_header(
+          "X-Sentry-Error",
+          "Creation of this event was denied due to various reasons."
+        )
+        |> Plug.Conn.resp(400, "Something bad happened")
+
+      send(pid, "API called")
+      conn
+    end)
+
+    modify_env(
+      :sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      client: Sentry.Client,
+      log_level: :error
+    )
+
+    capture_log(fn ->
+      try do
+        Event.not_a_function()
+      rescue
+        e ->
+          {:ok, task} =
+            Sentry.capture_exception(
+              e,
+              stacktrace: __STACKTRACE__
+            )
+
+          assert_receive "API called"
+          Task.shutdown(task)
+      end
+    end) =~ "[error] Failed to send Sentry event"
+  end
 end
