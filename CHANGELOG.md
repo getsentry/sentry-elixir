@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.0.6 (2019-04-17)
+
+* Enhancements
+  * Allow configuring Sentry log level (#334)
+
 ## 7.0.5 (2019-04-05)
 
 * Bug Fixes
