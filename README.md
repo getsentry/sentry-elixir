@@ -118,7 +118,7 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
-| `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error. |
+| `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
 
 An example production config might look like this:
 
