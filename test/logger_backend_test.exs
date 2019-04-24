@@ -147,4 +147,34 @@ defmodule Sentry.LoggerBackendTest do
       assert_receive "API called"
     end)
   end
+
+  test "includes Logger.metadata if the key and value are safely JSON-encodable" do
+    bypass = Bypass.open()
+    Process.flag(:trap_exit, true)
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert get_in(json, ["extra", "logger_metadata", "string"]) == "string"
+      assert get_in(json, ["extra", "logger_metadata", "atom"]) == "atom"
+      assert get_in(json, ["extra", "logger_metadata", "number"]) == 43
+      refute Map.has_key?(get_in(json, ["extra", "logger_metadata"]), "list")
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    capture_log(fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(pid)
+      Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+      Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
+      Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+      Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
+      Sentry.TestGenServer.invalid_function(pid)
+      assert_receive "terminating"
+      assert_receive "API called"
+    end)
+  end
 end

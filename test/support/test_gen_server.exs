@@ -11,6 +11,10 @@ defmodule Sentry.TestGenServer do
     send(pid, :bad_exit)
   end
 
+  def add_logger_metadata(pid, key, value) do
+    send(pid, {:logger_metadata, key, value})
+  end
+
   def invalid_function(pid) do
     send(pid, :invalid_function)
   end
@@ -30,6 +34,11 @@ defmodule Sentry.TestGenServer do
 
   def handle_info(:bad_exit, state) do
     {:stop, :bad_exit, state}
+  end
+
+  def handle_info({:logger_metadata, key, value}, state) do
+    Logger.metadata([{key, value}])
+    {:noreply, state}
   end
 
   def handle_info(:invalid_function, state) do
