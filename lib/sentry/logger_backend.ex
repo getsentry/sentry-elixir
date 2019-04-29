@@ -5,22 +5,28 @@ defmodule Sentry.LoggerBackend do
   """
   @behaviour :gen_event
 
-  defstruct level: nil
+  defstruct level: nil, include_logger_metadata: false
 
   def init(__MODULE__) do
-    config = Application.get_env(:logger, :sentry, [])
+    config = Application.get_env(:logger, __MODULE__, [])
     {:ok, init(config, %__MODULE__{})}
   end
 
   def init({__MODULE__, opts}) when is_list(opts) do
     config =
-      Application.get_env(:logger, :sentry, [])
+      Application.get_env(:logger, __MODULE__, [])
       |> Keyword.merge(opts)
 
     {:ok, init(config, %__MODULE__{})}
   end
 
-  def handle_call({:configure, _options}, state) do
+  def handle_call({:configure, options}, state) do
+    config =
+      Application.get_env(:logger, __MODULE__, [])
+      |> Keyword.merge(options)
+
+    Application.put_env(:logger, __MODULE__, config)
+    state = init(config, state)
     {:ok, :ok, state}
   end
 
@@ -29,19 +35,18 @@ defmodule Sentry.LoggerBackend do
   end
 
   def handle_event({_level, _gl, {Logger, _msg, _ts, meta}}, state) do
-    logger_metadata =
-      meta
-      |> Enum.filter(fn {key, value} ->
-        (is_binary(key) || is_atom(key)) &&
-          (is_binary(value) || is_atom(value) || is_number(value))
-      end)
-      |> Enum.into(%{})
+    %{include_logger_metadata: include_logger_metadata} = state
 
-    opts = [
-      extra: %{
-        logger_metadata: logger_metadata
-      }
-    ]
+    opts =
+      if include_logger_metadata do
+        [
+          extra: %{
+            logger_metadata: build_logger_metadata(meta)
+          }
+        ]
+      else
+        []
+      end
 
     case Keyword.get(meta, :crash_reason) do
       {reason, stacktrace} ->
@@ -84,6 +89,16 @@ defmodule Sentry.LoggerBackend do
 
   defp init(config, %__MODULE__{} = state) do
     level = Keyword.get(config, :level)
-    %{state | level: level}
+    include_logger_metadata = Keyword.get(config, :include_logger_metadata)
+    %{state | level: level, include_logger_metadata: include_logger_metadata}
+  end
+
+  defp build_logger_metadata(meta) do
+    meta
+    |> Enum.filter(fn {key, value} ->
+      (is_binary(key) || is_atom(key)) &&
+        (is_binary(value) || is_atom(value) || is_number(value))
+    end)
+    |> Enum.into(%{})
   end
 end
