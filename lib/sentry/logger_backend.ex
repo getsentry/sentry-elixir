@@ -1,7 +1,42 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
   This module makes use of Elixir 1.7's new Logger metadata to report
-  crashes processes.  It replaces the previous `Sentry.Logger` sytem.
+  crashed processes.  It replaces the previous `Sentry.Logger` sytem.
+
+  To include the backend in your application, the backend can be added in your
+  application file:
+
+    def start(_type, _opts) do
+      children = [
+        supervisor(MyApp.Repo, []),
+        supervisor(MyAppWeb.Endpoint, [])
+      ]
+
+      opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+
+      {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
+
+      Supervisor.start_link(children, opts)
+    end
+
+  If you are on OTP 21+ and would like to configure the backend to include metadata from
+  `Logger.metadata/0` in reported events, it can be enabled:
+
+      {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
+      Logger.configure_backend(Sentry.LoggerBackend, include_logger_metadata: true)
+
+
+  It is important to be aware of whether this will include sensitive information
+  in Sentry events before enabling it.
+
+  ## Options
+
+  The supported options are:
+
+    * `:include_logger_metadata` - Enabling this option will read any key/value
+      pairs with with binary, atom or number values from `Logger.metadata/0`
+      and include that dictionary under the `:logger_metadata` key in an
+      event's `:extra` metadata.  This option defaults to `false`.
   """
   @behaviour :gen_event
 
@@ -95,8 +130,8 @@ defmodule Sentry.LoggerBackend do
 
   defp build_logger_metadata(meta) do
     meta
-    |> Enum.filter(fn {key, value} ->
-      (is_binary(key) || is_atom(key)) && (is_binary(value) || is_atom(value) || is_number(value))
+    |> Enum.filter(fn {_key, value} ->
+      is_binary(value) || is_atom(value) || is_number(value)
     end)
     |> Enum.into(%{})
   end
