@@ -2,6 +2,9 @@
 
 ## master
 
+* Enhancements
+  * Option to include `Logger.metadata` in `Sentry.LoggerBackend` (#338)
+
 ## 7.0.6 (2019-04-17)
 
 * Enhancements

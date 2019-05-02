@@ -68,6 +68,8 @@ def start(_type, _opts) do
 end
 ```
 
+The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
+
 ### Capture Arbitrary Exceptions
 
 Sometimes you want to capture specific exceptions.  To do so, use `Sentry.capture_exception/2`.

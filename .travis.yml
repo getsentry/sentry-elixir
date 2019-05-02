@@ -3,16 +3,16 @@ elixir:
   - 1.7
   - 1.8
 otp_release:
-  - 20.2
-  - 21.0
+  - 20.3
+  - 21.3
 env:
   - STRICT=true
   - STRICT=false
 matrix:
   exclude:
-    - otp_release: 20.2
+    - otp_release: 20.3
       env: STRICT=true
-    - otp_release: 21.0
+    - otp_release: 21.3
       env: STRICT=false
 notifications:
   email:

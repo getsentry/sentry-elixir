@@ -7,6 +7,7 @@ defmodule Sentry.LoggerBackendTest do
     {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
     ExUnit.Callbacks.on_exit(fn ->
+      Logger.configure_backend(Sentry.LoggerBackend, [])
       :ok = Logger.remove_backend(Sentry.LoggerBackend)
     end)
   end
@@ -146,5 +147,68 @@ defmodule Sentry.LoggerBackendTest do
 
       assert_receive "API called"
     end)
+  end
+
+  if :erlang.system_info(:otp_release) >= '21' do
+    test "includes Logger.metadata when enabled if the key and value are safely JSON-encodable" do
+      Logger.configure_backend(Sentry.LoggerBackend, include_logger_metadata: true)
+      bypass = Bypass.open()
+      Process.flag(:trap_exit, true)
+      pid = self()
+
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        json = Jason.decode!(body)
+        assert get_in(json, ["extra", "logger_metadata", "string"]) == "string"
+        assert get_in(json, ["extra", "logger_metadata", "atom"]) == "atom"
+        assert get_in(json, ["extra", "logger_metadata", "number"]) == 43
+        refute Map.has_key?(get_in(json, ["extra", "logger_metadata"]), "list")
+        send(pid, "API called")
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+      capture_log(fn ->
+        {:ok, pid} = Sentry.TestGenServer.start_link(pid)
+        Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+        Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
+        Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+        Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
+        Sentry.TestGenServer.invalid_function(pid)
+        assert_receive "terminating"
+        assert_receive "API called"
+      end)
+    end
+
+    test "does not include Logger.metadata when disabled" do
+      Logger.configure_backend(Sentry.LoggerBackend, include_logger_metadata: false)
+      bypass = Bypass.open()
+      Process.flag(:trap_exit, true)
+      pid = self()
+
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        json = Jason.decode!(body)
+        refute get_in(json, ["extra", "logger_metadata", "string"]) == "string"
+        refute get_in(json, ["extra", "logger_metadata", "atom"]) == "atom"
+        refute get_in(json, ["extra", "logger_metadata", "number"]) == 43
+        send(pid, "API called")
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+      capture_log(fn ->
+        {:ok, pid} = Sentry.TestGenServer.start_link(pid)
+        Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+        Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
+        Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+        Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
+        Sentry.TestGenServer.invalid_function(pid)
+        assert_receive "terminating"
+        assert_receive "API called"
+      end)
+    end
   end
 end
