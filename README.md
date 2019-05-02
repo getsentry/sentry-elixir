@@ -76,7 +76,7 @@ Sometimes you want to capture specific exceptions.  To do so, use `Sentry.captur
 
 ```elixir
 try do
-  ThisWillError.reall()
+  ThisWillError.really()
 rescue
   my_exception ->
     Sentry.capture_exception(my_exception, [stacktrace: __STACKTRACE__, extra: %{extra: information}])
