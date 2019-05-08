@@ -56,12 +56,12 @@ defmodule Sentry.Client do
   The event is dropped if it all retries fail.
 
   ### Options
-  * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task can be awaited upon to receive the result asynchronously.  When used in an OTP behaviour like GenServer, the task will send a message that needs to be matched with `GenServer.handle_info/2`.  See `Task.Supervisor.async_nolink/2` for more information.  `:async` is the default.
+  * `:result` - Allows specifying how the result should be returned. Options include `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}` on success where the Task should be awaited upon to receive the result asynchronously.  If you do not call `Task.await/2`, messages will be leaked to the inbox of the current process.  See `Task.Supervisor.async_nolink/2` for more information.  `:none` is the default.
   * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending any events, and a value of 1.0 will send 100% of events.
   """
   @spec send_event(Event.t()) :: send_event_result
   def send_event(%Event{} = event, opts \\ []) do
-    result = Keyword.get(opts, :result, :async)
+    result = Keyword.get(opts, :result, :none)
     sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
 
     event = maybe_call_before_send_event(event)
