@@ -36,13 +36,14 @@ defmodule Sentry.Phoenix.Endpoint do
             request = Sentry.Plug.build_request_interface_data(conn, [])
             exception = Exception.normalize(kind, reason, stacktrace)
 
-            Sentry.capture_exception(
-              exception,
-              stacktrace: stacktrace,
-              request: request,
-              event_source: :endpoint,
-              error_type: kind
-            )
+            _ =
+              Sentry.capture_exception(
+                exception,
+                stacktrace: stacktrace,
+                request: request,
+                event_source: :endpoint,
+                error_type: kind
+              )
 
             :erlang.raise(kind, reason, stacktrace)
         end
