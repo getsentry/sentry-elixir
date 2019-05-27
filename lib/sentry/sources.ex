@@ -14,7 +14,7 @@ defmodule Sentry.Sources do
   * `:enable_source_code_context` - when `true`, enables reporting source code
     alongside exceptions.
   * `:root_source_code_path` - The path from which to start recursively reading files from.
-    Should usually be set to `File.cwd!`.
+    Should usually be set to `File.cwd!()`.
   * `:context_lines` - The number of lines of source code before and after the line that
     caused the exception to be included.  Defaults to `3`.
   * `:source_code_exclude_patterns` - a list of Regex expressions used to exclude file paths that
@@ -28,7 +28,7 @@ defmodule Sentry.Sources do
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
         enable_source_code_context: true,
-        root_source_code_path: File.cwd!,
+        root_source_code_path: File.cwd!(),
         context_lines: 5
 
   ### Source code storage
