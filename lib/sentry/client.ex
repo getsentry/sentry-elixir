@@ -222,7 +222,8 @@ defmodule Sentry.Client do
   def get_dsn do
     dsn = Config.dsn()
 
-    with %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
+    with dsn when is_binary(dsn) <- dsn,
+         %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
          when is_binary(path) and is_binary(userinfo) <- URI.parse(dsn),
          [public_key, secret_key] <- keys_from_userinfo(userinfo),
          [_, binary_project_id] <- String.split(path, "/"),
