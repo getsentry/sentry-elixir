@@ -65,6 +65,22 @@ defmodule Sentry.ClientTest do
     end)
   end
 
+  test "errors on nil dsn" do
+    modify_env(:sentry, dsn: nil)
+
+    capture_log(fn ->
+      assert :error = Sentry.Client.get_dsn()
+    end)
+  end
+
+  test "errors on atom dsn" do
+    modify_env(:sentry, dsn: :error)
+
+    capture_log(fn ->
+      assert :error = Sentry.Client.get_dsn()
+    end)
+  end
+
   test "logs api errors" do
     bypass = Bypass.open()
 
