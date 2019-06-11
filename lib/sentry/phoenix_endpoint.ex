@@ -6,7 +6,6 @@ defmodule Sentry.Phoenix.Endpoint do
 
   For more information, see https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791.
 
-
   #### Usage
 
   Add the following to your endpoint.ex, below `use Phoenix.Endpoint, otp_app: :my_app`

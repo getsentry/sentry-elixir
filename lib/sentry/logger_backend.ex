@@ -25,7 +25,6 @@ defmodule Sentry.LoggerBackend do
       {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
       Logger.configure_backend(Sentry.LoggerBackend, include_logger_metadata: true)
 
-
   It is important to be aware of whether this will include sensitive information
   in Sentry events before enabling it.
 

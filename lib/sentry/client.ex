@@ -36,7 +36,7 @@ defmodule Sentry.Client do
         end
   """
 
-  alias Sentry.{Event, Util, Config}
+  alias Sentry.{Config, Event, Util}
 
   require Logger
 

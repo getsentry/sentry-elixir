@@ -3,7 +3,6 @@ defmodule Sentry.Event do
     Provides an Event Struct as well as transformation of Logger
     entries into Sentry Events.
 
-
   ### Configuration
 
   * `:in_app_module_whitelist` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
@@ -34,7 +33,7 @@ defmodule Sentry.Event do
 
   @type t :: %__MODULE__{}
 
-  alias Sentry.{Event, Util, Config}
+  alias Sentry.{Config, Event, Util}
   @source_code_context_enabled Config.enable_source_code_context()
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 

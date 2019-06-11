@@ -26,7 +26,7 @@ defmodule Sentry.Util do
   end
 
   @spec mix_deps() :: list(atom())
-  def mix_deps() do
+  def mix_deps do
     Mix.Project.deps_paths()
     |> Map.keys()
   end
@@ -42,7 +42,7 @@ defmodule Sentry.Util do
   Per http://www.ietf.org/rfc/rfc4122.txt
   """
   @spec uuid4_hex() :: String.t()
-  def uuid4_hex() do
+  def uuid4_hex do
     <<time_low_mid::48, _version::4, time_high::12, _reserved::2, rest::62>> =
       :crypto.strong_rand_bytes(16)
 

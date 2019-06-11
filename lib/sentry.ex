@@ -1,7 +1,7 @@
 defmodule Sentry do
   use Application
   import Supervisor.Spec
-  alias Sentry.{Event, Config}
+  alias Sentry.{Config, Event}
   require Logger
 
   @moduledoc """
