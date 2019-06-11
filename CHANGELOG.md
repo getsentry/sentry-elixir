@@ -2,8 +2,17 @@
 
 ## master
 
+## 7.1.0 (2019-06-11)
+
 * Enhancements
   * Option to include `Logger.metadata` in `Sentry.LoggerBackend` (#338)
+  * Send maximum length of args in stacktrace (#340)
+  * Fix dialyzer warning when using Sentry.Phoenix.Endpoint (#344)
+
+* Bug Fixes
+  * Fix documentation error relating to File.cwd!() (#346)
+  * Add parens to File.cwd!() in documentation (#347)
+  * Check that DSN is binary (#348)
 
 ## 7.0.6 (2019-04-17)
 
