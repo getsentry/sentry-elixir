@@ -6,18 +6,18 @@ defmodule Sentry.LoggerBackend do
   To include the backend in your application, the backend can be added in your
   application file:
 
-    def start(_type, _opts) do
-      children = [
-        supervisor(MyApp.Repo, []),
-        supervisor(MyAppWeb.Endpoint, [])
-      ]
+      def start(_type, _opts) do
+        children = [
+          supervisor(MyApp.Repo, []),
+          supervisor(MyAppWeb.Endpoint, [])
+        ]
 
-      opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+        opts = [strategy: :one_for_one, name: MyApp.Supervisor]
 
-      {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
+        {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
-      Supervisor.start_link(children, opts)
-    end
+        Supervisor.start_link(children, opts)
+      end
 
   If you are on OTP 21+ and would like to configure the backend to include metadata from
   `Logger.metadata/0` in reported events, it can be enabled:
