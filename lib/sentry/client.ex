@@ -340,7 +340,7 @@ defmodule Sentry.Client do
     Logger.log(
       Config.log_level(),
       fn ->
-        ["Failed to send Sentry event.", ?\n, body]
+        ["Failed to send Sentry event.", inspect(body)]
       end
     )
   end
