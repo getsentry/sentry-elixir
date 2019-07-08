@@ -20,6 +20,9 @@ defmodule Sentry.Context do
         posts = Blog.list_posts()
         render(conn, "index.html", posts: posts)
       end
+
+    It should be noted that the `set_*_context/1` functions merge with the
+    existing context rather than entirely overwriting it.
   """
   @process_dictionary_key :sentry_context
   @user_key :user
@@ -28,6 +31,29 @@ defmodule Sentry.Context do
   @request_key :request
   @breadcrumbs_key :breadcrumbs
 
+  @doc """
+  Retrieves all currently set context on the current process.
+
+  ## Example
+
+      iex> Sentry.Context.set_user_context(%{id: 123})
+      iex> Sentry.Context.set_tags_context(%{message_id: 456})
+      iex> Sentry.Context.get_all()
+      %{
+        user: %{id: 123},
+        tags: %{message_id: 456},
+        extra: %{},
+        request: %{},
+        breadcrumbs: []
+      }
+  """
+  @spec get_all() :: %{
+          user: map(),
+          tags: map(),
+          extra: map(),
+          request: map(),
+          breadcrumbs: list()
+        }
   def get_all do
     context = get_context()
 
@@ -40,26 +66,129 @@ defmodule Sentry.Context do
     }
   end
 
+  @doc """
+  Merges new fields into the `:extra` context, specific to the current process.
+
+  This is used to set fields which should display when looking at a specific
+  instance of an error.
+
+  ## Example
+
+      iex> Sentry.Context.set_extra_context(%{id: 123})
+      nil
+      iex> Sentry.Context.set_extra_context(%{detail: "bad_error"})
+      %{extra: %{id: 123}}
+      iex> Sentry.Context.set_extra_context(%{message: "Oh no"})
+      %{extra: %{detail: "bad_error", id: 123}}
+      iex> Sentry.Context.get_all()
+      %{
+        user: %{},
+        tags: %{},
+        extra: %{detail: "bad_error", id: 123, message: "Oh no"},
+        request: %{},
+        breadcrumbs: []
+      }
+  """
+  @spec set_extra_context(map()) :: nil | map()
   def set_extra_context(map) when is_map(map) do
     get_context()
     |> set_context(@extra_key, map)
   end
 
+  @doc """
+  Merges new fields into the `:user` context, specific to the current process.
+
+  This is used to set certain fields which identify the actor who experienced a
+  specific instance of an error.
+
+  ## Example
+
+      iex> Sentry.Context.set_user_context(%{id: 123})
+      nil
+      iex> Sentry.Context.set_user_context(%{username: "george"})
+      %{user: %{id: 123}}
+      iex> Sentry.Context.get_all()
+      %{
+        user: %{id: 123, username: "george"},
+        tags: %{},
+        extra: %{},
+        request: %{},
+        breadcrumbs: []
+      }
+  """
+  @spec set_user_context(map()) :: nil | map()
   def set_user_context(map) when is_map(map) do
     get_context()
     |> set_context(@user_key, map)
   end
 
+  @doc """
+  Merges new fields into the `:tags` context, specific to the current process.
+
+  This is used to set fields which should display when looking at a specific
+  instance of an error. These fields can also be used to search and filter on.
+
+  ## Example
+
+      iex> Sentry.Context.set_tags_context(%{id: 123})
+      nil
+      iex> Sentry.Context.set_tags_context(%{other_id: 456})
+      %{tags: %{id: 123}}
+      iex> Sentry.Context.get_all()
+      %{
+          breadcrumbs: [],
+          extra: %{},
+          request: %{},
+          tags: %{id: 123, other_id: 456},
+          user: %{}
+      }
+  """
+  @spec set_tags_context(map()) :: nil | map()
   def set_tags_context(map) when is_map(map) do
     get_context()
     |> set_context(@tags_key, map)
   end
 
+  @doc """
+  Merges new fields into the `:request` context, specific to the current
+  process.
+
+  This is used to set metadata that identifies the request associated with a
+  specific instance of an error.
+
+  ## Example
+
+      iex(1)> Sentry.Context.set_http_context(%{id: 123})
+      nil
+      iex(2)> Sentry.Context.set_http_context(%{url: "www.example.com"})
+      %{request: %{id: 123}}
+      iex(3)> Sentry.Context.get_all()
+      %{
+          breadcrumbs: [],
+          extra: %{},
+          request: %{id: 123, url: "www.example.com"},
+          tags: %{},
+          user: %{}
+      }
+  """
+  @spec set_http_context(map()) :: nil | map()
   def set_http_context(map) when is_map(map) do
     get_context()
     |> set_context(@request_key, map)
   end
 
+  @doc """
+  Clears all existing context for the current process.
+
+  ## Example
+
+      iex> Sentry.Context.set_tags_context(%{id: 123})
+      nil
+      iex> Sentry.Context.clear_all()
+      %{tags: %{id: 123}}
+      iex> Sentry.Context.get_all()
+      %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}}
+  """
   def clear_all do
     Process.delete(@process_dictionary_key)
   end
@@ -68,8 +197,52 @@ defmodule Sentry.Context do
     Process.get(@process_dictionary_key) || %{}
   end
 
+  @doc """
+  Adds a new breadcrumb to the `:breadcrumb` context, specific to the current
+  process.
+
+  Breadcrumbs are used to record a series of events that led to a specific
+  instance of an error. Breadcrumbs can contain arbitrary key data to assist in
+  understanding what happened before an error occurred.
+
+  ## Example
+
+      iex> Sentry.Context.add_breadcrumb(message: "first_event")
+      nil
+      iex> Sentry.Context.add_breadcrumb(%{message: "second_event", type: "auth"})
+      %{breadcrumbs: [%{:message => "first_event", "timestamp" => 1562007480}]}
+      iex> Sentry.Context.add_breadcrumb(%{message: "response"})
+      %{
+          breadcrumbs: [
+                %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
+                %{:message => "first_event", "timestamp" => 1562007480}
+              ]
+      }
+      iex> Sentry.Context.get_all()
+      %{
+          breadcrumbs: [
+                %{:message => "first_event", "timestamp" => 1562007480},
+                %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
+                %{:message => "response", "timestamp" => 1562007517}
+              ],
+          extra: %{},
+          request: %{},
+          tags: %{},
+          user: %{}
+      }
+  """
+  @spec add_breadcrumb(keyword() | map()) :: nil | map()
   def add_breadcrumb(list) when is_list(list) do
-    add_breadcrumb(Enum.into(list, %{}))
+    if Keyword.keyword?(list) do
+      list
+      |> Enum.into(%{})
+      |> add_breadcrumb
+    else
+      raise ArgumentError, """
+      Sentry.Context.add_breadcrumb/1 only accepts keyword lists or maps.
+      Received a non-keyword list.
+      """
+    end
   end
 
   def add_breadcrumb(map) when is_map(map) do
@@ -92,6 +265,16 @@ defmodule Sentry.Context do
     Process.put(@process_dictionary_key, new_context)
   end
 
+  @doc """
+  Returns the keys used to store context in the current Process's process
+  dictionary.
+
+  ## Example
+
+      iex> Sentry.Context.context_keys()
+      [:breadcrumbs, :tags, :user, :extra]
+  """
+  @spec context_keys() :: list(atom())
   def context_keys do
     [@breadcrumbs_key, @tags_key, @user_key, @extra_key]
   end
