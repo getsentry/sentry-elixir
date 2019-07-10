@@ -149,6 +149,38 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "only sends one error when a Plug process crashes" do
+    Code.compile_string("""
+      defmodule SentryApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
+    bypass = Bypass.open()
+    pid = self()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    {:ok, _plug_pid} = Plug.Cowboy.http(SentryApp, [], port: 8003)
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      _json = Jason.decode!(body)
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      assert_receive "API called"
+      refute_receive "API called"
+    end)
+  end
+
   if :erlang.system_info(:otp_release) >= '21' do
     test "includes Logger.metadata when enabled if the key and value are safely JSON-encodable" do
       Logger.configure_backend(Sentry.LoggerBackend, include_logger_metadata: true)

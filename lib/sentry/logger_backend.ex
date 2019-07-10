@@ -36,10 +36,13 @@ defmodule Sentry.LoggerBackend do
       pairs with with binary, atom or number values from `Logger.metadata/0`
       and include that dictionary under the `:logger_metadata` key in an
       event's `:extra` metadata.  This option defaults to `false`.
+    * `:ignore_plug` - Enabling this option will ignore any events that
+      appear to be from a Plug process crashing.  This is to prevent
+      duplicate errors being reported to Sentry alongside `Sentry.Plug`.
   """
   @behaviour :gen_event
 
-  defstruct level: nil, include_logger_metadata: false
+  defstruct level: nil, include_logger_metadata: false, ignore_plug: true
 
   def init(__MODULE__) do
     config = Application.get_env(:logger, __MODULE__, [])
@@ -69,7 +72,7 @@ defmodule Sentry.LoggerBackend do
   end
 
   def handle_event({_level, _gl, {Logger, _msg, _ts, meta}}, state) do
-    %{include_logger_metadata: include_logger_metadata} = state
+    %{include_logger_metadata: include_logger_metadata, ignore_plug: ignore_plug} = state
 
     opts =
       if include_logger_metadata do
@@ -84,12 +87,19 @@ defmodule Sentry.LoggerBackend do
 
     case Keyword.get(meta, :crash_reason) do
       {reason, stacktrace} ->
-        opts =
-          opts
-          |> Keyword.put(:event_source, :logger)
-          |> Keyword.put(:stacktrace, stacktrace)
+        if ignore_plug &&
+             Enum.any?(stacktrace, fn {module, function, arity, _file_line} ->
+               match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2})
+             end) do
+          :ok
+        else
+          opts =
+            opts
+            |> Keyword.put(:event_source, :logger)
+            |> Keyword.put(:stacktrace, stacktrace)
 
-        Sentry.capture_exception(reason, opts)
+          Sentry.capture_exception(reason, opts)
+        end
 
       reason when is_atom(reason) and not is_nil(reason) ->
         Sentry.capture_exception(reason, [{:event_source, :logger} | opts])
@@ -122,9 +132,19 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp init(config, %__MODULE__{} = state) do
-    level = Keyword.get(config, :level)
-    include_logger_metadata = Keyword.get(config, :include_logger_metadata)
-    %{state | level: level, include_logger_metadata: include_logger_metadata}
+    level = Keyword.get(config, :level, state.level)
+
+    include_logger_metadata =
+      Keyword.get(config, :include_logger_metadata, state.include_logger_metadata)
+
+    ignore_plug = Keyword.get(config, :ignore_plug, state.ignore_plug)
+
+    %{
+      state
+      | level: level,
+        include_logger_metadata: include_logger_metadata,
+        ignore_plug: ignore_plug
+    }
   end
 
   defp build_logger_metadata(meta) do
