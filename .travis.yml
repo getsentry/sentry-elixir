@@ -2,17 +2,21 @@ language: elixir
 elixir:
   - 1.7
   - 1.8
+  - 1.9
 otp_release:
   - 20.3
   - 21.3
+  - 22.0
 env:
   - STRICT=true
   - STRICT=false
 matrix:
   exclude:
-    - otp_release: 20.3
+    - elixir: 1.7
       env: STRICT=true
-    - otp_release: 21.3
+    - elixir: 1.8
+      env: STRICT=true
+    - elixir: 1.9
       env: STRICT=false
 notifications:
   email:
