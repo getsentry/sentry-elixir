@@ -63,7 +63,11 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 500, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(
+      :sentry,
+      client: Sentry.Client,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
+    )
 
     assert capture_log(fn ->
              assert capture_io(fn ->
@@ -78,7 +82,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
                     hackney_opts: [recv_timeout: 50]
 
                     Sending test event...
-                    Error sending event!
+                    Error sending event!: "Received 500 from Sentry server: "
                     """
            end) =~ "Failed to send Sentry event"
   end

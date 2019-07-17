@@ -58,8 +58,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
         {:ok, id} ->
           Mix.shell().info("Test event sent!  Event ID: #{id}")
 
-        :error ->
-          Mix.shell().info("Error sending event!")
+        {:error, error} ->
+          Mix.shell().info("Error sending event!: #{inspect(error)}")
 
         :excluded ->
           Mix.shell().info("No test event was sent because the event was excluded by a filter")

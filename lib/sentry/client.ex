@@ -40,10 +40,11 @@ defmodule Sentry.Client do
 
   require Logger
 
-  @type send_event_result :: {:ok, Task.t() | String.t() | pid()} | :error | :unsampled
+  @type send_event_result ::
+          {:ok, Task.t() | String.t() | pid()} | {:error, any()} | :unsampled
   @type dsn :: {String.t(), String.t(), String.t()} | :error
   @sentry_version 5
-  @max_attempts 4
+  @max_attempts Application.get_env(:sentry, :max_client_attempts, 4)
   @hackney_pool_name :sentry_pool
 
   quote do
@@ -84,7 +85,7 @@ defmodule Sentry.Client do
 
       {:error, error} ->
         log_api_error("Unable to encode Sentry error - #{inspect(error)}")
-        :error
+        {:error, error}
     end
   end
 
@@ -128,13 +129,15 @@ defmodule Sentry.Client do
     end
   end
 
-  defp try_request(url, headers, event_body_tuple, current_attempt \\ 1)
+  defp try_request(url, headers, {event, body}) do
+    do_try_request(url, headers, {event, body, nil}, 1)
+  end
 
-  defp try_request(_, _, _, current_attempt)
+  defp do_try_request(_, _, {_event, _body, {:error, error}}, current_attempt)
        when current_attempt > @max_attempts,
-       do: :error
+       do: {:error, error}
 
-  defp try_request(url, headers, {event, body}, current_attempt) do
+  defp do_try_request(url, headers, {event, body, _error_tuple}, current_attempt) do
     case request(url, headers, body) do
       {:ok, id} ->
         {:ok, id}
@@ -148,7 +151,7 @@ defmodule Sentry.Client do
 
         if current_attempt < @max_attempts, do: sleep(current_attempt)
 
-        try_request(url, headers, {event, body}, current_attempt + 1)
+        do_try_request(url, headers, {event, body, {:error, error}}, current_attempt + 1)
     end
   end
 
@@ -237,7 +240,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec maybe_call_after_send_event(send_event_result, Event.t()) :: Event.t()
+  @spec maybe_call_after_send_event(send_event_result, Event.t()) :: Event.t() | {:error, any()}
   def maybe_call_after_send_event(result, event) do
     case Config.after_send_event() do
       function when is_function(function, 2) ->

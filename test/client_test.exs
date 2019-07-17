@@ -114,7 +114,7 @@ defmodule Sentry.ClientTest do
     unencodable_event = %Sentry.Event{message: "error", level: {:a, :b}}
 
     capture_log(fn ->
-      assert :error = Sentry.Client.send_event(unencodable_event)
+      assert {:error, _} = Sentry.Client.send_event(unencodable_event)
     end)
   end
 
@@ -234,6 +234,37 @@ defmodule Sentry.ClientTest do
                  {:ok, task} = Sentry.capture_exception(e, result: :async)
                  Task.await(task)
                end) =~ "AFTER_SEND_EVENT"
+    end
+  end
+
+  test "calls after_send_event with error details if HTTP request fails" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
+
+      Plug.Conn.put_resp_header(conn, "X-Sentry-Error", "Too Many Requests")
+      |> Plug.Conn.resp(429, ~s<{"error": "too many requests"}>)
+    end)
+
+    modify_env(
+      :sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      after_send_event: fn _e, r ->
+        assert {:error, error} = r
+        assert error =~ "429"
+        assert error =~ "Too Many Requests"
+      end,
+      client: Sentry.Client
+    )
+
+    try do
+      Event.not_a_function()
+    rescue
+      e ->
+        assert capture_log(fn ->
+                 Sentry.capture_exception(e, result: :sync)
+               end)
     end
   end
 
