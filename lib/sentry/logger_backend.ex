@@ -89,7 +89,8 @@ defmodule Sentry.LoggerBackend do
       {reason, stacktrace} ->
         if ignore_plug &&
              Enum.any?(stacktrace, fn {module, function, arity, _file_line} ->
-               match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2})
+               match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2}) ||
+                 match?({^module, ^function, ^arity}, {Phoenix.Endpoint.Cowboy2Handler, :init, 2})
              end) do
           :ok
         else
