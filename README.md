@@ -223,12 +223,12 @@ config :sentry,
 
 Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
 
-The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.compile sentry --force`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below would allow one to run `mix sentry_recompile` which will force recompilation of Sentry so it has the newest source and then compile the project:
+The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.compile sentry --force`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below allows one to run `mix sentry_recompile` which will compile any uncompiled or changed parts of the application, and then force recompilation of Sentry so it has the newest source:
 
 ```elixir
 # mix.exs
 defp aliases do
-  [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+  [sentry_recompile: ["compile", "deps.compile sentry --force"]]
 end
 ```
 
