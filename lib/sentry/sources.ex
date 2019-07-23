@@ -44,7 +44,7 @@ defmodule Sentry.Sources do
   it has the newest source and then compile the project:
 
       defp aliases do
-        [sentry_recompile: ["deps.compile sentry --force", "compile"]]
+        [sentry_recompile: ["compile", "deps.compile sentry --force"]]
       end
 
   This is an important to note especially when building for production. If your
