@@ -20,6 +20,7 @@ defmodule Sentry.Event do
             server_name: nil,
             environment: nil,
             exception: nil,
+            original_exception: nil,
             release: nil,
             stacktrace: %{
               frames: []
@@ -29,7 +30,8 @@ defmodule Sentry.Event do
             user: %{},
             breadcrumbs: [],
             fingerprint: [],
-            modules: %{}
+            modules: %{},
+            event_source: nil
 
   @type t :: %__MODULE__{}
 
@@ -47,7 +49,8 @@ defmodule Sentry.Event do
   @doc """
   Creates an Event struct out of context collected and options
   ## Options
-    * `:exception` - expection
+    * `:exception` - Sentry-formatted exception
+    * `:original_exception` - Original exception
     * `:message` - message
     * `:stacktrace` - a list of Exception.stacktrace()
     * `:extra` - map of extra context
@@ -55,6 +58,7 @@ defmodule Sentry.Event do
     * `:tags` - map of tags context
     * `:request` - map of request context
     * `:breadcrumbs` - list of breadcrumbs
+    * `:event_source` - the source of the event
     * `:level` - error level
     * `:fingerprint` -  list of the fingerprint for grouping this event
   """
@@ -69,8 +73,11 @@ defmodule Sentry.Event do
     } = Sentry.Context.get_all()
 
     exception = Keyword.get(opts, :exception)
+    original_exception = Keyword.get(opts, :original_exception)
 
     message = Keyword.get(opts, :message)
+
+    event_source = Keyword.get(opts, :event_source)
 
     stacktrace =
       Keyword.get(opts, :stacktrace, [])
@@ -113,6 +120,7 @@ defmodule Sentry.Event do
       environment: env,
       server_name: server_name,
       exception: exception,
+      original_exception: original_exception,
       stacktrace: %{
         frames: stacktrace_to_frames(stacktrace)
       },
@@ -123,7 +131,8 @@ defmodule Sentry.Event do
       breadcrumbs: breadcrumbs,
       request: request,
       fingerprint: fingerprint,
-      modules: Util.mix_deps_versions(@deps)
+      modules: Util.mix_deps_versions(@deps),
+      event_source: event_source
     }
     |> add_metadata()
   end
@@ -163,7 +172,7 @@ defmodule Sentry.Event do
       end
 
     module = Keyword.get(opts, :module)
-    exception = [%{type: type, value: value, module: module}]
+    transformed_exception = [%{type: type, value: value, module: module}]
 
     message =
       :error
@@ -172,8 +181,9 @@ defmodule Sentry.Event do
       |> String.trim()
 
     opts
-    |> Keyword.put(:exception, exception)
+    |> Keyword.put(:exception, transformed_exception)
     |> Keyword.put(:message, message)
+    |> Keyword.put(:original_exception, exception)
     |> create_event()
   end
 

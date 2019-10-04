@@ -117,9 +117,9 @@ defmodule Sentry do
   @spec capture_exception(Exception.t() | atom() | {atom(), atom()}, Keyword.t()) :: send_result
   def capture_exception(exception, opts \\ []) do
     filter_module = Config.filter()
-    {source, opts} = Keyword.pop(opts, :event_source)
+    event_source = Keyword.get(opts, :event_source)
 
-    if filter_module.exclude_exception?(exception, source) do
+    if filter_module.exclude_exception?(exception, event_source) do
       :excluded
     else
       exception

@@ -40,7 +40,8 @@ defmodule Sentry.Client do
 
   require Logger
 
-  @type send_event_result :: {:ok, Task.t() | String.t() | pid()} | :error | :unsampled
+  @type send_event_result ::
+          {:ok, Task.t() | String.t() | pid()} | :error | :unsampled | :excluded
   @type dsn :: {String.t(), String.t(), String.t()} | :error
   @sentry_version 5
   @max_attempts 4
@@ -66,10 +67,15 @@ defmodule Sentry.Client do
 
     event = maybe_call_before_send_event(event)
 
-    if sample_event?(sample_rate) do
-      encode_and_send(event, result)
-    else
-      :unsampled
+    case {event, sample_event?(sample_rate)} do
+      {false, _} ->
+        :excluded
+
+      {%Event{}, false} ->
+        :unsampled
+
+      {%Event{}, true} ->
+        encode_and_send(event, result)
     end
   end
 
@@ -257,14 +263,14 @@ defmodule Sentry.Client do
     result
   end
 
-  @spec maybe_call_before_send_event(Event.t()) :: Event.t()
+  @spec maybe_call_before_send_event(Event.t()) :: Event.t() | false
   def maybe_call_before_send_event(event) do
     case Config.before_send_event() do
       function when is_function(function, 1) ->
-        function.(event)
+        function.(event) || false
 
       {module, function} ->
-        apply(module, function, [event])
+        apply(module, function, [event]) || false
 
       nil ->
         event
