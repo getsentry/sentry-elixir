@@ -182,6 +182,23 @@ defmodule Sentry.ClientTest do
     end
   end
 
+  test "falsey before_send_event does not send event" do
+    modify_env(
+      :sentry,
+      before_send_event: {Sentry.BeforeSendEventTest, :before_send_event_ignore_arithmetic},
+      client: Sentry.Client
+    )
+
+    try do
+      :random.uniform() + "1"
+    rescue
+      e ->
+        capture_log(fn ->
+          assert Sentry.capture_exception(e, result: :sync) == :excluded
+        end)
+    end
+  end
+
   test "calls anonymous after_send_event synchronously" do
     bypass = Bypass.open()
 
