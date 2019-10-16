@@ -43,6 +43,7 @@ defmodule Sentry.Client do
   @type send_event_result ::
           {:ok, Task.t() | String.t() | pid()} | :error | :unsampled | :excluded
   @type dsn :: {String.t(), String.t(), String.t()} | :error
+  @type result :: :sync | :none | :async
   @sentry_version 5
   @max_attempts 4
   @hackney_pool_name :sentry_pool
@@ -79,6 +80,7 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec encode_and_send(Event.t(), result()) :: send_event_result()
   defp encode_and_send(event, result) do
     json_library = Config.json_library()
 
@@ -94,6 +96,7 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | :error
   defp do_send_event(event, body, :async) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} ->
@@ -108,6 +111,7 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec do_send_event(Event.t(), map(), :sync) :: {:ok, String.t()} | :error
   defp do_send_event(event, body, :sync) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} ->
@@ -119,6 +123,8 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec do_send_event(Event.t(), map(), :none) ::
+          {:ok, DynamicSupervisor.on_start_child()} | :error
   defp do_send_event(event, body, :none) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} ->
@@ -134,6 +140,12 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec try_request(
+          String.t(),
+          list({String.t(), String.t()}),
+          {Event.t(), String.t()},
+          pos_integer()
+        ) :: {:ok, String.t()} | :error
   defp try_request(url, headers, event_body_tuple, current_attempt \\ 1)
 
   defp try_request(_, _, _, current_attempt)
@@ -212,6 +224,7 @@ defmodule Sentry.Client do
     "Sentry " <> query
   end
 
+  @spec authorization_headers(String.t(), String.t()) :: list({String.t(), String.t()})
   defp authorization_headers(public_key, secret_key) do
     [
       {"User-Agent", @sentry_client},
@@ -351,11 +364,13 @@ defmodule Sentry.Client do
     )
   end
 
+  @spec sleep(pos_integer()) :: :ok
   defp sleep(1), do: :timer.sleep(2000)
   defp sleep(2), do: :timer.sleep(4000)
   defp sleep(3), do: :timer.sleep(8000)
   defp sleep(_), do: :timer.sleep(8000)
 
+  @spec sample_event?(number()) :: boolean()
   defp sample_event?(1), do: true
   defp sample_event?(1.0), do: true
   defp sample_event?(0), do: false

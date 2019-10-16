@@ -33,7 +33,31 @@ defmodule Sentry.Event do
             modules: %{},
             event_source: nil
 
-  @type t :: %__MODULE__{}
+  @type sentry_exception :: %{type: String.t(), value: String.t(), module: any()}
+  @type t :: %__MODULE__{
+          event_id: String.t() | nil,
+          culprit: String.t() | nil,
+          timestamp: String.t() | nil,
+          message: String.t() | nil,
+          tags: map(),
+          level: String.t(),
+          platform: String.t(),
+          server_name: any(),
+          environment: any(),
+          exception: [sentry_exception()],
+          original_exception: Exception.t() | nil,
+          release: any(),
+          stacktrace: %{
+            frames: [map()]
+          },
+          request: map(),
+          extra: map(),
+          user: map(),
+          breadcrumbs: list(),
+          fingerprint: list(),
+          modules: map(),
+          event_source: any()
+        }
 
   alias Sentry.{Config, Event, Util}
   @source_code_context_enabled Config.enable_source_code_context()
