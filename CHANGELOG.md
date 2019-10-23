@@ -2,6 +2,17 @@
 
 ## master
 
+## 7.2.0 (2019-10-23)
+
+* Enhancements
+  * Allow filtering of Events using `before_send_event` (#364)
+
+* Bug Fixes
+  * Remove newline from Logger for API error (#351)
+  * Add docs for Sentry.Context (#352)
+  * Avoid error duplication for Plug errors (#355)
+  * Fix issue in Sentry.Sources docs around recompilation (#357)
+
 ## 7.1.0 (2019-06-11)
 
 * Enhancements
