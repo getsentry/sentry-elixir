@@ -18,7 +18,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry, []},
-      extra_applications: [:logger]
+      extra_applications: extra_applications(Mix.env())
     ]
   end
 
@@ -47,4 +47,12 @@ defmodule Sentry.Mixfile do
   end
 
   defp elixirc_paths(_), do: ["lib"]
+
+  defp extra_applications(:test) do
+    [:telemetry, :logger]
+  end
+
+  defp extra_applications(_) do
+    [:logger]
+  end
 end
