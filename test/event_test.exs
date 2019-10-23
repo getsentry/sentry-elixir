@@ -239,12 +239,10 @@ defmodule Sentry.EventTest do
       |> Enum.sort()
 
     assert modules == [
-             :bunt,
              :bypass,
              :certifi,
              :cowboy,
              :cowlib,
-             :credo,
              :hackney,
              :idna,
              :jason,
@@ -259,6 +257,7 @@ defmodule Sentry.EventTest do
              :plug_crypto,
              :ranch,
              :ssl_verify_fun,
+             :telemetry,
              :unicode_util_compat
            ]
   end
