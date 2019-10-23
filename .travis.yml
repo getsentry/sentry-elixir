@@ -6,7 +6,7 @@ elixir:
 otp_release:
   - 20.3
   - 21.3
-  - 22.0
+  - 22.1
 env:
   - STRICT=true
   - STRICT=false
