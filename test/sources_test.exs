@@ -45,7 +45,7 @@ defmodule Sentry.SourcesTest do
 
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-    assert_raise(RuntimeError, "Error", fn ->
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
       |> SourcesApp.call([])
     end)

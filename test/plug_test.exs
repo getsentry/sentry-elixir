@@ -44,7 +44,7 @@ defmodule Sentry.PlugTest do
 
     conn = conn(:post, "/error_route", %{})
 
-    assert_raise(RuntimeError, "Error", fn ->
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       OverrideApp.call(conn, [])
     end)
 
@@ -75,7 +75,7 @@ defmodule Sentry.PlugTest do
 
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-    assert_raise(RuntimeError, "Error", fn ->
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:post, "/error_route", %{
         "secret" => "world",
         "password" => "test",
@@ -120,7 +120,7 @@ defmodule Sentry.PlugTest do
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     upload = %Plug.Upload{path: "test/fixtures/my_image.png", filename: "my_image.png"}
 
-    assert_raise(RuntimeError, "Error", fn ->
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:post, "/error_route", %{"image" => upload, "password" => "my_password"})
       |> put_req_cookie("cookie_key", "cookie_value")
       |> put_req_header("accept-language", "en-US")
@@ -154,7 +154,7 @@ defmodule Sentry.PlugTest do
 
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-    assert_raise(RuntimeError, "Error", fn ->
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
       |> update_req_cookie("secret", "secretvalue")
       |> update_req_cookie("regular", "value")
