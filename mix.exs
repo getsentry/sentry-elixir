@@ -18,7 +18,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry, []},
-      applications: [:hackney, :logger]
+      extra_applications: [:logger]
     ]
   end
 
@@ -30,7 +30,7 @@ defmodule Sentry.Mixfile do
       {:plug_cowboy, "~> 1.0 or ~> 2.0", optional: true},
       {:phoenix, "~> 1.3", optional: true},
       {:dialyxir, "> 0.0.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.20.0", only: :dev},
+      {:ex_doc, "~> 0.21.0", only: :dev},
       {:bypass, "~> 1.0", only: [:test]}
     ]
   end
