@@ -38,6 +38,15 @@ use Plug.ErrorHandler
 use Sentry.Plug
 ```
 
+In phoenix, this will add Sentry to all of your environments. If you want to enable Sentry in an specific environment, you can do it this way:
+
+```elixir
+if Mix.env() == :prod do
+  use Sentry.Plug
+end
+```
+
+
 If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
 
 ```elixir
