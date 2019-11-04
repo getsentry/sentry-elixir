@@ -5,7 +5,7 @@ defmodule Sentry.Config do
   Sentry supports loading config at runtime, via `{:system, "SYSTEM_ENV_KEY"}` tuples, where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system environment at runtime.
   """
 
-  @default_included_environments [:dev, :test, :prod]
+  @default_included_environments [:prod]
   @default_environment_name Mix.env()
   @default_max_hackney_connections 50
   @default_hackney_timeout 5000
