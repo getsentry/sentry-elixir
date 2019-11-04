@@ -33,16 +33,19 @@ end
 
 In your Plug.Router or Phoenix.Router, add the following lines:
 
-```elixir
-use Plug.ErrorHandler
-use Sentry.Plug
+```diff
+ # lib/my_app_web/router.ex
+ defmodule MyAppWeb.Router do
+   use MyAppWeb, :router
++  use Plug.ErrorHandler
++  use Sentry.Plug
 ```
 
 If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
 
-```elixir
-use Phoenix.Endpoint, otp_app: :my_app
-use Sentry.Phoenix.Endpoint
+```diff
+ use Phoenix.Endpoint, otp_app: :my_app
++use Sentry.Phoenix.Endpoint
 ```
 
 More information on why this may be necessary can be found here: https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791
@@ -53,19 +56,21 @@ This library comes with an extension to capture all error messages that the Plug
 
 To set this up, add `{:ok, _} = Logger.add_backend(Sentry.LoggerBackend)` to your application's start function. Example:
 
-```elixir
-def start(_type, _opts) do
-  children = [
-    supervisor(MyApp.Repo, []),
-    supervisor(MyAppWeb.Endpoint, [])
-  ]
+```diff
+ # lib/my_app/application.ex
+ # ...
+ def start(_type, _opts) do
+   children = [
+     supervisor(MyApp.Repo, []),
+     supervisor(MyAppWeb.Endpoint, [])
+   ]
 
-  opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
 
-  {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
++ {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
-  Supervisor.start_link(children, opts)
-end
+   Supervisor.start_link(children, opts)
+ end
 ```
 
 The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
@@ -96,6 +101,25 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 
 ## Configuration
 
+Sentry has a range of configuration options, but most applications will have a configuration that looks like the following:
+
+```elixir
+# config/config.exs
+config :sentry,
+  dsn: "https://public_key@app.getsentry.com/1",
+  environment_name: Mix.env(),
+  included_environments: [:prod],
+  enable_source_code_context: true,
+  root_source_code_path: File.cwd!()
+```
+
+The `environment_name` and `included_environments` work together to determine
+if and when Sentry should send events to the server. If the currently configured
+`:environment_name` is in the configured list of `:included_environments`, the
+event will be sent.
+
+The full range of options is the following:
+
 | Key           | Required         | Default      | Notes |
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
@@ -121,53 +145,6 @@ For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
 | `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
-
-An example production config might look like this:
-
-```elixir
-config :sentry,
-  dsn: "https://public_key@app.getsentry.com/1",
-  environment_name: :prod,
-  included_environments: [:prod],
-  enable_source_code_context: true,
-  root_source_code_path: File.cwd!(),
-  tags: %{
-    env: "production"
-  },
-  hackney_opts: [pool: :my_pool],
-  in_app_module_whitelist: [MyApp]
-```
-
-The `environment_name` and `included_environments` work together to determine
-if and when Sentry should record exceptions. The `environment_name` is the
-name of the current environment. In the example above, we have explicitly set
-the environment to `:prod` which works well if you are inside an environment
-specific configuration like `config/prod.exs`.
-
-Alternatively, you could use Mix.env in your general configuration file:
-
-```elixir
-config :sentry, dsn: "https://public_key@app.getsentry.com/1",
-  included_environments: [:prod],
-  environment_name: Mix.env
-```
-
-You can even rely on more custom determinations of the environment name. It's
-not uncommon for most applications to have a "staging" environment. In order
-to handle this without adding an additional Mix environment, you can set an
-environment variable that determines the release level.
-
-```elixir
-config :sentry, dsn: "https://public_key@app.getsentry.com/1",
-  included_environments: ~w(production staging),
-  environment_name: System.get_env("RELEASE_LEVEL") || "development"
-```
-
-In this example, we are getting the environment name from the `RELEASE_LEVEL`
-environment variable. If that variable does not exist, we default to `"development"`.
-Now, on our servers, we can set the environment variable appropriately. On
-our local development machines, exceptions will never be sent, because the
-default value is not in the list of `included_environments`.
 
 Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
 
