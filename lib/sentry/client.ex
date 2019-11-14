@@ -41,8 +41,8 @@ defmodule Sentry.Client do
   require Logger
 
   @type send_event_result ::
-          {:ok, Task.t() | String.t() | pid()} | :error | :unsampled | :excluded
-  @type dsn :: {String.t(), String.t(), String.t()} | :error
+          {:ok, Task.t() | String.t() | pid()} | {:error, any()} | :unsampled | :excluded
+  @type dsn :: {String.t(), String.t(), String.t()}
   @type result :: :sync | :none | :async
   @sentry_version 5
   @max_attempts 4
@@ -91,43 +91,43 @@ defmodule Sentry.Client do
         do_send_event(event, body, result)
 
       {:error, error} ->
-        log_api_error("Unable to encode Sentry error - #{inspect(error)}")
-        :error
+        # log_api_error("Unable to encode Sentry error - #{inspect(error)}")
+        {:error, {:invalid_json, error}}
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | :error
+  @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | {:error, any()}
   defp do_send_event(event, body, :async) do
     case get_headers_and_endpoint() do
-      {endpoint, auth_headers} ->
+      {endpoint, auth_headers} when is_binary(endpoint) ->
         {:ok,
          Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
            try_request(endpoint, auth_headers, {event, body})
            |> maybe_call_after_send_event(event)
          end)}
 
-      _ ->
-        :error
+      {:error, :invalid_dsn} ->
+        {:error, :invalid_dsn}
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :sync) :: {:ok, String.t()} | :error
+  @spec do_send_event(Event.t(), map(), :sync) :: {:ok, String.t()} | {:error, any()}
   defp do_send_event(event, body, :sync) do
     case get_headers_and_endpoint() do
-      {endpoint, auth_headers} ->
+      {endpoint, auth_headers} when is_binary(endpoint) ->
         try_request(endpoint, auth_headers, {event, body})
         |> maybe_call_after_send_event(event)
 
-      _ ->
-        :error
+      {:error, :invalid_dsn} ->
+        {:error, :invalid_dsn}
     end
   end
 
   @spec do_send_event(Event.t(), map(), :none) ::
-          {:ok, DynamicSupervisor.on_start_child()} | :error
+          {:ok, DynamicSupervisor.on_start_child()} | {:error, any()}
   defp do_send_event(event, body, :none) do
     case get_headers_and_endpoint() do
-      {endpoint, auth_headers} ->
+      {endpoint, auth_headers} when is_binary(endpoint) ->
         Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
           try_request(endpoint, auth_headers, {event, body})
           |> maybe_call_after_send_event(event)
@@ -135,8 +135,8 @@ defmodule Sentry.Client do
 
         {:ok, ""}
 
-      _ ->
-        :error
+      {:error, :invalid_dsn} ->
+        {:error, :invalid_dsn}
     end
   end
 
@@ -144,13 +144,13 @@ defmodule Sentry.Client do
           String.t(),
           list({String.t(), String.t()}),
           {Event.t(), String.t()},
-          pos_integer()
-        ) :: {:ok, String.t()} | :error
-  defp try_request(url, headers, event_body_tuple, current_attempt \\ 1)
+          {pos_integer(), any()}
+        ) :: {:ok, String.t()} | {:error, {:request_failure, any()}}
+  defp try_request(url, headers, event_body_tuple, current_attempt_and_error \\ {1, nil})
 
-  defp try_request(_, _, _, current_attempt)
+  defp try_request(_url, _headers, {_event, _body}, {current_attempt, last_error})
        when current_attempt > @max_attempts,
-       do: :error
+       do: {:error, {:request_failure, last_error}}
 
   defp try_request(url, headers, {event, body}, current_attempt) do
     case request(url, headers, body) do
@@ -158,15 +158,15 @@ defmodule Sentry.Client do
         {:ok, id}
 
       {:error, error} ->
-        if(current_attempt == 1) do
-          log_api_error("Event ID: #{event.event_id} - #{inspect(error)} - #{body}")
-        else
-          log_api_error("Event ID: #{event.event_id} - #{inspect(error)}")
-        end
+        # if(current_attempt == 1) do
+        #   log_api_error("Event ID: #{event.event_id} - #{inspect(error)} - #{body}")
+        # else
+        #   log_api_error("Event ID: #{event.event_id} - #{inspect(error)}")
+        # end
 
         if current_attempt < @max_attempts, do: sleep(current_attempt)
 
-        try_request(url, headers, {event, body}, current_attempt + 1)
+        try_request(url, headers, {event, body}, {current_attempt + 1, error})
     end
   end
 
@@ -237,7 +237,7 @@ defmodule Sentry.Client do
 
   {PROTOCOL}://{PUBLIC_KEY}[:{SECRET_KEY}]@{HOST}/{PATH}{PROJECT_ID}
   """
-  @spec get_dsn :: dsn
+  @spec get_dsn :: dsn | {:error, :invalid_dsn}
   def get_dsn do
     dsn = Config.dsn()
 
@@ -251,8 +251,8 @@ defmodule Sentry.Client do
       {endpoint, public_key, secret_key}
     else
       _ ->
-        log_api_error("Cannot send event because of invalid DSN")
-        :error
+        # log_api_error("Cannot send event because of invalid DSN")
+        {:error, :invalid_dsn}
     end
   end
 
@@ -345,23 +345,24 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec get_headers_and_endpoint :: {String.t(), String.t(), String.t()} | {:error, :invalid_dsn}
   defp get_headers_and_endpoint do
     case get_dsn() do
       {endpoint, public_key, secret_key} ->
         {endpoint, authorization_headers(public_key, secret_key)}
 
-      _ ->
-        :error
+      {:error, :invalid_dsn} ->
+        {:error, :invalid_dsn}
     end
   end
 
   defp log_api_error(body) do
-    Logger.log(
-      Config.log_level(),
-      fn ->
-        ["Failed to send Sentry event.", inspect(body)]
-      end
-    )
+    # Logger.log(
+    #   Config.log_level(),
+    #   fn ->
+    #     ["Failed to send Sentry event.", inspect(body)]
+    #   end
+    # )
   end
 
   @spec sleep(pos_integer()) :: :ok
