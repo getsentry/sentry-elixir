@@ -26,7 +26,7 @@ defmodule Sentry.TestClient do
               end
             )
 
-            :error
+            {:error, error}
         end
 
       {:error, error} ->
@@ -35,7 +35,7 @@ defmodule Sentry.TestClient do
           "Error sending in Sentry.TestClient: #{inspect(error)}"
         )
 
-        :error
+        {:error, error}
     end
   end
 end

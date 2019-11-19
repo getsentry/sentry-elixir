@@ -55,7 +55,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            """
   end
 
-  test "handles :error when Sentry server is failing" do
+  test "handles error when Sentry server is failing" do
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -78,7 +78,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
                     hackney_opts: [recv_timeout: 50]
 
                     Sending test event...
-                    Error sending event!
+                    Error sending event: "Received 500 from Sentry server: "
                     """
            end) =~ "Failed to send Sentry event"
   end

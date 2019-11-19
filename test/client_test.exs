@@ -44,41 +44,31 @@ defmodule Sentry.ClientTest do
   test "errors on bad public keys" do
     modify_env(:sentry, dsn: "https://app.getsentry.com/1")
 
-    capture_log(fn ->
-      assert :error = Sentry.Client.get_dsn()
-    end)
+    assert {:error, :invalid_dsn} = Sentry.Client.get_dsn()
   end
 
   test "errors on non-integer project_id" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/Mitchell")
 
-    capture_log(fn ->
-      assert :error = Sentry.Client.get_dsn()
-    end)
+    assert {:error, :invalid_dsn} = Sentry.Client.get_dsn()
   end
 
   test "errors on no project_id" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com")
 
-    capture_log(fn ->
-      assert :error = Sentry.Client.get_dsn()
-    end)
+    assert {:error, :invalid_dsn} = Sentry.Client.get_dsn()
   end
 
   test "errors on nil dsn" do
     modify_env(:sentry, dsn: nil)
 
-    capture_log(fn ->
-      assert :error = Sentry.Client.get_dsn()
-    end)
+    assert {:error, :invalid_dsn} = Sentry.Client.get_dsn()
   end
 
   test "errors on atom dsn" do
     modify_env(:sentry, dsn: :error)
 
-    capture_log(fn ->
-      assert :error = Sentry.Client.get_dsn()
-    end)
+    assert {:error, :invalid_dsn} = Sentry.Client.get_dsn()
   end
 
   test "logs api errors" do
@@ -114,7 +104,7 @@ defmodule Sentry.ClientTest do
     unencodable_event = %Sentry.Event{message: "error", level: {:a, :b}}
 
     capture_log(fn ->
-      assert :error = Sentry.Client.send_event(unencodable_event)
+      assert {:error, {:invalid_json, _}} = Sentry.Client.send_event(unencodable_event)
     end)
   end
 
