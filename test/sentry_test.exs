@@ -55,9 +55,9 @@ defmodule SentryTest do
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
-    assert capture_log(fn ->
-             assert :error = Sentry.capture_message("error", [])
-           end) =~ "Failed to send Sentry event"
+    capture_log(fn ->
+      assert {:error, _} = Sentry.capture_message("error", [])
+    end)
 
     Bypass.pass(bypass)
   end
