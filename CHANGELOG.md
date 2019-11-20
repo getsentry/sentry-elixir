@@ -2,6 +2,12 @@
 
 ## master
 
+## 7.2.1 (2019-11-20)
+
+* Bug Fixes
+  * Improve documentation for `Sentry.Client.send_event/2` (#367)
+  * Fix potential Logger deadlock (#372)
+
 ## 7.2.0 (2019-10-23)
 
 * Enhancements
