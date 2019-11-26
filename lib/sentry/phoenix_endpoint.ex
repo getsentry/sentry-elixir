@@ -27,8 +27,8 @@ defmodule Sentry.Phoenix.Endpoint do
         try do
           super(conn, opts)
         catch
-          kind, %Phoenix.Router.NoRouteError{} ->
-            :erlang.raise(kind, %Phoenix.Router.NoRouteError{}, __STACKTRACE__)
+          kind, %Phoenix.Router.NoRouteError{} = reason ->
+            :erlang.raise(kind, reason, __STACKTRACE__)
 
           kind, reason ->
             stacktrace = __STACKTRACE__
