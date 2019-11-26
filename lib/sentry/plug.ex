@@ -97,6 +97,16 @@ if Code.ensure_loaded?(Plug) do
     which Plug.RequestId (and therefore Phoenix) also default to.
 
         use Sentry.Plug, request_id_header: "application-request-id"
+
+    ### Collect User Feedback after Error
+
+    Sentry allows collecting user feedback after they hit an error.
+    Information about it is available [here](https://docs.sentry.io/enriching-error-data/user-feedback).
+    If a Plug request experiences an error that Sentry is reporting, and the request
+    accepts the content-type "text/html" or "*/*", the feedback form will be rendered.
+    The configuration is limited to the defaults at the moment, but it can be enabled with:
+
+        use Sentry.Plug, collect_feedback: [enabled: true]
     """
 
     @default_plug_request_id_header "x-request-id"
@@ -108,6 +118,8 @@ if Code.ensure_loaded?(Plug) do
       cookie_scrubber = Keyword.get(env, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
 
       request_id_header = Keyword.get(env, :request_id_header)
+      collect_feedback = Keyword.get(env, :collect_feedback, [])
+      collect_feedback_enabled = Keyword.get(collect_feedback, :enabled, false)
 
       quote do
         # Ignore 404s for Plug routes
@@ -130,17 +142,62 @@ if Code.ensure_loaded?(Plug) do
             request_id_header: unquote(request_id_header)
           ]
 
+          collect_feedback_enabled = unquote(collect_feedback_enabled)
           request = Sentry.Plug.build_request_interface_data(conn, opts)
           exception = Exception.normalize(kind, reason, stack)
 
-          Sentry.capture_exception(
-            exception,
-            stacktrace: stack,
-            request: request,
-            event_source: :plug,
-            error_type: kind
-          )
+          accept_html =
+            Plug.Conn.get_req_header(conn, "accept")
+            |> Enum.any?(fn header ->
+              String.split(header, ",")
+              |> Enum.any?(&(&1 == "text/html" || &1 == "*/*"))
+            end)
+
+          if accept_html && collect_feedback_enabled do
+            result =
+              Sentry.capture_exception(
+                exception,
+                stacktrace: stack,
+                request: request,
+                event_source: :plug,
+                error_type: kind,
+                result: :sync
+              )
+
+            render_sentry_feedback(conn, result)
+          else
+            Sentry.capture_exception(
+              exception,
+              stacktrace: stack,
+              request: request,
+              event_source: :plug,
+              error_type: kind
+            )
+          end
         end
+
+        defp render_sentry_feedback(conn, {:ok, id}) do
+          html = """
+            <!DOCTYPE HTML>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
+                <script>
+                  Sentry.init({ dsn: '#{Sentry.Config.dsn()}' });
+                  Sentry.showReportDialog({ eventId: '#{id}' })
+                </script>
+              </head>
+              <body>
+              </body>
+            </html>
+          """
+
+          Plug.Conn.put_resp_header(conn, "content-type", "text/html")
+          |> Plug.Conn.send_resp(conn.status, html)
+        end
+
+        defp render_sentry_feedback(_conn, _result), do: nil
 
         defoverridable handle_errors: 2
       end
