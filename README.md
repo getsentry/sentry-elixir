@@ -54,23 +54,11 @@ More information on why this may be necessary can be found here: https://github.
 
 This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends).
 
-To set this up, add `{:ok, _} = Logger.add_backend(Sentry.LoggerBackend)` to your application's start function. Example:
-
 ```diff
- # lib/my_app/application.ex
- # ...
- def start(_type, _opts) do
-   children = [
-     supervisor(MyApp.Repo, []),
-     supervisor(MyAppWeb.Endpoint, [])
-   ]
+# config/config.exs
 
-   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
-
-+ {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
-
-   Supervisor.start_link(children, opts)
- end
++ config :logger,
++  backends: [:console, Sentry.LoggerBackend]
 ```
 
 The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
