@@ -7,6 +7,9 @@
 * Bug Fixes
   * Improve documentation for `Sentry.Client.send_event/2` (#367)
   * Fix potential Logger deadlock (#372)
+  * Pass the same exception for NoRouteError in `Sentry.Phoenix.Endpoint` (#376)
+  * Handle new MFA for duplicate Plug errors (#377)
+  * Update docs to recommend using application environment config for adding `Sentry.LoggerBackend` (#379)
 
 ## 7.2.0 (2019-10-23)
 
