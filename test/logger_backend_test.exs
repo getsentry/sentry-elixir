@@ -149,6 +149,40 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "GenServer timeout makes call to Sentry API" do
+    self_pid = self()
+    Process.flag(:trap_exit, true)
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+
+      exception_value =
+        List.first(json["exception"])
+        |> Map.fetch!("value")
+
+      assert String.contains?(exception_value, "{:timeout, {GenServer, :call")
+
+      assert conn.request_path == "/api/1/store/"
+      assert conn.method == "POST"
+      send(self_pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    {:ok, pid1} = Sentry.TestGenServer.start_link(self_pid)
+
+    capture_log(fn ->
+      Task.start(fn ->
+        GenServer.call(pid1, {:sleep, 20}, 1)
+      end)
+
+      assert_receive "API called"
+    end)
+  end
+
   test "only sends one error when a Plug process crashes" do
     Code.compile_string("""
       defmodule SentryApp do
