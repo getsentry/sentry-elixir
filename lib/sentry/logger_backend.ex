@@ -76,7 +76,7 @@ defmodule Sentry.LoggerBackend do
       end
 
     case Keyword.get(meta, :crash_reason) do
-      {reason, stacktrace} ->
+      {reason, stacktrace} when is_list(stacktrace) ->
         if ignore_plug &&
              Enum.any?(stacktrace, fn {module, function, arity, _file_line} ->
                match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2}) ||
