@@ -142,7 +142,10 @@ defmodule Sentry.LoggerBackend do
   defp build_logger_metadata(meta) do
     meta
     |> Enum.filter(fn {_key, value} ->
-      is_binary(value) || is_atom(value) || is_number(value)
+      case Jason.encode(value) do
+        {:ok, _} -> true
+        _ -> false
+      end
     end)
     |> Enum.into(%{})
   end
