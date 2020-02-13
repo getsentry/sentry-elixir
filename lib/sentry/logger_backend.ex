@@ -76,7 +76,7 @@ defmodule Sentry.LoggerBackend do
       end
 
     case Keyword.get(meta, :crash_reason) do
-      {reason, stacktrace} ->
+      {reason, stacktrace} when is_list(stacktrace) ->
         if ignore_plug &&
              Enum.any?(stacktrace, fn {module, function, arity, _file_line} ->
                match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2}) ||
@@ -92,6 +92,11 @@ defmodule Sentry.LoggerBackend do
 
           Sentry.capture_exception(reason, opts)
         end
+
+      {{_reason, stacktrace}, {_m, _f, args}} when is_list(stacktrace) and is_list(args) ->
+        # Cowboy stuff
+        # https://github.com/ninenines/cowboy/blob/master/src/cowboy_stream_h.erl#L148-L151
+        :ok
 
       reason when is_atom(reason) and not is_nil(reason) ->
         Sentry.capture_exception(reason, [{:event_source, :logger} | opts])
