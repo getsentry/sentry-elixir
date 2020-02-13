@@ -93,6 +93,11 @@ defmodule Sentry.LoggerBackend do
           Sentry.capture_exception(reason, opts)
         end
 
+      {{_reason, stacktrace}, {_m, _f, args}} when is_list(stacktrace) and is_list(args) ->
+        # Cowboy stuff
+        # https://github.com/ninenines/cowboy/blob/master/src/cowboy_stream_h.erl#L148-L151
+        :ok
+
       reason when is_atom(reason) and not is_nil(reason) ->
         Sentry.capture_exception(reason, [{:event_source, :logger} | opts])
 
