@@ -2,7 +2,13 @@
 
 ## master
 
-## 7.2.1 (2019-11-20)
+## 7.2.2 (2020-02-13)
+
+* Bug Fixes
+  * Handle neww Cowboy 2 init MFA (#377)
+  * Ensure stacktrace is list in LoggerBackend (#380)
+
+## 7.2.1 (2019-12-05)
 
 * Bug Fixes
   * Improve documentation for `Sentry.Client.send_event/2` (#367)
