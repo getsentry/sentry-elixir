@@ -162,6 +162,41 @@ defmodule Sentry.PlugTest do
     end)
   end
 
+  test "collects feedback" do
+    Code.compile_string("""
+      defmodule CollectFeedbackApp do
+        use Plug.Router
+        use Plug.ErrorHandler
+        use Sentry.Plug, collect_feedback: [enabled: true]
+        plug :match
+        plug :dispatch
+        forward("/", to: Sentry.ExampleApp)
+      end
+    """)
+
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, _body, _conn} = Plug.Conn.read_body(conn)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    conn =
+      conn(:get, "/error_route")
+      |> Plug.Conn.put_req_header("accept", "text/html")
+
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
+      CollectFeedbackApp.call(conn, [])
+    end)
+
+    assert_received {:plug_conn, :sent}
+    assert {500, _headers, body} = sent_resp(conn)
+    assert body =~ "340"
+    assert body =~ "sentry-cdn"
+  end
+
   defp update_req_cookie(conn, name, value) do
     req_headers =
       conn.req_headers
