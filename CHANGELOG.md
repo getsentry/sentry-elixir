@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.2.3 (2020-02-27)
+
+* Enhancements
+  * Allow gathering feedback from Sentry.Plug errors (#385)
+
 ## 7.2.2 (2020-02-13)
 
 * Bug Fixes
