@@ -167,7 +167,7 @@ defmodule Sentry.PlugTest do
       defmodule CollectFeedbackApp do
         use Plug.Router
         use Plug.ErrorHandler
-        use Sentry.Plug, collect_feedback: [enabled: true]
+        use Sentry.Plug, collect_feedback: [enabled: true, options: %{title: "abc-123"}]
         plug :match
         plug :dispatch
         forward("/", to: Sentry.ExampleApp)
@@ -195,6 +195,7 @@ defmodule Sentry.PlugTest do
     assert {500, _headers, body} = sent_resp(conn)
     assert body =~ "340"
     assert body =~ "sentry-cdn"
+    assert body =~ ~s{"title":"abc-123"}
   end
 
   defp update_req_cookie(conn, name, value) do

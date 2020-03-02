@@ -100,13 +100,17 @@ if Code.ensure_loaded?(Plug) do
 
     ### Collect User Feedback after Error
 
-    Sentry allows collecting user feedback after they hit an error.
-    Information about it is available [here](https://docs.sentry.io/enriching-error-data/user-feedback).
-    If a Plug request experiences an error that Sentry is reporting, and the request
-    accepts the content-type "text/html" or "*/*", the feedback form will be rendered.
-    The configuration is limited to the defaults at the moment, but it can be enabled with:
+    Sentry allows collecting user feedback after they hit an error, and is configured under the
+    `:collect_feedback` key. Information and configuration options are available
+    [here](https://docs.sentry.io/enriching-error-data/user-feedback).
 
-        use Sentry.Plug, collect_feedback: [enabled: true]
+    When enabled, if a Plug request experiences an error that Sentry is reporting and the request
+    accepts the content-type "text/html" or "*/*", the feedback form will be rendered.
+    The feedback form can be enabled by passing `[enabled: true]`. The form also supports
+    all of the configuration in the Sentry documentation linked above. These options can be
+    passed as a configuration map under the `:options` key. Example:
+
+        use Sentry.Plug, collect_feedback: [enabled: true, options: %{title: "Sorry about that!"}]
     """
 
     @default_plug_request_id_header "x-request-id"
@@ -120,6 +124,7 @@ if Code.ensure_loaded?(Plug) do
       request_id_header = Keyword.get(env, :request_id_header)
       collect_feedback = Keyword.get(env, :collect_feedback, [])
       collect_feedback_enabled = Keyword.get(collect_feedback, :enabled, false)
+      collect_feedback_opts = Keyword.get(collect_feedback, :options, Macro.escape(%{}))
 
       quote do
         # Ignore 404s for Plug routes
@@ -143,6 +148,7 @@ if Code.ensure_loaded?(Plug) do
           ]
 
           collect_feedback_enabled = unquote(collect_feedback_enabled)
+          collect_feedback_opts = unquote(collect_feedback_opts)
           request = Sentry.Plug.build_request_interface_data(conn, opts)
           exception = Exception.normalize(kind, reason, stack)
 
@@ -164,7 +170,7 @@ if Code.ensure_loaded?(Plug) do
                 result: :sync
               )
 
-            render_sentry_feedback(conn, result)
+            render_sentry_feedback(conn, result, collect_feedback_opts)
           else
             Sentry.capture_exception(
               exception,
@@ -176,7 +182,11 @@ if Code.ensure_loaded?(Plug) do
           end
         end
 
-        defp render_sentry_feedback(conn, {:ok, id}) do
+        defp render_sentry_feedback(conn, {:ok, id}, opts) do
+          encoded_opts =
+            Map.put(opts, :eventId, id)
+            |> Jason.encode!()
+
           html = """
             <!DOCTYPE HTML>
             <html lang="en">
@@ -185,7 +195,7 @@ if Code.ensure_loaded?(Plug) do
                 <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
                 <script>
                   Sentry.init({ dsn: '#{Sentry.Config.dsn()}' });
-                  Sentry.showReportDialog({ eventId: '#{id}' })
+                  Sentry.showReportDialog(#{encoded_opts})
                 </script>
               </head>
               <body>
@@ -197,7 +207,7 @@ if Code.ensure_loaded?(Plug) do
           |> Plug.Conn.send_resp(conn.status, html)
         end
 
-        defp render_sentry_feedback(_conn, _result), do: nil
+        defp render_sentry_feedback(_conn, _result, _opts), do: nil
 
         defoverridable handle_errors: 2
       end
