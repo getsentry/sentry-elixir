@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.2.4 (2020-03-09)
+
+* Enhancements
+  * Allow configuring gather feedback form for Sentry.Plug errors (#387)
+
 ## 7.2.3 (2020-02-27)
 
 * Enhancements
