@@ -1,3 +1,23 @@
+defmodule ClientSupervisor do
+  use Agent
+
+  def start_link do
+    Agent.start_link(fn -> Timex.now() end, name: __MODULE__)
+  end
+
+  def should_drop_event do
+    Agent.get(__MODULE__, fn state -> Timex.before?(Timex.now(), state) end)
+  end
+
+  def disabled_until do
+    Agent.get(__MODULE__, fn state -> state end)
+  end
+
+  def update_disabled_until(deadline) do
+    Agent.update(__MODULE__, fn _state -> deadline end)
+  end
+end
+
 defmodule Sentry.Client do
   @behaviour Sentry.HTTPClient
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
@@ -46,6 +66,8 @@ defmodule Sentry.Client do
   @type result :: :sync | :none | :async
   @sentry_version 5
   @max_attempts 4
+  # seconds
+  @default_retry_after 60
   @hackney_pool_name :sentry_pool
 
   quote do
@@ -161,14 +183,26 @@ defmodule Sentry.Client do
        do: {:error, {:request_failure, last_error}}
 
   defp try_request(url, headers, {event, body}, {current_attempt, _last_error}) do
-    case request(url, headers, body) do
-      {:ok, id} ->
-        {:ok, id}
+    ClientSupervisor.start_link()
 
-      {:error, error} ->
-        if current_attempt < @max_attempts, do: sleep(current_attempt)
+    if ClientSupervisor.should_drop_event() do
+      {:error,
+       {:request_failure,
+        "Skipping event send because we're disabled due to rate limits until #{
+          ClientSupervisor.disabled_until()
+        }"}}
+    else
+      case request(url, headers, body) do
+        {:ok, id} ->
+          {:ok, id}
 
-        try_request(url, headers, {event, body}, {current_attempt + 1, error})
+        {:error, {:too_many_requests, e}} ->
+          {:error, {:request_failure, e}}
+
+        {:error, error} ->
+          if current_attempt < @max_attempts, do: sleep(current_attempt)
+          try_request(url, headers, {event, body}, {current_attempt + 1, error})
+      end
     end
   end
 
@@ -186,18 +220,36 @@ defmodule Sentry.Client do
       Config.hackney_opts()
       |> Keyword.put_new(:pool, @hackney_pool_name)
 
-    with {:ok, 200, _, client} <- :hackney.request(:post, url, headers, body, hackney_opts),
-         {:ok, body} <- :hackney.body(client),
-         {:ok, json} <- json_library.decode(body) do
-      {:ok, Map.get(json, "id")}
-    else
+    case :hackney.request(:post, url, headers, body, hackney_opts) do
+      {:ok, 200, _, client} ->
+        case :hackney.body(client) do
+          {:ok, body} ->
+            case json_library.decode(body) do
+              {:ok, json} ->
+                {:ok, Map.get(json, "id")}
+
+              {:err, error} ->
+                {:error, error}
+            end
+
+          {:err, error} ->
+            {:error, error}
+        end
+
+      {:ok, 429, headers, client} ->
+        :hackney.skip_body(client)
+        deadline = parse_retry_after(:proplists.get_value("Retry-After", headers, ""))
+        ClientSupervisor.update_disabled_until(deadline)
+        error = "Too many requests, backing off till: #{deadline}"
+        {:error, {:too_many_requests, error}}
+
       {:ok, status, headers, client} ->
         :hackney.skip_body(client)
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         error = "Received #{status} from Sentry server: #{error_header}"
         {:error, error}
 
-      e ->
+      {e, _reason} ->
         {:error, e}
     end
   end
@@ -353,7 +405,7 @@ defmodule Sentry.Client do
       Logger.log(
         Config.log_level(),
         fn ->
-          ["Failed to send Sentry event.", message]
+          ["Failed to send Sentry event. ", message]
         end
       )
     end
@@ -384,6 +436,21 @@ defmodule Sentry.Client do
 
       {:error, :invalid_dsn} ->
         {:error, :invalid_dsn}
+    end
+  end
+
+  defp parse_retry_after(header) do
+    case Timex.parse(header, "{RFC1123}") do
+      {:ok, retry_after} ->
+        retry_after
+
+      {:error, _} ->
+        try do
+          {retry_after, _} = Integer.parse(header, 10)
+          Timex.shift(Timex.now(), seconds: retry_after)
+        rescue
+          _ -> @default_retry_after
+        end
     end
   end
 

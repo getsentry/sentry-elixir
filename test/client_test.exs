@@ -84,7 +84,7 @@ defmodule Sentry.ClientTest do
         "X-Sentry-Error",
         "Creation of this event was denied due to rate limiting."
       )
-      |> Plug.Conn.resp(400, "Something bad happened")
+      |> Plug.Conn.resp(:bad_request, "Something bad happened")
     end)
 
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
@@ -117,7 +117,7 @@ defmodule Sentry.ClientTest do
       assert request_map["extra"] == %{"key" => "value"}
       assert request_map["user"]["id"] == 1
       assert is_nil(request_map["stacktrace"]["frames"])
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -150,7 +150,7 @@ defmodule Sentry.ClientTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_map = Jason.decode!(body)
       assert request_map["extra"] == %{"key" => "value", "user_id" => 1}
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -194,7 +194,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -221,7 +221,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -251,7 +251,7 @@ defmodule Sentry.ClientTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_map = Jason.decode!(body)
       assert Enum.count(request_map["stacktrace"]["frames"]) > 0
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -279,7 +279,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      Plug.Conn.resp(conn, :ok, ~s<{"id": "340"}>)
     end)
 
     modify_env(
@@ -298,6 +298,91 @@ defmodule Sentry.ClientTest do
     end
   end
 
+  test "respects relative retry-after header" do
+    bypass = Bypass.open()
+
+    Bypass.stub(bypass, "POST", "/api/1/store/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      cond do
+        String.contains?(body, "nope") ->
+          conn
+          |> Plug.Conn.put_resp_header("Retry-After", "1")
+          |> Plug.Conn.resp(:too_many_requests, "")
+
+        String.contains?(body, "yep") ->
+          conn
+          |> Plug.Conn.resp(:ok, ~s<{}>)
+
+        true ->
+          conn
+          |> Plug.Conn.put_resp_header("X-Sentry-Error", "This shouldnt be reached")
+          |> Plug.Conn.resp(:internal_server_error, "Something bad happened")
+      end
+    end)
+
+    modify_env(
+      :sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      client: Sentry.Client
+    )
+
+    # Should block first request on server level
+    assert {:error, {:request_failure, _}} =
+             Sentry.Client.send_event(%Sentry.Event{message: "nope"}, result: :sync)
+
+    # Should block second request on app level
+    assert {:error, {:request_failure, _}} =
+             Sentry.Client.send_event(%Sentry.Event{message: "doesnt matter"}, result: :sync)
+
+    # Rewind time to "after" deadline
+    :timer.sleep(1010)
+    # Should pass the request
+    assert {:ok, _} = Sentry.Client.send_event(%Sentry.Event{message: "yep"}, result: :sync)
+  end
+
+  # test "respects absolute retry-after header" do    
+  #   bypass = Bypass.open()
+  #   event = %Sentry.Event{message: "error"}
+
+  #   Bypass.expect(bypass, fn conn ->
+  #       conn
+  #         |> Plug.Conn.put_resp_header("Retry-After", "Sun, 16 Mar 2020 08:28:13 +0000")
+  #         |> Plug.Conn.resp(:too_many_requests, ~s<{}>)
+  #   end)
+
+  #   modify_env(
+  #     :sentry,
+  #     dsn: "http://public:secret@localhost:#{bypass.port}/1",
+  #     client: Sentry.Client
+  #   )
+
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  # end
+
+  # test "fallbacks to default retry-after if header is malformed" do    
+  #   bypass = Bypass.open()
+  #   event = %Sentry.Event{message: "error"}
+
+  #   Bypass.expect(bypass, fn conn ->
+  #       conn
+  #         |> Plug.Conn.put_resp_header("Retry-After", "boop")
+  #         |> Plug.Conn.resp(:too_many_requests, ~s<{}>)
+  #   end)
+
+  #   modify_env(
+  #     :sentry,
+  #     dsn: "http://public:secret@localhost:#{bypass.port}/1",
+  #     client: Sentry.Client
+  #   )
+
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  #   assert {:error, {:too_many_requests, _}} = Sentry.Client.send_event(event, result: :sync)
+  # end
+
   test "logs errors at configured log_level" do
     bypass = Bypass.open()
     pid = self()
@@ -313,7 +398,7 @@ defmodule Sentry.ClientTest do
           "X-Sentry-Error",
           "Creation of this event was denied due to various reasons."
         )
-        |> Plug.Conn.resp(400, "Something bad happened")
+        |> Plug.Conn.resp(:bad_request, "Something bad happened")
 
       send(pid, "API called")
       conn

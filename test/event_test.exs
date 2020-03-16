@@ -241,8 +241,10 @@ defmodule Sentry.EventTest do
     assert modules == [
              :bypass,
              :certifi,
+             :combine,
              :cowboy,
              :cowlib,
+             :gettext,
              :hackney,
              :idna,
              :jason,
@@ -258,6 +260,8 @@ defmodule Sentry.EventTest do
              :ranch,
              :ssl_verify_fun,
              :telemetry,
+             :timex,
+             :tzdata,
              :unicode_util_compat
            ]
   end
