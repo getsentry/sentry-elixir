@@ -35,3 +35,4 @@ cache:
   directories:
     - .mix
     - _build
+    - priv/plts

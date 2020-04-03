@@ -3,3 +3,5 @@
 erl_crash.dump
 *.ez
 /doc
+/priv/plts/*.plt
+/priv/plts/*.plt.hash
