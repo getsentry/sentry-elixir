@@ -96,6 +96,7 @@ defmodule Sentry do
   def start(_type, _opts) do
     children = [
       supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+      {ClientSupervisor, NaiveDateTime.utc_now()},
       :hackney_pool.child_spec(
         Sentry.Client.hackney_pool_name(),
         timeout: Config.hackney_timeout(),
@@ -110,6 +111,7 @@ defmodule Sentry do
     Supervisor.start_link(children, opts)
   end
 
+  
   @doc """
   Parses and submits an exception to Sentry if current environment is in included_environments.
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.

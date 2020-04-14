@@ -1,12 +1,12 @@
 defmodule ClientSupervisor do
   use Agent
 
-  def start_link do
-    Agent.start_link(fn -> Timex.now() end, name: __MODULE__)
+  def start_link(initial_value) do
+    Agent.start_link(fn -> initial_value end, name: __MODULE__)
   end
 
   def should_drop_event do
-    Agent.get(__MODULE__, fn state -> Timex.before?(Timex.now(), state) end)
+    Agent.get(__MODULE__, fn state -> NaiveDateTime.compare(NaiveDateTime.utc_now(), state) == :lt end)
   end
 
   def disabled_until do
@@ -183,8 +183,6 @@ defmodule Sentry.Client do
        do: {:error, {:request_failure, last_error}}
 
   defp try_request(url, headers, {event, body}, {current_attempt, _last_error}) do
-    ClientSupervisor.start_link()
-
     if ClientSupervisor.should_drop_event() do
       {:error,
        {:request_failure,
@@ -447,7 +445,7 @@ defmodule Sentry.Client do
       {:error, _} ->
         try do
           {retry_after, _} = Integer.parse(header, 10)
-          Timex.shift(Timex.now(), seconds: retry_after)
+          NaiveDateTime.add(NaiveDateTime.utc_now(), retry_after)
         rescue
           _ -> @default_retry_after
         end
