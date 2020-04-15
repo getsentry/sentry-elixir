@@ -1,6 +1,5 @@
 defmodule Sentry do
   use Application
-  import Supervisor.Spec
   alias Sentry.{Config, Event}
   require Logger
 
@@ -95,7 +94,7 @@ defmodule Sentry do
 
   def start(_type, _opts) do
     children = [
-      supervisor(Task.Supervisor, [[name: Sentry.TaskSupervisor]]),
+      {Task.Supervisor, name: Sentry.TaskSupervisor},
       :hackney_pool.child_spec(
         Sentry.Client.hackney_pool_name(),
         timeout: Config.hackney_timeout(),
