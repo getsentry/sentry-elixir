@@ -198,6 +198,26 @@ defmodule Sentry.PlugTest do
     assert body =~ ~s{"title":"abc-123"}
   end
 
+  test "request url" do
+    # Default ports
+    conn = conn(:get, "http://www.example.com:80/error_route")
+    %{url: url} = Sentry.Plug.build_request_interface_data(conn, [])
+    assert url == "http://www.example.com/error_route"
+
+    conn = conn(:get, "https://www.example.com:443/error_route")
+    %{url: url} = Sentry.Plug.build_request_interface_data(conn, [])
+    assert url == "https://www.example.com/error_route"
+
+    # Custom ports
+    conn = conn(:get, "http://www.example.com:1234/error_route")
+    %{url: url} = Sentry.Plug.build_request_interface_data(conn, [])
+    assert url == "http://www.example.com:1234/error_route"
+
+    conn = conn(:get, "https://www.example.com:1234/error_route")
+    %{url: url} = Sentry.Plug.build_request_interface_data(conn, [])
+    assert url == "https://www.example.com:1234/error_route"
+  end
+
   defp update_req_cookie(conn, name, value) do
     req_headers =
       conn.req_headers

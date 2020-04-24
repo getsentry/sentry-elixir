@@ -230,7 +230,7 @@ if Code.ensure_loaded?(Plug) do
         |> Plug.Conn.fetch_query_params()
 
       %{
-        url: "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}",
+        url: Plug.Conn.request_url(conn),
         method: conn.method,
         data: handle_data(conn, body_scrubber),
         query_string: conn.query_string,
