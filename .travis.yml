@@ -3,10 +3,11 @@ elixir:
   - 1.7
   - 1.8
   - 1.9
+  - 1.10
 otp_release:
   - 20.3
   - 21.3
-  - 22.1
+  - 22.2
 env:
   - STRICT=true
   - STRICT=false
@@ -17,7 +18,11 @@ matrix:
     - elixir: 1.8
       env: STRICT=true
     - elixir: 1.9
+      env: STRICT=true
+    - elixir: 1.10
       env: STRICT=false
+    - elixir: 1.10
+      otp_release: 20.3
 notifications:
   email:
     - mitch@rokkincat.com
@@ -30,3 +35,4 @@ cache:
   directories:
     - .mix
     - _build
+    - priv/plts

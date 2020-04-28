@@ -10,7 +10,11 @@ defmodule Sentry.Mixfile do
       package: package(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      dialyzer: [plt_add_deps: :transitive, plt_add_apps: [:mix]],
+      dialyzer: [
+        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        plt_add_deps: :app_tree,
+        plt_add_apps: [:mix, :plug]
+      ],
       docs: [extras: ["README.md"], main: "readme"]
     ]
   end
@@ -29,7 +33,7 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 1.0 or ~> 2.0", optional: true},
       {:phoenix, "~> 1.3", optional: true},
-      {:dialyxir, "> 0.0.0", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.21.0", only: :dev},
       {:bypass, "~> 1.0", only: [:test]}
     ]
