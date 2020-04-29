@@ -140,30 +140,37 @@ defmodule Sentry.Config do
     check_dsn = Keyword.get(opts, :check_dsn, true)
     type = Keyword.get(opts, :type)
 
-    environment_result =
-      case get_from_application_environment(key) do
-        {:ok, value} -> {:ok, value}
-        :not_found -> get_from_system_environment(config_key_to_system_environment_key(key))
-      end
-
     result =
-      case environment_result do
-        {:ok, value} ->
-          {:ok, value}
-
-        :not_found ->
-          if(check_dsn, do: get_from_dsn_query_string(Atom.to_string(key)), else: :not_found)
+      with :not_found <- get_from_application_environment(key),
+           env_key = config_key_to_system_environment_key(key),
+           system_func = fn -> get_from_system_environment(env_key) end,
+           :not_found <- save_system_to_application(key, system_func) do
+        if check_dsn do
+          query_func = fn -> key |> Atom.to_string() |> get_from_dsn_query_string() end
+          save_system_to_application(key, query_func)
+        else
+          :not_found
+        end
       end
 
-    case result do
-      {:ok, value} -> convert_type(value, type)
-      :not_found -> default
+    convert_type(result, type, default)
+  end
+
+  defp save_system_to_application(key, func) do
+    case func.() do
+      :not_found ->
+        :not_found
+
+      {:ok, value} ->
+        Application.put_env(:sentry, key, value)
+        {:ok, value}
     end
   end
 
-  defp convert_type(value, nil), do: value
-  defp convert_type(value, :list) when is_list(value), do: value
-  defp convert_type(value, :list) when is_binary(value), do: String.split(value, ",")
+  defp convert_type({:ok, value}, nil, _), do: value
+  defp convert_type({:ok, value}, :list, _) when is_list(value), do: value
+  defp convert_type({:ok, value}, :list, _) when is_binary(value), do: String.split(value, ",")
+  defp convert_type(_, _, default), do: default
 
   defp get_from_application_environment(key) when is_atom(key) do
     case Application.fetch_env(:sentry, key) do
