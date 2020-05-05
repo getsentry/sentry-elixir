@@ -4,15 +4,24 @@ defmodule Sentry.ConfigTest do
   alias Sentry.Config
 
   test "retrieves from application environment" do
-    modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
-
-    assert "https://public:secret@app.getsentry.com/1" == Config.dsn()
+    dsn = "https://public:secret@app.getsentry.com/1"
+    modify_env(:sentry, dsn: dsn)
+    assert dsn == Config.dsn()
   end
 
   test "retrieves from system environment" do
-    modify_system_env(%{"SENTRY_DSN" => "https://public:secret@app.getsentry.com/1"})
+    dsn = "https://public:secret@app.getsentry.com/1"
+    modify_system_env(%{"SENTRY_DSN" => dsn})
 
-    assert "https://public:secret@app.getsentry.com/1" == Config.dsn()
+    assert dsn == Config.dsn()
+  end
+
+  test "sets application env if found in system env" do
+    dsn = "https://public:secret@app.getsentry.com/1"
+    modify_system_env(%{"SENTRY_DSN" => dsn})
+
+    assert Config.dsn() == dsn
+    assert Application.get_env(:sentry, :dsn) == dsn
   end
 
   test "retrieves from DSN query string" do
@@ -22,6 +31,16 @@ defmodule Sentry.ConfigTest do
     )
 
     assert "my_server" == Config.server_name()
+  end
+
+  test "sets application env if found in DSN query string" do
+    modify_env(
+      :sentry,
+      dsn: "https://public:super_secret@app.getsentry.com/2?server_name=my_server"
+    )
+
+    assert "my_server" == Config.server_name()
+    assert Application.get_env(:sentry, :server_name) == "my_server"
   end
 
   describe "source_code_path_pattern" do
