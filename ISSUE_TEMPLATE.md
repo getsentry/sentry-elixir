@@ -4,6 +4,8 @@
 * Erlang/OTP version (erl):
 * Sentry version (mix deps):
 * Operating system:
+* Is this an umbrella application?:
+* Release type (Distillery, mix release, Mix, etc.):
 
 ### Description
 
