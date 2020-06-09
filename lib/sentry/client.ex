@@ -109,7 +109,7 @@ defmodule Sentry.Client do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
         {:ok,
-         Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
+         Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
            try_request(endpoint, auth_headers, {event, body})
            |> maybe_call_after_send_event(event)
          end)}
