@@ -75,14 +75,17 @@ defmodule Sentry do
 
   ## Capturing Exceptions
 
-  Simply calling `capture_exception/2` will send the event.  By default, the event is sent asynchronously and the result can be awaited upon.  The `:result` option can be used to change this behavior.  See `Sentry.Client.send_event/2` for more information.
+  Simply calling `capture_exception/2` will send the event. By default, the event
+  is sent asynchronously and the result can be awaited upon.  The `:result` option
+  can be used to change this behavior.  See `Sentry.Client.send_event/2` for more
+  information.
 
       {:ok, task} = Sentry.capture_exception(my_exception)
       {:ok, event_id} = Task.await(task)
-
       {:ok, another_event_id} = Sentry.capture_exception(other_exception, [event_source: :my_source, result: :sync])
 
   ### Options
+
     * `:event_source` - The source passed as the first argument to `c:Sentry.EventFilter.exclude_exception?/2`
 
   ## Configuring The `Logger` Backend
@@ -95,11 +98,7 @@ defmodule Sentry do
   def start(_type, _opts) do
     children = [
       {Task.Supervisor, name: Sentry.TaskSupervisor},
-      :hackney_pool.child_spec(
-        Sentry.Client.hackney_pool_name(),
-        timeout: Config.hackney_timeout(),
-        max_connections: Config.max_hackney_connections()
-      )
+      Config.client().child_spec()
     ]
 
     validate_json_config!()
@@ -157,10 +156,9 @@ defmodule Sentry do
   def send_event(%Event{} = event, opts) do
     included_environments = Config.included_environments()
     environment_name = Config.environment_name()
-    client = Config.client()
 
     if environment_name in included_environments do
-      client.send_event(event, opts)
+      Sentry.Client.send_event(event, opts)
     else
       :ignored
     end

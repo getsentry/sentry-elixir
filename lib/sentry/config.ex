@@ -13,6 +13,8 @@ defmodule Sentry.Config do
   @default_path_pattern "**/*.ex"
   @default_context_lines 3
   @default_sample_rate 1.0
+  @default_send_result :none
+  @default_send_max_attempts 4
 
   @permitted_log_level_values ~w(debug info warn error)a
 
@@ -68,7 +70,7 @@ defmodule Sentry.Config do
   end
 
   def client do
-    get_config(:client, default: Sentry.Client, check_dsn: false)
+    get_config(:client, default: Sentry.HackneyClient, check_dsn: false)
   end
 
   def enable_source_code_context do
@@ -103,6 +105,14 @@ defmodule Sentry.Config do
 
   def in_app_module_whitelist do
     get_config(:in_app_module_whitelist, default: [], check_dsn: false)
+  end
+
+  def send_result do
+    get_config(:send_result, default: @default_send_result, check_dsn: false)
+  end
+
+  def send_max_attempts do
+    get_config(:send_max_attempts, default: @default_send_max_attempts, check_dsn: false)
   end
 
   def sample_rate do

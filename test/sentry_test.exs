@@ -17,8 +17,7 @@ defmodule SentryTest do
     modify_env(
       :sentry,
       filter: Sentry.TestFilter,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      client: Sentry.Client
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
     assert {:ok, _} =

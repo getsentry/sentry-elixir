@@ -185,7 +185,7 @@ if Code.ensure_loaded?(Plug) do
         defp render_sentry_feedback(conn, {:ok, id}, opts) do
           encoded_opts =
             Map.put(opts, :eventId, id)
-            |> Jason.encode!()
+            |> Sentry.Config.json_library().encode!()
 
           html = """
             <!DOCTYPE HTML>
