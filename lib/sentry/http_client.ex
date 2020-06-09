@@ -47,7 +47,7 @@ defmodule Sentry.HackneyClient do
 
     with {:ok, status, headers, client} <-
            :hackney.request(:post, url, headers, body, hackney_opts),
-        {:ok, body} <- :hackney.body(client) do
+         {:ok, body} <- :hackney.body(client) do
       {:ok, status, headers, body}
     end
   end
