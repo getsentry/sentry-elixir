@@ -13,7 +13,7 @@ defmodule Sentry.PhoenixEndpointTest do
     use Phoenix.Endpoint, otp_app: :sentry
     use Sentry.Phoenix.Endpoint
     plug(:error)
-    plug(Sentry.ExampleApp)
+    plug(Sentry.TestPlugApplications.Example)
 
     def error(_conn, _opts) do
       raise "EndpointError"

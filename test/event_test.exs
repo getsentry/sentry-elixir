@@ -5,7 +5,7 @@ defmodule Sentry.EventTest do
 
   def event_generated_by_exception(extra \\ %{}) do
     try do
-      Event.not_a_function(1, 2, 3)
+      apply(Event, :not_a_function, [1, 2, 3])
     rescue
       e -> Event.transform_exception(e, stacktrace: __STACKTRACE__, extra: extra)
     end

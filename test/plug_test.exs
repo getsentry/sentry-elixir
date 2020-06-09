@@ -2,38 +2,27 @@ defmodule Sentry.PlugTest do
   use ExUnit.Case
   use Plug.Test
   import Sentry.TestEnvironmentHelper
+  alias Sentry.TestPlugApplications
 
   test "non-existent route exceptions are ignored" do
-    exception = %FunctionClauseError{arity: 4, function: :do_match, module: Sentry.ExampleApp}
+    exception = %FunctionClauseError{
+      arity: 4,
+      function: :do_match,
+      module: TestPlugApplications.Example
+    }
 
     assert ^exception =
              assert_raise(
                FunctionClauseError,
-               "no function clause matching in Sentry.ExampleApp.do_match/4",
+               "no function clause matching in Sentry.TestPlugApplications.Example.do_match/4",
                fn ->
                  conn(:get, "/not_found")
-                 |> Sentry.ExampleApp.call([])
+                 |> TestPlugApplications.Example.call([])
                end
              )
   end
 
   test "overriding handle_errors/2" do
-    Code.compile_string("""
-      defmodule OverrideApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-
-        defp handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack} = error) do
-          super(conn, error)
-          send_resp(conn, conn.status, "Something went terribly wrong")
-        end
-      end
-    """)
-
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -45,24 +34,13 @@ defmodule Sentry.PlugTest do
     conn = conn(:post, "/error_route", %{})
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
-      OverrideApp.call(conn, [])
+      TestPlugApplications.Override.call(conn, [])
     end)
 
     assert {500, _headers, "Something went terribly wrong"} = sent_resp(conn)
   end
 
   test "default data scrubbing" do
-    Code.compile_string("""
-      defmodule DefaultConfigApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-      end
-    """)
-
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -91,22 +69,11 @@ defmodule Sentry.PlugTest do
       |> put_req_header("authorization", "secrets")
       |> put_req_header("authentication", "secrets")
       |> put_req_header("content-type", "application/json")
-      |> DefaultConfigApp.call([])
+      |> TestPlugApplications.DefaultConfig.call([])
     end)
   end
 
   test "handles data scrubbing with file upload" do
-    Code.compile_string("""
-      defmodule ScrubbingWithFileApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-      end
-    """)
-
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -125,24 +92,11 @@ defmodule Sentry.PlugTest do
       |> put_req_cookie("cookie_key", "cookie_value")
       |> put_req_header("accept-language", "en-US")
       |> put_req_header("authorization", "ignorme")
-      |> ScrubbingWithFileApp.call([])
+      |> TestPlugApplications.ScrubbingWithFile.call([])
     end)
   end
 
   test "custom cookie scrubbing" do
-    Code.compile_string("""
-      defmodule CustomCookieScrubberApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug, cookie_scrubber: fn(conn) ->
-          Map.take(conn.req_cookies, ["regular"])
-        end
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-      end
-    """)
-
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -158,22 +112,11 @@ defmodule Sentry.PlugTest do
       conn(:get, "/error_route")
       |> update_req_cookie("secret", "secretvalue")
       |> update_req_cookie("regular", "value")
-      |> CustomCookieScrubberApp.call([])
+      |> TestPlugApplications.CustomCookieScrubber.call([])
     end)
   end
 
   test "collects feedback" do
-    Code.compile_string("""
-      defmodule CollectFeedbackApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug, collect_feedback: [enabled: true, options: %{title: "abc-123"}]
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-      end
-    """)
-
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
@@ -188,7 +131,7 @@ defmodule Sentry.PlugTest do
       |> Plug.Conn.put_req_header("accept", "text/html")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
-      CollectFeedbackApp.call(conn, [])
+      TestPlugApplications.CollectFeedback.call(conn, [])
     end)
 
     assert_received {:plug_conn, :sent}

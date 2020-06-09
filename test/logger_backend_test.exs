@@ -134,7 +134,10 @@ defmodule Sentry.LoggerBackendTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
       assert length(json["stacktrace"]["frames"]) == 1
-      assert List.first(json["stacktrace"]["frames"])["filename"] == "test/support/test_plug.ex"
+
+      assert List.first(json["stacktrace"]["frames"])["filename"] ==
+               "test/support/test_plug_applications.ex"
+
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -143,7 +146,7 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       Plug.Test.conn(:get, "/spawn_error_route")
-      |> Sentry.ExampleApp.call([])
+      |> Sentry.TestPlugApplications.Example.call([])
 
       assert_receive "API called"
     end)
@@ -184,22 +187,11 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "only sends one error when a Plug process crashes" do
-    Code.compile_string("""
-      defmodule SentryApp do
-        use Plug.Router
-        use Plug.ErrorHandler
-        use Sentry.Plug
-        plug :match
-        plug :dispatch
-        forward("/", to: Sentry.ExampleApp)
-      end
-    """)
-
     bypass = Bypass.open()
     pid = self()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-    {:ok, _plug_pid} = Plug.Cowboy.http(SentryApp, [], port: 8003)
+    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.TestPlugApplications.DefaultConfig, [], port: 8003)
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)

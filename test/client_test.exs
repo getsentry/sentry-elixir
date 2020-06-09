@@ -90,7 +90,7 @@ defmodule Sentry.ClientTest do
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         assert capture_log(fn ->
@@ -134,7 +134,7 @@ defmodule Sentry.ClientTest do
     Logger.metadata(key: "value", user_id: 1)
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         assert capture_log(fn ->
@@ -163,7 +163,7 @@ defmodule Sentry.ClientTest do
     Logger.metadata(key: "value", user_id: 1)
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         assert capture_log(fn ->
@@ -207,7 +207,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         assert capture_log(fn ->
@@ -234,7 +234,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         assert capture_log(fn ->
@@ -261,7 +261,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         {:ok, _} =
@@ -289,7 +289,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      Event.not_a_function()
+      apply(Event, :not_a_function, [])
     rescue
       e ->
         {:ok, _} = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
@@ -328,7 +328,7 @@ defmodule Sentry.ClientTest do
 
     capture_log(fn ->
       try do
-        Event.not_a_function()
+        apply(Event, :not_a_function, [])
       rescue
         e ->
           {:ok, task} =
