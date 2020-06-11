@@ -15,7 +15,7 @@ defmodule Sentry.Mixfile do
         plt_add_apps: [:mix, :plug, :hackney]
       ],
       docs: [extras: ["README.md"], main: "readme"],
-      xref: [exclude: [:hackney]]
+      xref: [exclude: [:hackney, :hackney_pool]]
     ]
   end
 
