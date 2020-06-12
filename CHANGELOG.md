@@ -12,7 +12,7 @@
   * Change default `included_environments` to only include `:prod` by default (#370)
   * Change default event send type to :none instead of :async (#341)
   * Make hackney an optional dependency, and simplify Sentry.HTTPClient behaviour (#400)
-  * Use Logger.metadata for Sentry.Context, and no longer return metadata values on set_* functions
+  * Use Logger.metadata for Sentry.Context, no longer return metadata values on set_* functions, and rename `set_http_context` to `set_request_context`
 
 ## 7.2.4 (2020-03-09)
 

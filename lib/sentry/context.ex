@@ -155,9 +155,9 @@ defmodule Sentry.Context do
 
   ## Example
 
-      iex(1)> Sentry.Context.set_http_context(%{id: 123})
+      iex(1)> Sentry.Context.set_request_context(%{id: 123})
       :ok
-      iex(2)> Sentry.Context.set_http_context(%{url: "www.example.com"})
+      iex(2)> Sentry.Context.set_request_context(%{url: "www.example.com"})
       :ok
       iex(3)> Sentry.Context.get_all()
       %{
@@ -168,8 +168,8 @@ defmodule Sentry.Context do
           user: %{}
       }
   """
-  @spec set_http_context(map()) :: :ok
-  def set_http_context(map) when is_map(map) do
+  @spec set_request_context(map()) :: :ok
+  def set_request_context(map) when is_map(map) do
     set_context(@request_key, map)
   end
 
