@@ -3,8 +3,8 @@ defmodule Sentry.Context do
     Provides functionality to store user, tags, extra, and breadcrumbs context when an
     event is reported. The contexts will be fetched and merged into the event when it is sent.
 
-    When calling Sentry.Context, the Process Dictionary is used to store this state.
-    This imposes some limitations. The state will only exist within
+    When calling Sentry.Context, Logger metadata is used to store this state.
+    This imposes some limitations. The metadata will only exist within
     the current process, and the context will die with the process.
 
     For example, if you add context inside your controller and an
@@ -24,7 +24,7 @@ defmodule Sentry.Context do
     It should be noted that the `set_*_context/1` functions merge with the
     existing context rather than entirely overwriting it.
   """
-  @process_dictionary_key :sentry_context
+  @logger_metadata_key :sentry
   @user_key :user
   @tags_key :tags
   @extra_key :extra
@@ -55,7 +55,7 @@ defmodule Sentry.Context do
           breadcrumbs: list()
         }
   def get_all do
-    context = get_context()
+    context = get_sentry_context()
 
     %{
       user: Map.get(context, @user_key, %{}),
@@ -75,11 +75,11 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.set_extra_context(%{id: 123})
-      nil
+      :ok
       iex> Sentry.Context.set_extra_context(%{detail: "bad_error"})
-      %{extra: %{id: 123}}
+      :ok
       iex> Sentry.Context.set_extra_context(%{message: "Oh no"})
-      %{extra: %{detail: "bad_error", id: 123}}
+      :ok
       iex> Sentry.Context.get_all()
       %{
         user: %{},
@@ -89,10 +89,9 @@ defmodule Sentry.Context do
         breadcrumbs: []
       }
   """
-  @spec set_extra_context(map()) :: nil | map()
+  @spec set_extra_context(map()) :: :ok
   def set_extra_context(map) when is_map(map) do
-    get_context()
-    |> set_context(@extra_key, map)
+    set_context(@extra_key, map)
   end
 
   @doc """
@@ -104,9 +103,9 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.set_user_context(%{id: 123})
-      nil
+      :ok
       iex> Sentry.Context.set_user_context(%{username: "george"})
-      %{user: %{id: 123}}
+      :ok
       iex> Sentry.Context.get_all()
       %{
         user: %{id: 123, username: "george"},
@@ -116,10 +115,9 @@ defmodule Sentry.Context do
         breadcrumbs: []
       }
   """
-  @spec set_user_context(map()) :: nil | map()
+  @spec set_user_context(map()) :: :ok
   def set_user_context(map) when is_map(map) do
-    get_context()
-    |> set_context(@user_key, map)
+    set_context(@user_key, map)
   end
 
   @doc """
@@ -131,9 +129,9 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.set_tags_context(%{id: 123})
-      nil
+      :ok
       iex> Sentry.Context.set_tags_context(%{other_id: 456})
-      %{tags: %{id: 123}}
+      :ok
       iex> Sentry.Context.get_all()
       %{
           breadcrumbs: [],
@@ -143,10 +141,9 @@ defmodule Sentry.Context do
           user: %{}
       }
   """
-  @spec set_tags_context(map()) :: nil | map()
+  @spec set_tags_context(map()) :: :ok
   def set_tags_context(map) when is_map(map) do
-    get_context()
-    |> set_context(@tags_key, map)
+    set_context(@tags_key, map)
   end
 
   @doc """
@@ -159,9 +156,9 @@ defmodule Sentry.Context do
   ## Example
 
       iex(1)> Sentry.Context.set_http_context(%{id: 123})
-      nil
+      :ok
       iex(2)> Sentry.Context.set_http_context(%{url: "www.example.com"})
-      %{request: %{id: 123}}
+      :ok
       iex(3)> Sentry.Context.get_all()
       %{
           breadcrumbs: [],
@@ -171,10 +168,9 @@ defmodule Sentry.Context do
           user: %{}
       }
   """
-  @spec set_http_context(map()) :: nil | map()
+  @spec set_http_context(map()) :: :ok
   def set_http_context(map) when is_map(map) do
-    get_context()
-    |> set_context(@request_key, map)
+    set_context(@request_key, map)
   end
 
   @doc """
@@ -183,18 +179,22 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.set_tags_context(%{id: 123})
-      nil
+      :ok
       iex> Sentry.Context.clear_all()
-      %{tags: %{id: 123}}
+      :ok
       iex> Sentry.Context.get_all()
       %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}}
   """
   def clear_all do
-    Process.delete(@process_dictionary_key)
+    :logger.update_process_metadata(%{sentry: %{}})
   end
 
-  defp get_context do
-    Process.get(@process_dictionary_key) || %{}
+  defp get_sentry_context do
+    case :logger.get_process_metadata() do
+      %{@logger_metadata_key => sentry} -> sentry
+      %{} -> %{}
+      :undefined -> %{}
+    end
   end
 
   @doc """
@@ -208,7 +208,7 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.add_breadcrumb(message: "first_event")
-      nil
+      :ok
       iex> Sentry.Context.add_breadcrumb(%{message: "second_event", type: "auth"})
       %{breadcrumbs: [%{:message => "first_event", "timestamp" => 1562007480}]}
       iex> Sentry.Context.add_breadcrumb(%{message: "response"})
@@ -231,7 +231,7 @@ defmodule Sentry.Context do
           user: %{}
       }
   """
-  @spec add_breadcrumb(keyword() | map()) :: nil | map()
+  @spec add_breadcrumb(keyword() | map()) :: :ok
   def add_breadcrumb(list) when is_list(list) do
     if Keyword.keyword?(list) do
       list
@@ -248,21 +248,21 @@ defmodule Sentry.Context do
   def add_breadcrumb(map) when is_map(map) do
     map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
 
-    context =
-      get_context()
+    sentry_metadata =
+      get_sentry_context()
       |> Map.update(@breadcrumbs_key, [map], &[map | &1])
 
-    Process.put(@process_dictionary_key, context)
+    :logger.update_process_metadata(%{sentry: sentry_metadata})
   end
 
-  defp set_context(current, key, new) when is_map(current) and is_map(new) do
-    merged_context =
-      current
-      |> Map.get(key, %{})
-      |> Map.merge(new)
+  defp set_context(key, new) when is_map(new) do
+    sentry_metadata =
+      case :logger.get_process_metadata() do
+        %{sentry: sentry} -> Map.update(sentry, key, new, &Map.merge(&1, new))
+        _ -> %{key => new}
+      end
 
-    new_context = Map.put(current, key, merged_context)
-    Process.put(@process_dictionary_key, new_context)
+    :logger.update_process_metadata(%{sentry: sentry_metadata})
   end
 
   @doc """
