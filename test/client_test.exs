@@ -127,8 +127,7 @@ defmodule Sentry.ClientTest do
         metadata = Map.new(Logger.metadata())
         {user_id, rest_metadata} = Map.pop(metadata, :user_id)
         %{e | extra: Map.merge(e.extra, rest_metadata), user: Map.put(e.user, :id, user_id)}
-      end,
-      client: Sentry.Client
+      end
     )
 
     Logger.metadata(key: "value", user_id: 1)
@@ -156,8 +155,7 @@ defmodule Sentry.ClientTest do
     modify_env(
       :sentry,
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      before_send_event: {Sentry.BeforeSendEventTest, :before_send_event},
-      client: Sentry.Client
+      before_send_event: {Sentry.BeforeSendEventTest, :before_send_event}
     )
 
     Logger.metadata(key: "value", user_id: 1)
@@ -175,8 +173,7 @@ defmodule Sentry.ClientTest do
   test "falsey before_send_event does not send event" do
     modify_env(
       :sentry,
-      before_send_event: {Sentry.BeforeSendEventTest, :before_send_event_ignore_arithmetic},
-      client: Sentry.Client
+      before_send_event: {Sentry.BeforeSendEventTest, :before_send_event_ignore_arithmetic}
     )
 
     try do
@@ -202,8 +199,7 @@ defmodule Sentry.ClientTest do
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       after_send_event: fn _e, _r ->
         Logger.error("AFTER_SEND_EVENT")
-      end,
-      client: Sentry.Client
+      end
     )
 
     try do
@@ -229,8 +225,7 @@ defmodule Sentry.ClientTest do
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       after_send_event: fn _e, _r ->
         Logger.error("AFTER_SEND_EVENT")
-      end,
-      client: Sentry.Client
+      end
     )
 
     try do
@@ -256,8 +251,7 @@ defmodule Sentry.ClientTest do
 
     modify_env(
       :sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      client: Sentry.Client
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
     try do
@@ -284,8 +278,7 @@ defmodule Sentry.ClientTest do
 
     modify_env(
       :sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      client: Sentry.Client
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
     try do
@@ -322,7 +315,6 @@ defmodule Sentry.ClientTest do
     modify_env(
       :sentry,
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      client: Sentry.Client,
       log_level: :error
     )
 

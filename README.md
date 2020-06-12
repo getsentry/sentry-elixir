@@ -17,7 +17,7 @@ If you would like to upgrade a project to use Sentry 7.x, see [here](https://gis
 
 ## Installation
 
-To use Sentry with your projects, edit your mix.exs file and add it as a dependency.  Sentry does not install a JSON library itself, and requires users to have one available.  Sentry will default to trying to use Jason for JSON operations, but can be configured to use other ones.
+To use Sentry with your projects, edit your mix.exs file and add it as a dependency. Sentry does not install a JSON library nor HTTP client by itself.  Sentry will default to trying to use Jason for JSON operations and Hackney for HTTP requests, but can be configured to use other ones. To use the default ones, do:
 
 ```elixir
 defp deps do
@@ -25,6 +25,7 @@ defp deps do
     # ...
     {:sentry, "~> 7.0"},
     {:jason, "~> 1.1"},
+    {:hackney, "~> 1.8"}
   ]
 end
 ```
@@ -116,13 +117,15 @@ The full range of options is the following:
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
 | `server_name` | False  | None | |
-| `client` | False  | `Sentry.Client` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
+| `client` | False  | `Sentry.HackneyClient` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
 | `hackney_opts` | False  | `[pool: :sentry_pool]` | |
 | `hackney_pool_max_connections` | False  | 50 | |
 | `hackney_pool_timeout` | False  | 5000 | |
 | `before_send_event` | False | | |
 | `after_send_event` | False | | |
 | `sample_rate` | False | 1.0 | |
+| `send_result` | False | `:none` | You may want to set it to `:sync` if testing your Sentry integration. See "Testing with Sentry" |
+| `send_max_attempts` | False | 4 | |
 | `in_app_module_whitelist` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
@@ -242,9 +245,12 @@ test "add/2 does not raise but sends an event to Sentry when given bad input" do
   end)
 
   Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
+  Application.put_env(:sentry, :send_result, :sync)
   MyModule.add(1, "a")
 end
 ```
+
+When testing, you will also want to set the `send_result` type to `:sync`, so the request is done synchronously.
 
 ## License
 

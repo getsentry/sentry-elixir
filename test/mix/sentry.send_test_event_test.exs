@@ -35,7 +35,6 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
     modify_env(
       :sentry,
-      client: Sentry.Client,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
@@ -78,7 +77,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
                     hackney_opts: [recv_timeout: 50]
 
                     Sending test event...
-                    Error sending event: "Received 500 from Sentry server: "
+                    Error sending event: {:request_failure, "Received 500 from Sentry server: "}
                     """
            end) =~ "Failed to send Sentry event"
   end

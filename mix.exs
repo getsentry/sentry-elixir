@@ -9,26 +9,26 @@ defmodule Sentry.Mixfile do
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
-      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [
         plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
         plt_add_deps: :app_tree,
-        plt_add_apps: [:mix, :plug]
+        plt_add_apps: [:mix, :plug, :hackney]
       ],
-      docs: [extras: ["README.md"], main: "readme"]
+      docs: [extras: ["README.md"], main: "readme"],
+      xref: [exclude: [:hackney, :hackney_pool]]
     ]
   end
 
   def application do
     [
       mod: {Sentry, []},
-      extra_applications: extra_applications(Mix.env())
+      extra_applications: [:logger]
     ]
   end
 
   defp deps do
     [
-      {:hackney, "~> 1.8 or 1.6.5"},
+      {:hackney, "~> 1.8 or 1.6.5", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 1.0 or ~> 2.0", optional: true},
@@ -48,15 +48,5 @@ defmodule Sentry.Mixfile do
         "github" => "https://github.com/getsentry/sentry-elixir"
       }
     ]
-  end
-
-  defp elixirc_paths(_), do: ["lib"]
-
-  defp extra_applications(:test) do
-    [:telemetry, :logger]
-  end
-
-  defp extra_applications(_) do
-    [:logger]
   end
 end
