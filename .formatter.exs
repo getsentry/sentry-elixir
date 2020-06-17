@@ -1,4 +1,5 @@
 [
+  import_deps: [:plug],
   inputs: [
     "lib/**/*.ex",
     "config/*.exs",
