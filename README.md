@@ -2,18 +2,10 @@
 
 [![Build Status](https://img.shields.io/travis/getsentry/sentry-elixir.svg?style=flat)](https://travis-ci.org/getsentry/sentry-elixir)
 [![hex.pm version](https://img.shields.io/hexpm/v/sentry.svg?style=flat)](https://hex.pm/packages/sentry)
-
-The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger.
-
 [Documentation](https://hexdocs.pm/sentry/readme.html)
 
-## Note on upgrading from Sentry 6.x to 7.x
+The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
 
-Elixir 1.7 and Erlang/OTP 21 significantly changed how errors are transmitted (See "Erlang/OTP logger integration" [here](https://elixir-lang.org/blog/2018/07/25/elixir-v1-7-0-released/)).  Sentry integrated heavily with Erlang's `:error_logger` module, but it is no longer the suggested path towards handling errors.
-
-Sentry 7.x requires Elixir 1.7 and Sentry 6.x will be maintained for applications running prior versions.  Documentation for Sentry 6.x can be found [here](https://hexdocs.pm/sentry/6.4.2/readme.html).
-
-If you would like to upgrade a project to use Sentry 7.x, see [here](https://gist.github.com/mitchellhenke/4ab6dd8d0ebeaaf9821fb625e0037a4d).
 
 ## Installation
 
@@ -30,26 +22,67 @@ defp deps do
 end
 ```
 
-### Setup with Plug or Phoenix
+### Setup with Plug and Phoenix
+Capturing errors in Plug applications is done with `Sentry.PlugContext` and `Sentry.PlugCapture`. `Sentry.PlugContext` adds contextual metadata from the current request which is then included in errors that are captured and reported by `Sentry.PlugCapture`.
 
-In your Plug.Router or Phoenix.Router, add the following lines:
-
-```diff
- # lib/my_app_web/router.ex
- defmodule MyAppWeb.Router do
-   use MyAppWeb, :router
-+  use Plug.ErrorHandler
-+  use Sentry.Plug
-```
-
-If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
+If you are using Phoenix, first add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file. `Sentry.PlugContext` should be added below `Plug.Parsers`.
 
 ```diff
- use Phoenix.Endpoint, otp_app: :my_app
-+use Sentry.Phoenix.Endpoint
+ defmodule MyAppWeb.Endpoint
++  use Sentry.PlugCapture
+   use Phoenix.Endpoint, otp_app: :my_app
+   # ...
+   plug Plug.Parsers,
+     parsers: [:urlencoded, :multipart, :json],
+     pass: ["*/*"],
+     json_decoder: Phoenix.json_library()
+
++  plug Sentry.PlugContext
 ```
 
-More information on why this may be necessary can be found here: https://github.com/getsentry/sentry-elixir/issues/229 and https://github.com/phoenixframework/phoenix/issues/2791
+If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the top of your Plug application, and add `Sentry.PlugContext` below `Plug.Parsers` (if it is in your stack).
+
+```diff
+ defmodule MyApp.Router do
++  use Sentry.PlugCapture
+   use Plug.Router
+   # ...
+   plug Plug.Parsers,
+     parsers: [:urlencoded, :multipart]
++  plug Sentry.PlugContext
+```
+
+#### Capturing User Feedback
+
+If you would like to capture user feedback as described [here](https://docs.sentry.io/enriching-error-data/user-feedback), the `Sentry.last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
+
+An example Phoenix application setup that wanted to display the user feedback form on 500 responses on requests accepting HTML could look like:
+
+```elixir
+defmodule MyAppWeb.ErrorView do
+  # ...
+  def render("500.html", _assigns) do
+    case Sentry.last_event_id_and_source() do
+      {event_id, :plug} when is_binary(event_id) ->
+        opts =
+          # can do %{eventId: event_id, title: "My custom title"}
+          %{eventId: event_id}
+          |> Jason.encode!()
+
+        ~E"""
+          <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
+          <script>
+            Sentry.init({ dsn: '<%= Sentry.Config.dsn() %>' });
+            Sentry.showReportDialog(<%= raw opts %>)
+          </script>
+        """
+
+      _ ->
+        "Error"
+    end
+  # ...
+  end
+```
 
 ### Capture Crashed Process Exceptions
 

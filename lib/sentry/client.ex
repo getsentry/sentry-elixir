@@ -119,6 +119,11 @@ defmodule Sentry.Client do
           maybe_log_result(result)
         end
 
+        if match?({:ok, _}, result) do
+          {event.event_id, event.event_source}
+          Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
+        end
+
         result
 
       {:error, error} ->

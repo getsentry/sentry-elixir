@@ -13,6 +13,9 @@
   * Change default event send type to :none instead of :async (#341)
   * Make hackney an optional dependency, and simplify Sentry.HTTPClient behaviour (#400)
   * Use Logger.metadata for Sentry.Context, no longer return metadata values on set_* functions, and rename `set_http_context` to `set_request_context`
+  * Move excluded exceptions from Sentry.Plug to Sentry.DefaultEventFilter
+  * Remove Sentry.Plug and Sentry.Phoenix.Endpoint in favor of Sentry.PlugContext and Sentry.PlugCapture
+  * Remove feedback form rendering and configuration
 
 ## 7.2.4 (2020-03-09)
 
