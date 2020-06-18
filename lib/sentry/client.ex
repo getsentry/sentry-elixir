@@ -120,7 +120,6 @@ defmodule Sentry.Client do
         end
 
         if match?({:ok, _}, result) do
-          {event.event_id, event.event_source}
           Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
         end
 
