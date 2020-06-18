@@ -91,4 +91,22 @@ defmodule SentryTest do
 
     Bypass.pass(bypass)
   end
+
+  test "sets last_event_id_and_source when an event is sent" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(
+      :sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
+    )
+
+    Sentry.capture_message("test")
+
+    assert {event_id, nil} = Sentry.get_last_event_id_and_source()
+    assert is_binary(event_id)
+  end
 end
