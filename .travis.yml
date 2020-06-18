@@ -1,28 +1,17 @@
 language: elixir
 elixir:
-  - 1.7
-  - 1.8
-  - 1.9
   - 1.10
 otp_release:
-  - 20.3
   - 21.3
-  - 22.2
+  - 22.3
+  - 23.0
 env:
   - STRICT=true
   - STRICT=false
 matrix:
   exclude:
-    - elixir: 1.7
-      env: STRICT=true
-    - elixir: 1.8
-      env: STRICT=true
-    - elixir: 1.9
-      env: STRICT=true
     - elixir: 1.10
       env: STRICT=false
-    - elixir: 1.10
-      otp_release: 20.3
 notifications:
   email:
     - mitch@rokkincat.com

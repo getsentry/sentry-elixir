@@ -56,8 +56,8 @@ defmodule Sentry.ContextTest do
     assert event.user == %{}
   end
 
-  test "storing http context appears when generating event" do
-    Sentry.Context.set_http_context(%{"url" => "https://wow"})
+  test "storing request context appears when generating event" do
+    Sentry.Context.set_request_context(%{"url" => "https://wow"})
 
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, request: %{"method" => "GET"})
