@@ -128,7 +128,7 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp get_sentry_from_callers([head | tail]) do
-    with [_ | _] = dictionary <- :erlang.process_info(head, :dictionary),
+    with {:dictionary, [_ | _] = dictionary} <- :erlang.process_info(head, :dictionary),
          %{sentry: sentry} <- dictionary[:"$logger_metadata$"] do
       sentry
     else
