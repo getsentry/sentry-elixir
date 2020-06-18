@@ -5,7 +5,7 @@ defmodule Sentry.Mixfile do
     [
       app: :sentry,
       version: "7.2.4",
-      elixir: "~> 1.7",
+      elixir: "~> 1.10",
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
@@ -31,7 +31,7 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.8 or 1.6.5", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
-      {:plug_cowboy, "~> 1.0 or ~> 2.0", optional: true},
+      {:plug_cowboy, "~> 2.3", optional: true},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.21.0", only: :dev},
       {:bypass, "~> 1.0", only: [:test]},
