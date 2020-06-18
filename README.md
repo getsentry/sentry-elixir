@@ -44,8 +44,8 @@ If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the to
 
 ```diff
  defmodule MyApp.Router do
-+  use Sentry.PlugCapture
    use Plug.Router
++  use Sentry.PlugCapture
    # ...
    plug Plug.Parsers,
      parsers: [:urlencoded, :multipart]
