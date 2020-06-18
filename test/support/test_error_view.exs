@@ -2,7 +2,7 @@ defmodule Sentry.ErrorView do
   import Phoenix.HTML, only: [sigil_E: 2, raw: 1]
 
   def render(_, _) do
-    case Sentry.last_event_id_and_source() do
+    case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} ->
         opts =
           %{title: "Testing", eventId: event_id}

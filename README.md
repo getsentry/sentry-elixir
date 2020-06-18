@@ -54,7 +54,7 @@ If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the to
 
 #### Capturing User Feedback
 
-If you would like to capture user feedback as described [here](https://docs.sentry.io/enriching-error-data/user-feedback), the `Sentry.last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
+If you would like to capture user feedback as described [here](https://docs.sentry.io/enriching-error-data/user-feedback), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
 
 An example Phoenix application setup that wanted to display the user feedback form on 500 responses on requests accepting HTML could look like:
 
@@ -62,7 +62,7 @@ An example Phoenix application setup that wanted to display the user feedback fo
 defmodule MyAppWeb.ErrorView do
   # ...
   def render("500.html", _assigns) do
-    case Sentry.last_event_id_and_source() do
+    case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} when is_binary(event_id) ->
         opts =
           # can do %{eventId: event_id, title: "My custom title"}

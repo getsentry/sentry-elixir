@@ -32,7 +32,7 @@ defmodule Sentry.ExamplePlugApplication do
   end
 
   def handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack}) do
-    response = case Sentry.last_event_id_and_source() do
+    response = case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} ->
         opts =
           %{title: "Testing", eventId: event_id}

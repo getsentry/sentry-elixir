@@ -147,7 +147,7 @@ defmodule Sentry.PlugCaptureTest do
       end
     end)
 
-    {event_id, _} = Sentry.last_event_id_and_source()
+    {event_id, _} = Sentry.get_last_event_id_and_source()
 
     assert_received {:plug_conn, :sent}
     assert {500, _headers, body} = sent_resp(conn)
@@ -208,7 +208,7 @@ defmodule Sentry.PlugCaptureTest do
       Sentry.ExamplePlugApplication.call(conn, [])
     end)
 
-    {event_id, _} = Sentry.last_event_id_and_source()
+    {event_id, _} = Sentry.get_last_event_id_and_source()
 
     assert_received {:plug_conn, :sent}
     assert {500, _headers, body} = sent_resp(conn)

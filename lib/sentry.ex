@@ -140,8 +140,8 @@ defmodule Sentry do
   Since it uses the process dictionary, it will only return the last event
   ID sent within the current process.
   """
-  @spec last_event_id_and_source() :: {String.t(), atom() | nil} | nil
-  def last_event_id_and_source do
+  @spec get_last_event_id_and_source() :: {String.t(), atom() | nil} | nil
+  def get_last_event_id_and_source do
     Process.get(:sentry_last_event_id_and_source)
   end
 
