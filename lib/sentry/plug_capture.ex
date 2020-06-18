@@ -16,11 +16,11 @@ if Code.ensure_loaded?(Plug) do
           # ...
         end
 
-    In a Plug application, it should be added above your router:
+    In a Plug application, it can be added below your router:
 
         defmodule MyApp.PlugRouter do
-          use Sentry.PlugCapture
           use Plug.Router
+          use Sentry.PlugCapture
           # ...
         end
     """
