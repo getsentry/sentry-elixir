@@ -138,4 +138,30 @@ defmodule Sentry.PlugCaptureTest do
     assert body =~ event_id
     assert body =~ ~s{"title":"Testing"}
   end
+
+  test "can render feedback form in Plug application" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      _json = Jason.decode!(body)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    conn = conn(:get, "/error_route")
+
+    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
+      Sentry.ExamplePlugApplication.call(conn, [])
+    end)
+
+    {event_id, _} = Sentry.last_event_id_and_source()
+
+    assert_received {:plug_conn, :sent}
+    assert {500, _headers, body} = sent_resp(conn)
+    assert body =~ "sentry-cdn"
+    assert body =~ event_id
+    assert body =~ ~s{"title":"Testing"}
+  end
 end
