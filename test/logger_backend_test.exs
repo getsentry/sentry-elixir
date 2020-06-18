@@ -340,4 +340,29 @@ defmodule Sentry.LoggerBackendTest do
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, send_all_messages: false)
   end
+
+  @tag :skip
+  test "sentry metadata is retrieved from callers" do
+    bypass = Bypass.open()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    pid = self()
+
+    Bypass.expect_once(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert json["user"]["user_id"] == 3
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      Sentry.Context.set_user_context(%{user_id: 3})
+
+      Task.start(fn ->
+        raise "Error"
+      end)
+
+      assert_receive("API called")
+    end)
+  end
 end
