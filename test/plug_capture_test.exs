@@ -208,9 +208,8 @@ defmodule Sentry.PlugCaptureTest do
       Sentry.ExamplePlugApplication.call(conn, [])
     end)
 
-    {event_id, _} = Sentry.get_last_event_id_and_source()
-
     assert_received {:plug_conn, :sent}
+    {event_id, _} = Sentry.get_last_event_id_and_source()
     assert {500, _headers, body} = sent_resp(conn)
     assert body =~ "sentry-cdn"
     assert body =~ event_id
