@@ -118,10 +118,10 @@ defmodule Sentry.PlugCaptureTest do
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       "#{__MODULE__.PhoenixEndpoint}": [
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
+      ],
+      phoenix: [format_encoders: []]
     )
 
-    modify_env(:phoenix, format_encoders: [])
     {:ok, _} = PhoenixEndpoint.start_link()
 
     conn = conn(:get, "/")

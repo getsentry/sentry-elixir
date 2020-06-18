@@ -9,3 +9,5 @@ config :sentry,
 
 config :ex_unit,
   assert_receive_timeout: 500
+
+config :phoenix, :json_library, Jason

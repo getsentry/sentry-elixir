@@ -2,7 +2,7 @@ defmodule Sentry.ExamplePlugApplication do
   use Sentry.PlugCapture
   use Plug.Router
 
-  plug Plug.Parsers, parsers: [:multipart]
+  plug Plug.Parsers, parsers: [:multipart, :urlencoded]
   plug Sentry.PlugContext
   plug :match
   plug :dispatch
