@@ -127,6 +127,25 @@ defmodule Sentry do
   end
 
   @doc """
+  Puts the last event ID sent to the server for the current process in
+  the process dictionary.
+  """
+  @spec put_last_event_id_and_source(String.t()) :: {String.t(), atom() | nil} | nil
+  def put_last_event_id_and_source(event_id, source \\ nil) when is_binary(event_id) do
+    Process.put(:sentry_last_event_id_and_source, {event_id, source})
+  end
+
+  @doc """
+  Gets the last event ID sent to the server from the process dictionary.
+  Since it uses the process dictionary, it will only return the last event
+  ID sent within the current process.
+  """
+  @spec get_last_event_id_and_source() :: {String.t(), atom() | nil} | nil
+  def get_last_event_id_and_source do
+    Process.get(:sentry_last_event_id_and_source)
+  end
+
+  @doc """
   Reports a message to Sentry.
 
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.

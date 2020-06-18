@@ -136,7 +136,7 @@ defmodule Sentry.LoggerBackendTest do
       assert length(json["stacktrace"]["frames"]) == 1
 
       assert List.first(json["stacktrace"]["frames"])["filename"] ==
-               "test/support/test_plug_applications.ex"
+               "test/support/example_plug_application.ex"
 
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -146,7 +146,7 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       Plug.Test.conn(:get, "/spawn_error_route")
-      |> Sentry.TestPlugApplications.Example.call([])
+      |> Sentry.ExamplePlugApplication.call([])
 
       assert_receive "API called"
     end)
@@ -191,7 +191,7 @@ defmodule Sentry.LoggerBackendTest do
     pid = self()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.TestPlugApplications.DefaultConfig, [], port: 8003)
+    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)

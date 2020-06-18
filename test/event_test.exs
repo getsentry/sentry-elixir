@@ -251,6 +251,7 @@ defmodule Sentry.EventTest do
              :mimerl,
              :parse_trans,
              :phoenix,
+             :phoenix_html,
              :phoenix_pubsub,
              :plug,
              :plug_cowboy,
