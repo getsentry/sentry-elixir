@@ -1,54 +1,50 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
-  Report logger events.
+  Report Logger events like crashed processes to Sentry. To include in your
+  application, add this module to your Logger backends:
 
       config :logger,
-        backends: [:console, BytepackWeb.SentryLoggerBackend]
+        backends: [:console, Sentry.LoggerBackend]
 
-  It sends all messages to Sentry, so it is recommended
-  to disable Sentry for non-prod environments and set the
-  log level to at least `:warn` in prod:
+  Sentry context will be included in metadata in reported events. Example:
 
-      config :logger, BytepackWeb.SentryLoggerBackend,
-        level: :warn,
-        metadata: [:foo_bar]
-
-  You can add request metadata to the reports like this:
-
-      SentryLoggerBackend.context(:request, %{ 
-        url: Plug.Conn.request_url(conn),
-        method: conn.method,
-        query_string: conn.query_string,
-        env: %{
-          "SERVER_NAME" => conn.host,
-          "SERVER_PORT" => conn.port,
-          "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first()
-        }
-      })
-
-  You can add user metadata to the reports like this:
-
-      SentryLoggerBackend.context(:user, %{
+      Sentry.Context.set_user_context(%{
         user_id: current_user.id
       })
 
+  ## Configuration
+
+  * `:excluded_domains` - Any messages with a domain in the configured
+  list will not be sent. Defaults to `[:cowboy]` to avoid double reporting
+  events from `Sentry.PlugCapture`.
+
+  * `:metadata` - To include non-Sentry Logger metadata in reports, the
+  `:metadata` key can be set to a list of keys. Metadata under those keys will
+  be added in the `:extra` context under the `:logger_metadata` key  Defaults
+  to `[]`
+
+  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
+  Defaults to `:error`.
+
+  * `:send_all_messages` - When `true`, this module will send all Logger
+  messages. Defaults to `false`, which will only send messages with metadata
+  that has the shape of an exception and stacktrace.
+
+  Example:
+
+      config :logger, Sentry.LoggerBackend,
+        # Also send warn messages
+        level: :warn,
+        # Send messages from Plug/Cowboy
+        excluded_domains: [],
+        # Include metadata added with `Logger.metadata([foo_bar: "value"])`
+        metadata: [:foo_bar],
+        # Send messages like `Logger.error("error")` to Sentry
+        send_all_messages: true
   """
   @behaviour :gen_event
 
-  defstruct level: :warn, metadata: [], excluded_domains: [:cowboy]
-
-  def context(key, value) when is_atom(key) and is_map(value) do
-    {sentry, metadata} =
-      case :logger.get_process_metadata() do
-        %{sentry: sentry} = metadata -> {sentry, metadata}
-        %{} = metadata -> {%{}, metadata}
-        :undefined -> {%{}, %{}}
-      end
-
-    sentry = Map.update(sentry, key, value, &Map.merge(&1, value))
-    :logger.set_process_metadata(Map.put(metadata, :sentry, sentry))
-    :ok
-  end
+  defstruct level: :error, metadata: [], excluded_domains: [:cowboy], send_all_messages: false
 
   def init(__MODULE__) do
     config = Application.get_env(:logger, __MODULE__, [])
@@ -112,17 +108,21 @@ defmodule Sentry.LoggerBackend do
       ] ++ Map.to_list(sentry)
 
     case meta[:crash_reason] do
-      {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
+      {exception, stacktrace} when is_list(stacktrace) ->
         Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
 
+      reason when is_atom(reason) and not is_nil(reason) ->
+        Sentry.capture_exception(reason, opts)
+
       _ ->
-        # TODO: Make this opt-in or opt-out
-        try do
-          if is_binary(msg), do: msg, else: :unicode.characters_to_binary(msg)
-        rescue
-          _ -> :ok
-        else
-          msg -> Sentry.capture_message(msg, opts)
+        if state.send_all_messages do
+          try do
+            if is_binary(msg), do: msg, else: :unicode.characters_to_binary(msg)
+          rescue
+            _ -> :ok
+          else
+            msg -> Sentry.capture_message(msg, opts)
+          end
         end
     end
   end

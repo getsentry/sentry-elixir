@@ -4,6 +4,7 @@
 
 * Enhancements
   * Cache environment config in application config (#393)
+  * Allow configuring LoggerBackend to send all messages, not just exceptions (e.g. `Logger.error("I am an error message")`)
 
 * Bug Fixes
   * fix request url port in payloads for HTTPS requests  (#391)
@@ -12,10 +13,11 @@
   * Change default `included_environments` to only include `:prod` by default (#370)
   * Change default event send type to :none instead of :async (#341)
   * Make hackney an optional dependency, and simplify Sentry.HTTPClient behaviour (#400)
-  * Use Logger.metadata for Sentry.Context, no longer return metadata values on set_* functions, and rename `set_http_context` to `set_request_context`
-  * Move excluded exceptions from Sentry.Plug to Sentry.DefaultEventFilter
-  * Remove Sentry.Plug and Sentry.Phoenix.Endpoint in favor of Sentry.PlugContext and Sentry.PlugCapture
-  * Remove feedback form rendering and configuration
+  * Use Logger.metadata for Sentry.Context, no longer return metadata values on set_* functions, and rename `set_http_context` to `set_request_context` (#401)
+  * Move excluded exceptions from Sentry.Plug to Sentry.DefaultEventFilter (#402)
+  * Remove Sentry.Plug and Sentry.Phoenix.Endpoint in favor of Sentry.PlugContext and Sentry.PlugCapture (#402)
+  * Remove feedback form rendering and configuration (#402)
+  * Logger metadata is now specified by key in LoggerBackend instead of enabled/disabled
 
 ## 7.2.4 (2020-03-09)
 
