@@ -299,8 +299,8 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
-  test "sends all messages if send_all_messages is true" do
-    Logger.configure_backend(Sentry.LoggerBackend, send_all_messages: true)
+  test "sends all messages if capture_log_messages is true" do
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
     bypass = Bypass.open()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     pid = self()
@@ -318,11 +318,11 @@ defmodule Sentry.LoggerBackendTest do
       assert_receive("API called")
     end)
   after
-    Logger.configure_backend(Sentry.LoggerBackend, send_all_messages: false)
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
   end
 
   test "sends warning messages when configured to :warn" do
-    Logger.configure_backend(Sentry.LoggerBackend, level: :warn, send_all_messages: true)
+    Logger.configure_backend(Sentry.LoggerBackend, level: :warn, capture_log_messages: true)
     bypass = Bypass.open()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     pid = self()
@@ -342,12 +342,12 @@ defmodule Sentry.LoggerBackendTest do
       assert_receive("API called")
     end)
   after
-    Logger.configure_backend(Sentry.LoggerBackend, level: :error, send_all_messages: false)
+    Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
   # TODO: update for Elixir 1.10.4 to not manually set :callers and replace with Task
   test "sentry metadata is retrieved from callers" do
-    Logger.configure_backend(Sentry.LoggerBackend, send_all_messages: true)
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
     bypass = Bypass.open()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     pid = self()

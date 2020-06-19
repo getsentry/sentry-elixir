@@ -26,7 +26,7 @@ defmodule Sentry.LoggerBackend do
   * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
   Defaults to `:error`.
 
-  * `:send_all_messages` - When `true`, this module will send all Logger
+  * `:capture_log_messages` - When `true`, this module will send all Logger
   messages. Defaults to `false`, which will only send messages with metadata
   that has the shape of an exception and stacktrace.
 
@@ -40,11 +40,11 @@ defmodule Sentry.LoggerBackend do
         # Include metadata added with `Logger.metadata([foo_bar: "value"])`
         metadata: [:foo_bar],
         # Send messages like `Logger.error("error")` to Sentry
-        send_all_messages: true
+        capture_log_messages: true
   """
   @behaviour :gen_event
 
-  defstruct level: :error, metadata: [], excluded_domains: [:cowboy], send_all_messages: false
+  defstruct level: :error, metadata: [], excluded_domains: [:cowboy], capture_log_messages: false
 
   def init(__MODULE__) do
     config = Application.get_env(:logger, __MODULE__, [])
@@ -115,7 +115,7 @@ defmodule Sentry.LoggerBackend do
         Sentry.capture_exception(reason, opts)
 
       _ ->
-        if state.send_all_messages do
+        if state.capture_log_messages do
           try do
             if is_binary(msg), do: msg, else: :unicode.characters_to_binary(msg)
           rescue
