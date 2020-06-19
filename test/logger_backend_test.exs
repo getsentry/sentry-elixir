@@ -110,6 +110,8 @@ defmodule Sentry.LoggerBackendTest do
                "post_context" => []
              } = List.last(json["stacktrace"]["frames"])
 
+      assert [%{"test" => "test", "timestamp" => _}] = json["breadcrumbs"]
+
       assert List.first(json["exception"])["type"] == "FunctionClauseError"
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
@@ -121,9 +123,11 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
+      Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{test: "test"})
       Sentry.TestGenServer.invalid_function(pid)
       assert_receive "terminating"
       assert_receive "API called"
+      Bypass.down(bypass)
     end)
   end
 
