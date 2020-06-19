@@ -20,8 +20,8 @@ defmodule Sentry.LoggerBackend do
 
   * `:metadata` - To include non-Sentry Logger metadata in reports, the
   `:metadata` key can be set to a list of keys. Metadata under those keys will
-  be added in the `:extra` context under the `:logger_metadata` key  Defaults
-  to `[]`
+  be added in the `:extra` context under the `:logger_metadata` key. Defaults
+  to `[]`.
 
   * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
   Defaults to `:error`.
