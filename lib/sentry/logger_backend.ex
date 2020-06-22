@@ -108,11 +108,11 @@ defmodule Sentry.LoggerBackend do
       ] ++ Map.to_list(sentry)
 
     case meta[:crash_reason] do
-      {exception, stacktrace} when is_list(stacktrace) ->
+      {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
         Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
 
-      reason when is_atom(reason) and not is_nil(reason) ->
-        Sentry.capture_exception(reason, opts)
+      {other, stacktrace} when is_list(stacktrace) ->
+        Sentry.capture_exception(Sentry.CrashError.exception(other), [stacktrace: stacktrace] ++ opts)
 
       _ ->
         if state.capture_log_messages do
