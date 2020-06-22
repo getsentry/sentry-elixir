@@ -105,11 +105,9 @@ defmodule Sentry.PlugContext do
   def build_request_interface_data(conn, opts) do
     body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
 
-    header_scrubber =
-      Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
+    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
 
-    cookie_scrubber =
-      Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
+    cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
 
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
