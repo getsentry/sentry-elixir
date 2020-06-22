@@ -397,4 +397,26 @@ defmodule Sentry.LoggerBackendTest do
       assert_receive("API called")
     end)
   end
+
+  test "handles malformed :callers metadata" do
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    bypass = Bypass.open()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    pid = self()
+    {:ok, dead_pid} = Task.start(fn -> nil end)
+
+    Bypass.expect_once(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert json["message"] == "error"
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      Logger.error("error", callers: [dead_pid, nil])
+
+      assert_receive("API called")
+    end)
+  end
 end
