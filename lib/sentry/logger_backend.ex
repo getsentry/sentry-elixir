@@ -112,7 +112,10 @@ defmodule Sentry.LoggerBackend do
         Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
 
       {other, stacktrace} when is_list(stacktrace) ->
-        Sentry.capture_exception(Sentry.CrashError.exception(other), [stacktrace: stacktrace] ++ opts)
+        Sentry.capture_exception(
+          Sentry.CrashError.exception(other),
+          [stacktrace: stacktrace] ++ opts
+        )
 
       _ ->
         if state.capture_log_messages do
