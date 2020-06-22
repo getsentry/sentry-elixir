@@ -73,8 +73,8 @@ defmodule Sentry.Event do
   @doc """
   Creates an Event struct out of context collected and options
   ## Options
-    * `:exception` - Sentry-formatted exception
-    * `:original_exception` - Original exception
+    * `:exception` - Sentry-structured exception
+    * `:original_exception` - Original Elixir exception struct
     * `:message` - message
     * `:stacktrace` - a list of Exception.stacktrace()
     * `:extra` - map of extra context
@@ -175,34 +175,18 @@ defmodule Sentry.Event do
 
   """
   @spec transform_exception(Exception.t(), keyword()) :: Event.t()
-  def transform_exception(exception, opts) do
-    error_type = Keyword.get(opts, :error_type) || :error
-    normalized = Exception.normalize(:error, exception, Keyword.get(opts, :stacktrace, nil))
-
+  def transform_exception(%_{} = exception, opts) do
     type =
-      if error_type == :error do
-        normalized.__struct__
-        |> to_string()
-        |> String.trim_leading("Elixir.")
-      else
-        error_type
-      end
+      exception.__struct__
+      |> to_string()
+      |> String.trim_leading("Elixir.")
 
-    value =
-      if error_type == :error do
-        Exception.message(normalized)
-      else
-        Exception.format_banner(error_type, exception)
-      end
+    value = Exception.message(exception)
 
     module = Keyword.get(opts, :module)
     transformed_exception = [%{type: type, value: value, module: module}]
 
-    message =
-      :error
-      |> Exception.format_banner(normalized)
-      |> String.trim("*")
-      |> String.trim()
+    message = "(#{type} #{value})"
 
     opts
     |> Keyword.put(:exception, transformed_exception)

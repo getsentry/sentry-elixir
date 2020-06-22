@@ -1,42 +1,54 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
-  This module makes use of Elixir 1.7's new Logger metadata to report
-  crashed processes.  It replaces the previous `Sentry.Logger` sytem.
-
-  To include the backend in your application, the backend can be added in your
-  configuration file:
+  Report Logger events like crashed processes to Sentry. To include in your
+  application, add this module to your Logger backends:
 
       config :logger,
         backends: [:console, Sentry.LoggerBackend]
 
-  If you are on OTP 21+ and would like to configure the backend to include metadata from
-  `Logger.metadata/0` in reported events, it can be enabled:
+  Sentry context will be included in metadata in reported events. Example:
+
+      Sentry.Context.set_user_context(%{
+        user_id: current_user.id
+      })
+
+  ## Configuration
+
+  * `:excluded_domains` - Any messages with a domain in the configured
+  list will not be sent. Defaults to `[:cowboy]` to avoid double reporting
+  events from `Sentry.PlugCapture`.
+
+  * `:metadata` - To include non-Sentry Logger metadata in reports, the
+  `:metadata` key can be set to a list of keys. Metadata under those keys will
+  be added in the `:extra` context under the `:logger_metadata` key. Defaults
+  to `[]`.
+
+  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
+  Defaults to `:error`.
+
+  * `:capture_log_messages` - When `true`, this module will send all Logger
+  messages. Defaults to `false`, which will only send messages with metadata
+  that has the shape of an exception and stacktrace.
+
+  Example:
 
       config :logger, Sentry.LoggerBackend,
-        include_logger_metadata: true
-
-  It is important to be aware of whether this will include sensitive information
-  in Sentry events before enabling it.
-
-  ## Options
-
-  The supported options are:
-
-    * `:include_logger_metadata` - Enabling this option will read any key/value
-      pairs with with binary, atom or number values from `Logger.metadata/0`
-      and include that dictionary under the `:logger_metadata` key in an
-      event's `:extra` metadata.  This option defaults to `false`.
-    * `:ignore_plug` - Enabling this option will ignore any events that
-      appear to be from a Plug process crashing.  This is to prevent
-      duplicate errors being reported to Sentry alongside `Sentry.Plug`.
+        # Also send warn messages
+        level: :warn,
+        # Send messages from Plug/Cowboy
+        excluded_domains: [],
+        # Include metadata added with `Logger.metadata([foo_bar: "value"])`
+        metadata: [:foo_bar],
+        # Send messages like `Logger.error("error")` to Sentry
+        capture_log_messages: true
   """
   @behaviour :gen_event
 
-  defstruct level: nil, include_logger_metadata: false, ignore_plug: true
+  defstruct level: :error, metadata: [], excluded_domains: [:cowboy], capture_log_messages: false
 
   def init(__MODULE__) do
     config = Application.get_env(:logger, __MODULE__, [])
-    {:ok, init(config, %__MODULE__{})}
+    {:ok, struct(%__MODULE__{}, config)}
   end
 
   def init({__MODULE__, opts}) when is_list(opts) do
@@ -44,7 +56,7 @@ defmodule Sentry.LoggerBackend do
       Application.get_env(:logger, __MODULE__, [])
       |> Keyword.merge(opts)
 
-    {:ok, init(config, %__MODULE__{})}
+    {:ok, struct(%__MODULE__{}, config)}
   end
 
   def handle_call({:configure, options}, state) do
@@ -53,62 +65,19 @@ defmodule Sentry.LoggerBackend do
       |> Keyword.merge(options)
 
     Application.put_env(:logger, __MODULE__, config)
-    state = init(config, state)
-    {:ok, :ok, state}
+    {:ok, :ok, struct(state, config)}
   end
 
   def handle_event({_level, gl, {Logger, _, _, _}}, state) when node(gl) != node() do
     {:ok, state}
   end
 
-  def handle_event({_level, _gl, {Logger, _msg, _ts, meta}}, state) do
-    %{include_logger_metadata: include_logger_metadata, ignore_plug: ignore_plug} = state
-
-    opts =
-      if include_logger_metadata do
-        [
-          extra: %{
-            logger_metadata: build_logger_metadata(meta)
-          }
-        ]
-      else
-        []
-      end
-
-    case Keyword.get(meta, :crash_reason) do
-      {reason, stacktrace} when is_list(stacktrace) ->
-        if ignore_plug &&
-             Enum.any?(stacktrace, fn {module, function, arity, _file_line} ->
-               match?({^module, ^function, ^arity}, {Plug.Cowboy.Handler, :init, 2}) ||
-                 match?({^module, ^function, ^arity}, {Phoenix.Endpoint.Cowboy2Handler, :init, 2}) ||
-                 match?({^module, ^function, ^arity}, {Phoenix.Endpoint.Cowboy2Handler, :init, 4})
-             end) do
-          :ok
-        else
-          opts =
-            opts
-            |> Keyword.put(:event_source, :logger)
-            |> Keyword.put(:stacktrace, stacktrace)
-
-          Sentry.capture_exception(reason, opts)
-        end
-
-      {{_reason, stacktrace}, {_m, _f, args}} when is_list(stacktrace) and is_list(args) ->
-        # Cowboy stuff
-        # https://github.com/ninenines/cowboy/blob/master/src/cowboy_stream_h.erl#L148-L151
-        :ok
-
-      reason when is_atom(reason) and not is_nil(reason) ->
-        Sentry.capture_exception(reason, [{:event_source, :logger} | opts])
-
-      _ ->
-        :ok
+  def handle_event({level, _gl, {Logger, msg, _ts, meta}}, state) do
+    if Logger.compare_levels(level, state.level) != :lt and
+         not excluded_domain?(meta[:domain], state) do
+      log(level, msg, meta, state)
     end
 
-    {:ok, state}
-  end
-
-  def handle_event(:flush, state) do
     {:ok, state}
   end
 
@@ -128,27 +97,57 @@ defmodule Sentry.LoggerBackend do
     :ok
   end
 
-  defp init(config, %__MODULE__{} = state) do
-    level = Keyword.get(config, :level, state.level)
+  defp log(level, msg, meta, state) do
+    sentry = meta[:sentry] || get_sentry_from_callers(meta[:callers] || [])
 
-    include_logger_metadata =
-      Keyword.get(config, :include_logger_metadata, state.include_logger_metadata)
+    opts =
+      [
+        event_source: :logger,
+        extra: %{logger_metadata: logger_metadata(meta, state), logger_level: level},
+        result: :none
+      ] ++ Map.to_list(sentry)
 
-    ignore_plug = Keyword.get(config, :ignore_plug, state.ignore_plug)
+    case meta[:crash_reason] do
+      {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
+        Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
 
-    %{
-      state
-      | level: level,
-        include_logger_metadata: include_logger_metadata,
-        ignore_plug: ignore_plug
-    }
+      {other, stacktrace} when is_list(stacktrace) ->
+        Sentry.capture_exception(
+          Sentry.CrashError.exception(other),
+          [stacktrace: stacktrace] ++ opts
+        )
+
+      _ ->
+        if state.capture_log_messages do
+          try do
+            if is_binary(msg), do: msg, else: :unicode.characters_to_binary(msg)
+          rescue
+            _ -> :ok
+          else
+            msg -> Sentry.capture_message(msg, opts)
+          end
+        end
+    end
   end
 
-  defp build_logger_metadata(meta) do
-    meta
-    |> Enum.filter(fn {_key, value} ->
-      is_binary(value) || is_atom(value) || is_number(value)
-    end)
-    |> Enum.into(%{})
+  defp get_sentry_from_callers([head | tail]) when is_pid(head) do
+    with {:dictionary, [_ | _] = dictionary} <- :erlang.process_info(head, :dictionary),
+         %{sentry: sentry} <- dictionary[:"$logger_metadata$"] do
+      sentry
+    else
+      _ -> get_sentry_from_callers(tail)
+    end
+  end
+
+  defp get_sentry_from_callers(_), do: %{}
+
+  defp excluded_domain?([head | _], state), do: head in state.excluded_domains
+  defp excluded_domain?(_, _), do: false
+
+  defp logger_metadata(meta, state) do
+    for key <- state.metadata,
+        value = meta[key],
+        do: {key, value},
+        into: %{}
   end
 end

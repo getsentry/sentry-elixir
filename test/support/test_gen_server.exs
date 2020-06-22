@@ -15,6 +15,10 @@ defmodule Sentry.TestGenServer do
     send(pid, {:logger_metadata, key, value})
   end
 
+  def add_sentry_breadcrumb(pid, value) do
+    send(pid, {:sentry_breadcrumb, value})
+  end
+
   def invalid_function(pid) do
     send(pid, :invalid_function)
   end
@@ -38,6 +42,11 @@ defmodule Sentry.TestGenServer do
 
   def handle_info({:logger_metadata, key, value}, state) do
     Logger.metadata([{key, value}])
+    {:noreply, state}
+  end
+
+  def handle_info({:sentry_breadcrumb, value}, state) do
+    Sentry.Context.add_breadcrumb(value)
     {:noreply, state}
   end
 
