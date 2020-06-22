@@ -32,7 +32,7 @@ defmodule Sentry.EventTest do
     assert event.level == "error"
 
     assert event.message ==
-             "(UndefinedFunctionError) function Sentry.Event.not_a_function/3 is undefined or private"
+             "(UndefinedFunctionError function Sentry.Event.not_a_function/3 is undefined or private)"
 
     assert is_binary(event.server_name)
 

@@ -49,7 +49,7 @@ defmodule Sentry.LoggerBackendTest do
       json = Jason.decode!(body)
 
       assert List.first(json["exception"])["value"] ==
-               ~s[Erlang error: {:bad_return_value, "I am throwing"}]
+               ~s[** (exit) bad return value: "I am throwing"]
 
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
@@ -75,8 +75,8 @@ defmodule Sentry.LoggerBackendTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
-      assert List.first(json["exception"])["type"] == "ErlangError"
-      assert List.first(json["exception"])["value"] == "Erlang error: :bad_exit"
+      assert List.first(json["exception"])["type"] == "Sentry.CrashError"
+      assert List.first(json["exception"])["value"] == "** (exit) :bad_exit"
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"
       send(self_pid, "API called")
@@ -166,11 +166,9 @@ defmodule Sentry.LoggerBackendTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
 
-      exception_value =
-        List.first(json["exception"])
-        |> Map.fetch!("value")
-
-      assert String.contains?(exception_value, "{:timeout, {GenServer, :call")
+      assert List.first(json["exception"])["type"] == "Sentry.CrashError"
+      assert List.first(json["exception"])["value"] =~ "** (EXIT) time out"
+      assert List.first(json["exception"])["value"] =~ "GenServer\.call"
 
       assert conn.request_path == "/api/1/store/"
       assert conn.method == "POST"

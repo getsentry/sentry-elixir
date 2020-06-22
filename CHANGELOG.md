@@ -18,6 +18,7 @@
   * Remove Sentry.Plug and Sentry.Phoenix.Endpoint in favor of Sentry.PlugContext and Sentry.PlugCapture (#402)
   * Remove feedback form rendering and configuration (#402)
   * Logger metadata is now specified by key in LoggerBackend instead of enabled/disabled
+  * `Sentry.capture_exception/1` now only accepts exceptions
 
 ## 7.2.4 (2020-03-09)
 

@@ -112,7 +112,7 @@ defmodule Sentry do
   Parses and submits an exception to Sentry if current environment is in included_environments.
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
-  @spec capture_exception(Exception.t() | atom() | {atom(), atom()}, Keyword.t()) :: send_result
+  @spec capture_exception(Exception.t(), Keyword.t()) :: send_result
   def capture_exception(exception, opts \\ []) do
     filter_module = Config.filter()
     event_source = Keyword.get(opts, :event_source)

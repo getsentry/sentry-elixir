@@ -100,7 +100,7 @@ defmodule Sentry.PlugCaptureTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
       assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.error/2"
-      assert json["message"] == "(RuntimeError) PhoenixError"
+      assert json["message"] == "(RuntimeError PhoenixError)"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
