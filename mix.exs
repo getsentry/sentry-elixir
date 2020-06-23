@@ -28,7 +28,7 @@ defmodule Sentry.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 1.8 or 1.6.5", optional: true},
+      {:hackney, "~> 1.8", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 2.3", optional: true},
