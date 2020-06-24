@@ -1,6 +1,6 @@
 # Changelog
 
-## master
+## 8.0.0-rc.0 (2020-06-24)
 
 * Enhancements
   * Cache environment config in application config (#393)
