@@ -368,7 +368,8 @@ defmodule Sentry.Client do
         Config.log_level(),
         fn ->
           ["Failed to send Sentry event.", message]
-        end
+        end,
+        domain: [:sentry]
       )
     end
   end
