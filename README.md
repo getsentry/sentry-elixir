@@ -6,6 +6,12 @@
 
 The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
 
+## Note on upgrading from Sentry 7.x to 8.x
+
+Sentry 8.x requires Elixir 1.10 and Sentry 7.x will be maintained for applications running prior versions. Documentation for Sentry 7.x can be found [here](https://hexdocs.pm/sentry/7.2.4/readme.html).
+
+If you would like to upgrade a project to use Sentry 8.x, see [here](https://gist.github.com/mitchellhenke/dce120a5515565076b13962ee0be749b).
+
 ## Installation
 
 To use Sentry with your projects, edit your mix.exs file and add it as a dependency. Sentry does not install a JSON library nor HTTP client by itself.  Sentry will default to trying to use Jason for JSON operations and Hackney for HTTP requests, but can be configured to use other ones. To use the default ones, do:
