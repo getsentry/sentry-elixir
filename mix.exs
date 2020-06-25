@@ -33,7 +33,7 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 2.3", optional: true},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.21.0", only: :dev},
+      {:ex_doc, "~> 0.22.0", only: :dev},
       {:bypass, "~> 1.0", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
       {:phoenix_html, "~> 2.0", only: [:test]}
