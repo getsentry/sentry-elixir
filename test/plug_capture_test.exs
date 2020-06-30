@@ -7,17 +7,23 @@ defmodule Sentry.PlugCaptureTest do
   defmodule PhoenixController do
     use Phoenix.Controller
     def error(_conn, _params), do: raise("PhoenixError")
+
+    def assigns(conn, _params) do
+      _test = conn.assigns2.test
+    end
   end
 
   defmodule PhoenixRouter do
     use Phoenix.Router
 
     get "/error_route", PhoenixController, :error
+    get "/assigns_route", PhoenixController, :assigns
   end
 
   defmodule PhoenixEndpoint do
     use Sentry.PlugCapture
     use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
 
     plug Plug.Parsers,
       parsers: [:urlencoded, :multipart, :json],
@@ -214,5 +220,33 @@ defmodule Sentry.PlugCaptureTest do
     assert body =~ "sentry-cdn"
     assert body =~ event_id
     assert body =~ ~s{"title":"Testing"}
+  end
+
+  test "handles Erlang error in Plug.Conn.WrapperError" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      "#{__MODULE__.PhoenixEndpoint}": [
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      ]
+    )
+
+    {:ok, _} = PhoenixEndpoint.start_link()
+
+    capture_log(fn ->
+      assert_raise KeyError, fn ->
+        conn(:get, "/assigns_route")
+        |> Plug.Conn.put_req_header("throw", "throw")
+        |> PhoenixEndpoint.call([])
+      end
+    end)
   end
 end
