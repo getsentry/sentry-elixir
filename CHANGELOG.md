@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.0-rc.2 (2020-07-01)
+Fix trying to transform erlang error coming from PlugCapture (#406)
+
+## 8.0.0-rc.1 (2020-06-29)
+
+Remove changes that were unintentionally included in build
+
 ## 8.0.0-rc.0 (2020-06-24)
 
 * Enhancements
