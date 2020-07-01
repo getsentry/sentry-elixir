@@ -20,7 +20,7 @@ To use Sentry with your projects, edit your mix.exs file and add it as a depende
 defp deps do
   [
     # ...
-    {:sentry, "8.0.0-rc.1"},
+    {:sentry, "8.0.0-rc.2"},
     {:jason, "~> 1.1"},
     {:hackney, "~> 1.8"}
   ]
