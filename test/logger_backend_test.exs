@@ -368,7 +368,6 @@ defmodule Sentry.LoggerBackendTest do
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
-  # TODO: update for Elixir 1.10.4 to not manually set :callers and replace with Task
   test "sentry metadata is retrieved from callers" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
     bypass = Bypass.open()
@@ -379,18 +378,16 @@ defmodule Sentry.LoggerBackendTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
       assert json["user"]["user_id"] == 3
-      assert json["message"] == "error"
+      assert json["message"] == "(RuntimeError oops)"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
     capture_log(fn ->
       Sentry.Context.set_user_context(%{user_id: 3})
-      parent = self()
 
-      Task.start(fn ->
-        Logger.error("error", callers: [parent])
-      end)
+      {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
+      send(task, :go)
 
       assert_receive("API called")
     end)
@@ -416,5 +413,18 @@ defmodule Sentry.LoggerBackendTest do
 
       assert_receive("API called")
     end)
+  end
+
+  def task(parent, fun \\ fn -> raise "oops" end) do
+    mon = Process.monitor(parent)
+    Process.unlink(parent)
+
+    receive do
+      :go ->
+        fun.()
+
+      {:DOWN, ^mon, _, _, _} ->
+        exit(:shutdown)
+    end
   end
 end
