@@ -30,9 +30,13 @@ defmodule Sentry.PlugCaptureTest do
       pass: ["*/*"],
       json_decoder: Jason
 
-    plug Sentry.PlugContext
+    plug Sentry.PlugContext, body_scrubber: &PhoenixEndpoint.scrub_params/1
 
     plug PhoenixRouter
+
+    def scrub_params(conn) do
+      Sentry.PlugContext.default_body_scrubber(conn)
+    end
   end
 
   test "sends error to Sentry" do

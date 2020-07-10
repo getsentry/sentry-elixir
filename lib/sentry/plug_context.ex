@@ -29,11 +29,11 @@ defmodule Sentry.PlugContext do
 
   Then pass it into Sentry.Plug:
 
-      use Sentry.PlugContext, body_scrubber: &scrub_params/1
+      plug Sentry.PlugContext, body_scrubber: &MyModule.scrub_params/1
 
   You can also pass it in as a `{module, fun}` like so:
 
-      use Sentry.PlugContext, body_scrubber: {MyModule, :scrub_params}
+      plug Sentry.PlugContext, body_scrubber: {MyModule, :scrub_params}
 
   *Please Note*: If you are sending large files you will want to scrub them out.
 
@@ -54,11 +54,11 @@ defmodule Sentry.PlugContext do
 
   Then pass it into Sentry.Plug:
 
-      use Sentry.PlugContext, header_scrubber: &scrub_headers/1
+      plug Sentry.PlugContext, header_scrubber: &MyModule.scrub_headers/1
 
   It can also be passed in as a `{module, fun}` like so:
 
-      use Sentry.PlugContext, header_scrubber: {MyModule, :scrub_headers}
+      plug Sentry.PlugContext, header_scrubber: {MyModule, :scrub_headers}
 
   ### Cookie Scrubber
 
@@ -67,8 +67,8 @@ defmodule Sentry.PlugContext do
 
   To configure scrubbing, we can set all configuration keys:
 
-  use Sentry.PlugContext, header_scrubber: &scrub_headers/1,
-    body_scrubber: &scrub_params/1, cookie_scrubber: &scrub_cookies/1
+  plug Sentry.PlugContext, header_scrubber: &MyModule.scrub_headers/1,
+    body_scrubber: &MyModule.scrub_params/1, cookie_scrubber: &MyModule.scrub_cookies/1
 
   ### Including Request Identifiers
 
@@ -78,7 +78,7 @@ defmodule Sentry.PlugContext do
   which header key Sentry should check.  It will default to "x-request-id",
   which Plug.RequestId (and therefore Phoenix) also default to.
 
-      use Sentry.PlugContext, request_id_header: "application-request-id"
+      plug Sentry.PlugContext, request_id_header: "application-request-id"
   """
 
   if Code.ensure_loaded?(Plug) do
