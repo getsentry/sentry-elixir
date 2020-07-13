@@ -1,11 +1,19 @@
 # Changelog
 
+## 8.0.0 (2020-07-13)
+[7.x -> 8.0 Upgrade Guide](https://gist.github.com/mitchellhenke/dce120a5515565076b13962ee0be749b)
+
+* Bug Fixes
+  * Fix documentation for `Sentry.PlugContext` (#410)
+
 ## 8.0.0-rc.2 (2020-07-01)
-Fix trying to transform erlang error coming from PlugCapture (#406)
+* Bug Fixes
+  * Fix trying to transform erlang error coming from PlugCapture (#406)
 
 ## 8.0.0-rc.1 (2020-06-29)
 
-Remove changes that were unintentionally included in build
+* Bug Fixes
+  * Remove changes that were unintentionally included in build
 
 ## 8.0.0-rc.0 (2020-06-24)
 
