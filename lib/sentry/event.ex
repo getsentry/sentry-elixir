@@ -64,11 +64,6 @@ defmodule Sentry.Event do
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
   @enable_deps_reporting Config.report_deps()
-  @deps if(
-          @enable_deps_reporting,
-          do: Util.mix_deps(),
-          else: []
-        )
 
   @doc """
   Creates an Event struct out of context collected and options
@@ -155,7 +150,7 @@ defmodule Sentry.Event do
       breadcrumbs: breadcrumbs,
       request: request,
       fingerprint: fingerprint,
-      modules: Util.mix_deps_versions(@deps),
+      modules: Util.mix_deps_versions(deps(@enable_deps_reporting)),
       event_source: event_source
     }
     |> add_metadata()
@@ -304,4 +299,10 @@ defmodule Sentry.Event do
 
   defp coerce_stacktrace({m, f, a}), do: [{m, f, a, []}]
   defp coerce_stacktrace(stacktrace), do: stacktrace
+
+  defp deps(enable_deps_reporting)
+       when is_boolean(enable_deps_reporting) and enable_deps_reporting,
+       do: Util.mix_deps()
+
+  defp deps(_), do: []
 end
