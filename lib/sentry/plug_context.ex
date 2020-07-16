@@ -167,25 +167,44 @@ defmodule Sentry.PlugContext do
 
   @spec default_body_scrubber(Plug.Conn.t()) :: map()
   def default_body_scrubber(conn) do
-    scrub_map(conn.params)
+    scrub_map(conn.params, @default_scrubbed_param_keys)
   end
 
-  defp scrub_map(map) do
+  @doc """
+  Recursively scrubs a map that may have nested maps
+
+  Accepts a list of keys to scrub, and a list of options to configure
+
+  ### Options
+    * `:scrubbed_values_regular_expressions` - A list of regular expressions.
+    Any binary values within the map that match any of the regular expressions
+    will be scrubbed. Defaults to `[~r/^(?:\d[ -]*?){13,16}$/]`.
+    * `:scrubbed_value` - The value to replace scrubbed values with.
+    Defaults to `"*********"`.
+  """
+  @spec scrub_map(map(), list(String.t()), keyword()) :: map()
+  def scrub_map(map, scrubbed_keys, opts \\ []) do
+    scrubbed_values_regular_expressions =
+      Keyword.get(opts, :scrubbed_values_regular_expressions, [@credit_card_regex])
+
+    scrubbed_value = Keyword.get(opts, :scrubbed_value, @scrubbed_value)
+
     Enum.into(map, %{}, fn {key, value} ->
       value =
         cond do
-          Enum.member?(@default_scrubbed_param_keys, key) ->
-            @scrubbed_value
+          Enum.member?(scrubbed_keys, key) ->
+            scrubbed_value
 
-          is_binary(value) && Regex.match?(@credit_card_regex, value) ->
-            @scrubbed_value
+          is_binary(value) &&
+              Enum.any?(scrubbed_values_regular_expressions, &Regex.match?(&1, value)) ->
+            scrubbed_value
 
           is_map(value) && Map.has_key?(value, :__struct__) ->
             Map.from_struct(value)
-            |> scrub_map()
+            |> scrub_map(scrubbed_keys, opts)
 
           is_map(value) ->
-            scrub_map(value)
+            scrub_map(value, scrubbed_keys, opts)
 
           true ->
             value
