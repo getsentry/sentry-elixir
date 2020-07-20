@@ -126,7 +126,10 @@ defmodule Sentry.Event do
       request_context
       |> Map.merge(Keyword.get(opts, :request, %{}))
 
-    breadcrumbs = Keyword.get(opts, :breadcrumbs, []) ++ breadcrumbs_context
+    breadcrumbs =
+      Keyword.get(opts, :breadcrumbs, [])
+      |> Kernel.++(breadcrumbs_context)
+      |> Enum.take(-1 * Config.max_breadcrumbs())
 
     level = Keyword.get(opts, :level, "error")
 

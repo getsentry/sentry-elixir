@@ -133,6 +133,10 @@ defmodule Sentry.Config do
     get_config(:log_level, default: :warn, check_dsn: false)
   end
 
+  def max_breadcrumbs do
+    get_config(:max_breadcrumbs, default: 100, check_dsn: false)
+  end
+
   def permitted_log_level_values, do: @permitted_log_level_values
 
   defp get_config(key, opts \\ []) when is_atom(key) do
