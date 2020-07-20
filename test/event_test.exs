@@ -140,6 +140,16 @@ defmodule Sentry.EventTest do
     } = Event.create_event(message: "Test message")
   end
 
+  test "respects the max_breadcrumbs configuration" do
+    breadcrumbs =
+      1..150
+      |> Enum.map(fn x -> %{message: "breadcrumb-#{x}"} end)
+
+    event = Event.create_event(message: "Test message", breadcrumbs: breadcrumbs)
+    assert length(event.breadcrumbs) == 100
+    assert event.breadcrumbs == Enum.take(breadcrumbs, -100)
+  end
+
   test "only sending fingerprint when set" do
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, fingerprint: ["hello", "world"])
