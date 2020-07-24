@@ -3,7 +3,15 @@ defmodule Sentry.DefaultEventFilter do
 
   @moduledoc false
 
-  def exclude_exception?(%x{}, :plug) when x in [Phoenix.Router.NoRouteError] do
+  @ignored_exceptions [
+    Phoenix.Router.NoRouteError,
+    Plug.Parsers.RequestTooLarge,
+    Plug.Parsers.BadEncodingError,
+    Plug.Parsers.ParseError,
+    Plug.Parsers.UnsupportedMediaTypeError
+  ]
+
+  def exclude_exception?(%x{}, :plug) when x in @ignored_exceptions do
     true
   end
 
