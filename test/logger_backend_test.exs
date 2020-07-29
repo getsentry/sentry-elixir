@@ -269,6 +269,38 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "includes Logger.metadata for all keys except :pid and :gl when metadata is set as :all" do
+    Logger.configure_backend(Sentry.LoggerBackend, metadata: :all)
+    bypass = Bypass.open()
+    Process.flag(:trap_exit, true)
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert get_in(json, ["extra", "logger_metadata", "string"]) == "string"
+      assert get_in(json, ["extra", "logger_metadata", "map"]) == %{"a" => "b"}
+      assert get_in(json, ["extra", "logger_metadata", "list"]) == [1, 2, 3]
+      assert get_in(json, ["extra", "logger_metadata", "number"]) == 43
+      assert get_in(json, ["extra", "logger_metadata", "file"]) == "gen_server.erl"
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    capture_log(fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(pid)
+      Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+      Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+      Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
+      Sentry.TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
+      Sentry.TestGenServer.invalid_function(pid)
+      assert_receive "terminating"
+      assert_receive "API called"
+    end)
+  end
+
   test "does not include Logger.metadata when disabled" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
     bypass = Bypass.open()
