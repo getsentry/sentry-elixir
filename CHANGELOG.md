@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.1 (2020-08-08)
+
+* Enhancements
+  * Add plug parsing errors to list of default excluded params (#414)
+  * Make Sentry.PlugContext.scrub\_map public (#417)
+  * Allow users to configure maximum number of breadcrumbs (#418)
+
 ## 8.0.0 (2020-07-13)
 [7.x -> 8.0 Upgrade Guide](https://gist.github.com/mitchellhenke/dce120a5515565076b13962ee0be749b)
 
