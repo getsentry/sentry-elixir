@@ -5,7 +5,7 @@
 
 The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger.
 
-[Documentation](https://hexdocs.pm/sentry/readme.html)
+[Documentation](https://hexdocs.pm/sentry/7.2.5/readme.html)
 
 ## Note on upgrading from Sentry 6.x to 7.x
 
@@ -41,7 +41,7 @@ In your Plug.Router or Phoenix.Router, add the following lines:
 +  use Sentry.Plug
 ```
 
-If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
+If you are using Phoenix, you can also include [Sentry.Phoenix.Endpoint](https://hexdocs.pm/sentry/7.2.5/Sentry.Phoenix.Endpoint.html) in your Endpoint. This module captures errors occurring in the Phoenix pipeline before the request reaches the Router:
 
 ```diff
  use Phoenix.Endpoint, otp_app: :my_app
@@ -61,7 +61,7 @@ This library comes with an extension to capture all error messages that the Plug
 +  backends: [:console, Sentry.LoggerBackend]
 ```
 
-The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
+The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/7.2.5/Sentry.LoggerBackend.html).
 
 ### Capture Arbitrary Exceptions
 
@@ -84,7 +84,7 @@ Sometimes you want to capture messages that are not Exceptions.
     Sentry.capture_message("custom_event_name", extra: %{extra: information})
 ```
 
-For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
+For optional settings check the [docs](https://hexdocs.pm/sentry/7.2.5/readme.html).
 
 
 ## Configuration
@@ -130,7 +130,7 @@ The full range of options is the following:
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
-| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
+| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/7.2.5/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
 | `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
 | `max_breadcrumbs` | False | 100 | This sets the maximum number of breadcrumbs to send to Sentry when creating an event |
@@ -141,7 +141,7 @@ Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HT
 
 Sentry has multiple options for including contextual information. They are organized into "Tags", "User", and "Extra", and Sentry's documentation on them is [here](https://docs.sentry.io/learn/context/).  Breadcrumbs are a similar concept and Sentry's documentation covers them [here](https://docs.sentry.io/learn/breadcrumbs/).
 
-In Elixir this can be complicated due to processes being isolated from one another. Tags context can be set globally through configuration, and all contexts can be set within a process, and on individual events.  If an event is sent within a process that has some context configured it will include that context in the event.  Examples of each are below, and for more information see the documentation of [Sentry.Context](https://hexdocs.pm/sentry/Sentry.Context.html).
+In Elixir this can be complicated due to processes being isolated from one another. Tags context can be set globally through configuration, and all contexts can be set within a process, and on individual events.  If an event is sent within a process that has some context configured it will include that context in the event.  Examples of each are below, and for more information see the documentation of [Sentry.Context](https://hexdocs.pm/sentry/7.2.5/Sentry.Context.html).
 
 ```elixir
 # Global Tags context via configuration:
@@ -198,7 +198,7 @@ defp aliases do
 end
 ```
 
-For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
+For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/7.2.5/Sentry.Sources.html).
 
 ## Testing Your Configuration
 
