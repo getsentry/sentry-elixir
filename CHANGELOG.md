@@ -2,6 +2,11 @@
 
 ## master
 
+## 7.2.5 (2020-08-11)
+
+* Enhancements
+  * Allow users to configure maximum number of breadcrumbs (#423)
+
 ## 7.2.4 (2020-03-09)
 
 * Enhancements
