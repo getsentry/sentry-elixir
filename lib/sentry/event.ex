@@ -63,13 +63,6 @@ defmodule Sentry.Event do
   @source_code_context_enabled Config.enable_source_code_context()
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
-  @enable_deps_reporting Config.report_deps()
-  @deps if(
-          @enable_deps_reporting,
-          do: Util.mix_deps(),
-          else: []
-        )
-
   @doc """
   Creates an Event struct out of context collected and options
   ## Options
