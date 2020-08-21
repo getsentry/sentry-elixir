@@ -52,7 +52,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
       result =
         "Testing sending Sentry event"
         |> RuntimeError.exception()
-        |> Sentry.capture_exception(result: :sync)
+        |> Sentry.capture_exception(result: :sync, mix_deps: Sentry.Util.mix_deps())
 
       case result do
         {:ok, id} ->
