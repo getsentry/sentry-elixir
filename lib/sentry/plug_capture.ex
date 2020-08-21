@@ -26,6 +26,11 @@ defmodule Sentry.PlugCapture do
   defmacro __using__(_opts) do
     quote do
       @before_compile Sentry.PlugCapture
+      @mix_deps if(
+                  Sentry.Config.report_deps(),
+                  do: Sentry.Util.mix_deps(),
+                  else: []
+                )
     end
   end
 
@@ -39,11 +44,22 @@ defmodule Sentry.PlugCapture do
         rescue
           e in Plug.Conn.WrapperError ->
             exception = Exception.normalize(:error, e.reason, e.stack)
-            Sentry.capture_exception(exception, stacktrace: e.stack, event_source: :plug)
+
+            Sentry.capture_exception(exception,
+              stacktrace: e.stack,
+              event_source: :plug,
+              mix_deps: @mix_deps
+            )
+
             Plug.Conn.WrapperError.reraise(e)
 
           e ->
-            Sentry.capture_exception(e, stacktrace: __STACKTRACE__, event_source: :plug)
+            Sentry.capture_exception(e,
+              stacktrace: __STACKTRACE__,
+              event_source: :plug,
+              mix_deps: @mix_deps
+            )
+
             :erlang.raise(:error, e, __STACKTRACE__)
         end
       end

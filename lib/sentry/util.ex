@@ -27,8 +27,11 @@ defmodule Sentry.Util do
 
   @spec mix_deps() :: list(atom())
   def mix_deps do
+    Mix.Project.get() |> IO.inspect()
+
     Mix.Project.deps_paths()
     |> Map.keys()
+    |> IO.inspect()
   end
 
   @spec mix_deps_versions(list(atom())) :: map()

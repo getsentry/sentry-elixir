@@ -139,6 +139,8 @@ defmodule Sentry.Event do
 
     env = Config.environment_name()
 
+    mix_deps = Keyword.get(opts, :mix_deps, [])
+
     %Event{
       culprit: culprit_from_stacktrace(stacktrace),
       message: message,
@@ -158,7 +160,7 @@ defmodule Sentry.Event do
       breadcrumbs: breadcrumbs,
       request: request,
       fingerprint: fingerprint,
-      modules: Util.mix_deps_versions(@deps),
+      modules: Util.mix_deps_versions(mix_deps),
       event_source: event_source
     }
     |> add_metadata()
