@@ -415,6 +415,30 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "sets event level to Logger message level" do
+    Logger.configure_backend(Sentry.LoggerBackend, level: :warn, capture_log_messages: true)
+    bypass = Bypass.open()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    pid = self()
+
+    Bypass.expect_once(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      json = Jason.decode!(body)
+      assert json["message"] == "warn"
+      assert json["level"] == "warn"
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      Logger.warn("warn")
+
+      assert_receive("API called")
+    end)
+  after
+    Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
+  end
+
   def task(parent, fun \\ fn -> raise "oops" end) do
     mon = Process.monitor(parent)
     Process.unlink(parent)
