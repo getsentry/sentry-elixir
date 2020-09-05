@@ -109,25 +109,26 @@ defmodule Sentry.Client do
   defp encode_and_send(event, result, should_log) do
     json_library = Config.json_library()
 
-    render_event(event)
-    |> json_library.encode()
-    |> case do
-      {:ok, body} ->
-        result = do_send_event(event, body, result)
+    result =
+      render_event(event)
+      |> json_library.encode()
+      |> case do
+        {:ok, body} ->
+          do_send_event(event, body, result)
 
-        if should_log do
-          maybe_log_result(result)
-        end
+        {:error, error} ->
+          {:error, {:invalid_json, error}}
+      end
 
-        if match?({:ok, _}, result) do
-          Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
-        end
-
-        result
-
-      {:error, error} ->
-        {:error, {:invalid_json, error}}
+    if match?({:ok, _}, result) do
+      Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
     end
+
+    if should_log do
+      maybe_log_result(result)
+    end
+
+    result
   end
 
   @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | {:error, any()}
@@ -367,7 +368,7 @@ defmodule Sentry.Client do
       Logger.log(
         Config.log_level(),
         fn ->
-          ["Failed to send Sentry event.", message]
+          ["Failed to send Sentry event. ", message]
         end,
         domain: [:sentry]
       )
