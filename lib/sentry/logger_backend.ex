@@ -103,6 +103,7 @@ defmodule Sentry.LoggerBackend do
     opts =
       [
         event_source: :logger,
+        level: "#{level}",
         extra: %{logger_metadata: logger_metadata(meta, state), logger_level: level},
         result: :none
       ] ++ Map.to_list(sentry)
