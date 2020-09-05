@@ -335,4 +335,10 @@ defmodule Sentry.ClientTest do
       end
     end) =~ "[error] Failed to send Sentry event"
   end
+
+  test "logs JSON parsing errors at configured log_level" do
+    assert capture_log(fn ->
+             Sentry.capture_message("something happened", extra: %{metadata: [keyword: "list"]})
+           end) =~ "Failed to send Sentry event. Unable to encode JSON"
+  end
 end
