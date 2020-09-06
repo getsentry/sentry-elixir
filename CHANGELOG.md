@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.2 (2020-09-06)
+
+* Enhancements
+  * Log error when JSON is unencodable (#429)
+  * Set logger event level to logger message level (#430)
+  * Limit breadcrumbs on add_breadcrumb (#431)
+
 ## 8.0.1 (2020-08-08)
 
 * Enhancements
