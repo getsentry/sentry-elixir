@@ -1,10 +1,13 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
+  @version "8.0.2"
+  @source_url "https://github.com/getsentry/sentry-elixir"
+
   def project do
     [
       app: :sentry,
-      version: "8.0.2",
+      version: @version,
       elixir: "~> 1.10",
       description: "The Official Elixir client for Sentry",
       package: package(),
@@ -14,7 +17,12 @@ defmodule Sentry.Mixfile do
         plt_add_deps: :app_tree,
         plt_add_apps: [:mix, :plug, :hackney]
       ],
-      docs: [extras: ["README.md"], main: "readme"],
+      docs: [
+        extras: ["README.md"],
+        source_ref: "#{@version}",
+        source_url: @source_url,
+        main: "readme"
+      ],
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
     ]
   end
@@ -42,11 +50,11 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      files: ["lib", "LICENSE", "mix.exs", "README.md"],
+      files: ["lib", "LICENSE", "mix.exs", "README.md", "CHANGELOG.md"],
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
-        "github" => "https://github.com/getsentry/sentry-elixir"
+        "GitHub" => @source_url
       }
     ]
   end
