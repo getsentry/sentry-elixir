@@ -17,6 +17,16 @@ defmodule Sentry.EventFilter do
         def exclude_exception?(_exception, _source), do: false
       end
 
+  Alternatively, if you want to skip all non-500 exceptions in a Plug app:
+
+      defmodule MyApp.SentryEventFilter do
+        @behaviour Sentry.EventFilter
+
+        def exclude_exception?(exception, _) do
+          Plug.Exception.status(exception) < 500
+        end
+      end
+
   Sentry uses `Sentry.DefaultEventFilter` by default.
   """
 
