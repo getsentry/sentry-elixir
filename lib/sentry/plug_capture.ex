@@ -39,11 +39,11 @@ defmodule Sentry.PlugCapture do
         rescue
           e in Plug.Conn.WrapperError ->
             exception = Exception.normalize(:error, e.reason, e.stack)
-            Sentry.capture_exception(exception, stacktrace: e.stack, event_source: :plug)
+            _ = Sentry.capture_exception(exception, stacktrace: e.stack, event_source: :plug)
             Plug.Conn.WrapperError.reraise(e)
 
           e ->
-            Sentry.capture_exception(e, stacktrace: __STACKTRACE__, event_source: :plug)
+            _ = Sentry.capture_exception(e, stacktrace: __STACKTRACE__, event_source: :plug)
             :erlang.raise(:error, e, __STACKTRACE__)
         end
       end
