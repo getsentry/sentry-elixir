@@ -3,6 +3,32 @@ defmodule Sentry.SourcesTest do
   use Plug.Test
   import Sentry.TestEnvironmentHelper
 
+  describe "load_files/0" do
+    test "loads files" do
+      Application.put_env(:sentry, :root_source_code_paths, [
+        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_a",
+        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_b"
+      ])
+
+      assert %{
+               "lib/module_a.ex" => %{
+                 1 => "defmodule ModuleA do",
+                 2 => "  def test do",
+                 3 => "    \"test a\"",
+                 4 => "  end",
+                 5 => "end"
+               },
+               "lib/module_b.ex" => %{
+                 1 => "defmodule ModuleB do",
+                 2 => "  def test do",
+                 3 => "    \"test b\"",
+                 4 => "  end",
+                 5 => "end"
+               }
+             } = Sentry.Sources.load_files()
+    end
+  end
+
   test "exception makes call to Sentry API" do
     correct_context = %{
       "context_line" => "    raise RuntimeError, \"Error\"",
