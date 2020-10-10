@@ -65,21 +65,11 @@ defmodule Sentry.Sources do
   @type source_map :: %{String.t() => file_map}
 
   def load_files do
-    root_paths = Config.root_source_code_paths()
-    path_pattern = Config.source_code_path_pattern()
-    exclude_patterns = Config.source_code_exclude_patterns()
-
-    Enum.reduce(root_paths, %{}, fn root_path, acc1 ->
-      Path.join(root_path, path_pattern)
-      |> Path.wildcard()
-      |> exclude_files(exclude_patterns)
-      |> Enum.reduce(acc1, fn path, acc2 ->
-        key = Path.relative_to(path, root_path)
-        value = source_to_lines(File.read!(path))
-
-        Map.put(acc2, key, value)
-      end)
-    end)
+    Enum.reduce(
+      Config.root_source_code_paths(),
+      %{},
+      &load_files_for_root_path/2
+    )
   end
 
   @doc """
@@ -126,6 +116,37 @@ defmodule Sentry.Sources do
           {pre_context, context, post_context}
       end
     end)
+  end
+
+  defp load_files_for_root_path(root_path, files) do
+    root_path
+    |> find_files_for_root_path()
+    |> Enum.reduce(files, fn path, acc ->
+      key = Path.relative_to(path, root_path)
+
+      if Map.has_key?(acc, key) do
+        raise RuntimeError, """
+        Found two source files in different source root paths with the same relative \
+        path: #{key}
+
+        This means that both source files would be reported to Sentry as the same \
+        file. Please rename one of them to avoid this.
+        """
+      else
+        value = source_to_lines(File.read!(path))
+
+        Map.put(acc, key, value)
+      end
+    end)
+  end
+
+  defp find_files_for_root_path(root_path) do
+    path_pattern = Config.source_code_path_pattern()
+    exclude_patterns = Config.source_code_exclude_patterns()
+
+    Path.join(root_path, path_pattern)
+    |> Path.wildcard()
+    |> exclude_files(exclude_patterns)
   end
 
   defp exclude_files(file_names, []), do: file_names

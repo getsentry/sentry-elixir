@@ -90,6 +90,14 @@ defmodule Sentry.Config do
     path = get_config(:root_source_code_path)
 
     cond do
+      not is_nil(path) and not is_nil(paths) ->
+        raise ArgumentError, """
+        :root_source_code_path and :root_source_code_paths can't be configured at the \
+        same time.
+
+        :root_source_code_path is deprecated. Set :root_source_code_paths instead.
+        """
+
       not is_nil(paths) ->
         paths
 

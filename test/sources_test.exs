@@ -27,6 +27,25 @@ defmodule Sentry.SourcesTest do
                }
              } = Sentry.Sources.load_files()
     end
+
+    test "raises error when two files have the same relative path" do
+      Application.put_env(:sentry, :root_source_code_paths, [
+        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_a",
+        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_b"
+      ])
+
+      expected_error_message = """
+      Found two source files in different source root paths with the same relative \
+      path: lib/module_a.ex
+
+      This means that both source files would be reported to Sentry as the same \
+      file. Please rename one of them to avoid this.
+      """
+
+      assert_raise RuntimeError, expected_error_message, fn ->
+        Sentry.Sources.load_files()
+      end
+    end
   end
 
   test "exception makes call to Sentry API" do
