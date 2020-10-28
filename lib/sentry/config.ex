@@ -77,6 +77,17 @@ defmodule Sentry.Config do
     get_config(:enable_source_code_context, default: false, check_dsn: false)
   end
 
+  @deprecated "Use root_source_code_paths/0 instead"
+  def root_source_code_path do
+    path = get_config(:root_source_code_path)
+
+    if path do
+      path
+    else
+      raise ArgumentError.exception(":root_source_code_path must be configured")
+    end
+  end
+
   # :root_source_code_path (single path) was replaced by :root_source_code_paths (list of
   # paths).
   #
