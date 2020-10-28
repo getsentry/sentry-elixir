@@ -5,7 +5,7 @@ defmodule Sentry.SourcesTest do
 
   describe "load_files/0" do
     test "loads files" do
-      Application.put_env(:sentry, :root_source_code_paths, [
+      modify_env(:sentry, root_source_code_paths: [
         File.cwd!() <> "/test/support/example-umbrella-app/apps/app_a",
         File.cwd!() <> "/test/support/example-umbrella-app/apps/app_b"
       ])
@@ -29,7 +29,7 @@ defmodule Sentry.SourcesTest do
     end
 
     test "raises error when two files have the same relative path" do
-      Application.put_env(:sentry, :root_source_code_paths, [
+      modify_env(:sentry, root_source_code_paths: [
         File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_a",
         File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_b"
       ])
