@@ -5,10 +5,12 @@ defmodule Sentry.SourcesTest do
 
   describe "load_files/0" do
     test "loads files" do
-      modify_env(:sentry, root_source_code_paths: [
-        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_a",
-        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_b"
-      ])
+      modify_env(:sentry,
+        root_source_code_paths: [
+          File.cwd!() <> "/test/support/example-umbrella-app/apps/app_a",
+          File.cwd!() <> "/test/support/example-umbrella-app/apps/app_b"
+        ]
+      )
 
       assert %{
                "lib/module_a.ex" => %{
@@ -29,10 +31,12 @@ defmodule Sentry.SourcesTest do
     end
 
     test "raises error when two files have the same relative path" do
-      modify_env(:sentry, root_source_code_paths: [
-        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_a",
-        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_b"
-      ])
+      modify_env(:sentry,
+        root_source_code_paths: [
+          File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_a",
+          File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_b"
+        ]
+      )
 
       expected_error_message = """
       Found two source files in different source root paths with the same relative \
