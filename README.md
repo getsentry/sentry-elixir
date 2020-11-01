@@ -139,7 +139,7 @@ config :sentry,
   environment_name: Mix.env(),
   included_environments: [:prod],
   enable_source_code_context: true,
-  root_source_code_path: File.cwd!()
+  root_source_code_paths: [File.cwd!()]
 ```
 
 The `environment_name` and `included_environments` work together to determine
@@ -169,7 +169,7 @@ The full range of options is the following:
 | `in_app_module_whitelist` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
-| `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!()`|
+| `root_source_code_paths` | Required if `enable_source_code_context` is enabled | | Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`. |
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
