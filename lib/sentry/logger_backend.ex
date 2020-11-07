@@ -103,7 +103,7 @@ defmodule Sentry.LoggerBackend do
     opts =
       [
         event_source: :logger,
-        level: "#{level}",
+        level: elixir_logger_level_to_sentry_level(level),
         extra: %{logger_metadata: logger_metadata(meta, state), logger_level: level},
         result: :none
       ] ++ Map.to_list(sentry)
@@ -150,5 +150,37 @@ defmodule Sentry.LoggerBackend do
         value = meta[key],
         do: {key, value},
         into: %{}
+  end
+
+  @spec elixir_logger_level_to_sentry_level(Logger.level()) :: String.t()
+  defp elixir_logger_level_to_sentry_level(level) do
+    case level do
+      :emergency ->
+        "fatal"
+
+      :alert ->
+        "fatal"
+
+      :critical ->
+        "fatal"
+
+      :error ->
+        "error"
+
+      :warning ->
+        "warning"
+
+      :warn ->
+        "warning"
+
+      :notice ->
+        "info"
+
+      :info ->
+        "info"
+
+      :debug ->
+        "debug"
+    end
   end
 end

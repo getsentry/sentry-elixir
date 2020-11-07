@@ -425,7 +425,7 @@ defmodule Sentry.LoggerBackendTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       json = Jason.decode!(body)
       assert json["message"] == "warn"
-      assert json["level"] == "warn"
+      assert json["level"] == "warning"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
