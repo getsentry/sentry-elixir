@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.0.3 (2020-11-11)
+
+* Enhancements
+  * Update package & docs configuration (#432)
+  * Add Plug.Status filter example (#433)
+  * Support multiple source code root paths in Sentry.Sources (#437)
+
+* Bug Fixes
+  * Fix dialyzer reporting unmatched_return for Sentry.PlugCapture (#436)
+  * Align Sentry event levels with Elixir logging levels (#439)
+
 ## 8.0.2 (2020-09-06)
 
 * Enhancements
