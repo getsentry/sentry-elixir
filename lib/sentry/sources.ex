@@ -9,7 +9,8 @@ defmodule Sentry.Sources do
   ### Configuration
   There is configuration required to set up this functionality.  The options
   include `:enable_source_code_context`, `:root_source_code_paths`, `:context_lines`,
-  `:source_code_exclude_patterns`, and `:source_code_path_pattern`.
+  `:source_code_exclude_patterns`, and `:source_code_path_pattern`. The options must
+  be set at compile-time.
 
   * `:enable_source_code_context` - when `true`, enables reporting source code
     alongside exceptions.
