@@ -16,7 +16,7 @@ defmodule Sentry.Config do
   @default_send_result :none
   @default_send_max_attempts 4
 
-  @permitted_log_level_values ~w(debug info warn error)a
+  @permitted_log_level_values ~w(debug info warning warn error)a
 
   def validate_config! do
   end
