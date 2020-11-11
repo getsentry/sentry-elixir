@@ -252,6 +252,7 @@ defmodule Sentry.EventTest do
              :bypass,
              :certifi,
              :cowboy,
+             :cowboy_telemetry,
              :cowlib,
              :hackney,
              :idna,
