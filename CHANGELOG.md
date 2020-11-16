@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.0.4 (2020-11-16)
+
+* Do not read dsn config at compile time (#441)
+
 ## 8.0.3 (2020-11-11)
 
 * Enhancements
