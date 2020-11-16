@@ -79,7 +79,7 @@ defmodule Sentry.Config do
 
   @deprecated "Use root_source_code_paths/0 instead"
   def root_source_code_path do
-    path = get_config(:root_source_code_path)
+    path = get_config(:root_source_code_path, check_dsn: false)
 
     if path do
       path
@@ -97,8 +97,8 @@ defmodule Sentry.Config do
   # We should deprecate this the :root_source_code_path completely in the next major
   # release.
   def root_source_code_paths do
-    paths = get_config(:root_source_code_paths)
-    path = get_config(:root_source_code_path)
+    paths = get_config(:root_source_code_paths, check_dsn: false)
+    path = get_config(:root_source_code_path, check_dsn: false)
 
     cond do
       not is_nil(path) and not is_nil(paths) ->

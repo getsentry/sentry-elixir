@@ -113,5 +113,11 @@ defmodule Sentry.ConfigTest do
 
       assert Config.root_source_code_paths() == ["/test"]
     end
+
+    test "call to :root_source_code_paths does not read dsn env" do
+      modify_env(:sentry, dsn: {:system, "DSN", required: true})
+
+      Config.root_source_code_paths()
+    end
   end
 end
