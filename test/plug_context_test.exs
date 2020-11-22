@@ -82,7 +82,10 @@ defmodule Sentry.PlugContextTest do
       "count" => 334,
       "cc" => "4197-7215-7810-8280",
       "another_cc" => "4197721578108280",
-      "user" => %{"password" => "mypassword"}
+      "user" => %{"password" => "mypassword"},
+      "payments" => [
+        %{"yet_another_cc" => "4197-7215-7810-8280"}
+      ]
     })
     |> put_req_cookie("secret", "secretvalue")
     |> put_req_cookie("regular", "value")
@@ -101,7 +104,10 @@ defmodule Sentry.PlugContextTest do
              "passwd" => "*********",
              "password" => "*********",
              "secret" => "*********",
-             "user" => %{"password" => "*********"}
+             "user" => %{"password" => "*********"},
+             "payments" => [
+               %{"yet_another_cc" => "*********"}
+             ]
            }
   end
 
