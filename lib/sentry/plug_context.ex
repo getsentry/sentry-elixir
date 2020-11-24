@@ -171,7 +171,7 @@ defmodule Sentry.PlugContext do
   end
 
   @doc """
-  Recursively scrubs a map that may have nested maps
+  Recursively scrubs a map that may have nested maps or lists
 
   Accepts a list of keys to scrub, and a list of options to configure
 
@@ -206,11 +206,35 @@ defmodule Sentry.PlugContext do
           is_map(value) ->
             scrub_map(value, scrubbed_keys, opts)
 
+          is_list(value) ->
+            scrub_list(value, scrubbed_keys, opts)
+
           true ->
             value
         end
 
       {key, value}
+    end)
+  end
+
+  @spec scrub_list(list(), list(String.t()), keyword()) :: list()
+  defp scrub_list(list, scrubbed_keys, opts) do
+    Enum.map(list, fn value ->
+      cond do
+        is_map(value) && Map.has_key?(value, :__struct__) ->
+          value
+          |> Map.from_struct()
+          |> scrub_map(scrubbed_keys, opts)
+
+        is_map(value) ->
+          scrub_map(value, scrubbed_keys, opts)
+
+        is_list(value) ->
+          scrub_list(value, scrubbed_keys, opts)
+
+        true ->
+          value
+      end
     end)
   end
 end
