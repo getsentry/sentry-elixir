@@ -243,10 +243,6 @@ end
 
 For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
 
-### Umbrella Applications
-
-Sentry within umbrella applications should operate similarly to other project types with one exception. Due to the way Sentry stores source code context and the information available in stacktraces, it is not currently possible to reliably report exceptions with source code as described in [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html). A fuller explanation is described in an issue [here](https://github.com/getsentry/sentry-elixir/issues/362#issuecomment-647787262).
-
 ## Testing Your Configuration
 
 To ensure you've set up your configuration correctly we recommend running the
