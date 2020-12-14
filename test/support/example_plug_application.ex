@@ -13,6 +13,16 @@ defmodule Sentry.ExamplePlugApplication do
     raise RuntimeError, "Error"
   end
 
+  get "/exit_route" do
+    _ = conn
+    exit(:test)
+  end
+
+  get "/throw_route" do
+    _ = conn
+    throw(:test)
+  end
+
   post "/error_route" do
     _ = conn
     raise RuntimeError, "Error"
