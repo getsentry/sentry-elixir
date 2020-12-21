@@ -55,7 +55,7 @@ defmodule Sentry.SourcesTest do
   test "exception makes call to Sentry API" do
     correct_context = %{
       "context_line" => "    raise RuntimeError, \"Error\"",
-      "post_context" => ["  end", "", "  post \"/error_route\" do"],
+      "post_context" => ["  end", "", "  get \"/exit_route\" do"],
       "pre_context" => ["", "  get \"/error_route\" do", "    _ = conn"]
     }
 

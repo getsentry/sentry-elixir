@@ -45,6 +45,12 @@ defmodule Sentry.PlugCapture do
           e ->
             _ = Sentry.capture_exception(e, stacktrace: __STACKTRACE__, event_source: :plug)
             :erlang.raise(:error, e, __STACKTRACE__)
+        catch
+          kind, reason ->
+            message = "Uncaught #{kind} - #{inspect(reason)}"
+            stack = __STACKTRACE__
+            Sentry.capture_message(message, stacktrace: stack, event_source: :plug)
+            :erlang.raise(kind, reason, stack)
         end
       end
     end
