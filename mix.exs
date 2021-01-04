@@ -18,10 +18,11 @@ defmodule Sentry.Mixfile do
         plt_add_apps: [:mix, :plug, :hackney]
       ],
       docs: [
-        extras: ["README.md"],
+        extras: ["README.md", "CHANGELOG.md"],
         source_ref: "#{@version}",
         source_url: @source_url,
-        main: "readme"
+        main: "readme",
+        skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
       ],
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
     ]
@@ -54,6 +55,7 @@ defmodule Sentry.Mixfile do
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
+        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md",
         "GitHub" => @source_url
       }
     ]
