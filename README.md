@@ -166,7 +166,7 @@ The full range of options is the following:
 | `sample_rate` | False | 1.0 | |
 | `send_result` | False | `:none` | You may want to set it to `:sync` if testing your Sentry integration. See "Testing with Sentry" |
 | `send_max_attempts` | False | 4 | |
-| `in_app_module_whitelist` | False | `[]` | |
+| `in_app_module_allow_list` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
 | `root_source_code_paths` | Required if `enable_source_code_context` is enabled | | Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`. |
