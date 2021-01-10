@@ -1,5 +1,8 @@
 # Changelog
 
+## next release
+* Deprecate `Sentry.Config.in_app_module_whitelist` in favor of `Sentry.Config.in_app_module_allow_list` (#450)
+
 ## 8.0.4 (2020-11-16)
 
 * Do not read dsn config at compile time (#441)

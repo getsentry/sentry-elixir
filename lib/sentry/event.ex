@@ -5,7 +5,7 @@ defmodule Sentry.Event do
 
   ### Configuration
 
-  * `:in_app_module_whitelist` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
+  * `:in_app_module_allow_list` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
   * `:report_deps` - Flag for whether to include the loaded dependencies when reporting an error. Defaults to true.
 
   """
@@ -220,7 +220,7 @@ defmodule Sentry.Event do
 
   @spec stacktrace_to_frames(Exception.stacktrace()) :: [map]
   def stacktrace_to_frames(stacktrace) do
-    in_app_module_whitelist = Config.in_app_module_whitelist()
+    in_app_module_allow_list = Config.in_app_module_allow_list()
 
     stacktrace
     |> Enum.map(fn line ->
@@ -236,7 +236,7 @@ defmodule Sentry.Event do
         function: Exception.format_mfa(mod, function, arity),
         module: mod,
         lineno: line_number,
-        in_app: is_in_app?(mod, in_app_module_whitelist),
+        in_app: is_in_app?(mod, in_app_module_allow_list),
         vars: f_args
       }
       |> put_source_context(file, line_number)
@@ -284,17 +284,17 @@ defmodule Sentry.Event do
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)
   defp arity_to_integer(arity) when is_integer(arity), do: arity
 
-  defp is_in_app?(nil, _in_app_whitelist), do: false
+  defp is_in_app?(nil, _in_app_allow_list), do: false
   defp is_in_app?(_, []), do: false
 
-  defp is_in_app?(module, in_app_module_whitelist) do
+  defp is_in_app?(module, in_app_module_allow_list) do
     split_modules = module_split(module)
 
-    Enum.any?(in_app_module_whitelist, fn module ->
-      whitelisted_split_modules = module_split(module)
+    Enum.any?(in_app_module_allow_list, fn module ->
+      allowed_split_modules = module_split(module)
 
-      count = Enum.count(whitelisted_split_modules)
-      Enum.take(split_modules, count) == whitelisted_split_modules
+      count = Enum.count(allowed_split_modules)
+      Enum.take(split_modules, count) == allowed_split_modules
     end)
   end
 

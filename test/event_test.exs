@@ -163,7 +163,7 @@ defmodule Sentry.EventTest do
   end
 
   test "sets app_frame to true when configured" do
-    modify_env(:sentry, in_app_module_whitelist: [Sentry, :random, Sentry.Submodule])
+    modify_env(:sentry, in_app_module_allow_list: [Sentry, :random, Sentry.Submodule])
     exception = RuntimeError.exception("error")
 
     event =
