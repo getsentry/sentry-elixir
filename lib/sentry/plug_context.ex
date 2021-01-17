@@ -23,7 +23,7 @@ defmodule Sentry.PlugContext do
         # and credit card information in plain text.  To also prevent sending
         # our sensitive "my_secret_field" and "other_sensitive_data" fields,
         # we simply drop those keys.
-        Sentry.Plug.default_body_scrubber(conn)
+        Sentry.PlugContext.default_body_scrubber(conn)
         |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
 
