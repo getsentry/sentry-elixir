@@ -2,6 +2,8 @@
 
 ## next release
 * Deprecate `Sentry.Config.in_app_module_whitelist` in favor of `Sentry.Config.in_app_module_allow_list` (#450)
+* Update outdated `Sentry.Plug` documentation (#452)
+* Update `Sentry.HTTPClient` documentation (#456)
 
 ## 8.0.4 (2020-11-16)
 
