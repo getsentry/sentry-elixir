@@ -1,0 +1,74 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  MIX_ENV: test
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.development }}
+    strategy:
+      matrix:
+        elixir: ['1.10.x', '1.11.x']
+        otp: ['21.3.x', '22.2.x', '23.0.x']
+        development: [false]
+        include:
+          - elixir: 'master'
+            otp: '21.3.x'
+            development: true
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup elixir
+      uses: actions/setup-elixir@v1
+      with:
+        elixir-version: ${{ matrix.elixir }} # Define the elixir version [required]
+        otp-version: ${{ matrix.otp }} # Define the OTP version [required]
+
+    - name: Retrieve Mix Dependencies Cache
+      uses: actions/cache@v1
+      id: mix-cache #id to use in retrieve action
+      with:
+        path: deps
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+    - name: Install Mix Dependencies
+      if: steps.mix-cache.outputs.cache-hit != 'true'
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        mix deps.get
+    - name: Check Formatting
+      run: mix format --check-formatted
+      if: matrix.elixir == '1.11.x'
+
+    - name: Check Compile Warnings
+      run: mix compile --warnings-as-errors
+
+    - name: Run Tests
+      run: mix test
+
+    - name: Retrieve PLT Cache
+      uses: actions/cache@v1
+      id: plt-cache
+      if: matrix.elixir == '1.11.x'
+      with:
+        path: priv/plts
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+    - name: Create PLTs
+      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.11.x'
+      run: |
+        mkdir -p priv/plts
+        mix dialyzer --plt
+    - name: Run dialyzer
+      run: mix dialyzer --no-check --halt-exit-status
+      if: matrix.elixir == '1.11.x'

@@ -254,6 +254,8 @@ defmodule Sentry.EventTest do
              :cowboy,
              :cowboy_telemetry,
              :cowlib,
+             :dialyxir,
+             :erlex,
              :hackney,
              :idna,
              :jason,
