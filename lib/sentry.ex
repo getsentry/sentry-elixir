@@ -101,8 +101,7 @@ defmodule Sentry do
       Config.client().child_spec()
     ]
 
-    validate_json_config!()
-    validate_log_level_config!()
+    Sentry.Config.set_up_and_validate_config!()
 
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
     Supervisor.start_link(children, opts)
@@ -180,43 +179,6 @@ defmodule Sentry do
       Sentry.Client.send_event(event, opts)
     else
       :ignored
-    end
-  end
-
-  defp validate_json_config!() do
-    case Config.json_library() do
-      nil ->
-        raise ArgumentError.exception("nil is not a valid :json_library configuration")
-
-      library ->
-        try do
-          with {:ok, %{}} <- library.decode("{}"),
-               {:ok, "{}"} <- library.encode(%{}) do
-            :ok
-          else
-            _ ->
-              raise ArgumentError.exception(
-                      "configured :json_library #{inspect(library)} does not implement decode/1 and encode/1"
-                    )
-          end
-        rescue
-          UndefinedFunctionError ->
-            reraise ArgumentError.exception("""
-                    configured :json_library #{inspect(library)} is not available or does not implement decode/1 and encode/1.
-                    Do you need to add #{inspect(library)} to your mix.exs?
-                    """),
-                    __STACKTRACE__
-        end
-    end
-  end
-
-  defp validate_log_level_config!() do
-    value = Config.log_level()
-
-    if value in Config.permitted_log_level_values() do
-      :ok
-    else
-      raise ArgumentError.exception("#{inspect(value)} is not a valid :log_level configuration")
     end
   end
 end
