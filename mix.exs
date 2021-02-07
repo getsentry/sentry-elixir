@@ -14,6 +14,7 @@ defmodule Sentry.Mixfile do
       deps: deps(),
       dialyzer: [
         plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        plt_core_path: "priv/plts",
         plt_add_deps: :app_tree,
         plt_add_apps: [:mix, :plug, :hackney]
       ],
@@ -41,7 +42,7 @@ defmodule Sentry.Mixfile do
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 2.3", optional: true},
-      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.23.0", only: :dev},
       {:bypass, "~> 2.0", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
