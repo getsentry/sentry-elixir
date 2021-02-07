@@ -18,9 +18,23 @@ defmodule Sentry.Config do
 
   @permitted_log_level_values ~w(debug info warning warn error)a
 
+  @doc """
+  Sets up and ensures valid configuration.
+
+  Elixir releases set the "RELEASE_VSN" system environment variable. If `:release` is
+  not configured, "RELEASE_VSN" is checked and stored if it exists.
+  """
+  @spec set_up_and_validate_config!() :: :ok
   def set_up_and_validate_config! do
     validate_json_config!()
     validate_log_level_config!()
+    release = get_config(:release)
+
+    if release == nil do
+      system_func = fn -> get_from_system_environment("RELEASE_VSN") end
+      save_system_to_application(:release, system_func)
+    end
+
     :ok
   end
 
