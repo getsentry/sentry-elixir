@@ -1,13 +1,22 @@
 # Changelog
 
-## next release
-* Deprecate `Sentry.Config.in_app_module_whitelist` in favor of `Sentry.Config.in_app_module_allow_list` (#450)
-* Update outdated `Sentry.Plug` documentation (#452)
-* Update `Sentry.HTTPClient` documentation (#456)
+## Unreleased
+
+## 8.0.5 (2021-02-14)
+
+* Enhancements
+  * Support lists in scrubbing (#442)
+  * Send Sentry reports on uncaught throws/exits (#447)
+
+* Bug Fixes
+  * Deprecate `Sentry.Config.in_app_module_whitelist` in favor of `Sentry.Config.in_app_module_allow_list` (#450)
+  * Update outdated `Sentry.Plug` documentation (#452)
+  * Update `Sentry.HTTPClient` documentation (#456)
 
 ## 8.0.4 (2020-11-16)
 
-* Do not read DSN config at compile time (#441)
+* Bug Fixes
+  * Do not read DSN config at compile time (#441)
 
 ## 8.0.3 (2020-11-11)
 
