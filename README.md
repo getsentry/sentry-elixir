@@ -152,7 +152,7 @@ The full range of options is the following:
 | Key           | Required         | Default      | Notes |
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
-| `environment_name` | False  | `Mix.env` | The default value of `Mix.env` is set at compile-time. |
+| `environment_name` | False  | :prod | |
 | `included_environments` | False  | `[:test, :dev, :prod]` | If you need non-standard mix env names you *need* to include it here |
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
