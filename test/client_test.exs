@@ -177,7 +177,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      :random.uniform() + "1"
+      :rand.uniform() + "1"
     rescue
       e ->
         capture_log(fn ->
