@@ -1,10 +1,11 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
   Report Logger events like crashed processes to Sentry. To include in your
-  application, add this module to your Logger backends:
+  application, start this backend in your application `start/2` callback:
 
-      config :logger,
-        backends: [:console, Sentry.LoggerBackend]
+      # lib/my_app/application.ex
+      def start(_type, _args) do
+        Logger.add_backend(Sentry.LoggerBackend)
 
   Sentry context will be included in metadata in reported events. Example:
 
