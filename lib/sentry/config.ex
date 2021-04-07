@@ -182,6 +182,10 @@ defmodule Sentry.Config do
     get_config(:hackney_opts, default: [], check_dsn: false)
   end
 
+  def before_capture_exception do
+    get_config(:before_capture_exception, check_dsn: false)
+  end
+
   def before_send_event do
     get_config(:before_send_event, check_dsn: false)
   end

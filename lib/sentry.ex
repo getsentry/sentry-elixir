@@ -121,8 +121,28 @@ defmodule Sentry do
       :excluded
     else
       exception
+      |> maybe_call_before_capture_exception()
       |> Event.transform_exception(opts)
       |> send_event(opts)
+    end
+  end
+
+  @spec maybe_call_before_capture_exception(Exception.t()) :: Exception.t()
+  def maybe_call_before_capture_exception(exception) do
+    case Config.before_capture_exception() do
+      function when is_function(function, 1) ->
+        function.(exception) || false
+
+      {module, function} ->
+        apply(module, function, [exception]) || false
+
+      nil ->
+        exception
+
+      _ ->
+        raise ArgumentError,
+          message:
+            ":before_capture_exception must be an anonymous function or a {Module, Function} tuple"
     end
   end
 
