@@ -93,13 +93,13 @@ defmodule MyAppWeb.ErrorView do
 
 ### Capture Crashed Process Exceptions
 
-This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends).
+This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends). You can add it as a backend when your application starts:
 
 ```diff
-# config/config.exs
+# lib/my_app/application.ex
 
-+ config :logger,
-+  backends: [:console, Sentry.LoggerBackend]
++   def start(_type, _args) do
++     Logger.add_backend(Sentry.LoggerBackend)
 ```
 
 The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
