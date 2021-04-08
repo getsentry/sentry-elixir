@@ -21,7 +21,7 @@ jobs:
         development: [false]
         include:
           - elixir: 'master'
-            otp: '21.3.x'
+            otp: '23.0.x'
             development: true
 
     steps:
