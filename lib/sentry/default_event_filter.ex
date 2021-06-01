@@ -5,7 +5,7 @@ defmodule Sentry.DefaultEventFilter do
 
   @ignored_exceptions [
     Phoenix.Router.NoRouteError,
-    Plug.Parsers.RequestTooLarge,
+    Plug.Parsers.RequestTooLargeError,
     Plug.Parsers.BadEncodingError,
     Plug.Parsers.ParseError,
     Plug.Parsers.UnsupportedMediaTypeError
