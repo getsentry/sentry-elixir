@@ -63,6 +63,11 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
 
         :excluded ->
           Mix.shell().info("No test event was sent because the event was excluded by a filter")
+
+        :unsampled ->
+          Mix.shell().info(
+            "No test event was sent because the event was excluded according to the sample_rate"
+          )
       end
     else
       Mix.shell().info(

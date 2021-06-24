@@ -49,7 +49,7 @@ defmodule Sentry.PlugCapture do
           kind, reason ->
             message = "Uncaught #{kind} - #{inspect(reason)}"
             stack = __STACKTRACE__
-            Sentry.capture_message(message, stacktrace: stack, event_source: :plug)
+            _ = Sentry.capture_message(message, stacktrace: stack, event_source: :plug)
             :erlang.raise(kind, reason, stack)
         end
       end

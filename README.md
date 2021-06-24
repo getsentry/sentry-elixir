@@ -61,7 +61,7 @@ If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the to
 
 #### Capturing User Feedback
 
-If you would like to capture user feedback as described [here](https://docs.sentry.io/enriching-error-data/user-feedback), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
+If you would like to capture user feedback as described [here](https://docs.sentry.io/platforms/elixir/enriching-events/user-feedback/), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
 
 An example Phoenix application setup that wanted to display the user feedback form on 500 responses on requests accepting HTML could look like:
 
@@ -93,13 +93,13 @@ defmodule MyAppWeb.ErrorView do
 
 ### Capture Crashed Process Exceptions
 
-This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends).
+This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends). You can add it as a backend when your application starts:
 
 ```diff
-# config/config.exs
+# lib/my_app/application.ex
 
-+ config :logger,
-+  backends: [:console, Sentry.LoggerBackend]
++   def start(_type, _args) do
++     Logger.add_backend(Sentry.LoggerBackend)
 ```
 
 The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
