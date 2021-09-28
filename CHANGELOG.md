@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 8.0.6 (2021-02-14)
+
+* Bug Fixes
+  * Remove function that disables non-group leader logging (#467)
+  * Handle :unsampled events in `Sentry.send_test_event` (#474)
+  * Fix dialyzer reporting unmatched\_return for Sentry.PlugCapture (#475)
+  * Use correct `Plug.Parsers` exception module (#482)
+
 ## 8.0.5 (2021-02-14)
 
 * Enhancements
