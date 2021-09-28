@@ -16,12 +16,19 @@ jobs:
     continue-on-error: ${{ matrix.development }}
     strategy:
       matrix:
-        elixir: ['1.10.x', '1.11.x']
-        otp: ['21.3.x', '22.2.x', '23.0.x']
+        elixir: ['1.10.x', '1.11.x', '1.12.x']
+        otp: ['21.3.x', '22.3.x', '23.3.x', '24.1.x']
         development: [false]
+        exclude:
+          - elixir: '1.10.x'
+            otp: '24.1.x'
+            development: false
+          - elixir: '1.12.x'
+            otp: '21.3.x'
+            development: false
         include:
           - elixir: 'master'
-            otp: '23.0.x'
+            otp: '24.1.x'
             development: true
 
     steps:
