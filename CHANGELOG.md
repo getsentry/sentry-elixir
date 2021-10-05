@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 8.0.6 (2021-02-14)
+## 8.0.6 (2021-09-28)
 
 * Bug Fixes
   * Remove function that disables non-group leader logging (#467)
