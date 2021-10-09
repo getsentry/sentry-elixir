@@ -130,7 +130,7 @@ defmodule Sentry.Client do
     result
   end
 
-  @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | {:error, any()}
+  @spec do_send_event(Event.t(), binary(), :async) :: {:ok, Task.t()} | {:error, any()}
   defp do_send_event(event, body, :async) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
@@ -145,7 +145,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :sync) :: {:ok, String.t()} | {:error, any()}
+  @spec do_send_event(Event.t(), binary(), :sync) :: {:ok, String.t()} | {:error, any()}
   defp do_send_event(event, body, :sync) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
@@ -157,7 +157,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :none) ::
+  @spec do_send_event(Event.t(), binary(), :none) ::
           {:ok, DynamicSupervisor.on_start_child()} | {:error, any()}
   defp do_send_event(event, body, :none) do
     case get_headers_and_endpoint() do
@@ -210,7 +210,7 @@ defmodule Sentry.Client do
          {:ok, json} <- json_library.decode(body) do
       {:ok, Map.get(json, "id")}
     else
-      {:ok, status, headers, body} ->
+      {:ok, status, headers, _body} ->
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         error = "Received #{status} from Sentry server: #{error_header}"
         {:error, error}

@@ -78,21 +78,7 @@ defmodule Sentry.Envelope do
     end
   end
 
-  # Steps over the item pairs in the envelope body. The item header is decoded
-  # first so it can be used to decode the item following it.
-  defp decode_items(raw_items) do
-    item_pairs = Enum.chunk_every(raw_items, 2, 2, :discard)
-
-    Enum.reduce_while(item_pairs, {:ok, []}, fn [k, v], {:ok, acc} ->
-      with {:ok, item_header} <- Config.json_library().decode(k),
-           {:ok, item} <- decode_item(item_header, v) do
-        {:cont, {:ok, acc ++ [item]}}
-      else
-        {:error, e} -> {:halt, {:error, e}}
-      end
-    end)
-  end
-
+  @spec from_binary!(String.t()) :: t() | no_return()
   def from_binary!(binary) do
     {:ok, envelope} = from_binary(binary)
     envelope
@@ -133,6 +119,22 @@ defmodule Sentry.Envelope do
   #
   # Decoding
   #
+
+  # Steps over the item pairs in the envelope body. The item header is decoded
+  # first so it can be used to decode the item following it.
+  @spec decode_items([String.t()]) :: {:ok, [map()]} | {:error, any()}
+  defp decode_items(raw_items) do
+    item_pairs = Enum.chunk_every(raw_items, 2, 2, :discard)
+
+    Enum.reduce_while(item_pairs, {:ok, []}, fn [k, v], {:ok, acc} ->
+      with {:ok, item_header} <- Config.json_library().decode(k),
+           {:ok, item} <- decode_item(item_header, v) do
+        {:cont, {:ok, acc ++ [item]}}
+      else
+        {:error, e} -> {:halt, {:error, e}}
+      end
+    end)
+  end
 
   defp decode_item(%{"type" => "event"}, data) do
     result = Config.json_library().decode(data)
