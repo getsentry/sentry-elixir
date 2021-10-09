@@ -1,7 +1,7 @@
 defmodule Sentry.Envelope do
   @moduledoc false
 
-  alias Sentry.{Config, Event, Transaction, Util}
+  alias Sentry.{Config, Event, Util}
 
   @type t :: %__MODULE__{
     event_id: String.t()
@@ -29,18 +29,6 @@ defmodule Sentry.Envelope do
     |> Map.put(:event_id, event_id)
     |> Map.update!(:items, fn items ->
       items ++ [event]
-    end)
-  end
-
-  @doc """
-  Adds a transaction to the envelope.
-  """
-  @spec add_transaction(t(), Transaction.t()) :: t()
-  def add_transaction(envelope, %{event_id: event_id} = transaction) do
-    envelope
-    |> Map.put(:event_id, event_id)
-    |> Map.update!(:items, fn items ->
-      items ++ [transaction]
     end)
   end
 
@@ -125,7 +113,6 @@ defmodule Sentry.Envelope do
   end
 
   defp item_type_name(%Event{}), do: "event"
-  defp item_type_name(%Transaction{}), do: "transaction"
   defp item_type_name(unexpected), do: raise "unexpected item type '#{unexpected}' in Envelope.to_binary/1"
 
   defp decode_item!({%{"type" => "event"}, data}) do
