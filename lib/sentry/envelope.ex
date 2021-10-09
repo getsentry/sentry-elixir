@@ -37,35 +37,19 @@ defmodule Sentry.Envelope do
   """
   @spec to_binary(t()) :: {:ok, String.t()} | {:error, any()}
   def to_binary(envelope) do
-    buffer = case envelope.event_id do
-        nil -> "{{}}\n"
-        event_id -> "{\"event_id\":\"#{event_id}\"}\n"
-      end
-
-    json_library = Config.json_library()
+    buffer = encode_headers(envelope)
 
     # write each item
     Enum.reduce_while(envelope.items, {:ok, buffer}, fn (item, {:ok, acc}) ->
       # encode to a temporary buffer to get the length
-      result =
-        case item do
-          %Event{} ->
-            item
-            |> Sentry.Client.render_event()
-            |> json_library.encode()
-
-          _ -> json_library.encode(item)
-        end
-
-      case result do
-        {:ok, json_item} ->
-          length = byte_size(json_item)
-
+      case encode_item(item) do
+        {:ok, encoded_item} ->
+          length = byte_size(encoded_item)
           type_name = item_type_name(item)
 
           {:cont, {:ok, acc
             <> "{\"type\":\"#{type_name}\",\"length\":#{length}}\n"
-            <> json_item
+            <> encoded_item
             <> "\n"}}
         {:error, error} ->
           {:halt, {:error, error}}
@@ -78,25 +62,32 @@ defmodule Sentry.Envelope do
   """
   @spec from_binary(String.t()) :: {:ok, t()} | {:error, :invalid_envelope}
   def from_binary(binary) do
-    json_library = Config.json_library()
-
-    case String.split(binary, "\n") do
-      [headers | items] ->
-        {:ok, headers} = json_library.decode(headers)
-
-        items =
-          items
-          |> Enum.chunk_every(2, 2, :discard)
-          |> Enum.map(fn [k, v] -> {json_library.decode!(k), v} end)
-          |> Enum.map(&decode_item!/1)
-
-        {:ok, %__MODULE__{
-          event_id: headers["event_id"] || nil,
-          items: items
-        }}
-
-      _ -> {:error, :invalid_envelope}
+    with {:ok, {raw_headers, raw_items}} <- decode_lines(binary),
+         {:ok, headers} <- decode_headers(raw_headers),
+         {:ok, items} <- decode_items(raw_items)
+    do
+      {:ok, %__MODULE__{
+        event_id: headers["event_id"] || nil,
+        items: items
+      }}
+    else
+      _e -> {:error, :invalid_envelope}
     end
+  end
+
+  # Steps over the item pairs in the envelope body. The item header is decoded
+  # first so it can be used to decode the item following it.
+  defp decode_items(raw_items) do
+    item_pairs = Enum.chunk_every(raw_items, 2, 2, :discard)
+
+    Enum.reduce_while(item_pairs, {:ok, []}, fn [k, v], {:ok, acc} ->
+      with {:ok, item_header} <- Config.json_library().decode(k),
+           {:ok, item} <- decode_item(item_header, v) do
+        {:cont, {:ok, acc ++ [item]}}
+      else
+        {:error, e} -> {:halt, {:error, e}}
+      end
+    end)
   end
 
   def from_binary!(binary) do
@@ -112,39 +103,74 @@ defmodule Sentry.Envelope do
     |> List.first()
   end
 
+  #
+  # Encoding
+  #
+
   defp item_type_name(%Event{}), do: "event"
   defp item_type_name(unexpected), do: raise "unexpected item type '#{unexpected}' in Envelope.to_binary/1"
 
-  defp decode_item!({%{"type" => "event"}, data}) do
-    fields = Config.json_library().decode!(data)
-
-    %Sentry.Event{
-      breadcrumbs: fields["breadcrumbs"],
-      culprit: fields["culprit"],
-      environment: fields["environment"],
-      event_id: fields["event_id"],
-      event_source: fields["event_source"],
-      exception: fields["exception"],
-      extra: fields["extra"],
-      fingerprint: fields["fingerprint"],
-      level: fields["level"],
-      message: fields["message"],
-      modules: fields["modules"],
-      original_exception: fields["original_exception"],
-      platform: fields["platform"],
-      release: fields["release"],
-      request: fields["request"],
-      server_name: fields["server_name"],
-      stacktrace: %{
-        frames: fields["stacktrace"]["frames"],
-      },
-      tags: fields["tags"],
-      timestamp: fields["timestamp"],
-      user: fields["user"]
-    }
+  defp encode_headers(envelope) do
+    case envelope.event_id do
+      nil -> "{{}}\n"
+      event_id -> "{\"event_id\":\"#{event_id}\"}\n"
+    end
   end
-  defp decode_item!({%{"type" => type}, _data}), do: raise "unexpected item type '#{type}'"
-  defp decode_item!({_, _data}), do: raise "Missing item type header"
+
+  defp encode_item(%Event{} = event) do
+    event
+    |> Sentry.Client.render_event()
+    |> Config.json_library().encode()
+  end
+  defp encode_item(item), do: item
+
+  #
+  # Decoding
+  #
+
+  defp decode_item(%{"type" => "event"}, data) do
+    result = Config.json_library().decode(data)
+
+    case result do
+      {:ok, fields} ->
+        {:ok, %Sentry.Event{
+          breadcrumbs: fields["breadcrumbs"],
+          culprit: fields["culprit"],
+          environment: fields["environment"],
+          event_id: fields["event_id"],
+          event_source: fields["event_source"],
+          exception: fields["exception"],
+          extra: fields["extra"],
+          fingerprint: fields["fingerprint"],
+          level: fields["level"],
+          message: fields["message"],
+          modules: fields["modules"],
+          original_exception: fields["original_exception"],
+          platform: fields["platform"],
+          release: fields["release"],
+          request: fields["request"],
+          server_name: fields["server_name"],
+          stacktrace: %{
+            frames: fields["stacktrace"]["frames"],
+          },
+          tags: fields["tags"],
+          timestamp: fields["timestamp"],
+          user: fields["user"]
+        }}
+      {:error, e} -> {:error, "Failed to decode event item: #{e}"}
+    end
+  end
+  defp decode_item(%{"type" => type}, _data), do: {:error, "unexpected item type '#{type}'"}
+  defp decode_item(_, _data), do: {:error, "Missing item type header"}
+
+  defp decode_lines(binary) do
+    case String.split(binary, "\n") do
+      [headers | items] -> {:ok, {headers, items}}
+      _ -> {:error, :missing_header}
+    end
+  end
+
+  defp decode_headers(raw_headers), do: Config.json_library().decode(raw_headers)
 
 
 end
