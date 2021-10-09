@@ -107,11 +107,10 @@ defmodule Sentry.Client do
 
   @spec encode_and_send(Event.t(), result(), boolean()) :: send_event_result()
   defp encode_and_send(event, result, should_log) do
-    json_library = Config.json_library()
-
     result =
-      render_event(event)
-      |> json_library.encode()
+      Sentry.Envelope.new()
+      |> Sentry.Envelope.add_event(event)
+      |> Sentry.Envelope.to_binary()
       |> case do
         {:ok, body} ->
           do_send_event(event, body, result)
@@ -211,7 +210,7 @@ defmodule Sentry.Client do
          {:ok, json} <- json_library.decode(body) do
       {:ok, Map.get(json, "id")}
     else
-      {:ok, status, headers, _body} ->
+      {:ok, status, headers, body} ->
         error_header = :proplists.get_value("X-Sentry-Error", headers, "")
         error = "Received #{status} from Sentry server: #{error_header}"
         {:error, error}
@@ -260,7 +259,7 @@ defmodule Sentry.Client do
          [public_key, secret_key] <- keys_from_userinfo(userinfo),
          [_, binary_project_id] <- String.split(path, "/"),
          {project_id, ""} <- Integer.parse(binary_project_id),
-         endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/store/" do
+         endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/envelope/" do
       {endpoint, public_key, secret_key}
     else
       _ ->
@@ -325,6 +324,7 @@ defmodule Sentry.Client do
       level: event.level,
       platform: event.platform,
       server_name: event.server_name,
+      stacktrace: event.stacktrace,
       environment: event.environment,
       exception: event.exception,
       release: event.release,

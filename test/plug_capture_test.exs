@@ -3,6 +3,7 @@ defmodule Sentry.PlugCaptureTest do
   use Plug.Test
   import Sentry.TestEnvironmentHelper
   import ExUnit.CaptureLog
+  alias Sentry.Envelope
 
   defmodule PhoenixController do
     use Phoenix.Controller
@@ -48,7 +49,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -65,7 +69,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -82,7 +89,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -99,11 +109,14 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["request"]["url"] == "http://www.example.com/error_route"
-      assert json["request"]["method"] == "GET"
-      assert json["request"]["query_string"] == ""
-      assert json["request"]["data"] == %{}
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+      assert event.request["url"] == "http://www.example.com/error_route"
+      assert event.request["method"] == "GET"
+      assert event.request["query_string"] == ""
+      assert event.request["data"] == %{}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -120,7 +133,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -146,9 +162,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.error/2"
-      assert json["message"] == "(RuntimeError PhoenixError)"
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
+      assert event.message == "(RuntimeError PhoenixError)"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -174,9 +193,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
-      assert json["message"] == "Uncaught exit - :test"
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
+      assert event.message == "Uncaught exit - :test"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -199,9 +221,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
-      assert json["message"] == "Uncaught throw - :test"
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
+      assert event.message == "Uncaught throw - :test"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -224,7 +249,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -259,7 +287,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -294,7 +325,10 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -319,8 +353,11 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 

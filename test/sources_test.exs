@@ -3,6 +3,8 @@ defmodule Sentry.SourcesTest do
   use Plug.Test
   import Sentry.TestEnvironmentHelper
 
+  alias Sentry.Envelope
+
   describe "load_files/0" do
     test "loads files" do
       modify_env(:sentry,
@@ -64,10 +66,13 @@ defmodule Sentry.SourcesTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       frames =
-        Jason.decode!(body)
-        |> get_in(["stacktrace", "frames"])
-        |> Enum.reverse()
+        Enum.reverse(event.stacktrace.frames)
 
       assert ^correct_context =
                Enum.at(frames, 0)
@@ -75,7 +80,7 @@ defmodule Sentry.SourcesTest do
 
       assert body =~ "RuntimeError"
       assert body =~ "Example"
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
