@@ -71,8 +71,7 @@ defmodule Sentry.SourcesTest do
         |> Envelope.from_binary!()
         |> Envelope.event()
 
-      frames =
-        Enum.reverse(event.stacktrace.frames)
+      frames = Enum.reverse(event.stacktrace.frames)
 
       assert ^correct_context =
                Enum.at(frames, 0)

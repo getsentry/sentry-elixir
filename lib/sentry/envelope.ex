@@ -4,8 +4,8 @@ defmodule Sentry.Envelope do
   alias Sentry.{Config, Event, Util}
 
   @type t :: %__MODULE__{
-    event_id: String.t()
-  }
+          event_id: String.t()
+        }
 
   defstruct event_id: nil, items: []
 
@@ -40,17 +40,20 @@ defmodule Sentry.Envelope do
     buffer = encode_headers(envelope)
 
     # write each item
-    Enum.reduce_while(envelope.items, {:ok, buffer}, fn (item, {:ok, acc}) ->
+    Enum.reduce_while(envelope.items, {:ok, buffer}, fn item, {:ok, acc} ->
       # encode to a temporary buffer to get the length
       case encode_item(item) do
         {:ok, encoded_item} ->
           length = byte_size(encoded_item)
           type_name = item_type_name(item)
 
-          {:cont, {:ok, acc
-            <> "{\"type\":\"#{type_name}\",\"length\":#{length}}\n"
-            <> encoded_item
-            <> "\n"}}
+          {:cont,
+           {:ok,
+            acc <>
+              "{\"type\":\"#{type_name}\",\"length\":#{length}}\n" <>
+              encoded_item <>
+              "\n"}}
+
         {:error, error} ->
           {:halt, {:error, error}}
       end
@@ -64,12 +67,12 @@ defmodule Sentry.Envelope do
   def from_binary(binary) do
     with {:ok, {raw_headers, raw_items}} <- decode_lines(binary),
          {:ok, headers} <- decode_headers(raw_headers),
-         {:ok, items} <- decode_items(raw_items)
-    do
-      {:ok, %__MODULE__{
-        event_id: headers["event_id"] || nil,
-        items: items
-      }}
+         {:ok, items} <- decode_items(raw_items) do
+      {:ok,
+       %__MODULE__{
+         event_id: headers["event_id"] || nil,
+         items: items
+       }}
     else
       _e -> {:error, :invalid_envelope}
     end
@@ -108,7 +111,9 @@ defmodule Sentry.Envelope do
   #
 
   defp item_type_name(%Event{}), do: "event"
-  defp item_type_name(unexpected), do: raise "unexpected item type '#{unexpected}' in Envelope.to_binary/1"
+
+  defp item_type_name(unexpected),
+    do: raise("unexpected item type '#{unexpected}' in Envelope.to_binary/1")
 
   defp encode_headers(envelope) do
     case envelope.event_id do
@@ -122,6 +127,7 @@ defmodule Sentry.Envelope do
     |> Sentry.Client.render_event()
     |> Config.json_library().encode()
   end
+
   defp encode_item(item), do: item
 
   #
@@ -133,33 +139,37 @@ defmodule Sentry.Envelope do
 
     case result do
       {:ok, fields} ->
-        {:ok, %Sentry.Event{
-          breadcrumbs: fields["breadcrumbs"],
-          culprit: fields["culprit"],
-          environment: fields["environment"],
-          event_id: fields["event_id"],
-          event_source: fields["event_source"],
-          exception: fields["exception"],
-          extra: fields["extra"],
-          fingerprint: fields["fingerprint"],
-          level: fields["level"],
-          message: fields["message"],
-          modules: fields["modules"],
-          original_exception: fields["original_exception"],
-          platform: fields["platform"],
-          release: fields["release"],
-          request: fields["request"],
-          server_name: fields["server_name"],
-          stacktrace: %{
-            frames: fields["stacktrace"]["frames"],
-          },
-          tags: fields["tags"],
-          timestamp: fields["timestamp"],
-          user: fields["user"]
-        }}
-      {:error, e} -> {:error, "Failed to decode event item: #{e}"}
+        {:ok,
+         %Sentry.Event{
+           breadcrumbs: fields["breadcrumbs"],
+           culprit: fields["culprit"],
+           environment: fields["environment"],
+           event_id: fields["event_id"],
+           event_source: fields["event_source"],
+           exception: fields["exception"],
+           extra: fields["extra"],
+           fingerprint: fields["fingerprint"],
+           level: fields["level"],
+           message: fields["message"],
+           modules: fields["modules"],
+           original_exception: fields["original_exception"],
+           platform: fields["platform"],
+           release: fields["release"],
+           request: fields["request"],
+           server_name: fields["server_name"],
+           stacktrace: %{
+             frames: fields["stacktrace"]["frames"]
+           },
+           tags: fields["tags"],
+           timestamp: fields["timestamp"],
+           user: fields["user"]
+         }}
+
+      {:error, e} ->
+        {:error, "Failed to decode event item: #{e}"}
     end
   end
+
   defp decode_item(%{"type" => type}, _data), do: {:error, "unexpected item type '#{type}'"}
   defp decode_item(_, _data), do: {:error, "Missing item type header"}
 
@@ -171,6 +181,4 @@ defmodule Sentry.Envelope do
   end
 
   defp decode_headers(raw_headers), do: Config.json_library().decode(raw_headers)
-
-
 end

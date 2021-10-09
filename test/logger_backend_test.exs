@@ -48,6 +48,7 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
@@ -110,6 +111,7 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
@@ -151,12 +153,13 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
 
-        assert length(event.stacktrace.frames) == 1
+      assert length(event.stacktrace.frames) == 1
 
       assert List.first(event.stacktrace.frames)["filename"] ==
                "test/support/example_plug_application.ex"
@@ -182,6 +185,7 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
@@ -220,10 +224,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       _event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -247,10 +253,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       _event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -273,10 +281,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.extra["logger_metadata"]["string"] == "string"
       assert event.extra["logger_metadata"]["map"] == %{"a" => "b"}
       assert event.extra["logger_metadata"]["list"] == [1, 2, 3]
@@ -307,6 +317,7 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
@@ -339,10 +350,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.message == "testing"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -364,10 +377,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.message == "testing"
       assert event.user["user_id"] == 3
       send(pid, "API called")
@@ -391,10 +406,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.message == "error"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -419,10 +436,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.user["user_id"] == 3
       assert event.message == "(RuntimeError oops)"
       send(pid, "API called")
@@ -448,10 +467,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.message == "error"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -472,10 +493,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
+
       event =
         body
         |> Envelope.from_binary!()
         |> Envelope.event()
+
       assert event.message == "warn"
       assert event.level == "warning"
       send(pid, "API called")
