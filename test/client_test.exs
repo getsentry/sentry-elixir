@@ -11,7 +11,9 @@ defmodule Sentry.ClientTest do
     {_endpoint, public_key, private_key} = Client.get_dsn()
 
     assert Client.authorization_header(public_key, private_key) =~
-             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
+             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
+               Application.spec(:sentry, :vsn)
+             }, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
   end
 
   test "authorization without secret" do
@@ -19,7 +21,9 @@ defmodule Sentry.ClientTest do
     {_endpoint, public_key, private_key} = Client.get_dsn()
 
     assert Client.authorization_header(public_key, private_key) =~
-             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public$/
+             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
+               Application.spec(:sentry, :vsn)
+             }, sentry_timestamp=\d{10}, sentry_key=public$/
   end
 
   test "get dsn with default config" do
