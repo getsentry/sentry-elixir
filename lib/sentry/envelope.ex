@@ -88,9 +88,11 @@ defmodule Sentry.Envelope do
   @spec event(t()) :: Event.t() | nil
   def event(envelope) do
     envelope.items
-    |> Enum.filter(fn item -> is_struct(item, Event) end)
+    |> Enum.filter(fn item -> is_event?(item) end)
     |> List.first()
   end
+
+  defp is_event?(event), do: match?(%{__struct__: Sentry.Event}, event)
 
   #
   # Encoding
