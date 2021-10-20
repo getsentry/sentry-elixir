@@ -4,6 +4,8 @@ defmodule Sentry.LoggerBackendTest do
   import Sentry.TestEnvironmentHelper
   require Logger
 
+  alias Sentry.Envelope
+
   setup do
     {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
@@ -22,7 +24,7 @@ defmodule Sentry.LoggerBackendTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "RuntimeError"
       assert body =~ "Unique Error"
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -46,12 +48,16 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
 
-      assert List.first(json["exception"])["value"] ==
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert List.first(event.exception)["value"] ==
                ~s[** (exit) bad return value: "I am throwing"]
 
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       send(self_pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -74,10 +80,15 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert List.first(json["exception"])["type"] == "Sentry.CrashError"
-      assert List.first(json["exception"])["value"] == "** (exit) :bad_exit"
-      assert conn.request_path == "/api/1/store/"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert List.first(event.exception)["type"] == "Sentry.CrashError"
+      assert List.first(event.exception)["value"] == "** (exit) :bad_exit"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       send(self_pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -100,7 +111,11 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
 
       assert %{
                "in_app" => false,
@@ -108,12 +123,12 @@ defmodule Sentry.LoggerBackendTest do
                "context_line" => nil,
                "pre_context" => [],
                "post_context" => []
-             } = List.last(json["stacktrace"]["frames"])
+             } = List.last(event.stacktrace.frames)
 
-      assert [%{"test" => "test", "timestamp" => _}] = json["breadcrumbs"]
+      assert [%{"test" => "test", "timestamp" => _}] = event.breadcrumbs
 
-      assert List.first(json["exception"])["type"] == "FunctionClauseError"
-      assert conn.request_path == "/api/1/store/"
+      assert List.first(event.exception)["type"] == "FunctionClauseError"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       send(self_pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -123,6 +138,7 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
+
       Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{test: "test"})
       Sentry.TestGenServer.invalid_function(pid)
       assert_receive "terminating"
@@ -137,10 +153,15 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert length(json["stacktrace"]["frames"]) == 1
 
-      assert List.first(json["stacktrace"]["frames"])["filename"] ==
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert length(event.stacktrace.frames) == 1
+
+      assert List.first(event.stacktrace.frames)["filename"] ==
                "test/support/example_plug_application.ex"
 
       send(pid, "API called")
@@ -164,13 +185,17 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
 
-      assert List.first(json["exception"])["type"] == "Sentry.CrashError"
-      assert List.first(json["exception"])["value"] =~ "** (EXIT) time out"
-      assert List.first(json["exception"])["value"] =~ "GenServer\.call"
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
 
-      assert conn.request_path == "/api/1/store/"
+      assert List.first(event.exception)["type"] == "Sentry.CrashError"
+      assert List.first(event.exception)["value"] =~ "** (EXIT) time out"
+      assert List.first(event.exception)["value"] =~ "GenServer\.call"
+
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       send(self_pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -199,7 +224,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -223,7 +253,12 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -246,11 +281,16 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert get_in(json, ["extra", "logger_metadata", "string"]) == "string"
-      assert get_in(json, ["extra", "logger_metadata", "map"]) == %{"a" => "b"}
-      assert get_in(json, ["extra", "logger_metadata", "list"]) == [1, 2, 3]
-      assert get_in(json, ["extra", "logger_metadata", "number"]) == 43
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra["logger_metadata"]["string"] == "string"
+      assert event.extra["logger_metadata"]["map"] == %{"a" => "b"}
+      assert event.extra["logger_metadata"]["list"] == [1, 2, 3]
+      assert event.extra["logger_metadata"]["number"] == 43
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -277,8 +317,13 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert get_in(json, ["extra", "logger_metadata"]) == %{}
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra["logger_metadata"] == %{}
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -305,8 +350,13 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["message"] == "testing"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.message == "testing"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -327,9 +377,14 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["message"] == "testing"
-      assert json["user"]["user_id"] == 3
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.message == "testing"
+      assert event.user["user_id"] == 3
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -351,8 +406,13 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["message"] == "error"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.message == "error"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -376,9 +436,14 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["user"]["user_id"] == 3
-      assert json["message"] == "(RuntimeError oops)"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.user["user_id"] == 3
+      assert event.message == "(RuntimeError oops)"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -402,8 +467,13 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["message"] == "error"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.message == "error"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -423,9 +493,14 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["message"] == "warn"
-      assert json["level"] == "warning"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.message == "warn"
+      assert event.level == "warning"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)

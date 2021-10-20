@@ -4,7 +4,7 @@ defmodule Sentry.ClientTest do
   import Sentry.TestEnvironmentHelper
   require Logger
 
-  alias Sentry.Client
+  alias Sentry.{Client, Envelope}
 
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
@@ -29,7 +29,7 @@ defmodule Sentry.ClientTest do
   test "get dsn with default config" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
 
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
+    assert {"https://app.getsentry.com:443/api/1/envelope/", "public", "secret"} =
              Sentry.Client.get_dsn()
   end
 
@@ -37,7 +37,7 @@ defmodule Sentry.ClientTest do
     modify_env(:sentry, dsn: {:system, "SYSTEM_KEY"})
     modify_system_env(%{"SYSTEM_KEY" => "https://public:secret@app.getsentry.com/1"})
 
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
+    assert {"https://app.getsentry.com:443/api/1/envelope/", "public", "secret"} =
              Sentry.Client.get_dsn()
   end
 
@@ -76,7 +76,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
 
       conn
@@ -113,10 +113,15 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert request_map["extra"] == %{"key" => "value"}
-      assert request_map["user"]["id"] == 1
-      assert is_nil(request_map["stacktrace"]["frames"])
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra == %{"key" => "value"}
+      assert event.user["id"] == 1
+      assert event.stacktrace.frames == []
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -147,8 +152,13 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert request_map["extra"] == %{"key" => "value", "user_id" => 1}
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra == %{"key" => "value", "user_id" => 1}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -244,8 +254,14 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert Enum.count(request_map["stacktrace"]["frames"]) > 0
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert Enum.count(event.stacktrace.frames) > 0
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -297,7 +313,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
 
       conn =

@@ -107,11 +107,10 @@ defmodule Sentry.Client do
 
   @spec encode_and_send(Event.t(), result(), boolean()) :: send_event_result()
   defp encode_and_send(event, result, should_log) do
-    json_library = Config.json_library()
-
     result =
-      render_event(event)
-      |> json_library.encode()
+      Sentry.Envelope.new()
+      |> Sentry.Envelope.add_event(event)
+      |> Sentry.Envelope.to_binary()
       |> case do
         {:ok, body} ->
           do_send_event(event, body, result)
@@ -131,7 +130,7 @@ defmodule Sentry.Client do
     result
   end
 
-  @spec do_send_event(Event.t(), map(), :async) :: {:ok, Task.t()} | {:error, any()}
+  @spec do_send_event(Event.t(), binary(), :async) :: {:ok, Task.t()} | {:error, any()}
   defp do_send_event(event, body, :async) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
@@ -146,7 +145,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :sync) :: {:ok, String.t()} | {:error, any()}
+  @spec do_send_event(Event.t(), binary(), :sync) :: {:ok, String.t()} | {:error, any()}
   defp do_send_event(event, body, :sync) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
@@ -158,7 +157,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec do_send_event(Event.t(), map(), :none) ::
+  @spec do_send_event(Event.t(), binary(), :none) ::
           {:ok, DynamicSupervisor.on_start_child()} | {:error, any()}
   defp do_send_event(event, body, :none) do
     case get_headers_and_endpoint() do
@@ -260,7 +259,7 @@ defmodule Sentry.Client do
          [public_key, secret_key] <- keys_from_userinfo(userinfo),
          [_, binary_project_id] <- String.split(path, "/"),
          {project_id, ""} <- Integer.parse(binary_project_id),
-         endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/store/" do
+         endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/envelope/" do
       {endpoint, public_key, secret_key}
     else
       _ ->
@@ -325,6 +324,7 @@ defmodule Sentry.Client do
       level: event.level,
       platform: event.platform,
       server_name: event.server_name,
+      stacktrace: event.stacktrace,
       environment: event.environment,
       exception: event.exception,
       release: event.release,
