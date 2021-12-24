@@ -458,6 +458,36 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "sentry extra context is retrieved from callers" do
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    bypass = Bypass.open()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    pid = self()
+
+    Bypass.expect_once(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra["day_of_week"] == "Friday"
+      assert event.message == "(RuntimeError oops)"
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+
+      {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
+      send(task, :go)
+
+      assert_receive("API called")
+    end)
+  end
+
   test "handles malformed :callers metadata" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
     bypass = Bypass.open()
