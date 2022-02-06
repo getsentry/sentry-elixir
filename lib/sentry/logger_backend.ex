@@ -95,15 +95,7 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp log(level, msg, meta, state) do
-    sentry = meta[:sentry] || get_sentry_from_callers(meta[:callers] || [])
-
-    opts =
-      [
-        event_source: :logger,
-        level: elixir_logger_level_to_sentry_level(level),
-        extra: %{logger_metadata: logger_metadata(meta, state), logger_level: level},
-        result: :none
-      ] ++ Map.to_list(sentry)
+    opts = build_opts(level, meta, state)
 
     case meta[:crash_reason] do
       {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
@@ -138,6 +130,20 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp get_sentry_from_callers(_), do: %{}
+
+  defp build_opts(level, meta, state) do
+    default_extra = %{logger_metadata: logger_metadata(meta, state), logger_level: level}
+
+    sentry =
+      (meta[:sentry] || get_sentry_from_callers(meta[:callers] || []))
+      |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
+
+    [
+      event_source: :logger,
+      level: elixir_logger_level_to_sentry_level(level),
+      result: :none
+    ] ++ Map.to_list(sentry)
+  end
 
   defp excluded_domain?([head | _], state), do: head in state.excluded_domains
   defp excluded_domain?(_, _), do: false
