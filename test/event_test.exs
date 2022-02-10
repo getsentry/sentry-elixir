@@ -109,6 +109,10 @@ defmodule Sentry.EventTest do
 
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+    assert is_binary(event.contexts.os.name)
+    assert is_binary(event.contexts.os.version)
+    assert is_binary(event.contexts.runtime.name)
+    assert is_binary(event.contexts.runtime.version)
   end
 
   test "respects tags in config" do
@@ -136,7 +140,8 @@ defmodule Sentry.EventTest do
       request: %{},
       stacktrace: %{frames: []},
       tags: %{},
-      user: %{}
+      user: %{},
+      contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
     } = Event.create_event(message: "Test message")
   end
 
