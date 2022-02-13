@@ -16,7 +16,7 @@ jobs:
     continue-on-error: ${{ matrix.development }}
     strategy:
       matrix:
-        elixir: ['1.10.x', '1.11.x', '1.12.x']
+        elixir: ['1.10.x', '1.11.x', '1.12.x', '1.13.x']
         otp: ['21.3.x', '22.3.x', '23.3.x', '24.1.x']
         development: [false]
         exclude:
@@ -24,6 +24,9 @@ jobs:
             otp: '24.1.x'
             development: false
           - elixir: '1.12.x'
+            otp: '21.3.x'
+            development: false
+          - elixir: '1.13.x'
             otp: '21.3.x'
             development: false
         include:
@@ -55,7 +58,7 @@ jobs:
         mix deps.get
     - name: Check Formatting
       run: mix format --check-formatted
-      if: matrix.elixir == '1.11.x'
+      if: matrix.elixir == '1.13.x'
 
     - name: Check Compile Warnings
       run: mix compile --warnings-as-errors
@@ -66,16 +69,16 @@ jobs:
     - name: Retrieve PLT Cache
       uses: actions/cache@v1
       id: plt-cache
-      if: matrix.elixir == '1.11.x'
+      if: matrix.elixir == '1.13.x'
       with:
         path: priv/plts
         key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
     - name: Create PLTs
-      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.11.x'
+      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.13.x'
       run: |
         mkdir -p priv/plts
         mix dialyzer --plt
     - name: Run dialyzer
       run: mix dialyzer --no-check --halt-exit-status
-      if: matrix.elixir == '1.11.x'
+      if: matrix.elixir == '1.13.x'
