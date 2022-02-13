@@ -333,6 +333,7 @@ defmodule Sentry.Client do
       user: event.user,
       breadcrumbs: event.breadcrumbs,
       fingerprint: event.fingerprint,
+      contexts: event.contexts,
       modules: event.modules
     }
 

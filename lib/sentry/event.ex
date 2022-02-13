@@ -31,6 +31,7 @@ defmodule Sentry.Event do
             breadcrumbs: [],
             fingerprint: [],
             modules: %{},
+            contexts: %{},
             event_source: nil
 
   @type sentry_exception :: %{type: String.t(), value: String.t(), module: any()}
@@ -56,6 +57,7 @@ defmodule Sentry.Event do
           breadcrumbs: list(),
           fingerprint: list(),
           modules: map(),
+          contexts: map(),
           event_source: any()
         }
 
@@ -159,6 +161,7 @@ defmodule Sentry.Event do
       request: request,
       fingerprint: fingerprint,
       modules: Util.mix_deps_versions(@deps),
+      contexts: generate_contexts(),
       event_source: event_source
     }
     |> add_metadata()
@@ -307,4 +310,19 @@ defmodule Sentry.Event do
 
   defp coerce_stacktrace({m, f, a}), do: [{m, f, a, []}]
   defp coerce_stacktrace(stacktrace), do: stacktrace
+
+  defp generate_contexts do
+    {_, os_name} = :os.type()
+
+    os_version =
+      case :os.version() do
+        {major, minor, release} -> "#{major}.#{minor}.#{release}"
+        version_string -> version_string
+      end
+
+    %{
+      os: %{name: Atom.to_string(os_name), version: os_version},
+      runtime: %{name: "elixir", version: System.build_info().build}
+    }
+  end
 end
