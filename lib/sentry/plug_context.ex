@@ -123,8 +123,8 @@ defmodule Sentry.PlugContext do
       cookies: handle_data(conn, cookie_scrubber),
       headers: handle_data(conn, header_scrubber),
       env: %{
-        "REMOTE_ADDR" => remote_address(conn.remote_ip),
-        "REMOTE_PORT" => Plug.Conn.get_peer_data(conn).port,
+        "REMOTE_ADDR" => remote_address(conn),
+        "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
         "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first()
@@ -132,15 +132,37 @@ defmodule Sentry.PlugContext do
     }
   end
 
-  defp remote_address(address) do
-    address
-    |> :inet.ntoa()
-    |> case do
-      {:error, _} ->
-        ""
+  defp remote_address(conn) do
+    if header_value = get_header(conn, "x-forwarded-for") do
+      header_value
+      |> String.split(",")
+      |> hd()
+      |> String.trim()
+    else
+      conn.remote_ip
+      |> :inet.ntoa()
+      |> case do
+        {:error, _} ->
+          ""
 
-      address ->
-        to_string(address)
+        address ->
+          to_string(address)
+      end
+    end
+  end
+
+  defp remote_port(conn) do
+    if get_header(conn, "x-forwarded-for") do
+      nil
+    else
+      Plug.Conn.get_peer_data(conn).port
+    end
+  end
+
+  def get_header(conn, header) do
+    case Plug.Conn.get_req_header(conn, header) do
+      [] -> nil
+      [val | _] -> val
     end
   end
 

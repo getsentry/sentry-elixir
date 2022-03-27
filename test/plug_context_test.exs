@@ -16,6 +16,10 @@ defmodule Sentry.PlugContextTest do
     |> Map.take(["not-secret"])
   end
 
+  defp add_x_forwarded_for(conn, ip_str) do
+    %{conn | req_headers: [{"x-forwarded-for", ip_str} | conn.req_headers]}
+  end
+
   test "sets request context" do
     Sentry.PlugContext.call(conn(:get, "/test?hello=world"), [])
 
@@ -29,6 +33,31 @@ defmodule Sentry.PlugContextTest do
                },
                env: %{
                  "REMOTE_ADDR" => "127.0.0.1",
+                 "REMOTE_PORT" => _,
+                 "REQUEST_ID" => _,
+                 "SERVER_NAME" => "www.example.com",
+                 "SERVER_PORT" => 80
+               }
+             }
+           } = Sentry.Context.get_all()
+  end
+
+  test "sets request context with real client ip if request is forwarded" do
+    Sentry.PlugContext.call(
+      conn(:get, "/test?hello=world") |> add_x_forwarded_for("10.0.0.1"),
+      []
+    )
+
+    assert %{
+             request: %{
+               url: "http://www.example.com/test?hello=world",
+               method: "GET",
+               query_string: "hello=world",
+               data: %{
+                 "hello" => "world"
+               },
+               env: %{
+                 "REMOTE_ADDR" => "10.0.0.1",
                  "REMOTE_PORT" => _,
                  "REQUEST_ID" => _,
                  "SERVER_NAME" => "www.example.com",
