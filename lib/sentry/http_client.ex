@@ -13,7 +13,7 @@ defmodule Sentry.HTTPClient do
 
   @type headers :: [{String.t(), String.t()}]
 
-  @callback child_spec() :: :supervisor.child_spec()
+  @callback child_spec() :: Supervisor.child_spec()
 
   @callback post(url :: String.t(), headers, body :: String.t()) ::
               {:ok, status :: pos_integer, headers, body :: String.t()}
