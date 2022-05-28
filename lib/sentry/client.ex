@@ -257,9 +257,11 @@ defmodule Sentry.Client do
          %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
          when is_binary(path) and is_binary(userinfo) <- URI.parse(dsn),
          [public_key, secret_key] <- keys_from_userinfo(userinfo),
-         [_, binary_project_id] <- String.split(path, "/"),
+         uri_path <- String.split(path, "/"),
+         {binary_project_id, uri_path} <- List.pop_at(uri_path, -1),
+         base_path <- Enum.join(uri_path, "/"),
          {project_id, ""} <- Integer.parse(binary_project_id),
-         endpoint <- "#{protocol}://#{host}:#{port}/api/#{project_id}/envelope/" do
+         endpoint <- "#{protocol}://#{host}:#{port}#{base_path}/api/#{project_id}/envelope/" do
       {endpoint, public_key, secret_key}
     else
       _ ->
