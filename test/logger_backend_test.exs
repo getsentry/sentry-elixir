@@ -273,6 +273,36 @@ defmodule Sentry.LoggerBackendTest do
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
   end
 
+  test "ignores log messages with excluded domains" do
+    Logger.configure_backend(Sentry.LoggerBackend,
+      capture_log_messages: true,
+      excluded_domains: [:test_domain]
+    )
+
+    bypass = Bypass.open()
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      send(pid, event.message)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    capture_log(fn ->
+      Logger.error("no domain")
+      Logger.error("test_domain", domain: [:test_domain])
+      assert_receive("no domain")
+      refute_receive("test_domain")
+    end)
+  end
+
   test "includes Logger.metadata for keys configured to be included" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :number, :map, :list])
     bypass = Bypass.open()

@@ -145,7 +145,10 @@ defmodule Sentry.LoggerBackend do
     ] ++ Map.to_list(sentry)
   end
 
-  defp excluded_domain?([head | _], state), do: head in state.excluded_domains
+  defp excluded_domain?([head | rest], state) do
+    head in state.excluded_domains or excluded_domain?(rest, state)
+  end
+
   defp excluded_domain?(_, _), do: false
 
   defp logger_metadata(meta, state) do
