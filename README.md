@@ -153,7 +153,7 @@ The full range of options is the following:
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
 | `environment_name` | False  | :prod | |
-| `included_environments` | False  | `[:test, :dev, :prod]` | If you need non-standard mix env names you *need* to include it here |
+| `included_environments` | False  | `[:prod]` | If you need non-standard mix env names you *need* to include it here |
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
 | `server_name` | False  | None | |
