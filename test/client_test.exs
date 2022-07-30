@@ -330,22 +330,23 @@ defmodule Sentry.ClientTest do
       log_level: :error
     )
 
-    capture_log(fn ->
-      try do
-        apply(Event, :not_a_function, [])
-      rescue
-        e ->
-          {:ok, task} =
-            Sentry.capture_exception(
-              e,
-              stacktrace: __STACKTRACE__,
-              result: :async
-            )
+    assert capture_log(fn ->
+             try do
+               apply(Event, :not_a_function, [])
+             rescue
+               e ->
+                 {:ok, %{ref: ref}} =
+                   Sentry.capture_exception(
+                     e,
+                     stacktrace: __STACKTRACE__,
+                     result: :async
+                   )
 
-          assert_receive "API called"
-          Task.shutdown(task)
-      end
-    end) =~ "[error] Failed to send Sentry event"
+                 assert_receive "API called"
+                 assert_receive {^ref, {:error, {:request_failure, _}}}
+                 assert_receive {:DOWN, ^ref, :process, _pid, :normal}
+             end
+           end) =~ "[error] Failed to send Sentry event"
   end
 
   test "logs JSON parsing errors at configured log_level" do

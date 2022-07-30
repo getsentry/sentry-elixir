@@ -89,7 +89,6 @@ defmodule Sentry.Client do
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, Config.send_result())
     sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
-    should_log = event.event_source != :logger
 
     event = maybe_call_before_send_event(event)
 
@@ -101,12 +100,12 @@ defmodule Sentry.Client do
         :unsampled
 
       {%Event{}, true} ->
-        encode_and_send(event, result, should_log)
+        encode_and_send(event, result)
     end
   end
 
-  @spec encode_and_send(Event.t(), result(), boolean()) :: send_event_result()
-  defp encode_and_send(event, result, should_log) do
+  @spec encode_and_send(Event.t(), result()) :: send_event_result()
+  defp encode_and_send(event, result) do
     result =
       Sentry.Envelope.new()
       |> Sentry.Envelope.add_event(event)
@@ -123,9 +122,7 @@ defmodule Sentry.Client do
       Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
     end
 
-    if should_log do
-      maybe_log_result(result)
-    end
+    maybe_log_result(result, event)
 
     result
   end
@@ -138,6 +135,7 @@ defmodule Sentry.Client do
          Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
            try_request(endpoint, auth_headers, {event, body}, Config.send_max_attempts())
            |> maybe_call_after_send_event(event)
+           |> maybe_log_result(event)
          end)}
 
       {:error, :invalid_dsn} ->
@@ -165,6 +163,7 @@ defmodule Sentry.Client do
         Task.Supervisor.start_child(Sentry.TaskSupervisor, fn ->
           try_request(endpoint, auth_headers, {event, body}, Config.send_max_attempts())
           |> maybe_call_after_send_event(event)
+          |> maybe_log_result(event)
         end)
 
         {:ok, ""}
@@ -269,7 +268,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec maybe_call_after_send_event(send_event_result, Event.t()) :: Event.t()
+  @spec maybe_call_after_send_event(send_event_result, Event.t()) :: send_event_result
   def maybe_call_after_send_event(result, event) do
     case Config.after_send_event() do
       function when is_function(function, 2) ->
@@ -348,34 +347,39 @@ defmodule Sentry.Client do
     end
   end
 
-  def maybe_log_result(result) do
-    message =
-      case result do
-        {:error, :invalid_dsn} ->
-          "Cannot send Sentry event because of invalid DSN"
+  @spec maybe_log_result(send_event_result, Event.t()) :: send_event_result
+  def maybe_log_result(result, event) do
+    if should_log?(event) do
+      message =
+        case result do
+          {:error, :invalid_dsn} ->
+            "Cannot send Sentry event because of invalid DSN"
 
-        {:error, {:invalid_json, error}} ->
-          "Unable to encode JSON Sentry error - #{inspect(error)}"
+          {:error, {:invalid_json, error}} ->
+            "Unable to encode JSON Sentry error - #{inspect(error)}"
 
-        {:error, {:request_failure, last_error}} ->
-          "Error in HTTP Request to Sentry - #{inspect(last_error)}"
+          {:error, {:request_failure, last_error}} ->
+            "Error in HTTP Request to Sentry - #{inspect(last_error)}"
 
-        {:error, error} ->
-          inspect(error)
+          {:error, error} ->
+            inspect(error)
 
-        _ ->
-          nil
+          _ ->
+            nil
+        end
+
+      if message do
+        Logger.log(
+          Config.log_level(),
+          fn ->
+            ["Failed to send Sentry event. ", message]
+          end,
+          domain: [:sentry]
+        )
       end
-
-    if message != nil do
-      Logger.log(
-        Config.log_level(),
-        fn ->
-          ["Failed to send Sentry event. ", message]
-        end,
-        domain: [:sentry]
-      )
     end
+
+    result
   end
 
   @spec authorization_headers(String.t(), String.t()) :: list({String.t(), String.t()})
@@ -420,5 +424,9 @@ defmodule Sentry.Client do
 
   defp sample_event?(sample_rate) do
     :rand.uniform() < sample_rate
+  end
+
+  defp should_log?(%Event{event_source: event_source}) do
+    event_source != :logger
   end
 end
