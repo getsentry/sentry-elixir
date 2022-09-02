@@ -79,6 +79,18 @@ defmodule Sentry.PlugContext do
   which Plug.RequestId (and therefore Phoenix) also default to.
 
       plug Sentry.PlugContext, request_id_header: "application-request-id"
+
+  ### Remote Address Reader
+
+  Sentry.PlugContext includes a request's originating IP address under the `REMOTE_ADDR`
+  Environment key in Sentry. By default it is read from the `x-forwarded-for` HTTP header,
+  and if this header is not present, it is read from `conn.remote_ip`.
+
+  If you wish to read this value differently (e.g. from a different HTTP header),
+  or modify it in some other way (e.g. by masking it), you can configure this behavior
+  by passing the `:remote_address_reader` option:
+
+      plug Sentry.PlugContext, remote_address_reader: &MyModule.read_ip/1
   """
 
   if Code.ensure_loaded?(Plug) do
@@ -111,6 +123,9 @@ defmodule Sentry.PlugContext do
 
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
+    remote_address_reader =
+      Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
+
     conn =
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
@@ -123,7 +138,7 @@ defmodule Sentry.PlugContext do
       cookies: handle_data(conn, cookie_scrubber),
       headers: handle_data(conn, header_scrubber),
       env: %{
-        "REMOTE_ADDR" => remote_address(conn),
+        "REMOTE_ADDR" => handle_data(conn, remote_address_reader),
         "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
@@ -132,7 +147,8 @@ defmodule Sentry.PlugContext do
     }
   end
 
-  defp remote_address(conn) do
+  @spec default_remote_address_reader(Plug.Conn.t()) :: String.t()
+  def default_remote_address_reader(conn) do
     if header_value = get_header(conn, "x-forwarded-for") do
       header_value
       |> String.split(",")
