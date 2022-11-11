@@ -152,10 +152,14 @@ defmodule Sentry.LoggerBackend do
   defp excluded_domain?(_, _), do: false
 
   defp logger_metadata(meta, state) do
-    for key <- state.metadata,
-        value = meta[key],
-        do: {key, value},
-        into: %{}
+    if state.metadata == :all do
+      Map.new(meta)
+    else
+      for key <- state.metadata,
+          value = meta[key],
+          do: {key, value},
+          into: %{}
+    end
   end
 
   @spec elixir_logger_level_to_sentry_level(Logger.level()) :: String.t()
