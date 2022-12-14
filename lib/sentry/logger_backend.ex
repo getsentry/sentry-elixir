@@ -145,7 +145,7 @@ defmodule Sentry.LoggerBackend do
     ] ++ Map.to_list(sentry)
   end
 
-  defp excluded_domain?(domains, state) when is_list(domains), do: Enum.any?(domains, &Enum.member?(&1, state.excluded_domains))
+  defp excluded_domain?(domains, state) when is_list(domains), do: Enum.any?(domains, &Enum.member?(state.excluded_domains, &1))
   defp excluded_domain?(_, _), do: false
 
   defp logger_metadata(meta, state) do
