@@ -97,7 +97,7 @@ defmodule Sentry.Client do
         :excluded
 
       {%Event{}, false} ->
-        :unsampled
+        {:unsampled, event}
 
       {%Event{}, true} ->
         encode_and_send(event, result)

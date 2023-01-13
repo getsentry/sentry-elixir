@@ -299,7 +299,9 @@ defmodule Sentry.ClientTest do
       e ->
         {:ok, _} = Sentry.capture_exception(e, result: :sync, sample_rate: 1)
         Bypass.down(bypass)
-        :unsampled = Sentry.capture_exception(e, result: :sync, sample_rate: 0.0)
+
+        {:unsampled, %Sentry.Event{}} =
+          Sentry.capture_exception(e, result: :sync, sample_rate: 0.0)
     end
   end
 
