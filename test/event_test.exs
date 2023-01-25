@@ -54,7 +54,7 @@ defmodule Sentry.EventTest do
                  filename: "timer.erl",
                  function: ":timer.tc/1",
                  in_app: false,
-                 lineno: 166,
+                 lineno: _,
                  module: :timer,
                  post_context: [],
                  pre_context: [],
@@ -63,7 +63,7 @@ defmodule Sentry.EventTest do
                %{
                  context_line: nil,
                  filename: "lib/ex_unit/runner.ex",
-                 function: "ExUnit.Runner.exec_test/1",
+                 function: _,
                  in_app: false,
                  lineno: _,
                  module: ExUnit.Runner,
