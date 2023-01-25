@@ -12,33 +12,30 @@ env:
 jobs:
   test:
 
-    runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.development }}
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        elixir: ['1.10.x', '1.11.x', '1.12.x', '1.13.x']
-        otp: ['21.3.x', '22.3.x', '23.3.x', '24.1.x']
-        development: [false]
+        # https://hexdocs.pm/elixir/1.14/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
+        elixir: ['1.12.x', '1.13.x', '1.14.x']
+        otp: ['22.3.x', '23.3.x', '24.3.x', '25.2.x']
         exclude:
-          - elixir: '1.10.x'
-            otp: '24.1.x'
-            development: false
           - elixir: '1.12.x'
-            otp: '21.3.x'
-            development: false
-          - elixir: '1.13.x'
-            otp: '21.3.x'
-            development: false
+            otp: '25.2.x'
+          - elixir: '1.14.x'
+            otp: '22.3.x'
         include:
+          - elixir: '1.10.x'
+            otp: '22.3.x'
+          - elixir: '1.11.x'
+            otp: '23.3.x'
           - elixir: 'master'
-            otp: '24.1.x'
-            development: true
+            otp: '24.3.x'
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Setup elixir
-      uses: erlef/setup-elixir@v1
+      uses: erlef/setup-beam@v1
       with:
         elixir-version: ${{ matrix.elixir }} # Define the elixir version [required]
         otp-version: ${{ matrix.otp }} # Define the OTP version [required]
