@@ -1,0 +1,6 @@
+minVersion: 0.35.0
+changelogPolicy: auto
+artifactProvider:
+  name: none
+targets:
+  - name: hex
