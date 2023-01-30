@@ -95,9 +95,10 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp log(level, msg, meta, state) do
+    {crash_reason, meta} = Keyword.pop(meta, :crash_reason)
     opts = build_opts(level, meta, state)
 
-    case meta[:crash_reason] do
+    case crash_reason do
       {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
         Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
 
