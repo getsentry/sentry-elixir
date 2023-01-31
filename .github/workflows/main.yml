@@ -28,8 +28,8 @@ jobs:
             otp: '22.3.x'
           - elixir: '1.11.x'
             otp: '23.3.x'
-          - elixir: 'master'
-            otp: '24.3.x'
+          # - elixir: 'master'
+          #   otp: '24.3.x'
 
     steps:
     - uses: actions/checkout@v2
@@ -55,7 +55,7 @@ jobs:
         mix deps.get
     - name: Check Formatting
       run: mix format --check-formatted
-      if: matrix.elixir == '1.13.x'
+      if: matrix.elixir == '1.14.x'
 
     - name: Check Compile Warnings
       run: mix compile --warnings-as-errors
@@ -66,16 +66,16 @@ jobs:
     - name: Retrieve PLT Cache
       uses: actions/cache@v1
       id: plt-cache
-      if: matrix.elixir == '1.13.x'
+      if: matrix.elixir == '1.14.x'
       with:
         path: priv/plts
         key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
     - name: Create PLTs
-      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.13.x'
+      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.14.x'
       run: |
         mkdir -p priv/plts
         mix dialyzer --plt
     - name: Run dialyzer
       run: mix dialyzer --no-check --halt-exit-status
-      if: matrix.elixir == '1.13.x'
+      if: matrix.elixir == '1.14.x'
