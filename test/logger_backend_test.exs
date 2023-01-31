@@ -339,6 +339,37 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
+  test "includes Logger.metadata except for :crash_reason" do
+    Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :crash_reason])
+    bypass = Bypass.open()
+    Process.flag(:trap_exit, true)
+    pid = self()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra["logger_metadata"]["string"] == "string"
+      assert event.extra["logger_metadata"]["crash_reason"] == nil
+      send(pid, "API called")
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    capture_log(fn ->
+      {:ok, pid} = Sentry.TestGenServer.start_link(pid)
+      Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+      Sentry.TestGenServer.invalid_function(pid)
+      assert_receive "terminating"
+      assert_receive "API called"
+    end)
+  end
+
   test "does not include Logger.metadata when disabled" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
     bypass = Bypass.open()
