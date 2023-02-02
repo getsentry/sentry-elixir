@@ -16,8 +16,11 @@ defmodule Sentry.PlugContextTest do
     |> Map.take(["not-secret"])
   end
 
-  defp add_x_forwarded_for(conn, ip_str) do
-    %{conn | req_headers: [{"x-forwarded-for", ip_str} | conn.req_headers]}
+  def remote_address_reader(conn) do
+    case get_req_header(conn, "cf-connecting-ip") do
+      [remote_ip | _] -> remote_ip
+      _ -> conn.remote_ip
+    end
   end
 
   test "sets request context" do
@@ -43,10 +46,9 @@ defmodule Sentry.PlugContextTest do
   end
 
   test "sets request context with real client ip if request is forwarded" do
-    Sentry.PlugContext.call(
-      conn(:get, "/test?hello=world") |> add_x_forwarded_for("10.0.0.1"),
-      []
-    )
+    conn(:get, "/test?hello=world")
+    |> put_req_header("x-forwarded-for", "10.0.0.1")
+    |> Sentry.PlugContext.call([])
 
     assert %{
              request: %{
@@ -65,6 +67,14 @@ defmodule Sentry.PlugContextTest do
                }
              }
            } = Sentry.Context.get_all()
+  end
+
+  test "allows configuring request address reader" do
+    conn(:get, "/test")
+    |> put_req_header("cf-connecting-ip", "10.0.0.2")
+    |> Sentry.PlugContext.call(remote_address_reader: {__MODULE__, :remote_address_reader})
+
+    assert %{"REMOTE_ADDR" => "10.0.0.2"} = Sentry.Context.get_all().request.env
   end
 
   test "allows configuring body scrubber" do
