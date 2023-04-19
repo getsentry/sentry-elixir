@@ -7,16 +7,18 @@ defmodule Sentry.HackneyClient do
 
   @hackney_pool_name :sentry_pool
 
-  def child_spec do
+  if Application.get_env(:sentry, :client) in [__MODULE__, nil] do
     unless Code.ensure_loaded?(:hackney) do
       raise """
-      cannot start Sentry.HackneyClient because :hackney is not available.
+      Sentry.HackneyClient cannot be used as a client because :hackney is not available.
       Please make sure to add hackney as a dependency:
 
           {:hackney, "~> 1.8"}
       """
     end
+  end
 
+  def child_spec do
     Application.ensure_all_started(:hackney)
 
     :hackney_pool.child_spec(
