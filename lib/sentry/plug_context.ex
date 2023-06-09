@@ -37,6 +37,10 @@ defmodule Sentry.PlugContext do
 
   *Please Note*: If you are sending large files you will want to scrub them out.
 
+  Alternatively, you can add extra params to be scrubbed by default scrubber.
+
+      plug Sentry.PlugContext, extra_scrubbed_param_keys: ["email"]
+
   ### Headers Scrubber
 
   By default Sentry will scrub Authorization and Authentication headers from all
@@ -59,6 +63,10 @@ defmodule Sentry.PlugContext do
   It can also be passed in as a `{module, fun}` like so:
 
       plug Sentry.PlugContext, header_scrubber: {MyModule, :scrub_headers}
+
+  Alternatively, you can add extra headers to be scrubbed by default scrubber.
+
+    plug Sentry.PlugContext, extra_scrubbed_header_keys: ["x-secret"]
 
   ### Cookie Scrubber
 
@@ -115,9 +123,23 @@ defmodule Sentry.PlugContext do
 
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: map()
   def build_request_interface_data(conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
+    extra_scrubbed_param_keys = Keyword.get(opts, :extra_scrubbed_param_keys, [])
 
-    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
+    body_scrubber =
+      Keyword.get(
+        opts,
+        :body_scrubber,
+        {__MODULE__, :default_body_scrubber, [extra_scrubbed_param_keys]}
+      )
+
+    extra_scrubbed_header_keys = Keyword.get(opts, :extra_scrubbed_header_keys, [])
+
+    header_scrubber =
+      Keyword.get(
+        opts,
+        :header_scrubber,
+        {__MODULE__, :default_header_scrubber, [extra_scrubbed_header_keys]}
+      )
 
     cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
 
@@ -184,6 +206,10 @@ defmodule Sentry.PlugContext do
 
   defp handle_data(_conn, nil), do: %{}
 
+  defp handle_data(conn, {module, fun, args}) do
+    apply(module, fun, [conn] ++ args)
+  end
+
   defp handle_data(conn, {module, fun}) do
     apply(module, fun, [conn])
   end
@@ -197,15 +223,18 @@ defmodule Sentry.PlugContext do
     %{}
   end
 
-  @spec default_header_scrubber(Plug.Conn.t()) :: map()
-  def default_header_scrubber(conn) do
+  @spec default_header_scrubber(Plug.Conn.t(), list()) :: map()
+  def default_header_scrubber(conn, extra_scrubbed_header_keys \\ []) do
+    scrubbed_header_keys = extra_scrubbed_header_keys ++ @default_scrubbed_header_keys
+
     Enum.into(conn.req_headers, %{})
-    |> Map.drop(@default_scrubbed_header_keys)
+    |> Map.drop(scrubbed_header_keys)
   end
 
-  @spec default_body_scrubber(Plug.Conn.t()) :: map()
-  def default_body_scrubber(conn) do
-    scrub_map(conn.params, @default_scrubbed_param_keys)
+  @spec default_body_scrubber(Plug.Conn.t(), list()) :: map()
+  def default_body_scrubber(conn, extra_scrubbed_param_keys \\ []) do
+    scrubbed_param_keys = extra_scrubbed_param_keys ++ @default_scrubbed_param_keys
+    scrub_map(conn.params, scrubbed_param_keys)
   end
 
   @doc """

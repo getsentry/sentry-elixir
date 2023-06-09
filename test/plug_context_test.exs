@@ -87,11 +87,33 @@ defmodule Sentry.PlugContextTest do
            } == Sentry.Context.get_all().request.data
   end
 
+  test "allows configuring extra scrubbed param keys" do
+    Sentry.PlugContext.call(conn(:get, "/test?hello=world&foo=bar&password"),
+      extra_scrubbed_param_keys: ["foo"]
+    )
+
+    assert %{
+             "foo" => "*********",
+             "password" => "*********",
+             "hello" => "world"
+           } == Sentry.Context.get_all().request.data
+  end
+
   test "allows configuring header scrubber" do
     conn(:get, "/test?hello=world&foo=bar")
     |> put_req_header("x-not-secret-header", "not secrets")
     |> put_req_header("x-secret-header", "secrets")
     |> Sentry.PlugContext.call(header_scrubber: {__MODULE__, :header_scrubber})
+
+    assert %{"x-not-secret-header" => "not secrets"} == Sentry.Context.get_all().request.headers
+  end
+
+  test "allows configuring extra scrubbed header keys" do
+    conn(:get, "/test?hello=world&foo=bar")
+    |> put_req_header("x-not-secret-header", "not secrets")
+    |> put_req_header("x-secret-header", "secrets")
+    |> put_req_header("authorization", "also secret")
+    |> Sentry.PlugContext.call(extra_scrubbed_header_keys: ["x-secret-header"])
 
     assert %{"x-not-secret-header" => "not secrets"} == Sentry.Context.get_all().request.headers
   end
