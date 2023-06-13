@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        # https://hexdocs.pm/elixir/1.14/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
+        # https://hexdocs.pm/elixir/1.15/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         elixir: ['1.12.x', '1.13.x', '1.14.x']
-        otp: ['22.3.x', '23.3.x', '24.3.x', '25.2.x']
+        otp: ['22.3.x', '23.3.x', '24.3.x', '25.3.x']
         exclude:
           - elixir: '1.12.x'
-            otp: '25.2.x'
+            otp: '25.3.x'
           - elixir: '1.14.x'
             otp: '22.3.x'
         include:
@@ -28,6 +28,8 @@ jobs:
             otp: '22.3.x'
           - elixir: '1.11.x'
             otp: '23.3.x'
+          - elixir: '1.14.x'
+            otp: '26.0.x'
           # - elixir: 'master'
           #   otp: '24.3.x'
 
