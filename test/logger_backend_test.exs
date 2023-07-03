@@ -6,6 +6,10 @@ defmodule Sentry.LoggerBackendTest do
 
   alias Sentry.Envelope
 
+  @warning_log_level if Version.compare(System.version(), "1.11.0") != :lt,
+                       do: :warning,
+                       else: :warn
+
   setup do
     {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
@@ -399,8 +403,12 @@ defmodule Sentry.LoggerBackendTest do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
   end
 
-  test "sends warning messages when configured to :warn" do
-    Logger.configure_backend(Sentry.LoggerBackend, level: :warn, capture_log_messages: true)
+  test "sends warning messages when configured to #{@warning_log_level}" do
+    Logger.configure_backend(Sentry.LoggerBackend,
+      level: @warning_log_level,
+      capture_log_messages: true
+    )
+
     bypass = Bypass.open()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     pid = self()
@@ -421,7 +429,7 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       Sentry.Context.set_user_context(%{user_id: 3})
-      Logger.warn("testing")
+      Logger.log(@warning_log_level, "testing")
       assert_receive("API called")
     end)
   after
@@ -546,7 +554,11 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "sets event level to Logger message level" do
-    Logger.configure_backend(Sentry.LoggerBackend, level: :warn, capture_log_messages: true)
+    Logger.configure_backend(Sentry.LoggerBackend,
+      level: @warning_log_level,
+      capture_log_messages: true
+    )
+
     bypass = Bypass.open()
     modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
     pid = self()
@@ -566,8 +578,7 @@ defmodule Sentry.LoggerBackendTest do
     end)
 
     capture_log(fn ->
-      Logger.warn("warn")
-
+      Logger.log(@warning_log_level, "warn")
       assert_receive("API called")
     end)
   after

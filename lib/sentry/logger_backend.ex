@@ -34,8 +34,8 @@ defmodule Sentry.LoggerBackend do
   Example:
 
       config :logger, Sentry.LoggerBackend,
-        # Also send warn messages
-        level: :warn,
+        # Also send warning messages
+        level: :warning,
         # Send messages from Plug/Cowboy
         excluded_domains: [],
         # Include metadata added with `Logger.metadata([foo_bar: "value"])`
@@ -70,6 +70,8 @@ defmodule Sentry.LoggerBackend do
   end
 
   def handle_event({level, _gl, {Logger, msg, _ts, meta}}, state) do
+    level = maybe_ensure_warning_level(level)
+
     if Logger.compare_levels(level, state.level) != :lt and
          not excluded_domain?(meta[:domain], state) do
       log(level, msg, meta, state)
@@ -189,4 +191,10 @@ defmodule Sentry.LoggerBackend do
         "debug"
     end
   end
+
+  if Version.compare(System.version(), "1.11.0") != :lt do
+    defp maybe_ensure_warning_level(:warn), do: :warning
+  end
+
+  defp maybe_ensure_warning_level(level), do: level
 end
