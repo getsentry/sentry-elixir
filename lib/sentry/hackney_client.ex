@@ -7,18 +7,8 @@ defmodule Sentry.HackneyClient do
 
   @hackney_pool_name :sentry_pool
 
+  @impl true
   def child_spec do
-    unless Code.ensure_loaded?(:hackney) do
-      raise """
-      cannot start Sentry.HackneyClient because :hackney is not available.
-      Please make sure to add hackney as a dependency:
-
-          {:hackney, "~> 1.8"}
-      """
-    end
-
-    Application.ensure_all_started(:hackney)
-
     :hackney_pool.child_spec(
       @hackney_pool_name,
       timeout: Sentry.Config.hackney_timeout(),
@@ -26,6 +16,7 @@ defmodule Sentry.HackneyClient do
     )
   end
 
+  @impl true
   def post(url, headers, body) do
     hackney_opts =
       Sentry.Config.hackney_opts()
