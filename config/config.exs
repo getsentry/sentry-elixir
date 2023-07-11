@@ -1,4 +1,4 @@
-use Mix.Config
+import Config
 
 config :sentry,
   included_environments: [:test, :dev, :prod],
