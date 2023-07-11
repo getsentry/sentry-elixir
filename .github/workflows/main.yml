@@ -2,9 +2,11 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
+      - release/**
+
   pull_request:
-    branches: [ master ]
 
 env:
   MIX_ENV: test
