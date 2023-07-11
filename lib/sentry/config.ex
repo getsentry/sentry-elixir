@@ -18,6 +18,10 @@ defmodule Sentry.Config do
 
   @permitted_log_level_values ~w(debug info warning warn error)a
 
+  @warning_log_level if Version.compare(System.version(), "1.11.0") != :lt,
+                       do: :warning,
+                       else: :warn
+
   def validate_config! do
   end
 
@@ -199,7 +203,7 @@ defmodule Sentry.Config do
   end
 
   def log_level do
-    get_config(:log_level, default: :warn, check_dsn: false)
+    get_config(:log_level, default: @warning_log_level, check_dsn: false)
   end
 
   def max_breadcrumbs do

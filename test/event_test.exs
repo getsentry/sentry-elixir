@@ -52,7 +52,7 @@ defmodule Sentry.EventTest do
                %{
                  context_line: nil,
                  filename: "timer.erl",
-                 function: ":timer.tc/1",
+                 function: ":timer.tc" <> _arity,
                  in_app: false,
                  lineno: _,
                  module: :timer,

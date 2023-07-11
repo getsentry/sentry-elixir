@@ -175,7 +175,7 @@ The full range of options is the following:
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
-| `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
+| `log_level` | False | `:warning` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
 | `max_breadcrumbs` | False | 100 | This sets the maximum number of breadcrumbs to send to Sentry when creating an event |
 
 Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
