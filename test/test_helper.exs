@@ -5,6 +5,7 @@ Code.require_file("test/support/test_filter.exs")
 Code.require_file("test/support/test_gen_server.exs")
 Code.require_file("test/support/test_error_view.exs")
 
-ExUnit.start()
+ExUnit.start(assert_receive_timeout: 500)
+
 Application.ensure_all_started(:bypass)
 Application.ensure_all_started(:telemetry)
