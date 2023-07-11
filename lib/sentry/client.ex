@@ -51,7 +51,7 @@ defmodule Sentry.Client do
   require Logger
 
   @type send_event_result ::
-          {:ok, Task.t() | String.t() | pid()} | {:error, any()} | :unsampled | :excluded
+          {:ok, Task.t() | String.t()} | {:error, any()} | :unsampled | :excluded
   @type dsn :: {String.t(), String.t(), String.t()}
   @type result :: :sync | :none | :async
   @sentry_version 5
@@ -155,8 +155,7 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec do_send_event(Event.t(), binary(), :none) ::
-          {:ok, DynamicSupervisor.on_start_child()} | {:error, any()}
+  @spec do_send_event(Event.t(), binary(), :none) :: {:ok, String.t()} | {:error, any()}
   defp do_send_event(event, body, :none) do
     case get_headers_and_endpoint() do
       {endpoint, auth_headers} when is_binary(endpoint) ->
