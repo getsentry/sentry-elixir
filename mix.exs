@@ -8,7 +8,7 @@ defmodule Sentry.Mixfile do
     [
       app: :sentry,
       version: @version,
-      elixir: "~> 1.10",
+      elixir: "~> 1.11",
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
