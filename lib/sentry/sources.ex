@@ -23,14 +23,14 @@ defmodule Sentry.Sources do
     should not be stored or referenced when reporting exceptions.  Defaults to
     `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
   * `:source_code_path_pattern` - a glob that is expanded to select files from the
-    `:root_source_code_path`.  Defaults to `"**/*.ex"`.
+    `:root_source_code_paths`.  Defaults to `"**/*.ex"`.
 
   An example configuration:
 
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
         enable_source_code_context: true,
-        root_source_code_path: [File.cwd!()],
+        root_source_code_paths: [File.cwd!()],
         context_lines: 5
 
   ### Source code storage
