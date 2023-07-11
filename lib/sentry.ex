@@ -101,6 +101,21 @@ defmodule Sentry do
       Config.client().child_spec()
     ]
 
+    if Config.client() == Sentry.HackneyClient do
+      unless Code.ensure_loaded?(:hackney) do
+        raise """
+        cannot start the :sentry application because the HTTP client is set to \
+        Sentry.HackneyClient (which is the default), but the Hackney library is not loaded. \
+        Add :hackney to your dependencies to fix this.
+        """
+      end
+
+      case Application.ensure_all_started(:hackney) do
+        {:ok, _apps} -> :ok
+        {:error, reason} -> raise "failed to start the :hackney application: #{inspect(reason)}"
+      end
+    end
+
     validate_json_config!()
     validate_log_level_config!()
 
