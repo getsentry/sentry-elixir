@@ -83,12 +83,14 @@ defmodule Sentry.Config do
 
   @deprecated "Use root_source_code_paths/0 instead"
   def root_source_code_path do
-    path = get_config(:root_source_code_path, check_dsn: false)
-
-    if path do
+    if path = get_config(:root_source_code_path, check_dsn: false) do
       path
     else
-      raise ArgumentError.exception(":root_source_code_path must be configured")
+      raise ArgumentError, """
+      you called Sentry.Config.root_source_code_path/0, but :root_source_code_path is \
+      not configured. root_source_code_path/0 is deprecated anyways, so you should \
+      use root_source_code_paths/0 (plural) instead, and configure :root_source_code_paths.\
+      """
     end
   end
 
