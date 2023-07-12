@@ -362,11 +362,11 @@ defmodule Sentry.ClientTest do
     setup do
       modify_env(:sentry,
         dsn: "http://public:secret@localhost:0/1",
-        client: Sentry.MockClient
+        client: Sentry.HTTPClientMock
       )
 
       faulty_capture_message = fn failure ->
-        expect(Sentry.MockClient, :post, fn _url, _headers, _body -> failure.() end)
+        expect(Sentry.HTTPClientMock, :post, fn _url, _headers, _body -> failure.() end)
         {:ok, task} = Sentry.capture_message("all your code are belong to us", result: :async)
         Task.await(task)
       end
