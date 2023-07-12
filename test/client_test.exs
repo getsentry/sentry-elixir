@@ -1,6 +1,7 @@
 defmodule Sentry.ClientTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
+  import Mox
   import Sentry.TestEnvironmentHelper
   require Logger
 
@@ -353,5 +354,64 @@ defmodule Sentry.ClientTest do
     assert capture_log(fn ->
              Sentry.capture_message("something happened", extra: %{metadata: [keyword: "list"]})
            end) =~ "Failed to send Sentry event. Unable to encode JSON"
+  end
+
+  describe "client handles exits/throws/exceptions in adapters" do
+    setup :verify_on_exit!
+
+    setup do
+      modify_env(:sentry,
+        dsn: "http://public:secret@localhost:0/1",
+        client: Sentry.MockClient
+      )
+
+      faulty_capture_message = fn failure ->
+        expect(Sentry.MockClient, :post, fn _url, _headers, _body -> failure.() end)
+        {:ok, task} = Sentry.capture_message("all your code are belong to us", result: :async)
+        Task.await(task)
+      end
+
+      {:ok, faulty_capture_message: faulty_capture_message}
+    end
+
+    test "exits", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error, {:request_failure, {:exit, :through_the_window, _stacktrace}}} =
+                   faulty_capture_message.(fn -> exit(:through_the_window) end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (exit) :through_the_window
+                 test/client_test.exs:\
+             """
+    end
+
+    test "throws", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error, {:request_failure, {:throw, :catch_me_if_you_can, _stacktrace}}} =
+                   faulty_capture_message.(fn -> throw(:catch_me_if_you_can) end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (throw) :catch_me_if_you_can
+                 test/client_test.exs:\
+             """
+    end
+
+    test "exceptions", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error,
+                  {:request_failure, {:error, %RuntimeError{message: "oops"}, _stacktrace}}} =
+                   faulty_capture_message.(fn -> raise "oops" end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (RuntimeError) oops
+                 test/client_test.exs:\
+             """
+    end
   end
 end

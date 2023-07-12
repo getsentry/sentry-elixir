@@ -46,7 +46,8 @@ defmodule Sentry.Mixfile do
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:bypass, "~> 2.0", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
-      {:phoenix_html, "~> 2.0", only: [:test]}
+      {:phoenix_html, "~> 2.0", only: [:test]},
+      {:mox, "~> 1.0", only: [:test]}
     ]
   end
 
