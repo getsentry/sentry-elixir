@@ -4,3 +4,4 @@ artifactProvider:
   name: none
 targets:
   - name: hex
+  - name: github
