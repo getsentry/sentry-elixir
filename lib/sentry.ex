@@ -27,7 +27,7 @@ defmodule Sentry do
 
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
         included_environments: [:prod],
-        environment_name: Mix.env
+        environment_name: Mix.env()
 
   This will set the environment name to whatever the current Mix environment
   atom is, but it will only send events if the current environment is `:prod`,
@@ -47,6 +47,10 @@ defmodule Sentry do
   Now, on our servers, we can set the environment variable appropriately. On
   our local development machines, exceptions will never be sent, because the
   default value is not in the list of `included_environments`.
+
+  Sentry also supports loading config at runtime, via `{:system, "SYSTEM_ENV_KEY"}` tuples,
+  where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system
+  environment at runtime.
 
   ## Filtering Exceptions
 

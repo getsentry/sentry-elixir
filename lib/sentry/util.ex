@@ -1,7 +1,5 @@
 defmodule Sentry.Util do
-  @moduledoc """
-    Provides basic utility functions.
-  """
+  @moduledoc false
 
   @rfc_4122_variant10 2
   @uuid_v4_identifier 4
