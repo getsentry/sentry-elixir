@@ -351,12 +351,17 @@ defmodule Sentry.LoggerBackendTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert get_in(json, ["extra", "logger_metadata", "string"]) == "string"
-      assert get_in(json, ["extra", "logger_metadata", "map"]) == %{"a" => "b"}
-      assert get_in(json, ["extra", "logger_metadata", "list"]) == [1, 2, 3]
-      assert get_in(json, ["extra", "logger_metadata", "number"]) == 43
-      assert get_in(json, ["extra", "logger_metadata", "file"]) == "gen_server.erl"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra["logger_metadata"]["string"] == "string"
+      assert event.extra["logger_metadata"]["map"] == %{"a" => "b"}
+      assert event.extra["logger_metadata"]["list"] == [1, 2, 3]
+      assert event.extra["logger_metadata"]["number"] == 43
+      assert event.extra["logger_metadata"]["file"] == "gen_server.erl"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
