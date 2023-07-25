@@ -157,7 +157,16 @@ defmodule Sentry.LoggerBackend do
     # exclude unserialazble default key value set by Logger
     meta
     |> Enum.reject(
-      &(elem(&1, 0) in [:pid, :gl, :crash_reason, :function, :mfa, :report_cb, :error_logger, :sentry])
+      &(elem(&1, 0) in [
+          :pid,
+          :gl,
+          :crash_reason,
+          :function,
+          :mfa,
+          :report_cb,
+          :error_logger,
+          :sentry
+        ])
     )
     |> Enum.into(%{})
   end
