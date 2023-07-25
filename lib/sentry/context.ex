@@ -186,7 +186,7 @@ defmodule Sentry.Context do
       %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}}
   """
   def clear_all do
-    :logger.update_process_metadata(%{sentry: %{}})
+    :logger.update_process_metadata(%{@logger_metadata_key => %{}})
   end
 
   defp get_sentry_context do
@@ -250,19 +250,22 @@ defmodule Sentry.Context do
 
     sentry_metadata =
       get_sentry_context()
-      |> Map.update(@breadcrumbs_key, [map], &[map | &1])
+      |> Map.update(@breadcrumbs_key, [map], fn breadcrumbs ->
+        breadcrumbs = [map | breadcrumbs]
+        Enum.take(breadcrumbs, -1 * Sentry.Config.max_breadcrumbs())
+      end)
 
-    :logger.update_process_metadata(%{sentry: sentry_metadata})
+    :logger.update_process_metadata(%{@logger_metadata_key => sentry_metadata})
   end
 
   defp set_context(key, new) when is_map(new) do
     sentry_metadata =
       case :logger.get_process_metadata() do
-        %{sentry: sentry} -> Map.update(sentry, key, new, &Map.merge(&1, new))
+        %{@logger_metadata_key => sentry} -> Map.update(sentry, key, new, &Map.merge(&1, new))
         _ -> %{key => new}
       end
 
-    :logger.update_process_metadata(%{sentry: sentry_metadata})
+    :logger.update_process_metadata(%{@logger_metadata_key => sentry_metadata})
   end
 
   @doc """

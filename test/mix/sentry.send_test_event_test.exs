@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
              Mix.Tasks.Sentry.SendTestEvent.run([])
            end) == """
            Client configuration:
-           server: http://localhost:43/api/1/store/
+           server: http://localhost:43/api/1/envelope/
            public_key: public
            secret_key: secret
            included_environments: []
@@ -28,7 +28,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "Testing sending Sentry event"
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -42,7 +42,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
              Mix.Tasks.Sentry.SendTestEvent.run([])
            end) == """
            Client configuration:
-           server: http://localhost:#{bypass.port}/api/1/store/
+           server: http://localhost:#{bypass.port}/api/1/envelope/
            public_key: public
            secret_key: secret
            included_environments: [:test]
@@ -69,7 +69,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
                       Mix.Tasks.Sentry.SendTestEvent.run([])
                     end) == """
                     Client configuration:
-                    server: http://localhost:#{bypass.port}/api/1/store/
+                    server: http://localhost:#{bypass.port}/api/1/envelope/
                     public_key: public
                     secret_key: secret
                     included_environments: [:test]

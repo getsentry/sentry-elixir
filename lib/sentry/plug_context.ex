@@ -23,7 +23,7 @@ defmodule Sentry.PlugContext do
         # and credit card information in plain text.  To also prevent sending
         # our sensitive "my_secret_field" and "other_sensitive_data" fields,
         # we simply drop those keys.
-        Sentry.Plug.default_body_scrubber(conn)
+        Sentry.PlugContext.default_body_scrubber(conn)
         |> Map.drop(["my_secret_field", "other_sensitive_data"])
       end
 
@@ -79,6 +79,18 @@ defmodule Sentry.PlugContext do
   which Plug.RequestId (and therefore Phoenix) also default to.
 
       plug Sentry.PlugContext, request_id_header: "application-request-id"
+
+  ### Remote Address Reader
+
+  Sentry.PlugContext includes a request's originating IP address under the `REMOTE_ADDR`
+  Environment key in Sentry. By default it is read from the `x-forwarded-for` HTTP header,
+  and if this header is not present, it is read from `conn.remote_ip`.
+
+  If you wish to read this value differently (e.g. from a different HTTP header),
+  or modify it in some other way (e.g. by masking it), you can configure this behavior
+  by passing the `:remote_address_reader` option:
+
+      plug Sentry.PlugContext, remote_address_reader: &MyModule.read_ip/1
   """
 
   if Code.ensure_loaded?(Plug) do
@@ -111,6 +123,9 @@ defmodule Sentry.PlugContext do
 
     request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
+    remote_address_reader =
+      Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
+
     conn =
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
@@ -123,8 +138,8 @@ defmodule Sentry.PlugContext do
       cookies: handle_data(conn, cookie_scrubber),
       headers: handle_data(conn, header_scrubber),
       env: %{
-        "REMOTE_ADDR" => remote_address(conn.remote_ip),
-        "REMOTE_PORT" => Plug.Conn.get_peer_data(conn).port,
+        "REMOTE_ADDR" => handle_data(conn, remote_address_reader),
+        "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
         "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first()
@@ -132,15 +147,38 @@ defmodule Sentry.PlugContext do
     }
   end
 
-  defp remote_address(address) do
-    address
-    |> :inet.ntoa()
-    |> case do
-      {:error, _} ->
-        ""
+  @spec default_remote_address_reader(Plug.Conn.t()) :: String.t()
+  def default_remote_address_reader(conn) do
+    if header_value = get_header(conn, "x-forwarded-for") do
+      header_value
+      |> String.split(",")
+      |> hd()
+      |> String.trim()
+    else
+      conn.remote_ip
+      |> :inet.ntoa()
+      |> case do
+        {:error, _} ->
+          ""
 
-      address ->
-        to_string(address)
+        address ->
+          to_string(address)
+      end
+    end
+  end
+
+  defp remote_port(conn) do
+    if get_header(conn, "x-forwarded-for") do
+      nil
+    else
+      Plug.Conn.get_peer_data(conn).port
+    end
+  end
+
+  def get_header(conn, header) do
+    case Plug.Conn.get_req_header(conn, header) do
+      [] -> nil
+      [val | _] -> val
     end
   end
 
@@ -171,7 +209,7 @@ defmodule Sentry.PlugContext do
   end
 
   @doc """
-  Recursively scrubs a map that may have nested maps
+  Recursively scrubs a map that may have nested maps or lists
 
   Accepts a list of keys to scrub, and a list of options to configure
 
@@ -206,11 +244,35 @@ defmodule Sentry.PlugContext do
           is_map(value) ->
             scrub_map(value, scrubbed_keys, opts)
 
+          is_list(value) ->
+            scrub_list(value, scrubbed_keys, opts)
+
           true ->
             value
         end
 
       {key, value}
+    end)
+  end
+
+  @spec scrub_list(list(), list(String.t()), keyword()) :: list()
+  defp scrub_list(list, scrubbed_keys, opts) do
+    Enum.map(list, fn value ->
+      cond do
+        is_map(value) && Map.has_key?(value, :__struct__) ->
+          value
+          |> Map.from_struct()
+          |> scrub_map(scrubbed_keys, opts)
+
+        is_map(value) ->
+          scrub_map(value, scrubbed_keys, opts)
+
+        is_list(value) ->
+          scrub_list(value, scrubbed_keys, opts)
+
+        true ->
+          value
+      end
     end)
   end
 end

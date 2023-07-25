@@ -3,10 +3,13 @@ defmodule Sentry.PlugCaptureTest do
   use Plug.Test
   import Sentry.TestEnvironmentHelper
   import ExUnit.CaptureLog
+  alias Sentry.Envelope
 
   defmodule PhoenixController do
     use Phoenix.Controller
     def error(_conn, _params), do: raise("PhoenixError")
+    def exit(_conn, _params), do: exit(:test)
+    def throw(_conn, _params), do: throw(:test)
 
     def assigns(conn, _params) do
       _test = conn.assigns2.test
@@ -17,6 +20,8 @@ defmodule Sentry.PlugCaptureTest do
     use Phoenix.Router
 
     get "/error_route", PhoenixController, :error
+    get "/exit_route", PhoenixController, :exit
+    get "/throw_route", PhoenixController, :throw
     get "/assigns_route", PhoenixController, :assigns
   end
 
@@ -44,7 +49,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -56,16 +66,65 @@ defmodule Sentry.PlugCaptureTest do
     end)
   end
 
+  test "sends throws to Sentry" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    catch_throw(
+      conn(:get, "/throw_route")
+      |> Sentry.ExamplePlugApplication.call([])
+    )
+  end
+
+  test "sends exits to Sentry" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    catch_exit(
+      conn(:get, "/exit_route")
+      |> Sentry.ExamplePlugApplication.call([])
+    )
+  end
+
   test "works with Sentry.PlugContext" do
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["request"]["url"] == "http://www.example.com/error_route"
-      assert json["request"]["method"] == "GET"
-      assert json["request"]["query_string"] == ""
-      assert json["request"]["data"] == %{}
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.request["url"] == "http://www.example.com/error_route"
+      assert event.request["method"] == "GET"
+      assert event.request["query_string"] == ""
+      assert event.request["data"] == %{}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -82,7 +141,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -108,9 +172,14 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.error/2"
-      assert json["message"] == "(RuntimeError PhoenixError)"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
+      assert event.message == "(RuntimeError PhoenixError)"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -131,12 +200,77 @@ defmodule Sentry.PlugCaptureTest do
     end)
   end
 
+  test "reports exits occurring in Phoenix Endpoint" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
+      assert event.message == "Uncaught exit - :test"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      "#{__MODULE__.PhoenixEndpoint}": [
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      ]
+    )
+
+    {:ok, _} = PhoenixEndpoint.start_link()
+
+    capture_log(fn ->
+      catch_exit(conn(:get, "/exit_route") |> PhoenixEndpoint.call([]))
+    end)
+  end
+
+  test "reports throws occurring in Phoenix Endpoint" do
+    bypass = Bypass.open()
+
+    Bypass.expect(bypass, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
+      assert event.message == "Uncaught throw - :test"
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    modify_env(:sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      "#{__MODULE__.PhoenixEndpoint}": [
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      ]
+    )
+
+    {:ok, _} = PhoenixEndpoint.start_link()
+
+    capture_log(fn ->
+      catch_throw(conn(:get, "/throw_route") |> PhoenixEndpoint.call([]))
+    end)
+  end
+
   test "can render feedback form in Phoenix ErrorView" do
     bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -171,7 +305,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -206,7 +345,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      _json = Jason.decode!(body)
+
+      _event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -231,8 +375,13 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      json = Jason.decode!(body)
-      assert json["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 

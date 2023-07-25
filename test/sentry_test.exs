@@ -9,7 +9,7 @@ defmodule SentryTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "RuntimeError"
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -43,7 +43,7 @@ defmodule SentryTest do
 
     Bypass.expect(bypass, fn conn ->
       :timer.sleep(100)
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)

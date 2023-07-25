@@ -16,7 +16,11 @@ defmodule Sentry.Config do
   @default_send_result :none
   @default_send_max_attempts 4
 
-  @permitted_log_level_values ~w(debug info warn error)a
+  @permitted_log_level_values ~w(debug info warning warn error)a
+
+  @warning_log_level if Version.compare(System.version(), "1.11.0") != :lt,
+                       do: :warning,
+                       else: :warn
 
   def validate_config! do
   end
@@ -77,13 +81,48 @@ defmodule Sentry.Config do
     get_config(:enable_source_code_context, default: false, check_dsn: false)
   end
 
+  @deprecated "Use root_source_code_paths/0 instead"
   def root_source_code_path do
-    path = get_config(:root_source_code_path)
-
-    if path do
+    if path = get_config(:root_source_code_path, check_dsn: false) do
       path
     else
-      raise ArgumentError.exception(":root_source_code_path must be configured")
+      raise ArgumentError, """
+      you called Sentry.Config.root_source_code_path/0, but :root_source_code_path is \
+      not configured. root_source_code_path/0 is deprecated anyways, so you should \
+      use root_source_code_paths/0 (plural) instead, and configure :root_source_code_paths.\
+      """
+    end
+  end
+
+  # :root_source_code_path (single path) was replaced by :root_source_code_paths (list of
+  # paths).
+  #
+  # In order for this to not be a breaking change we still accept the old
+  # :root_source_code_path as a fallback.
+  #
+  # We should deprecate this the :root_source_code_path completely in the next major
+  # release.
+  def root_source_code_paths do
+    paths = get_config(:root_source_code_paths, check_dsn: false)
+    path = get_config(:root_source_code_path, check_dsn: false)
+
+    cond do
+      not is_nil(path) and not is_nil(paths) ->
+        raise ArgumentError, """
+        :root_source_code_path and :root_source_code_paths can't be configured at the \
+        same time.
+
+        :root_source_code_path is deprecated. Set :root_source_code_paths instead.
+        """
+
+      not is_nil(paths) ->
+        paths
+
+      not is_nil(path) ->
+        [path]
+
+      true ->
+        raise ArgumentError.exception(":root_source_code_paths must be configured")
     end
   end
 
@@ -103,8 +142,34 @@ defmodule Sentry.Config do
     get_config(:context_lines, default: @default_context_lines, check_dsn: false)
   end
 
+  @deprecated "Use Sentry.Config.in_app_module_allow_list/0 instead."
   def in_app_module_whitelist do
     get_config(:in_app_module_whitelist, default: [], check_dsn: false)
+  end
+
+  def in_app_module_allow_list do
+    new_config = get_config(:in_app_module_allow_list, default: [], check_dsn: false)
+    old_config = get_config(:in_app_module_whitelist, check_dsn: false)
+
+    cond do
+      not is_nil(new_config) and not is_nil(old_config) ->
+        raise ArgumentError, """
+        :in_app_module_allow_list and :in_app_module_whitelist can't be configured at the \
+        same time.
+
+        :in_app_module_whitelist is deprecated. Set :in_app_module_allow_list instead.
+        """
+
+      not is_nil(old_config) ->
+        IO.warn(
+          "Sentry.Config.in_app_module_whitelist/0 is deprecated. Use Sentry.Config.in_app_module_allow_list/0 instead."
+        )
+
+        old_config
+
+      true ->
+        new_config
+    end
   end
 
   def send_result do
@@ -140,7 +205,7 @@ defmodule Sentry.Config do
   end
 
   def log_level do
-    get_config(:log_level, default: :warn, check_dsn: false)
+    get_config(:log_level, default: @warning_log_level, check_dsn: false)
   end
 
   def max_breadcrumbs do

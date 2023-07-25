@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased
+
+## 8.0.6 (2021-09-28)
+
+* Bug Fixes
+  * Remove function that disables non-group leader logging (#467)
+  * Handle :unsampled events in `Sentry.send_test_event` (#474)
+  * Fix dialyzer reporting unmatched\_return for Sentry.PlugCapture (#475)
+  * Use correct `Plug.Parsers` exception module (#482)
+
+## 8.0.5 (2021-02-14)
+
+* Enhancements
+  * Support lists in scrubbing (#442)
+  * Send Sentry reports on uncaught throws/exits (#447)
+
+* Bug Fixes
+  * Deprecate `Sentry.Config.in_app_module_whitelist` in favor of `Sentry.Config.in_app_module_allow_list` (#450)
+  * Update outdated `Sentry.Plug` documentation (#452)
+  * Update `Sentry.HTTPClient` documentation (#456)
+
+## 8.0.4 (2020-11-16)
+
+* Bug Fixes
+  * Do not read DSN config at compile time (#441)
+
+## 8.0.3 (2020-11-11)
+
+* Enhancements
+  * Update package & docs configuration (#432)
+  * Add Plug.Status filter example (#433)
+  * Support multiple source code root paths in Sentry.Sources (#437)
+
+* Bug Fixes
+  * Fix dialyzer reporting unmatched_return for Sentry.PlugCapture (#436)
+  * Align Sentry event levels with Elixir logging levels (#439)
+
+## 8.0.2 (2020-09-06)
+
+* Enhancements
+  * Log error when JSON is unencodable (#429)
+  * Set logger event level to logger message level (#430)
+  * Limit breadcrumbs on add_breadcrumb (#431)
+
+## 8.0.1 (2020-08-08)
+
+* Enhancements
+  * Add plug parsing errors to list of default excluded params (#414)
+  * Make Sentry.PlugContext.scrub\_map public (#417)
+  * Allow users to configure maximum number of breadcrumbs (#418)
+
 ## 8.0.0 (2020-07-13)
 [7.x -> 8.0 Upgrade Guide](https://gist.github.com/mitchellhenke/dce120a5515565076b13962ee0be749b)
 

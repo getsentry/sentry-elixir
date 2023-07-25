@@ -1,10 +1,11 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
   Report Logger events like crashed processes to Sentry. To include in your
-  application, add this module to your Logger backends:
+  application, start this backend in your application `start/2` callback:
 
-      config :logger,
-        backends: [:console, Sentry.LoggerBackend]
+      # lib/my_app/application.ex
+      def start(_type, _args) do
+        Logger.add_backend(Sentry.LoggerBackend)
 
   Sentry context will be included in metadata in reported events. Example:
 
@@ -33,8 +34,8 @@ defmodule Sentry.LoggerBackend do
   Example:
 
       config :logger, Sentry.LoggerBackend,
-        # Also send warn messages
-        level: :warn,
+        # Also send warning messages
+        level: :warning,
         # Send messages from Plug/Cowboy
         excluded_domains: [],
         # Include metadata added with `Logger.metadata([foo_bar: "value"])`
@@ -68,11 +69,9 @@ defmodule Sentry.LoggerBackend do
     {:ok, :ok, struct(state, config)}
   end
 
-  def handle_event({_level, gl, {Logger, _, _, _}}, state) when node(gl) != node() do
-    {:ok, state}
-  end
-
   def handle_event({level, _gl, {Logger, msg, _ts, meta}}, state) do
+    level = maybe_ensure_warning_level(level)
+
     if Logger.compare_levels(level, state.level) != :lt and
          not excluded_domain?(meta[:domain], state) do
       log(level, msg, meta, state)
@@ -98,14 +97,7 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp log(level, msg, meta, state) do
-    sentry = meta[:sentry] || get_sentry_from_callers(meta[:callers] || [])
-
-    opts =
-      [
-        event_source: :logger,
-        extra: %{logger_metadata: logger_metadata(meta, state), logger_level: level},
-        result: :none
-      ] ++ Map.to_list(sentry)
+    opts = build_opts(level, meta, state)
 
     case meta[:crash_reason] do
       {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
@@ -141,7 +133,24 @@ defmodule Sentry.LoggerBackend do
 
   defp get_sentry_from_callers(_), do: %{}
 
-  defp excluded_domain?([head | _], state), do: head in state.excluded_domains
+  defp build_opts(level, meta, state) do
+    default_extra = %{logger_metadata: logger_metadata(meta, state), logger_level: level}
+
+    sentry =
+      (meta[:sentry] || get_sentry_from_callers(meta[:callers] || []))
+      |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
+
+    [
+      event_source: :logger,
+      level: elixir_logger_level_to_sentry_level(level),
+      result: :none
+    ] ++ Map.to_list(sentry)
+  end
+
+  defp excluded_domain?([head | rest], state) do
+    head in state.excluded_domains or excluded_domain?(rest, state)
+  end
+
   defp excluded_domain?(_, _), do: false
 
   defp logger_metadata(meta, state) do
@@ -150,4 +159,42 @@ defmodule Sentry.LoggerBackend do
         do: {key, value},
         into: %{}
   end
+
+  @spec elixir_logger_level_to_sentry_level(Logger.level()) :: String.t()
+  defp elixir_logger_level_to_sentry_level(level) do
+    case level do
+      :emergency ->
+        "fatal"
+
+      :alert ->
+        "fatal"
+
+      :critical ->
+        "fatal"
+
+      :error ->
+        "error"
+
+      :warning ->
+        "warning"
+
+      :warn ->
+        "warning"
+
+      :notice ->
+        "info"
+
+      :info ->
+        "info"
+
+      :debug ->
+        "debug"
+    end
+  end
+
+  if Version.compare(System.version(), "1.11.0") != :lt do
+    defp maybe_ensure_warning_level(:warn), do: :warning
+  end
+
+  defp maybe_ensure_warning_level(level), do: level
 end

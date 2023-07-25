@@ -52,9 +52,9 @@ defmodule Sentry.EventTest do
                %{
                  context_line: nil,
                  filename: "timer.erl",
-                 function: ":timer.tc/1",
+                 function: ":timer.tc" <> _arity,
                  in_app: false,
-                 lineno: 166,
+                 lineno: _,
                  module: :timer,
                  post_context: [],
                  pre_context: [],
@@ -63,7 +63,7 @@ defmodule Sentry.EventTest do
                %{
                  context_line: nil,
                  filename: "lib/ex_unit/runner.ex",
-                 function: "ExUnit.Runner.exec_test/1",
+                 function: _,
                  in_app: false,
                  lineno: _,
                  module: ExUnit.Runner,
@@ -109,6 +109,10 @@ defmodule Sentry.EventTest do
 
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+    assert is_binary(event.contexts.os.name)
+    assert is_binary(event.contexts.os.version)
+    assert is_binary(event.contexts.runtime.name)
+    assert is_binary(event.contexts.runtime.version)
   end
 
   test "respects tags in config" do
@@ -136,7 +140,8 @@ defmodule Sentry.EventTest do
       request: %{},
       stacktrace: %{frames: []},
       tags: %{},
-      user: %{}
+      user: %{},
+      contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
     } = Event.create_event(message: "Test message")
   end
 
@@ -163,7 +168,7 @@ defmodule Sentry.EventTest do
   end
 
   test "sets app_frame to true when configured" do
-    modify_env(:sentry, in_app_module_whitelist: [Sentry, :random, Sentry.Submodule])
+    modify_env(:sentry, in_app_module_allow_list: [Sentry, :random, Sentry.Submodule])
     exception = RuntimeError.exception("error")
 
     event =
@@ -252,13 +257,17 @@ defmodule Sentry.EventTest do
              :bypass,
              :certifi,
              :cowboy,
+             :cowboy_telemetry,
              :cowlib,
+             :dialyxir,
+             :erlex,
              :hackney,
              :idna,
              :jason,
              :metrics,
              :mime,
              :mimerl,
+             :mox,
              :parse_trans,
              :phoenix,
              :phoenix_html,

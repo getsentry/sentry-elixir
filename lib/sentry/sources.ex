@@ -8,40 +8,43 @@ defmodule Sentry.Sources do
 
   ### Configuration
   There is configuration required to set up this functionality.  The options
-  include `:enable_source_code_context`, `:root_source_code_path`, `:context_lines`,
-  `:source_code_exclude_patterns`, and `:source_code_path_pattern`.
+  include `:enable_source_code_context`, `:root_source_code_paths`, `:context_lines`,
+  `:source_code_exclude_patterns`, and `:source_code_path_pattern`. The options must
+  be set at compile-time.
 
   * `:enable_source_code_context` - when `true`, enables reporting source code
     alongside exceptions.
-  * `:root_source_code_path` - The path from which to start recursively reading files from.
-    Should usually be set to `File.cwd!()`.
+  * `:root_source_code_paths` - List of paths from which to start recursively reading files from.
+    Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your
+    applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`.
   * `:context_lines` - The number of lines of source code before and after the line that
     caused the exception to be included.  Defaults to `3`.
   * `:source_code_exclude_patterns` - a list of Regex expressions used to exclude file paths that
     should not be stored or referenced when reporting exceptions.  Defaults to
     `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
   * `:source_code_path_pattern` - a glob that is expanded to select files from the
-    `:root_source_code_path`.  Defaults to `"**/*.ex"`.
+    `:root_source_code_paths`.  Defaults to `"**/*.ex"`.
 
   An example configuration:
 
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
         enable_source_code_context: true,
-        root_source_code_path: File.cwd!(),
+        root_source_code_paths: [File.cwd!()],
         context_lines: 5
 
   ### Source code storage
 
   The file contents are saved when Sentry is compiled, which can cause some
-  complications.  If a file is changed, and Sentry is not recompiled,
+  complications. If a file is changed, and Sentry is not recompiled,
   it will still report old source code.
 
   The best way to ensure source code is up to date is to recompile Sentry
   itself via `mix deps.compile sentry --force`.  It's possible to create a Mix
   Task alias in `mix.exs` to do this.  The example below would allow one to
-  run `mix.sentry_recompile` which will force recompilation of Sentry so
-  it has the newest source and then compile the project:
+  run `mix sentry_recompile && mix compile` which will force recompilation of Sentry so
+  it has the newest source and then compile the project. The second `mix compile`
+  is required due to Mix only invoking the same task once in an alias.
 
       defp aliases do
         [sentry_recompile: ["compile", "deps.compile sentry --force"]]
@@ -64,19 +67,11 @@ defmodule Sentry.Sources do
   @type source_map :: %{String.t() => file_map}
 
   def load_files do
-    root_path = Config.root_source_code_path()
-    path_pattern = Config.source_code_path_pattern()
-    exclude_patterns = Config.source_code_exclude_patterns()
-
-    Path.join(root_path, path_pattern)
-    |> Path.wildcard()
-    |> exclude_files(exclude_patterns)
-    |> Enum.reduce(%{}, fn path, acc ->
-      key = Path.relative_to(path, root_path)
-      value = source_to_lines(File.read!(path))
-
-      Map.put(acc, key, value)
-    end)
+    Enum.reduce(
+      Config.root_source_code_paths(),
+      %{},
+      &load_files_for_root_path/2
+    )
   end
 
   @doc """
@@ -123,6 +118,37 @@ defmodule Sentry.Sources do
           {pre_context, context, post_context}
       end
     end)
+  end
+
+  defp load_files_for_root_path(root_path, files) do
+    root_path
+    |> find_files_for_root_path()
+    |> Enum.reduce(files, fn path, acc ->
+      key = Path.relative_to(path, root_path)
+
+      if Map.has_key?(acc, key) do
+        raise RuntimeError, """
+        Found two source files in different source root paths with the same relative \
+        path: #{key}
+
+        This means that both source files would be reported to Sentry as the same \
+        file. Please rename one of them to avoid this.
+        """
+      else
+        value = source_to_lines(File.read!(path))
+
+        Map.put(acc, key, value)
+      end
+    end)
+  end
+
+  defp find_files_for_root_path(root_path) do
+    path_pattern = Config.source_code_path_pattern()
+    exclude_patterns = Config.source_code_exclude_patterns()
+
+    Path.join(root_path, path_pattern)
+    |> Path.wildcard()
+    |> exclude_files(exclude_patterns)
   end
 
   defp exclude_files(file_names, []), do: file_names

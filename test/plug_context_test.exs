@@ -16,6 +16,13 @@ defmodule Sentry.PlugContextTest do
     |> Map.take(["not-secret"])
   end
 
+  def remote_address_reader(conn) do
+    case get_req_header(conn, "cf-connecting-ip") do
+      [remote_ip | _] -> remote_ip
+      _ -> conn.remote_ip
+    end
+  end
+
   test "sets request context" do
     Sentry.PlugContext.call(conn(:get, "/test?hello=world"), [])
 
@@ -36,6 +43,38 @@ defmodule Sentry.PlugContextTest do
                }
              }
            } = Sentry.Context.get_all()
+  end
+
+  test "sets request context with real client ip if request is forwarded" do
+    conn(:get, "/test?hello=world")
+    |> put_req_header("x-forwarded-for", "10.0.0.1")
+    |> Sentry.PlugContext.call([])
+
+    assert %{
+             request: %{
+               url: "http://www.example.com/test?hello=world",
+               method: "GET",
+               query_string: "hello=world",
+               data: %{
+                 "hello" => "world"
+               },
+               env: %{
+                 "REMOTE_ADDR" => "10.0.0.1",
+                 "REMOTE_PORT" => _,
+                 "REQUEST_ID" => _,
+                 "SERVER_NAME" => "www.example.com",
+                 "SERVER_PORT" => 80
+               }
+             }
+           } = Sentry.Context.get_all()
+  end
+
+  test "allows configuring request address reader" do
+    conn(:get, "/test")
+    |> put_req_header("cf-connecting-ip", "10.0.0.2")
+    |> Sentry.PlugContext.call(remote_address_reader: {__MODULE__, :remote_address_reader})
+
+    assert %{"REMOTE_ADDR" => "10.0.0.2"} = Sentry.Context.get_all().request.env
   end
 
   test "allows configuring body scrubber" do
@@ -82,7 +121,10 @@ defmodule Sentry.PlugContextTest do
       "count" => 334,
       "cc" => "4197-7215-7810-8280",
       "another_cc" => "4197721578108280",
-      "user" => %{"password" => "mypassword"}
+      "user" => %{"password" => "mypassword"},
+      "payments" => [
+        %{"yet_another_cc" => "4197-7215-7810-8280"}
+      ]
     })
     |> put_req_cookie("secret", "secretvalue")
     |> put_req_cookie("regular", "value")
@@ -101,7 +143,10 @@ defmodule Sentry.PlugContextTest do
              "passwd" => "*********",
              "password" => "*********",
              "secret" => "*********",
-             "user" => %{"password" => "*********"}
+             "user" => %{"password" => "*********"},
+             "payments" => [
+               %{"yet_another_cc" => "*********"}
+             ]
            }
   end
 

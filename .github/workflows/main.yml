@@ -1,0 +1,95 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+      - release/**
+
+  pull_request:
+
+env:
+  MIX_ENV: test
+
+jobs:
+  test:
+
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        # https://hexdocs.pm/elixir/1.14/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
+        elixir: ['1.12.x', '1.13.x', '1.14.x', '1.15.x']
+        otp: ['22.3.x', '23.3.x', '24.3.x', '25.2.x', '26.0.x']
+        exclude:
+          - elixir: '1.12.x'
+            otp: '25.2.x'
+          - elixir: '1.12.x'
+            otp: '26.0.x'
+          - elixir: '1.13.x'
+            otp: '25.2.x'
+          - elixir: '1.13.x'
+            otp: '26.0.x'
+          - elixir: '1.14.x'
+            otp: '22.3.x'
+          - elixir: '1.14.x'
+            otp: '26.0.x'
+          - elixir: '1.15.x'
+            otp: '22.3.x'
+          - elixir: '1.15.x'
+            otp: '23.3.x'
+        include:
+          - elixir: '1.10.x'
+            otp: '22.3.x'
+          - elixir: '1.11.x'
+            otp: '23.3.x'
+          # - elixir: 'master'
+          #   otp: '24.3.x'
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: ${{ matrix.elixir }} # Define the elixir version [required]
+        otp-version: ${{ matrix.otp }} # Define the OTP version [required]
+
+    - name: Retrieve Mix Dependencies Cache
+      uses: actions/cache@v1
+      id: mix-cache #id to use in retrieve action
+      with:
+        path: deps
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+    - name: Install Mix Dependencies
+      if: steps.mix-cache.outputs.cache-hit != 'true'
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        mix deps.get
+    - name: Check Formatting
+      run: mix format --check-formatted
+      if: matrix.elixir == '1.15.x'
+
+    - name: Check Compile Warnings
+      run: mix compile --warnings-as-errors
+
+    - name: Run Tests
+      run: mix test
+
+    - name: Retrieve PLT Cache
+      uses: actions/cache@v1
+      id: plt-cache
+      if: matrix.elixir == '1.15.x'
+      with:
+        path: priv/plts
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+    - name: Create PLTs
+      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.15.x'
+      run: |
+        mkdir -p priv/plts
+        mix dialyzer --plt
+    - name: Run dialyzer
+      run: mix dialyzer --no-check --halt-exit-status
+      if: matrix.elixir == '1.15.x'

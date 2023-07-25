@@ -1,0 +1,7 @@
+minVersion: 1.3.0
+changelogPolicy: auto
+artifactProvider:
+  name: none
+targets:
+  - name: hex
+  - name: github

@@ -1,19 +1,18 @@
 defmodule Sentry.ClientTest do
   use ExUnit.Case
   import ExUnit.CaptureLog
+  import Mox
   import Sentry.TestEnvironmentHelper
   require Logger
 
-  alias Sentry.Client
+  alias Sentry.{Client, Envelope}
 
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
     {_endpoint, public_key, private_key} = Client.get_dsn()
 
     assert Client.authorization_header(public_key, private_key) =~
-             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
-               Application.spec(:sentry, :vsn)
-             }, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
+             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
   end
 
   test "authorization without secret" do
@@ -21,15 +20,13 @@ defmodule Sentry.ClientTest do
     {_endpoint, public_key, private_key} = Client.get_dsn()
 
     assert Client.authorization_header(public_key, private_key) =~
-             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{
-               Application.spec(:sentry, :vsn)
-             }, sentry_timestamp=\d{10}, sentry_key=public$/
+             ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public$/
   end
 
   test "get dsn with default config" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
 
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
+    assert {"https://app.getsentry.com:443/api/1/envelope/", "public", "secret"} =
              Sentry.Client.get_dsn()
   end
 
@@ -37,7 +34,7 @@ defmodule Sentry.ClientTest do
     modify_env(:sentry, dsn: {:system, "SYSTEM_KEY"})
     modify_system_env(%{"SYSTEM_KEY" => "https://public:secret@app.getsentry.com/1"})
 
-    assert {"https://app.getsentry.com:443/api/1/store/", "public", "secret"} =
+    assert {"https://app.getsentry.com:443/api/1/envelope/", "public", "secret"} =
              Sentry.Client.get_dsn()
   end
 
@@ -76,7 +73,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
 
       conn
@@ -113,10 +110,15 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert request_map["extra"] == %{"key" => "value"}
-      assert request_map["user"]["id"] == 1
-      assert is_nil(request_map["stacktrace"]["frames"])
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra == %{"key" => "value"}
+      assert event.user["id"] == 1
+      assert event.stacktrace.frames == []
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -147,8 +149,13 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert request_map["extra"] == %{"key" => "value", "user_id" => 1}
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert event.extra == %{"key" => "value", "user_id" => 1}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -177,7 +184,7 @@ defmodule Sentry.ClientTest do
     )
 
     try do
-      :random.uniform() + "1"
+      :rand.uniform() + "1"
     rescue
       e ->
         capture_log(fn ->
@@ -244,8 +251,14 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request_map = Jason.decode!(body)
-      assert Enum.count(request_map["stacktrace"]["frames"]) > 0
+
+      event =
+        body
+        |> Envelope.from_binary!()
+        |> Envelope.event()
+
+      assert Enum.count(event.stacktrace.frames) > 0
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -297,7 +310,7 @@ defmodule Sentry.ClientTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      assert conn.request_path == "/api/1/store/"
+      assert conn.request_path == "/api/1/envelope/"
       assert conn.method == "POST"
 
       conn =
@@ -318,21 +331,87 @@ defmodule Sentry.ClientTest do
       log_level: :error
     )
 
-    capture_log(fn ->
-      try do
-        apply(Event, :not_a_function, [])
-      rescue
-        e ->
-          {:ok, task} =
-            Sentry.capture_exception(
-              e,
-              stacktrace: __STACKTRACE__,
-              result: :async
-            )
+    assert capture_log(fn ->
+             try do
+               apply(Event, :not_a_function, [])
+             rescue
+               e ->
+                 {:ok, %{ref: ref}} =
+                   Sentry.capture_exception(
+                     e,
+                     stacktrace: __STACKTRACE__,
+                     result: :async
+                   )
 
-          assert_receive "API called"
-          Task.shutdown(task)
+                 assert_receive "API called"
+                 assert_receive {^ref, {:error, {:request_failure, _}}}
+                 assert_receive {:DOWN, ^ref, :process, _pid, :normal}
+             end
+           end) =~ "[error] Failed to send Sentry event"
+  end
+
+  test "logs JSON parsing errors at configured log_level" do
+    assert capture_log(fn ->
+             Sentry.capture_message("something happened", extra: %{metadata: [keyword: "list"]})
+           end) =~ "Failed to send Sentry event. Unable to encode JSON"
+  end
+
+  describe "client handles exits/throws/exceptions in adapters" do
+    setup :verify_on_exit!
+
+    setup do
+      modify_env(:sentry,
+        dsn: "http://public:secret@localhost:0/1",
+        client: Sentry.HTTPClientMock
+      )
+
+      faulty_capture_message = fn failure ->
+        expect(Sentry.HTTPClientMock, :post, fn _url, _headers, _body -> failure.() end)
+        {:ok, task} = Sentry.capture_message("all your code are belong to us", result: :async)
+        Task.await(task)
       end
-    end) =~ "[error] Failed to send Sentry event"
+
+      {:ok, faulty_capture_message: faulty_capture_message}
+    end
+
+    test "exits", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error, {:request_failure, {:exit, :through_the_window, _stacktrace}}} =
+                   faulty_capture_message.(fn -> exit(:through_the_window) end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (exit) :through_the_window
+                 test/client_test.exs:\
+             """
+    end
+
+    test "throws", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error, {:request_failure, {:throw, :catch_me_if_you_can, _stacktrace}}} =
+                   faulty_capture_message.(fn -> throw(:catch_me_if_you_can) end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (throw) :catch_me_if_you_can
+                 test/client_test.exs:\
+             """
+    end
+
+    test "exceptions", %{faulty_capture_message: faulty_capture_message} do
+      log =
+        capture_log(fn ->
+          assert {:error,
+                  {:request_failure, {:error, %RuntimeError{message: "oops"}, _stacktrace}}} =
+                   faulty_capture_message.(fn -> raise "oops" end)
+        end)
+
+      assert log =~ """
+             Failed to send Sentry event. ** (RuntimeError) oops
+                 test/client_test.exs:\
+             """
+    end
   end
 end

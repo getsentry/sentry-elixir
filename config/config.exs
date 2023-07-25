@@ -1,10 +1,13 @@
-use Mix.Config
+import Config
 
 config :sentry,
-  included_environments: [:test, :dev, :prod],
-  environment_name: :dev,
+  included_environments: [:test],
+  environment_name: :test,
   tags: %{},
   enable_source_code_context: true,
-  root_source_code_path: File.cwd!()
+  root_source_code_paths: [File.cwd!()],
+  hackney_opts: [recv_timeout: 50],
+  send_result: :sync,
+  send_max_attempts: 1
 
-import_config "#{Mix.env()}.exs"
+config :phoenix, :json_library, Jason

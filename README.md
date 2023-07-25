@@ -1,8 +1,8 @@
 # sentry
 
-[![Build Status](https://img.shields.io/travis/getsentry/sentry-elixir.svg?style=flat)](https://travis-ci.org/getsentry/sentry-elixir)
-[![hex.pm version](https://img.shields.io/hexpm/v/sentry.svg?style=flat)](https://hex.pm/packages/sentry)
-[Documentation](https://hexdocs.pm/sentry/readme.html)
+![Build Status](https://github.com/getsentry/sentry-elixir/actions/workflows/main.yml/badge.svg)
+[![Hex Package](https://img.shields.io/hexpm/v/sentry.svg)](https://hex.pm/packages/sentry)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/sentry)
 
 The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
 
@@ -61,7 +61,7 @@ If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the to
 
 #### Capturing User Feedback
 
-If you would like to capture user feedback as described [here](https://docs.sentry.io/enriching-error-data/user-feedback), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
+If you would like to capture user feedback as described [here](https://docs.sentry.io/platforms/elixir/enriching-events/user-feedback/), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
 
 An example Phoenix application setup that wanted to display the user feedback form on 500 responses on requests accepting HTML could look like:
 
@@ -93,13 +93,13 @@ defmodule MyAppWeb.ErrorView do
 
 ### Capture Crashed Process Exceptions
 
-This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends).
+This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends). You can add it as a backend when your application starts:
 
 ```diff
-# config/config.exs
+# lib/my_app/application.ex
 
-+ config :logger,
-+  backends: [:console, Sentry.LoggerBackend]
++   def start(_type, _args) do
++     Logger.add_backend(Sentry.LoggerBackend)
 ```
 
 The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
@@ -139,7 +139,7 @@ config :sentry,
   environment_name: Mix.env(),
   included_environments: [:prod],
   enable_source_code_context: true,
-  root_source_code_path: File.cwd!()
+  root_source_code_paths: [File.cwd!()]
 ```
 
 The `environment_name` and `included_environments` work together to determine
@@ -152,7 +152,7 @@ The full range of options is the following:
 | Key           | Required         | Default      | Notes |
 | ------------- | -----------------|--------------|-------|
 | `dsn` | True  | n/a | |
-| `environment_name` | False  | `:dev` | |
+| `environment_name` | False  | :prod | |
 | `included_environments` | False  | `[:test, :dev, :prod]` | If you need non-standard mix env names you *need* to include it here |
 | `tags` | False  | `%{}` | |
 | `release` | False  | None | |
@@ -166,16 +166,16 @@ The full range of options is the following:
 | `sample_rate` | False | 1.0 | |
 | `send_result` | False | `:none` | You may want to set it to `:sync` if testing your Sentry integration. See "Testing with Sentry" |
 | `send_max_attempts` | False | 4 | |
-| `in_app_module_whitelist` | False | `[]` | |
+| `in_app_module_allow_list` | False | `[]` | |
 | `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
 | `enable_source_code_context` | False | False | |
-| `root_source_code_path` | Required if `enable_source_code_context` is enabled | | Should generally be set to `File.cwd!()`|
+| `root_source_code_paths` | Required if `enable_source_code_context` is enabled | | Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`. |
 | `context_lines` | False  | 3 | |
 | `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
 | `source_code_path_pattern` | False  | `"**/*.ex"` | |
 | `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
 | `json_library` | False | `Jason` | |
-| `log_level` | False | `:warn` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
+| `log_level` | False | `:warning` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
 | `max_breadcrumbs` | False | 100 | This sets the maximum number of breadcrumbs to send to Sentry when creating an event |
 
 Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
@@ -232,7 +232,7 @@ config :sentry,
 
 Sentry's server supports showing the source code that caused an error, but depending on deployment, the source code for an application is not guaranteed to be available while it is running.  To work around this, the Sentry library reads and stores the source code at compile time.  This has some unfortunate implications.  If a file is changed, and Sentry is not recompiled, it will still report old source code.
 
-The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.compile sentry --force`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below allows one to run `mix sentry_recompile` which will compile any uncompiled or changed parts of the application, and then force recompilation of Sentry so it has the newest source:
+The best way to ensure source code is up to date is to recompile Sentry itself via `mix deps.compile sentry --force`.  It's possible to create a Mix Task alias in `mix.exs` to do this.  The example below allows one to run `mix sentry_recompile && mix compile` which will compile any uncompiled or changed parts of the application, and then force recompilation of Sentry so it has the newest source. The second `mix compile` is required due to Mix only invoking the same task once in an alias.
 
 ```elixir
 # mix.exs
@@ -242,10 +242,6 @@ end
 ```
 
 For more documentation, see [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html).
-
-### Umbrella Applications
-
-Sentry within umbrella applications should operate similarly to other project types with one exception. Due to the way Sentry stores source code context and the information available in stacktraces, it is not currently possible to reliably report exceptions with source code as described in [Sentry.Sources](https://hexdocs.pm/sentry/Sentry.Sources.html). A fuller explanation is described in an issue [here](https://github.com/getsentry/sentry-elixir/issues/362#issuecomment-647787262).
 
 ## Testing Your Configuration
 
