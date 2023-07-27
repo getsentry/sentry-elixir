@@ -192,9 +192,6 @@ defmodule Sentry.LoggerBackend do
     end
   end
 
-  if Version.compare(System.version(), "1.11.0") != :lt do
-    defp maybe_ensure_warning_level(:warn), do: :warning
-  end
-
+  defp maybe_ensure_warning_level(:warn), do: :warning
   defp maybe_ensure_warning_level(level), do: level
 end
