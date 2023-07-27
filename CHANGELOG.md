@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased
+## 8.1.0
+
+### Various fixes & improvements
+
+- Bump min craft version to 1.4.2 (795bfd12) by @sl0thentr0py
+- Add github target to craft (ef563cc5) by @sl0thentr0py
+- Bump min craft version (56516be2) by @sl0thentr0py
+- Improve deprecation of Sentry.Config.root_source_code_path/0 (#558) by @whatyouhide
+- Wrap HTTP requests in try/catch (#515) by @ruslandoga
+- Remove extra config files (#556) by @yordis
+- Remove use of deprecated Mix.Config (#555) by @whatyouhide
+- Add release/** branches to ci for craft (dfaffb9f) by @sl0thentr0py
+- Fix typo in moduledoc (#534) by @louisvisser
+- Check :hackney application when starting (#554) by @whatyouhide
+- feat(event): filter more exceptions by default (#550) by @gpouilloux
+- Fix example configuration for Sentry.Sources (#543) by @scudelletti
+- Use module attribute for dictionary key consistently (#537) by @tmecklem
+- Fix send_event/2 typespec (#545) by @ruslandoga
+- Update badges in the README (#548) by @ruslandoga
+- Update ex_docs to 0.29+ (#549) by @ruslandoga
+- Fix Elixir 1.15 warnings (#553) by @dustinfarris
+- Add :remote_address_reader PlugContext option (#519) by @michallepicki
+- Traverse full domain list when checking for excluded domains (#508) by @martosaur
+- Add craft with target hex (#532) by @sl0thentr0py
+- Add Sentry to LICENSE (#530) by @sl0thentr0py
+- Update ci setup-beam action name (#531) by @sl0thentr0py
+- allow logging from tasks (#517) by @ruslandoga
+- Improve DSN parsing and Endpoint building (#507) by @AtjonTV
+
+_Plus 14 more_
 
 ## 8.0.6 (2021-09-28)
 
