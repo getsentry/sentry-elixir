@@ -74,37 +74,14 @@ defmodule Sentry.ConfigTest do
   end
 
   describe "root_source_code_paths" do
-    test "raises error if :root_source_code_path and :root_source_code_paths are set" do
-      modify_env(:sentry, root_source_code_path: "/test")
-      modify_env(:sentry, root_source_code_paths: ["/test"])
-
-      expected_error_message = """
-      :root_source_code_path and :root_source_code_paths can't be configured at the \
-      same time.
-
-      :root_source_code_path is deprecated. Set :root_source_code_paths instead.
-      """
-
-      assert_raise ArgumentError, expected_error_message, fn ->
-        Config.root_source_code_paths()
-      end
-    end
-
-    test "raises error if :root_source_code_path and :root_source_code_paths are not set" do
-      delete_env(:sentry, [:root_source_code_path, :root_source_code_paths])
+    test "raises error if :root_source_code_paths is not set" do
+      delete_env(:sentry, [:root_source_code_paths])
 
       expected_error_message = ":root_source_code_paths must be configured"
 
       assert_raise ArgumentError, expected_error_message, fn ->
         Config.root_source_code_paths()
       end
-    end
-
-    test "returns :root_source_code_path if it's set" do
-      modify_env(:sentry, root_source_code_path: "/test")
-      modify_env(:sentry, root_source_code_paths: nil)
-
-      assert Config.root_source_code_paths() == ["/test"]
     end
 
     test "returns :root_source_code_paths if it's set" do

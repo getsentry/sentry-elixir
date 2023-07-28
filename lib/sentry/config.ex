@@ -74,48 +74,11 @@ defmodule Sentry.Config do
     get_config(:enable_source_code_context, default: false, check_dsn: false)
   end
 
-  @deprecated "Use root_source_code_paths/0 instead"
-  def root_source_code_path do
-    if path = get_config(:root_source_code_path, check_dsn: false) do
-      path
-    else
-      raise ArgumentError, """
-      you called Sentry.Config.root_source_code_path/0, but :root_source_code_path is \
-      not configured. root_source_code_path/0 is deprecated anyways, so you should \
-      use root_source_code_paths/0 (plural) instead, and configure :root_source_code_paths.\
-      """
-    end
-  end
-
-  # :root_source_code_path (single path) was replaced by :root_source_code_paths (list of
-  # paths).
-  #
-  # In order for this to not be a breaking change we still accept the old
-  # :root_source_code_path as a fallback.
-  #
-  # We should deprecate this the :root_source_code_path completely in the next major
-  # release.
   def root_source_code_paths do
-    paths = get_config(:root_source_code_paths, check_dsn: false)
-    path = get_config(:root_source_code_path, check_dsn: false)
-
-    cond do
-      not is_nil(path) and not is_nil(paths) ->
-        raise ArgumentError, """
-        :root_source_code_path and :root_source_code_paths can't be configured at the \
-        same time.
-
-        :root_source_code_path is deprecated. Set :root_source_code_paths instead.
-        """
-
-      not is_nil(paths) ->
-        paths
-
-      not is_nil(path) ->
-        [path]
-
-      true ->
-        raise ArgumentError.exception(":root_source_code_paths must be configured")
+    if paths = get_config(:root_source_code_paths, check_dsn: false) do
+      paths
+    else
+      raise ArgumentError, ":root_source_code_paths must be configured"
     end
   end
 
