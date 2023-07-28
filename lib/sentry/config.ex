@@ -98,34 +98,8 @@ defmodule Sentry.Config do
     get_config(:context_lines, default: @default_context_lines, check_dsn: false)
   end
 
-  @deprecated "Use Sentry.Config.in_app_module_allow_list/0 instead."
-  def in_app_module_whitelist do
-    get_config(:in_app_module_whitelist, default: [], check_dsn: false)
-  end
-
   def in_app_module_allow_list do
-    new_config = get_config(:in_app_module_allow_list, default: [], check_dsn: false)
-    old_config = get_config(:in_app_module_whitelist, check_dsn: false)
-
-    cond do
-      not is_nil(new_config) and not is_nil(old_config) ->
-        raise ArgumentError, """
-        :in_app_module_allow_list and :in_app_module_whitelist can't be configured at the \
-        same time.
-
-        :in_app_module_whitelist is deprecated. Set :in_app_module_allow_list instead.
-        """
-
-      not is_nil(old_config) ->
-        IO.warn(
-          "Sentry.Config.in_app_module_whitelist/0 is deprecated. Use Sentry.Config.in_app_module_allow_list/0 instead."
-        )
-
-        old_config
-
-      true ->
-        new_config
-    end
+    get_config(:in_app_module_allow_list, default: [], check_dsn: false)
   end
 
   def send_result do
