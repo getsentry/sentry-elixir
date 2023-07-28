@@ -13,9 +13,15 @@ defmodule Sentry.Config do
   @default_send_max_attempts 4
   @default_log_level :warning
 
-  @permitted_log_level_values ~w(debug info warning warn error)a
+  @spec validate_log_level!() :: :ok
+  def validate_log_level!() do
+    value = log_level()
 
-  def validate_config! do
+    if value in ~w(debug info warning warn error)a do
+      :ok
+    else
+      raise ArgumentError, "#{inspect(value)} is not a valid :log_level configuration"
+    end
   end
 
   def dsn do
@@ -141,8 +147,6 @@ defmodule Sentry.Config do
   def max_breadcrumbs do
     get_config(:max_breadcrumbs, default: 100, check_dsn: false)
   end
-
-  def permitted_log_level_values, do: @permitted_log_level_values
 
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)

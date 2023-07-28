@@ -121,7 +121,7 @@ defmodule Sentry do
     end
 
     validate_json_config!()
-    validate_log_level_config!()
+    Config.validate_log_level!()
 
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
     Supervisor.start_link(children, opts)
@@ -226,16 +226,6 @@ defmodule Sentry do
                     """),
                     __STACKTRACE__
         end
-    end
-  end
-
-  defp validate_log_level_config!() do
-    value = Config.log_level()
-
-    if value in Config.permitted_log_level_values() do
-      :ok
-    else
-      raise ArgumentError.exception("#{inspect(value)} is not a valid :log_level configuration")
     end
   end
 end
