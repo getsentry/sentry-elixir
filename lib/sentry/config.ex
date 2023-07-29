@@ -47,7 +47,7 @@ defmodule Sentry.Config do
     :ok
   end
 
-  @spec validate_json_config!() :: :ok
+  @spec warn_for_deprecated_env_vars!() :: :ok
   def warn_for_deprecated_env_vars! do
     if is_nil(Application.get_env(:sentry, :included_environments)) &&
          System.get_env("SENTRY_INCLUDED_ENVIRONMENTS") do
