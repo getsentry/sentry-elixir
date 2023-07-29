@@ -14,7 +14,7 @@ defmodule Sentry.Config do
   @default_log_level :warning
 
   @spec validate_log_level!() :: :ok
-  def validate_log_level!() do
+  def validate_log_level! do
     value = log_level()
 
     if value in ~w(debug info warning warn error)a do
@@ -24,20 +24,49 @@ defmodule Sentry.Config do
     end
   end
 
+  @spec validate_included_environments!() :: :ok
+  def validate_included_environments! do
+    case included_environments() do
+      comma_separated_envs when is_binary(comma_separated_envs) ->
+        IO.warn("""
+        setting :included_environments to a comma-separated string is deprecated and won't \
+        be supported in the next major version. Set :included_environments to a list of \
+        atoms instead.\
+        """)
+
+        Application.put_env(
+          :sentry,
+          :included_environments,
+          String.split(comma_separated_envs, ",")
+        )
+
+      list_of_atoms when is_list(list_of_atoms) ->
+        :ok
+    end
+
+    :ok
+  end
+
+  @spec validate_json_config!() :: :ok
+  def warn_for_deprecated_env_vars! do
+    if is_nil(Application.get_env(:sentry, :included_environments)) &&
+         System.get_env("SENTRY_INCLUDED_ENVIRONMENTS") do
+      IO.warn("""
+      setting SENTRY_INCLUDED_ENVIRONMENTS is deprecated and won't be supported in the \
+      next major version. Set the :included_environments application configuration instead, \
+      and use config/runtime.exs if you want to set it at runtime.
+      """)
+    end
+
+    :ok
+  end
+
   def dsn do
     get_config(:dsn, check_dsn: false)
   end
 
-  @doc """
-  The `:included_environments` config key expects a list, but if given a string, it will split the string on commas to create a list.
-  """
   def included_environments do
-    get_config(
-      :included_environments,
-      default: @default_included_environments,
-      check_dsn: false,
-      type: :list
-    )
+    Application.get_env(:sentry, :included_environments, @default_included_environments)
   end
 
   def environment_name do
@@ -45,19 +74,15 @@ defmodule Sentry.Config do
   end
 
   def max_hackney_connections do
-    get_config(
-      :hackney_pool_max_connections,
-      default: @default_max_hackney_connections,
-      check_dsn: false
-    )
+    Application.get_env(:sentry, :hackney_pool_max_connections, @default_max_hackney_connections)
   end
 
   def hackney_timeout do
-    get_config(:hackney_pool_timeout, default: @default_hackney_timeout, check_dsn: false)
+    Application.get_env(:sentry, :hackney_pool_timeout, @default_hackney_timeout)
   end
 
   def tags do
-    get_config(:tags, default: %{}, check_dsn: false)
+    Application.get_env(:sentry, :tags, %{})
   end
 
   def release do
@@ -69,11 +94,11 @@ defmodule Sentry.Config do
   end
 
   def filter do
-    get_config(:filter, default: Sentry.DefaultEventFilter, check_dsn: false)
+    Application.get_env(:sentry, :filter, Sentry.DefaultEventFilter)
   end
 
   def client do
-    get_config(:client, default: Sentry.HackneyClient, check_dsn: false)
+    Application.get_env(:sentry, :client, Sentry.HackneyClient)
   end
 
   def enable_source_code_context do
@@ -109,19 +134,19 @@ defmodule Sentry.Config do
   end
 
   def send_result do
-    get_config(:send_result, default: @default_send_result, check_dsn: false)
+    Application.get_env(:sentry, :send_result, @default_send_result)
   end
 
   def send_max_attempts do
-    get_config(:send_max_attempts, default: @default_send_max_attempts, check_dsn: false)
+    Application.get_env(:sentry, :send_max_attempts, @default_send_max_attempts)
   end
 
   def sample_rate do
-    get_config(:sample_rate, default: @default_sample_rate, check_dsn: false)
+    Application.get_env(:sentry, :sample_rate, @default_sample_rate)
   end
 
   def hackney_opts do
-    get_config(:hackney_opts, default: [], check_dsn: false)
+    Application.get_env(:sentry, :hackney_opts, [])
   end
 
   def before_send_event do
@@ -137,7 +162,7 @@ defmodule Sentry.Config do
   end
 
   def json_library do
-    get_config(:json_library, default: Jason, check_dsn: false)
+    Application.get_env(:sentry, :json_library, Jason)
   end
 
   def log_level do
@@ -145,13 +170,12 @@ defmodule Sentry.Config do
   end
 
   def max_breadcrumbs do
-    get_config(:max_breadcrumbs, default: 100, check_dsn: false)
+    Application.get_env(:sentry, :max_breadcrumbs, 100)
   end
 
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)
     check_dsn = Keyword.get(opts, :check_dsn, true)
-    type = Keyword.get(opts, :type)
 
     result =
       with :not_found <- get_from_application_environment(key),
@@ -166,7 +190,10 @@ defmodule Sentry.Config do
         end
       end
 
-    convert_type(result, type, default)
+    case result do
+      {:ok, value} -> value
+      _other -> default
+    end
   end
 
   defp save_system_to_application(key, func) do
@@ -179,11 +206,6 @@ defmodule Sentry.Config do
         {:ok, value}
     end
   end
-
-  defp convert_type({:ok, value}, nil, _), do: value
-  defp convert_type({:ok, value}, :list, _) when is_list(value), do: value
-  defp convert_type({:ok, value}, :list, _) when is_binary(value), do: String.split(value, ",")
-  defp convert_type(_, _, default), do: default
 
   defp get_from_application_environment(key) when is_atom(key) do
     case Application.fetch_env(:sentry, key) do
