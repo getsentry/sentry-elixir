@@ -61,14 +61,14 @@ defmodule Sentry.Event do
           event_source: any()
         }
 
-  alias Sentry.{Config, Event, Util}
+  alias Sentry.{Config, Event, UUID}
   @source_code_context_enabled Config.enable_source_code_context()
   @source_files if(@source_code_context_enabled, do: Sentry.Sources.load_files(), else: nil)
 
   @enable_deps_reporting Config.report_deps()
   @deps if(
           @enable_deps_reporting,
-          do: Util.mix_deps(),
+          do: Map.keys(Mix.Project.deps_paths()),
           else: []
         )
 
@@ -160,7 +160,10 @@ defmodule Sentry.Event do
       breadcrumbs: breadcrumbs,
       request: request,
       fingerprint: fingerprint,
-      modules: Util.mix_deps_versions(@deps),
+      modules:
+        Enum.reduce(@deps, %{}, fn app, acc ->
+          Map.put(acc, app, to_string(Application.spec(app, :vsn)))
+        end),
       contexts: generate_contexts(),
       event_source: event_source
     }
@@ -203,7 +206,13 @@ defmodule Sentry.Event do
 
   @spec add_metadata(Event.t()) :: Event.t()
   def add_metadata(%Event{} = state) do
-    %{state | event_id: Util.uuid4_hex(), timestamp: Util.iso8601_timestamp()}
+    timestamp =
+      DateTime.utc_now()
+      |> DateTime.truncate(:microsecond)
+      |> DateTime.to_iso8601()
+      |> String.trim_trailing("Z")
+
+    %{state | event_id: UUID.uuid4_hex(), timestamp: timestamp}
     |> Map.update(:server_name, nil, fn server_name ->
       server_name || to_string(:net_adm.localhost())
     end)

@@ -1,7 +1,7 @@
 defmodule Sentry.Envelope do
   @moduledoc false
 
-  alias Sentry.{Config, Event, Util}
+  alias Sentry.{Config, Event, UUID}
 
   @type t :: %__MODULE__{
           event_id: String.t()
@@ -15,7 +15,7 @@ defmodule Sentry.Envelope do
   @spec new() :: t()
   def new() do
     %__MODULE__{
-      event_id: Util.uuid4_hex(),
+      event_id: UUID.uuid4_hex(),
       items: []
     }
   end
