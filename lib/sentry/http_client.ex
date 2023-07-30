@@ -34,7 +34,7 @@ defmodule Sentry.HTTPClient do
 
   For example, this can start a pool of HTTP connections dedicated to Sentry.
   """
-  @callback child_spec() :: Supervisor.child_spec()
+  @callback child_spec() :: :supervisor.child_spec()
 
   @doc """
   Should make an HTTP `POST` request to `url` with the given `headers` and `body`.
