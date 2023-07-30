@@ -2,11 +2,13 @@ defmodule Sentry.PlugCapture do
   @moduledoc """
   Provides basic functionality to handle and send errors occurring within
   Plug applications, including Phoenix.
+
   It is intended for usage with `Sentry.PlugContext`.
 
-  #### Usage
-  In a Phoenix application, it is important to use this module before
-  the Phoenix endpoint itself. It should be added to your endpoint.ex:
+  ## Usage
+
+  In a Phoenix application, it is important to use this module **before**
+  the Phoenix endpoint itself. It should be added to your `endpoint.ex` file:
 
 
       defmodule MyApp.Endpoint
@@ -15,13 +17,14 @@ defmodule Sentry.PlugCapture do
         # ...
       end
 
-  In a Plug application, it can be added below your router:
+  In a Plug application, it can be added *below* your router:
 
       defmodule MyApp.PlugRouter do
         use Plug.Router
         use Sentry.PlugCapture
         # ...
       end
+
   """
   defmacro __using__(_opts) do
     quote do
