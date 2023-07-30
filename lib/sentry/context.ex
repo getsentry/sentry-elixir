@@ -1,18 +1,21 @@
 defmodule Sentry.Context do
   @moduledoc """
-    Provides functionality to store user, tags, extra, and breadcrumbs context when an
-    event is reported. The contexts will be fetched and merged into the event when it is sent.
+  Provides functionality to store user, tags, extra, and breadcrumbs context when an
+  event is reported.
 
-    When calling Sentry.Context, Logger metadata is used to store this state.
-    This imposes some limitations. The metadata will only exist within
-    the current process, and the context will die with the process.
+  The contexts will be fetched and merged into the event when it is sent.
 
-    For example, if you add context inside your controller and an
-    error happens in a Task, that context will not be included.
+  `Sentry.Context` uses Elixir `Logger` metadata to store the context itself.
+  This imposes some limitations. The metadata will only exist **within
+  the current process**, and the context will disappear when the process
+  dies.
 
-    A common use-case is to set context within Plug or Phoenix applications, as each
-    request is its own process, and so any stored context will be included should an
-    error be reported within that request process. Example:
+  For example, if you add context inside your controller and an
+  error happens in a spawned `Task`, that context will not be included.
+
+  A common use case is to set context when handling requests within Plug or Phoenix
+  applications, as each request is its own process, and so any stored context is included
+  should an error be reported within that request process. For example:
 
       # post_controller.ex
       def index(conn, _params) do
@@ -21,9 +24,12 @@ defmodule Sentry.Context do
         render(conn, "index.html", posts: posts)
       end
 
-    It should be noted that the `set_*_context/1` functions merge with the
-    existing context rather than entirely overwriting it.
+  > #### Merging {: .info}
+  >
+  > The `set_*_context/1` functions **merge** with the
+  > existing context rather than entirely overwriting it.
   """
+
   @logger_metadata_key :sentry
   @user_key :user
   @tags_key :tags
@@ -32,7 +38,7 @@ defmodule Sentry.Context do
   @breadcrumbs_key :breadcrumbs
 
   @doc """
-  Retrieves all currently set context on the current process.
+  Retrieves all currently-set context on the current process.
 
   ## Example
 
@@ -46,6 +52,7 @@ defmodule Sentry.Context do
         request: %{},
         breadcrumbs: []
       }
+
   """
   @spec get_all() :: %{
           user: map(),
@@ -88,6 +95,7 @@ defmodule Sentry.Context do
         request: %{},
         breadcrumbs: []
       }
+
   """
   @spec set_extra_context(map()) :: :ok
   def set_extra_context(map) when is_map(map) do
@@ -114,6 +122,7 @@ defmodule Sentry.Context do
         request: %{},
         breadcrumbs: []
       }
+
   """
   @spec set_user_context(map()) :: :ok
   def set_user_context(map) when is_map(map) do
@@ -140,6 +149,7 @@ defmodule Sentry.Context do
           tags: %{id: 123, other_id: 456},
           user: %{}
       }
+
   """
   @spec set_tags_context(map()) :: :ok
   def set_tags_context(map) when is_map(map) do
@@ -167,6 +177,7 @@ defmodule Sentry.Context do
           tags: %{},
           user: %{}
       }
+
   """
   @spec set_request_context(map()) :: :ok
   def set_request_context(map) when is_map(map) do
@@ -184,7 +195,9 @@ defmodule Sentry.Context do
       :ok
       iex> Sentry.Context.get_all()
       %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}}
+
   """
+  @spec clear_all() :: :ok
   def clear_all do
     :logger.update_process_metadata(%{@logger_metadata_key => %{}})
   end
@@ -230,17 +243,20 @@ defmodule Sentry.Context do
           tags: %{},
           user: %{}
       }
+
   """
   @spec add_breadcrumb(keyword() | map()) :: :ok
+  def add_breadcrumb(breadcrumb_info)
+
   def add_breadcrumb(list) when is_list(list) do
     if Keyword.keyword?(list) do
       list
-      |> Enum.into(%{})
-      |> add_breadcrumb
+      |> Map.new()
+      |> add_breadcrumb()
     else
       raise ArgumentError, """
-      Sentry.Context.add_breadcrumb/1 only accepts keyword lists or maps.
-      Received a non-keyword list.
+      Sentry.Context.add_breadcrumb/1 only accepts keyword lists or maps, \
+      got a non-keyword list: #{inspect(list)}\
       """
     end
   end
@@ -269,15 +285,15 @@ defmodule Sentry.Context do
   end
 
   @doc """
-  Returns the keys used to store context in the current Process's process
-  dictionary.
+  Returns the keys used to store context in the current process' logger metadata.
 
   ## Example
 
       iex> Sentry.Context.context_keys()
       [:breadcrumbs, :tags, :user, :extra]
+
   """
-  @spec context_keys() :: list(atom())
+  @spec context_keys() :: [atom(), ...]
   def context_keys do
     [@breadcrumbs_key, @tags_key, @user_key, @extra_key]
   end
