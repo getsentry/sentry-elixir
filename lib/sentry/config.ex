@@ -2,7 +2,6 @@ defmodule Sentry.Config do
   @moduledoc false
 
   @default_included_environments [:prod]
-  @default_environment_name Mix.env()
   @default_max_hackney_connections 50
   @default_hackney_timeout 5000
   @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/"]
@@ -77,7 +76,7 @@ defmodule Sentry.Config do
   end
 
   def dsn do
-    get_config(:dsn)
+    get_config_from_app_or_system_env(:dsn, "SENTRY_DSN")
   end
 
   def included_environments do
@@ -85,7 +84,12 @@ defmodule Sentry.Config do
   end
 
   def environment_name do
-    get_config(:environment_name, default: @default_environment_name)
+    if env = get_config_from_app_or_system_env(:environment_name, "SENTRY_ENVIRONMENT") do
+      env
+    else
+      Application.put_env(:sentry, :environment_name, "dev")
+      "dev"
+    end
   end
 
   def max_hackney_connections do
@@ -101,11 +105,11 @@ defmodule Sentry.Config do
   end
 
   def release do
-    get_config(:release)
+    get_config_from_app_or_system_env(:release, "SENTRY_RELEASE")
   end
 
   def server_name do
-    get_config(:server_name)
+    Application.get_env(:sentry, :server_name)
   end
 
   def filter do
@@ -189,54 +193,23 @@ defmodule Sentry.Config do
     Application.get_env(:sentry, :max_breadcrumbs, 100)
   end
 
-  defp get_config(key, opts \\ []) when is_atom(key) do
-    default = Keyword.get(opts, :default)
-
-    result =
-      with :not_found <- get_from_application_environment(key),
-           env_key = config_key_to_system_environment_key(key),
-           system_func = fn -> get_from_system_environment(env_key) end,
-           :not_found <- save_system_to_application(key, system_func) do
-        :not_found
-      end
-
-    case result do
-      {:ok, value} -> value
-      _other -> default
-    end
-  end
-
-  defp save_system_to_application(key, func) do
-    case func.() do
-      :not_found ->
-        :not_found
+  defp get_config_from_app_or_system_env(app_key, system_env_key) do
+    case Application.fetch_env(:sentry, app_key) do
+      {:ok, {:system, env_key}} ->
+        value = System.fetch_env!(env_key)
+        Application.put_env(:sentry, app_key, value)
+        value
 
       {:ok, value} ->
-        Application.put_env(:sentry, key, value)
-        {:ok, value}
+        value
+
+      :error ->
+        if value = System.get_env(system_env_key) do
+          Application.put_env(:sentry, app_key, value)
+          value
+        else
+          nil
+        end
     end
-  end
-
-  defp get_from_application_environment(key) when is_atom(key) do
-    case Application.fetch_env(:sentry, key) do
-      {:ok, {:system, env_var}} -> get_from_system_environment(env_var)
-      {:ok, value} -> {:ok, value}
-      :error -> :not_found
-    end
-  end
-
-  defp get_from_system_environment(key) when is_binary(key) do
-    case System.get_env(key) do
-      nil -> :not_found
-      value -> {:ok, value}
-    end
-  end
-
-  defp config_key_to_system_environment_key(key) when is_atom(key) do
-    string_key =
-      Atom.to_string(key)
-      |> String.upcase()
-
-    "SENTRY_#{string_key}"
   end
 end
