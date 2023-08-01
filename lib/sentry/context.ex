@@ -246,7 +246,7 @@ defmodule Sentry.Context do
   end
 
   def add_breadcrumb(map) when is_map(map) do
-    map = Map.put_new(map, "timestamp", Sentry.Util.unix_timestamp())
+    map = Map.put_new(map, "timestamp", System.system_time(:second))
 
     sentry_metadata =
       get_sentry_context()

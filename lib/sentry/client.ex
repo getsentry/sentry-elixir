@@ -46,7 +46,7 @@ defmodule Sentry.Client do
       end
   """
 
-  alias Sentry.{Config, Event, Util}
+  alias Sentry.{Config, Event}
 
   require Logger
 
@@ -225,7 +225,7 @@ defmodule Sentry.Client do
   """
   @spec authorization_header(String.t(), String.t()) :: String.t()
   def authorization_header(public_key, secret_key) do
-    timestamp = Util.unix_timestamp()
+    timestamp = System.system_time(:second)
 
     data = [
       sentry_version: @sentry_version,
