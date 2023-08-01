@@ -116,35 +116,40 @@ defmodule Sentry.Config do
     Application.get_env(:sentry, :client, Sentry.HackneyClient)
   end
 
-  def enable_source_code_context do
-    get_config(:enable_source_code_context, default: false)
-  end
+  @enable_source_code_context Application.compile_env(:sentry, :enable_source_code_context, false)
+  def enable_source_code_context, do: @enable_source_code_context
+
+  @root_source_code_paths Application.compile_env(:sentry, :root_source_code_paths, nil)
 
   def root_source_code_paths do
-    if paths = get_config(:root_source_code_paths) do
-      paths
+    if is_nil(@root_source_code_paths) do
+      raise ArgumentError,
+            ":root_source_code_paths must be configured if :enable_source_code_context is true"
     else
-      raise ArgumentError, ":root_source_code_paths must be configured"
+      @root_source_code_paths
     end
   end
 
-  def source_code_path_pattern do
-    get_config(:source_code_path_pattern, default: @default_path_pattern)
-  end
+  @source_code_path_pattern Application.compile_env(
+                              :sentry,
+                              :source_code_path_pattern,
+                              @default_path_pattern
+                            )
+  def source_code_path_pattern, do: @source_code_path_pattern
 
-  def source_code_exclude_patterns do
-    get_config(
-      :source_code_exclude_patterns,
-      default: @default_exclude_patterns
-    )
-  end
+  @source_code_exclude_patterns Application.compile_env(
+                                  :sentry,
+                                  :source_code_exclude_patterns,
+                                  @default_exclude_patterns
+                                )
+  def source_code_exclude_patterns, do: @source_code_exclude_patterns
 
   def context_lines do
-    get_config(:context_lines, default: @default_context_lines)
+    Application.get_env(:sentry, :context_lines, @default_context_lines)
   end
 
   def in_app_module_allow_list do
-    get_config(:in_app_module_allow_list, default: [])
+    Application.get_env(:sentry, :in_app_module_allow_list, [])
   end
 
   def send_result do
@@ -171,16 +176,15 @@ defmodule Sentry.Config do
     Application.get_env(:sentry, :after_send_event)
   end
 
-  def report_deps do
-    get_config(:report_deps, default: true)
-  end
+  @report_deps Application.compile_env(:sentry, :report_deps, true)
+  def report_deps, do: @report_deps
 
   def json_library do
     Application.get_env(:sentry, :json_library, Jason)
   end
 
   def log_level do
-    get_config(:log_level, default: @default_log_level)
+    Application.get_env(:sentry, :log_level, @default_log_level)
   end
 
   def max_breadcrumbs do
