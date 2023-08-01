@@ -119,14 +119,12 @@ defmodule Sentry.Config do
   @enable_source_code_context Application.compile_env(:sentry, :enable_source_code_context, false)
   def enable_source_code_context, do: @enable_source_code_context
 
-  @root_source_code_paths Application.compile_env(:sentry, :root_source_code_paths, nil)
-
-  def root_source_code_paths do
-    if is_nil(@root_source_code_paths) do
+  if root_source_code_paths = Application.compile_env(:sentry, :root_source_code_paths, nil) do
+    def root_source_code_paths, do: unquote(root_source_code_paths)
+  else
+    def root_source_code_paths do
       raise ArgumentError,
             ":root_source_code_paths must be configured if :enable_source_code_context is true"
-    else
-      @root_source_code_paths
     end
   end
 
