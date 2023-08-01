@@ -48,9 +48,22 @@ defmodule Sentry do
   our local development machines, exceptions will never be sent, because the
   default value is not in the list of `included_environments`.
 
-  Sentry also supports loading config at runtime, via `{:system, "SYSTEM_ENV_KEY"}` tuples,
+  ### Configuration Through System Environment
+
+  Sentry supports loading configuration from the system environment. You can do this
+  by setting `SENTRY_<name>` environment variables. For example, to set the `:release`
+  option through the system environment, you can set the `SENTRY_RELEASE` environment
+  variable.
+
+  You can also load configuration at runtime via `{:system, "SYSTEM_ENV_KEY"}` tuples,
   where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system
   environment at runtime.
+
+  The supported `SENTRY_<name>` environment variables are:
+
+    * `SENTRY_RELEASE`
+    * `SENTRY_ENVIRONMENT_NAME`
+    * `SENTRY_DSN`
 
   ## Filtering Exceptions
 
@@ -120,8 +133,10 @@ defmodule Sentry do
       end
     end
 
+    Config.warn_for_deprecated_env_vars!()
     validate_json_config!()
     Config.validate_log_level!()
+    Config.validate_included_environments!()
 
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
     Supervisor.start_link(children, opts)

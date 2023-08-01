@@ -61,15 +61,9 @@ defmodule Sentry.ConfigTest do
   end
 
   describe "included_environments" do
-    test "retrieves and converts string from system environment" do
-      delete_env(:sentry, [:included_environments])
-      modify_system_env(%{"SENTRY_INCLUDED_ENVIRONMENTS" => "test,dev"})
-      assert ["test", "dev"] == Config.included_environments()
-    end
-
-    test "retrieves and converts string from config" do
-      modify_env(:sentry, included_environments: "test,dev")
-      assert ["test", "dev"] == Config.included_environments()
+    test "retrieves from app env" do
+      modify_env(:sentry, included_environments: [:test, :dev])
+      assert [:test, :dev] == Config.included_environments()
     end
   end
 
