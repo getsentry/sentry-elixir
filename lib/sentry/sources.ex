@@ -67,7 +67,7 @@ defmodule Sentry.Sources do
   @type source_map :: %{String.t() => file_map}
 
   @doc false
-  @spec load_files([Path.t()] | nil) :: source_map()
+  @spec load_files([Path.t()]) :: source_map()
   def load_files(paths \\ Config.root_source_code_paths()) do
     Enum.reduce(paths, %{}, &load_files_for_root_path/2)
   end
