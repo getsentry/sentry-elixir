@@ -24,25 +24,6 @@ defmodule Sentry.ConfigTest do
     assert Application.get_env(:sentry, :dsn) == dsn
   end
 
-  test "retrieves from DSN query string" do
-    modify_env(
-      :sentry,
-      dsn: "https://public:super_secret@app.getsentry.com/2?server_name=my_server"
-    )
-
-    assert "my_server" == Config.server_name()
-  end
-
-  test "sets application env if found in DSN query string" do
-    modify_env(
-      :sentry,
-      dsn: "https://public:super_secret@app.getsentry.com/2?server_name=my_server"
-    )
-
-    assert "my_server" == Config.server_name()
-    assert Application.get_env(:sentry, :server_name) == "my_server"
-  end
-
   describe "source_code_path_pattern" do
     test "retrieves from environment" do
       modify_env(:sentry, source_code_path_pattern: "**/*test.ex")

@@ -47,6 +47,21 @@ defmodule Sentry.Config do
     :ok
   end
 
+  @spec assert_dsn_has_no_query_params!() :: :ok
+  def assert_dsn_has_no_query_params! do
+    if sentry_dsn = dsn() do
+      if URI.parse(sentry_dsn).query do
+        raise ArgumentError, """
+        using a Sentry DSN with query parameters is not supported since v9.0.0 of this library. \
+        Please remove the query parameters from your DSN and pass them in as regular \
+        configuration. See the documentation for the Sentry module for more information.\
+        """
+      end
+    end
+
+    :ok
+  end
+
   @spec warn_for_deprecated_env_vars!() :: :ok
   def warn_for_deprecated_env_vars! do
     if is_nil(Application.get_env(:sentry, :included_environments)) &&
@@ -62,7 +77,7 @@ defmodule Sentry.Config do
   end
 
   def dsn do
-    get_config(:dsn, check_dsn: false)
+    get_config(:dsn)
   end
 
   def included_environments do
@@ -102,11 +117,11 @@ defmodule Sentry.Config do
   end
 
   def enable_source_code_context do
-    get_config(:enable_source_code_context, default: false, check_dsn: false)
+    get_config(:enable_source_code_context, default: false)
   end
 
   def root_source_code_paths do
-    if paths = get_config(:root_source_code_paths, check_dsn: false) do
+    if paths = get_config(:root_source_code_paths) do
       paths
     else
       raise ArgumentError, ":root_source_code_paths must be configured"
@@ -114,23 +129,22 @@ defmodule Sentry.Config do
   end
 
   def source_code_path_pattern do
-    get_config(:source_code_path_pattern, default: @default_path_pattern, check_dsn: false)
+    get_config(:source_code_path_pattern, default: @default_path_pattern)
   end
 
   def source_code_exclude_patterns do
     get_config(
       :source_code_exclude_patterns,
-      default: @default_exclude_patterns,
-      check_dsn: false
+      default: @default_exclude_patterns
     )
   end
 
   def context_lines do
-    get_config(:context_lines, default: @default_context_lines, check_dsn: false)
+    get_config(:context_lines, default: @default_context_lines)
   end
 
   def in_app_module_allow_list do
-    get_config(:in_app_module_allow_list, default: [], check_dsn: false)
+    get_config(:in_app_module_allow_list, default: [])
   end
 
   def send_result do
@@ -150,15 +164,15 @@ defmodule Sentry.Config do
   end
 
   def before_send_event do
-    get_config(:before_send_event, check_dsn: false)
+    Application.get_env(:sentry, :before_send_event)
   end
 
   def after_send_event do
-    get_config(:after_send_event, check_dsn: false)
+    Application.get_env(:sentry, :after_send_event)
   end
 
   def report_deps do
-    get_config(:report_deps, default: true, check_dsn: false)
+    get_config(:report_deps, default: true)
   end
 
   def json_library do
@@ -166,7 +180,7 @@ defmodule Sentry.Config do
   end
 
   def log_level do
-    get_config(:log_level, default: @default_log_level, check_dsn: false)
+    get_config(:log_level, default: @default_log_level)
   end
 
   def max_breadcrumbs do
@@ -175,19 +189,13 @@ defmodule Sentry.Config do
 
   defp get_config(key, opts \\ []) when is_atom(key) do
     default = Keyword.get(opts, :default)
-    check_dsn = Keyword.get(opts, :check_dsn, true)
 
     result =
       with :not_found <- get_from_application_environment(key),
            env_key = config_key_to_system_environment_key(key),
            system_func = fn -> get_from_system_environment(env_key) end,
            :not_found <- save_system_to_application(key, system_func) do
-        if check_dsn do
-          query_func = fn -> key |> Atom.to_string() |> get_from_dsn_query_string() end
-          save_system_to_application(key, query_func)
-        else
-          :not_found
-        end
+        :not_found
       end
 
     case result do
@@ -219,26 +227,6 @@ defmodule Sentry.Config do
     case System.get_env(key) do
       nil -> :not_found
       value -> {:ok, value}
-    end
-  end
-
-  defp get_from_dsn_query_string(key) when is_binary(key) do
-    sentry_dsn = dsn()
-
-    if sentry_dsn do
-      %URI{query: query} = URI.parse(sentry_dsn)
-      query = query || ""
-
-      result =
-        URI.decode_query(query)
-        |> Map.fetch(key)
-
-      case result do
-        {:ok, value} -> {:ok, value}
-        :error -> :not_found
-      end
-    else
-      :not_found
     end
   end
 
