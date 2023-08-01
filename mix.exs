@@ -19,11 +19,24 @@ defmodule Sentry.Mixfile do
         plt_add_apps: [:mix, :plug, :hackney]
       ],
       docs: [
-        extras: ["README.md", "CHANGELOG.md"],
+        extra_section: "Guides",
+        extras: [
+          "README.md",
+          "CHANGELOG.md",
+          "pages/upgrade-8.x.md",
+          "pages/upgrade-9.x.md"
+        ],
+        groups_for_extras: [
+          "Upgrade Guides": [
+            "pages/upgrade-8.x.md",
+            "pages/upgrade-9.x.md"
+          ]
+        ],
         source_ref: "#{@version}",
         source_url: @source_url,
         main: "readme",
-        skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
+        skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+        authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
     ]
