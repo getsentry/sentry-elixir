@@ -23,6 +23,7 @@ defmodule Sentry.Mixfile do
         extras: [
           "README.md",
           "CHANGELOG.md",
+          "pages/setup-with-plug-and-phoenix.md",
           "pages/upgrade-8.x.md",
           "pages/upgrade-9.x.md"
         ],

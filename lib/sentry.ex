@@ -4,7 +4,18 @@ defmodule Sentry do
   require Logger
 
   @moduledoc """
-  Provides the basic functionality to submit a `Sentry.Event` to the Sentry Service.
+  Provides the functionality to submit events to [Sentry](https://sentry.io).
+
+  This library can be used to submit events to Sentry from any Elixir application.
+  It supports several ways of reporting events:
+
+    * Manually — see `capture_exception/2` and `capture_message/2`.
+
+    * Through an Elixir `Logger` backend — see `Sentry.LoggerBackend`.
+
+    * Automatically for Plug/Phoenix applications — see the
+      [*Setup with Plug and Phoenix* guide](setup-with-plug-and-phoenix.html), and the
+      `Sentry.PlugCapture` and `Sentry.PlugContext` modules.
 
   ## Configuration
 
