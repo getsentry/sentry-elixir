@@ -46,12 +46,17 @@ config :sentry,
 
 We strongly recommend you do this in `config/runtime.exs` so that you'll read the system environment when starting your application. This is going to work both for local development as well as in [Mix releases](https://hexdocs.pm/mix/1.15.4/Mix.Tasks.Release.html).
 
-These are the system environment variables that are **not** available anymore:
+This is the new system environment variables configuration:
 
-| System environment variable | Corresponding configuration setting |
-| --------------------------- | ----------------------------------- |
-| `SENTRY_LOG_LEVEL`          | `:log_level`                        |
-| `SENTRY_CONTEXT_LINES` | `:context_lines` |
+| System environment variable | Corresponding configuration setting | Supported in 9.0.0+           |
+| --------------------------- | ----------------------------------- | ----------------------------- |
+| `SENTRY_SERVER_NAME`        | `:server_name`                      | ❌                            |
+| `SENTRY_LOG_LEVEL`          | `:log_level`                        | ❌                            |
+| `SENTRY_CONTEXT_LINES`      | `:context_lines`                    | ❌                            |
+| `SENTRY_ENVIRONMENT_NAME`   | `:environment_name`                 | ❌ — use `SENTRY_ENVIRONMENT` |
+| `SENTRY_ENVIRONMENT`        | `:environment_name`                 | ✅                            |
+| `SENTRY_DSN`                | `:dsn`                              | ✅                            |
+| `SENTRY_RELEASE`            | `:release`                          | ✅                            |
 
 ## Fix Compile-Time Configuration
 
