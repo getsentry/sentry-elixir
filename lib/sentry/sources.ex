@@ -6,25 +6,6 @@ defmodule Sentry.Sources do
   the text of source files during compilation for displaying the
   source code that caused an exception.
 
-  ### Configuration
-  There is configuration required to set up this functionality.  The options
-  include `:enable_source_code_context`, `:root_source_code_paths`, `:context_lines`,
-  `:source_code_exclude_patterns`, and `:source_code_path_pattern`. The options must
-  be set at compile-time.
-
-  * `:enable_source_code_context` - when `true`, enables reporting source code
-    alongside exceptions.
-  * `:root_source_code_paths` - List of paths from which to start recursively reading files from.
-    Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your
-    applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`.
-  * `:context_lines` - The number of lines of source code before and after the line that
-    caused the exception to be included.  Defaults to `3`.
-  * `:source_code_exclude_patterns` - a list of Regex expressions used to exclude file paths that
-    should not be stored or referenced when reporting exceptions.  Defaults to
-    `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
-  * `:source_code_path_pattern` - a glob that is expanded to select files from the
-    `:root_source_code_paths`.  Defaults to `"**/*.ex"`.
-
   An example configuration:
 
       config :sentry,

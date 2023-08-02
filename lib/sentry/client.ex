@@ -1,5 +1,5 @@
 defmodule Sentry.Client do
-  @moduledoc ~S"""
+  @moduledoc """
   This module interfaces directly with Sentry via HTTP.
 
   The client itself can be configured via the :client
@@ -9,41 +9,6 @@ defmodule Sentry.Client do
   It makes use of `Task.Supervisor` to allow sending tasks
   synchronously or asynchronously, and defaulting to asynchronous.
   See `send_event/2` for more information.
-
-  ### Configuration
-
-    * `:before_send_event` - allows performing operations on the event before
-      it is sent. Accepts an anonymous function or a `{module, function}` tuple,
-      and the event will be passed as the only argument.
-
-    * `:after_send_event` - callback that is called after attempting to send an event.
-      Accepts an anonymous function or a `{module, function}` tuple. The result of the
-      HTTP call as well as the event will be passed as arguments. The return value of
-      the callback is not returned.
-
-  Example configuration of putting Logger metadata in the extra context:
-
-      config :sentry,
-        before_send_event: {MyModule, :before_send},
-        before_send_event: {MyModule, :after_send}
-
-  where:
-
-      defmodule MyModule do
-        def before_send(event) do
-          metadata = Map.new(Logger.metadata)
-          %{event | extra: Map.merge(event.extra, metadata)}
-        end
-
-        def after_send_event(event, result) do
-          case result do
-            {:ok, id} ->
-              Logger.info("Successfully sent event!")
-            _ ->
-              Logger.info(fn -> "Did not successfully send event! #{inspect(event)}" end)
-          end
-        end
-      end
   """
 
   alias Sentry.{Config, Event}

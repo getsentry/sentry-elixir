@@ -1,13 +1,7 @@
 defmodule Sentry.Event do
   @moduledoc """
-    Provides an Event Struct as well as transformation of Logger
-    entries into Sentry Events.
-
-  ### Configuration
-
-  * `:in_app_module_allow_list` - Expects a list of modules that is used to distinguish among stacktrace frames that belong to your app and ones that are part of libraries or core Elixir.  This is used to better display the significant part of stacktraces.  The logic is greedy, so if your app's root module is `MyApp` and your setting is `[MyApp]`, that module as well as any submodules like `MyApp.Submodule` would be considered part of your app.  Defaults to `[]`.
-  * `:report_deps` - Flag for whether to include the loaded dependencies when reporting an error. Defaults to true.
-
+  Provides an Event Struct as well as transformation of Logger
+  entries into Sentry Events.
   """
 
   defstruct event_id: nil,
