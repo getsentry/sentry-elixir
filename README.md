@@ -4,7 +4,7 @@
 [![Hex Package](https://img.shields.io/hexpm/v/sentry.svg)](https://hex.pm/packages/sentry)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/sentry)
 
-The Official Sentry Client for Elixir which provides a simple API to capture exceptions, automatically handle Plug Exceptions and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
+The official Sentry client for Elixir which provides a simple API to capture exceptions, automatically handle Plug exceptions, and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
 
 ## Installation
 
@@ -21,68 +21,6 @@ defp deps do
     {:plug_cowboy, "~> 2.3"},
   ]
 end
-```
-
-### Setup with Plug and Phoenix
-Capturing errors in Plug applications is done with `Sentry.PlugContext` and `Sentry.PlugCapture`. `Sentry.PlugContext` adds contextual metadata from the current request which is then included in errors that are captured and reported by `Sentry.PlugCapture`.
-
-If you are using Phoenix, first add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file. `Sentry.PlugContext` should be added below `Plug.Parsers`.
-
-```diff
- defmodule MyAppWeb.Endpoint
-+  use Sentry.PlugCapture
-   use Phoenix.Endpoint, otp_app: :my_app
-   # ...
-   plug Plug.Parsers,
-     parsers: [:urlencoded, :multipart, :json],
-     pass: ["*/*"],
-     json_decoder: Phoenix.json_library()
-
-+  plug Sentry.PlugContext
-```
-
-If you are in a non-Phoenix Plug application, add `Sentry.PlugCapture` at the top of your Plug application, and add `Sentry.PlugContext` below `Plug.Parsers` (if it is in your stack).
-
-```diff
- defmodule MyApp.Router do
-   use Plug.Router
-+  use Sentry.PlugCapture
-   # ...
-   plug Plug.Parsers,
-     parsers: [:urlencoded, :multipart]
-+  plug Sentry.PlugContext
-```
-
-#### Capturing User Feedback
-
-If you would like to capture user feedback as described [here](https://docs.sentry.io/platforms/elixir/enriching-events/user-feedback/), the `Sentry.get_last_event_id_and_source()` function can be used to see if Sentry has sent an event within the current Plug process, and the source of that event. `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
-
-An example Phoenix application setup that wanted to display the user feedback form on 500 responses on requests accepting HTML could look like:
-
-```elixir
-defmodule MyAppWeb.ErrorView do
-  # ...
-  def render("500.html", _assigns) do
-    case Sentry.get_last_event_id_and_source() do
-      {event_id, :plug} when is_binary(event_id) ->
-        opts =
-          # can do %{eventId: event_id, title: "My custom title"}
-          %{eventId: event_id}
-          |> Jason.encode!()
-
-        ~E"""
-          <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
-          <script>
-            Sentry.init({ dsn: '<%= Sentry.Config.dsn() %>' });
-            Sentry.showReportDialog(<%= raw opts %>)
-          </script>
-        """
-
-      _ ->
-        "Error"
-    end
-  # ...
-  end
 ```
 
 ### Capture Crashed Process Exceptions
@@ -120,7 +58,6 @@ Sometimes you want to capture messages that are not Exceptions.
 ```
 
 For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
-
 
 ## Configuration
 
