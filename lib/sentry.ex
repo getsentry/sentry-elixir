@@ -66,14 +66,10 @@ defmodule Sentry do
   option through the system environment, you can set the `SENTRY_RELEASE` environment
   variable.
 
-  You can also load configuration at runtime via `{:system, "SYSTEM_ENV_KEY"}` tuples,
-  where Sentry will read `SYSTEM_ENV_KEY` to get the config value from the system
-  environment at runtime.
-
   The supported `SENTRY_<name>` environment variables are:
 
     * `SENTRY_RELEASE`
-    * `SENTRY_ENVIRONMENT_NAME`
+    * `SENTRY_ENVIRONMENT`
     * `SENTRY_DSN`
 
   ## Filtering Exceptions

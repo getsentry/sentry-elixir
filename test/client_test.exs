@@ -30,14 +30,6 @@ defmodule Sentry.ClientTest do
              Sentry.Client.get_dsn()
   end
 
-  test "get dsn with system config" do
-    modify_env(:sentry, dsn: {:system, "SYSTEM_KEY"})
-    modify_system_env(%{"SYSTEM_KEY" => "https://public:secret@app.getsentry.com/1"})
-
-    assert {"https://app.getsentry.com:443/api/1/envelope/", "public", "secret"} =
-             Sentry.Client.get_dsn()
-  end
-
   test "errors on bad public keys" do
     modify_env(:sentry, dsn: "https://app.getsentry.com/1")
 
