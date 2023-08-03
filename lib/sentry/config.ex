@@ -23,6 +23,13 @@ defmodule Sentry.Config do
     end
   end
 
+  @spec validate_environment_name!() :: :ok
+  def validate_environment_name! do
+    # This already raises if missing.
+    environment_name()
+    :ok
+  end
+
   @spec validate_included_environments!() :: :ok
   def validate_included_environments! do
     case included_environments() do
