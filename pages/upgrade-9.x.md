@@ -30,6 +30,10 @@ config :sentry,
   server_name: "my-server"
 ```
 
+## Make Sure the Environment Name Is Configured
+
+Sentry now requires the `:environment_name` configuration to be set, since the default was causing potential issues (such as [#524](https://github.com/getsentry/sentry-elixir/issues/524)). To fix this, configure `:environment_name` or set the `SENTRY_ENVIRONMENT` system environment variable.
+
 ## Fix Your Environment Variables
 
 Sentry 9.0.0 stops using many "magic" system environment variables for configuration. These were environment variables prefixed with `SENTRY_`.

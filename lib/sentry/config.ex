@@ -84,12 +84,8 @@ defmodule Sentry.Config do
   end
 
   def environment_name do
-    if env = get_config_from_app_or_system_env(:environment_name, "SENTRY_ENVIRONMENT") do
-      env
-    else
-      Application.put_env(:sentry, :environment_name, "dev")
-      "dev"
-    end
+    get_config_from_app_or_system_env(:environment_name, "SENTRY_ENVIRONMENT") ||
+      raise ":environment_name must be set in the application config or the SENTRY_ENVIRONMENT env var"
   end
 
   def max_hackney_connections do
