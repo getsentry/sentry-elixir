@@ -327,6 +327,7 @@ defmodule Sentry do
     validate_json_config!()
     Config.validate_log_level!()
     Config.validate_included_environments!()
+    Config.validate_environment_name!()
     Config.assert_dsn_has_no_query_params!()
 
     opts = [strategy: :one_for_one, name: Sentry.Supervisor]
