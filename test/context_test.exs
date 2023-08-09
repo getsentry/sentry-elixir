@@ -1,8 +1,9 @@
 defmodule Sentry.ContextTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
+
   import Sentry.TestEnvironmentHelper
 
-  doctest Sentry.Context, except: [{:add_breadcrumb, 1}]
+  doctest Sentry.Context, except: [add_breadcrumb: 1]
 
   test "storing extra context appears when generating event" do
     Sentry.Context.set_extra_context(%{"key" => "345"})

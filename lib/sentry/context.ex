@@ -8,9 +8,7 @@ defmodule Sentry.Context do
   `Sentry.Context` uses Elixir `Logger` metadata to store the context itself.
   This imposes some limitations. The metadata will only exist **within
   the current process**, and the context will disappear when the process
-  dies.
-
-  For example, if you add context inside your controller and an
+  dies. For example, if you add context inside your controller and an
   error happens in a spawned `Task`, that context will not be included.
 
   A common use case is to set context when handling requests within Plug or Phoenix
@@ -28,7 +26,104 @@ defmodule Sentry.Context do
   >
   > The `set_*_context/1` functions **merge** with the
   > existing context rather than entirely overwriting it.
+
+  ## Sentry Documentation
+
+  Sentry itself documents the meaning of the various contexts:
+
+    * [General context interface](https://develop.sentry.dev/sdk/event-payloads/contexts/)
+    * [Request context](https://develop.sentry.dev/sdk/event-payloads/request/)
+    * [User context](https://develop.sentry.dev/sdk/event-payloads/user/)
+
   """
+
+  @typedoc """
+  Request context.
+
+  See `set_request_context/1`.
+  """
+  @typedoc since: "9.0.0"
+  @type request_context() :: %{
+          optional(:method) => String.t(),
+          optional(:url) => String.t(),
+          optional(:query_string) => String.t(),
+          optional(:data) => term(),
+          optional(:cookies) => String.t() | map() | [{String.t(), String.t()}],
+          optional(:headers) => %{optional(String.t()) => String.t()},
+          optional(:env) => %{optional(String.t()) => String.t()}
+        }
+
+  @typedoc """
+  User context.
+
+  See `set_user_context/1`.
+
+  You can use `"{{auto}}"` as the value of `:ip_address` to let Sentry infer the
+  IP address (see [the documentation for automatic IP
+  addresses](https://develop.sentry.dev/sdk/event-payloads/user/#automatic-ip-addresses)).
+
+  Other than the keys specified in the typespec below, all other keys are stored
+  as extra information but not specifically processed by Sentry.
+
+  ## Example
+
+      %{
+        user: %{
+          id: "unique_id",
+          username: "my_user",
+          email: "foo@example.com",
+          ip_address: "127.0.0.1",
+
+          # Extra key
+          subscription: "basic"
+        }
+      }
+
+  """
+  @typedoc since: "9.0.0"
+  @type user_context() :: %{
+          optional(:id) => term(),
+          optional(:username) => String.t(),
+          optional(:email) => String.t(),
+          optional(:ip_address) => term(),
+          optional(:segment) => term(),
+          optional(:geo) => %{
+            optional(:city) => String.t(),
+            optional(:country_code) => String.t(),
+            optional(:region) => String.t()
+          },
+          optional(atom()) => term()
+        }
+
+  @typedoc """
+  Breadcrumb info.
+
+  See `add_breadcrumb/1`.
+
+  All the atom keys in this map can also be specified as strings.
+
+  ## Example
+
+      %{
+        type: "default",
+        category: "ui.click",
+        data: nil,
+        level: "info",
+        message: "User clicked on the main button",
+        timestamp: 1596814007.035
+      }
+
+  """
+  @typedoc since: "9.0.0"
+  @type breadcrumb() :: %{
+          optional(:type) => :default | :debug | :error | :navigation | String.t(),
+          optional(:category) => String.t(),
+          optional(:message) => String.t(),
+          optional(:data) => map(),
+          optional(:level) => :fatal | :error | :warning | :info | :debug,
+          optional(:timestamp) => String.t() | integer(),
+          optional(String.t()) => term()
+        }
 
   @logger_metadata_key :sentry
   @user_key :user
@@ -55,10 +150,10 @@ defmodule Sentry.Context do
 
   """
   @spec get_all() :: %{
-          user: map(),
+          user: user_context(),
           tags: map(),
           extra: map(),
-          request: map(),
+          request: request_context(),
           breadcrumbs: list()
         }
   def get_all do
@@ -108,6 +203,9 @@ defmodule Sentry.Context do
   This is used to set certain fields which identify the actor who experienced a
   specific instance of an error.
 
+  The user context is documented [in the Sentry
+  documentation](https://develop.sentry.dev/sdk/event-payloads/user/).
+
   ## Example
 
       iex> Sentry.Context.set_user_context(%{id: 123})
@@ -124,9 +222,9 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_user_context(map()) :: :ok
-  def set_user_context(map) when is_map(map) do
-    set_context(@user_key, map)
+  @spec set_user_context(user_context()) :: :ok
+  def set_user_context(user_context) when is_map(user_context) do
+    set_context(@user_key, user_context)
   end
 
   @doc """
@@ -163,25 +261,36 @@ defmodule Sentry.Context do
   This is used to set metadata that identifies the request associated with a
   specific instance of an error.
 
+  The request context is documented [in the Sentry
+  documentation](https://develop.sentry.dev/sdk/event-payloads/request/).
+
+  > #### Invalid Keys {: .error}
+  >
+  > While this function accepts any map with atom keys, the only keys that
+  > are valid are those in `t:request_context/0`. We don't validate
+  > keys because of performance concerns, so it's up to you to ensure that
+  > you're passing valid keys.
+
   ## Example
 
-      iex(1)> Sentry.Context.set_request_context(%{id: 123})
+      iex> Sentry.Context.set_request_context(%{url: "example.com"})
       :ok
-      iex(2)> Sentry.Context.set_request_context(%{url: "www.example.com"})
+      iex> headers = %{"accept" => "application/json"}
+      iex> Sentry.Context.set_request_context(%{headers: headers, method: "GET"})
       :ok
-      iex(3)> Sentry.Context.get_all()
+      iex> Sentry.Context.get_all()
       %{
           breadcrumbs: [],
           extra: %{},
-          request: %{id: 123, url: "www.example.com"},
+          request: %{method: "GET", headers: %{"accept" => "application/json"}, url: "example.com"},
           tags: %{},
           user: %{}
       }
 
   """
-  @spec set_request_context(map()) :: :ok
-  def set_request_context(map) when is_map(map) do
-    set_context(@request_key, map)
+  @spec set_request_context(request_context()) :: :ok
+  def set_request_context(request_context) when is_map(request_context) do
+    set_context(@request_key, request_context)
   end
 
   @doc """
@@ -218,6 +327,12 @@ defmodule Sentry.Context do
   instance of an error. Breadcrumbs can contain arbitrary key data to assist in
   understanding what happened before an error occurred.
 
+  See the [Sentry documentation](https://develop.sentry.dev/sdk/event-payloads/breadcrumbs/)
+  for more information.
+
+  If `breadcrumb_info` is a keyword list, it should be convertable to a map of type
+  `t:breadcrumb/0`.
+
   ## Example
 
       iex> Sentry.Context.add_breadcrumb(message: "first_event")
@@ -226,26 +341,26 @@ defmodule Sentry.Context do
       %{breadcrumbs: [%{:message => "first_event", "timestamp" => 1562007480}]}
       iex> Sentry.Context.add_breadcrumb(%{message: "response"})
       %{
-          breadcrumbs: [
-                %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
-                %{:message => "first_event", "timestamp" => 1562007480}
-              ]
+        breadcrumbs: [
+          %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
+          %{:message => "first_event", "timestamp" => 1562007480}
+        ]
       }
       iex> Sentry.Context.get_all()
       %{
-          breadcrumbs: [
-                %{:message => "first_event", "timestamp" => 1562007480},
-                %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
-                %{:message => "response", "timestamp" => 1562007517}
-              ],
-          extra: %{},
-          request: %{},
-          tags: %{},
-          user: %{}
+        breadcrumbs: [
+          %{:message => "first_event", "timestamp" => 1562007480},
+          %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
+          %{:message => "response", "timestamp" => 1562007517}
+        ],
+        extra: %{},
+        request: %{},
+        tags: %{},
+        user: %{}
       }
 
   """
-  @spec add_breadcrumb(keyword() | map()) :: :ok
+  @spec add_breadcrumb(keyword() | breadcrumb()) :: :ok
   def add_breadcrumb(breadcrumb_info)
 
   def add_breadcrumb(list) when is_list(list) do
@@ -290,11 +405,11 @@ defmodule Sentry.Context do
   ## Example
 
       iex> Sentry.Context.context_keys()
-      [:breadcrumbs, :tags, :user, :extra]
+      [:breadcrumbs, :tags, :user, :extra, :request]
 
   """
   @spec context_keys() :: [atom(), ...]
   def context_keys do
-    [@breadcrumbs_key, @tags_key, @user_key, @extra_key]
+    [@breadcrumbs_key, @tags_key, @user_key, @extra_key, @request_key]
   end
 end
