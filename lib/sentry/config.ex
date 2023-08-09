@@ -196,9 +196,16 @@ defmodule Sentry.Config do
   defp get_config_from_app_or_system_env(app_key, system_env_key) do
     case Application.fetch_env(:sentry, app_key) do
       {:ok, {:system, env_key}} ->
-        value = System.fetch_env!(env_key)
-        Application.put_env(:sentry, app_key, value)
-        value
+        raise ArgumentError, """
+        using {:system, env} as a configuration value is not supported since v9.0.0 of this \
+        library. Move the configuration for #{inspect(app_key)} to config/runtime.exs, \
+        and read the #{inspect(env_key)} environment variable from there:
+
+          config :sentry,
+            # ...,
+            #{app_key}: System.fetch_env!(#{inspect(env_key)})
+
+        """
 
       {:ok, value} ->
         value

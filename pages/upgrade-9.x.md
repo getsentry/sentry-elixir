@@ -58,6 +58,26 @@ This is the new system environment variables configuration:
 | `SENTRY_DSN`                | `:dsn`                              | ✅                            |
 | `SENTRY_RELEASE`            | `:release`                          | ✅                            |
 
+## Stop Using `{:system, var}`
+
+Sentry used to support setting configuration options to `{:system, var}` in order to read `var` from the system environment at runtime. This behavior was there to compensate for releases before [Mix releases](https://hexdocs.pm/mix/1.15.4/Mix.Tasks.Release.html) were introduced.
+
+With Mix releases, you can use `config/runtime.exs` to have runtime configuration that works both within releases and using Mix (like during local development).
+
+To fix this, remove all the `{:system, var}` values from the Sentry configuration, move those options to `config/runtime.exs`, and use normal `System` functions to read the environment (such as `System.fetch_env!/2`).
+
+```elixir
+# Before, in config/config.exs ❌
+config :sentry,
+  # ...,
+  environment_name: {:system, "SENTRY_ENV"}
+
+# Now, in config/runtime.exs ✅
+config :sentry,
+  # ...,
+  environment_name: System.fetch_env!("SENTRY_ENV")
+```
+
 ## Fix Compile-Time Configuration
 
 Some configuration settings that Sentry supports are needed to **compile** Sentry itself. Before 9.0.0, you could change the value of these settings (such as `:enable_source_code_context`) at runtime, but it would have no effect. It would only do something if you were to change the value at compile time, and then you'd *recompile* Sentry itself.
