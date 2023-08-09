@@ -73,44 +73,6 @@ config :sentry,
   root_source_code_paths: [File.cwd!()]
 ```
 
-The `environment_name` and `included_environments` work together to determine
-if and when Sentry should send events to the server. If the currently configured
-`:environment_name` is in the configured list of `:included_environments`, the
-event will be sent.
-
-The full range of options is the following:
-
-| Key           | Required         | Default      | Notes |
-| ------------- | -----------------|--------------|-------|
-| `dsn` | True  | n/a | |
-| `environment_name` | False  | :prod | |
-| `included_environments` | False  | `[:test, :dev, :prod]` | If you need non-standard mix env names you *need* to include it here |
-| `tags` | False  | `%{}` | |
-| `release` | False  | None | |
-| `server_name` | False  | None | |
-| `client` | False  | `Sentry.HackneyClient` | If you need different functionality for the HTTP client, you can define your own module that implements the `Sentry.HTTPClient` behaviour and set `client` to that module |
-| `hackney_opts` | False  | `[pool: :sentry_pool]` | |
-| `hackney_pool_max_connections` | False  | 50 | |
-| `hackney_pool_timeout` | False  | 5000 | |
-| `before_send_event` | False | | |
-| `after_send_event` | False | | |
-| `sample_rate` | False | 1.0 | |
-| `send_result` | False | `:none` | You may want to set it to `:sync` if testing your Sentry integration. See "Testing with Sentry" |
-| `send_max_attempts` | False | 4 | |
-| `in_app_module_allow_list` | False | `[]` | |
-| `report_deps` | False | True | Will attempt to load Mix dependencies at compile time to report alongside events |
-| `enable_source_code_context` | False | False | |
-| `root_source_code_paths` | Required if `enable_source_code_context` is enabled | | Should usually be set to `[File.cwd!()]`. For umbrella applications you should list all your applications paths in this list (e.g. `["#{File.cwd!()}/apps/app_1", "#{File.cwd!()}/apps/app_2"]`. |
-| `context_lines` | False  | 3 | |
-| `source_code_exclude_patterns` | False  | `[~r"/_build/", ~r"/deps/", ~r"/priv/"]` | |
-| `source_code_path_pattern` | False  | `"**/*.ex"` | |
-| `filter` | False | | Module where the filter rules are defined (see [Filtering Exceptions](https://hexdocs.pm/sentry/Sentry.html#module-filtering-exceptions)) |
-| `json_library` | False | `Jason` | |
-| `log_level` | False | `:warning` | This sets the log level used when Sentry fails to send an event due to an invalid event or API error |
-| `max_breadcrumbs` | False | 100 | This sets the maximum number of breadcrumbs to send to Sentry when creating an event |
-
-Sentry uses the [hackney HTTP client](https://github.com/benoitc/hackney) for HTTP requests.  Sentry starts its own hackney pool named `:sentry_pool` with a default connection pool of 50, and a connection timeout of 5000 milliseconds.  The pool can be configured with the `hackney_pool_max_connections` and `hackney_pool_timeout` configuration keys.  If you need to set other [hackney configurations](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5) for things like a proxy, using your own pool or response timeouts, the `hackney_opts` configuration is passed directly to hackney for each request.
-
 ### Context and Breadcrumbs
 
 Sentry has multiple options for including contextual information. They are organized into "Tags", "User", and "Extra", and Sentry's documentation on them is [here](https://docs.sentry.io/learn/context/).  Breadcrumbs are a similar concept and Sentry's documentation covers them [here](https://docs.sentry.io/learn/breadcrumbs/).

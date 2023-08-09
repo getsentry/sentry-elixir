@@ -10,6 +10,12 @@ defmodule Sentry.HackneyClient do
   which is an *optional dependency* of this library. If you wish to use another
   HTTP client, you'll have to implement your own `Sentry.HTTPClient`. See the
   documentation for `Sentry.HTTPClient` for more information.
+
+  Sentry starts its own hackney pool called `:sentry_pool`. If you need to set other
+  [hackney configuration options](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5)
+  for things such as proxies, using your own pool, or response timeouts, the `:hackney_opts`
+  configuration is passed directly to hackney for each request. See the configuration
+  documentation in the `Sentry` module.
   """
 
   @hackney_pool_name :sentry_pool
