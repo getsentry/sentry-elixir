@@ -30,13 +30,6 @@ defmodule Sentry.HTTPClient do
   @type body :: binary()
 
   @doc """
-  Should return a **child specification** to start the HTTP client.
-
-  For example, this can start a pool of HTTP connections dedicated to Sentry.
-  """
-  @callback child_spec() :: :supervisor.child_spec()
-
-  @doc """
   Should make an HTTP `POST` request to `url` with the given `headers` and `body`.
   """
   @callback post(url :: String.t(), request_headers :: headers(), request_body :: body()) ::

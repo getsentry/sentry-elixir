@@ -20,7 +20,6 @@ defmodule Sentry.HackneyClient do
 
   @hackney_pool_name :sentry_pool
 
-  @impl true
   def child_spec do
     :hackney_pool.child_spec(
       @hackney_pool_name,

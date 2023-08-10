@@ -304,11 +304,12 @@ defmodule Sentry do
 
   def start(_type, _opts) do
     children = [
-      {Task.Supervisor, name: Sentry.TaskSupervisor},
-      Config.client().child_spec()
+      {Task.Supervisor, name: Sentry.TaskSupervisor}
     ]
 
-    if Config.client() == Sentry.HackneyClient do
+    client = Config.client()
+
+    if client == Sentry.HackneyClient do
       unless Code.ensure_loaded?(:hackney) do
         raise """
         cannot start the :sentry application because the HTTP client is set to \
@@ -322,6 +323,13 @@ defmodule Sentry do
         {:error, reason} -> raise "failed to start the :hackney application: #{inspect(reason)}"
       end
     end
+
+    children =
+      if client == Sentry.HackneyClient do
+        children ++ [Sentry.HackneyClient.child_spec()]
+      else
+        children
+      end
 
     Config.warn_for_deprecated_env_vars!()
     validate_json_config!()
