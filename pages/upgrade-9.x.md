@@ -68,7 +68,7 @@ Sentry used to support setting configuration options to `{:system, var}` in orde
 
 With Mix releases, you can use `config/runtime.exs` to have runtime configuration that works both within releases and using Mix (like during local development).
 
-To fix this, remove all the `{:system, var}` values from the Sentry configuration, move those options to `config/runtime.exs`, and use normal `System` functions to read the environment (such as `System.fetch_env!/2`).
+To fix this, remove all the `{:system, var}` values from the Sentry configuration, move those options to `config/runtime.exs`, and use normal `System` functions to read the environment (such as `System.fetch_env!/1`).
 
 ```elixir
 # Before, in config/config.exs ❌
@@ -97,3 +97,11 @@ The settings that are now *compile-time settings* are:
   * `:report_deps`
   * `:source_code_path_pattern`
   * `:source_code_exclude_patterns`
+
+## Stop Using API That Is Now Private
+
+Some public-facing APIs have been removed. These were more internal than public, and hopefully not many folks are relying on these.
+
+These are the things to patch up:
+
+  * `Sentry.send_event/1,2` - This function doesn't exist anymore. Building events manually is not public API anymore, since Sentry's event format can change and evolve and we want this library to be able to stay on top of things without introducing breaking changes. Replace `Sentry.send_event/1,2` calls with `Sentry.capture_exception/1,2` or `Sentry.capture_message/1,2`.

@@ -389,21 +389,13 @@ defmodule Sentry do
     |> send_event(opts)
   end
 
-  @doc """
-  Sends a `Sentry.Event`
-
-  `opts` argument is passed as the second argument to `send_event/2` of the configured `Sentry.HTTPClient`.  See `Sentry.Client.send_event/2` for more information.
-  """
-  @spec send_event(Event.t(), Keyword.t()) :: send_result
-  def send_event(event, opts \\ [])
-
-  def send_event(%Event{message: nil, exception: nil}, _opts) do
+  defp send_event(%Event{message: nil, exception: nil}, _opts) do
     Logger.log(Config.log_level(), "Sentry: unable to parse exception")
 
     :ignored
   end
 
-  def send_event(%Event{} = event, opts) do
+  defp send_event(%Event{} = event, opts) do
     included_environments = Config.included_environments()
     environment_name = Config.environment_name()
 
