@@ -341,7 +341,7 @@ defmodule Sentry do
   the `:included_environments`. See the [*Configuration* section](#module-configuration)
   in the module documentation.
 
-  The `opts` argument is passed as the second argument to `send_event/2`.
+  The `opts` argument is passed as the second argument to `Sentry.Client.send_event/2`.
   """
   @spec capture_exception(Exception.t(), Keyword.t()) :: send_result
   def capture_exception(exception, opts \\ []) do
@@ -379,7 +379,7 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
 
-  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
+  `opts` argument is passed as the second argument to `Sentry.Client.send_event/2`.
   """
   @spec capture_message(String.t(), Keyword.t()) :: send_result
   def capture_message(message, opts \\ []) when is_binary(message) do
