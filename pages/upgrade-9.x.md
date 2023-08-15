@@ -97,3 +97,7 @@ The settings that are now *compile-time settings* are:
   * `:report_deps`
   * `:source_code_path_pattern`
   * `:source_code_exclude_patterns`
+
+## Stop Using `Sentry.Sources`
+
+`Sentry.Sources` was meant to be private API and has been removed. Its functionality is very specific to Sentry, and it's not a good general mechanism to retrieve source code. This way, we can also have the freedom to improve this functionality without making potential breaking changes to the API of this library.
