@@ -5,7 +5,7 @@ defmodule Sentry.ClientTest do
   import Sentry.TestEnvironmentHelper
   require Logger
 
-  alias Sentry.{Client, Envelope}
+  alias Sentry.Client
 
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
@@ -103,10 +103,7 @@ defmodule Sentry.ClientTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.extra == %{"key" => "value"}
       assert event.user["id"] == 1
@@ -142,10 +139,7 @@ defmodule Sentry.ClientTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.extra == %{"key" => "value", "user_id" => 1}
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -244,10 +238,7 @@ defmodule Sentry.ClientTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert Enum.count(event.stacktrace.frames) > 0
 

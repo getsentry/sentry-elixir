@@ -1,9 +1,9 @@
 defmodule Sentry.PlugCaptureTest do
   use ExUnit.Case
   use Plug.Test
+
   import Sentry.TestEnvironmentHelper
   import ExUnit.CaptureLog
-  alias Sentry.Envelope
 
   defmodule PhoenixController do
     use Phoenix.Controller
@@ -50,10 +50,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -72,10 +69,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -94,10 +88,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -116,10 +107,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.request["url"] == "http://www.example.com/error_route"
       assert event.request["method"] == "GET"
@@ -142,10 +130,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -173,10 +158,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
       assert event.message == "(RuntimeError PhoenixError)"
@@ -206,10 +188,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
       assert event.message == "Uncaught exit - :test"
@@ -236,10 +215,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
       assert event.message == "Uncaught throw - :test"
@@ -266,10 +242,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -306,10 +279,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -346,10 +316,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      _event = TestHelpers.decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -376,10 +343,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)

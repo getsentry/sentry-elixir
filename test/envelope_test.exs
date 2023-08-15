@@ -1,5 +1,6 @@
 defmodule Sentry.EnvelopeTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
+
   alias Sentry.Envelope
 
   describe "from_binary/1" do
@@ -71,8 +72,8 @@ defmodule Sentry.EnvelopeTest do
       }
 
       {:ok, raw_envelope} =
-        Sentry.Envelope.new()
-        |> Sentry.Envelope.add_event(event)
+        event
+        |> Sentry.Envelope.new()
         |> Sentry.Envelope.to_binary()
 
       {:ok, envelope} = Envelope.from_binary(raw_envelope)
@@ -129,5 +130,8 @@ defmodule Sentry.EnvelopeTest do
                }
              ]
     end
+  end
+
+  describe "to_binary/1" do
   end
 end
