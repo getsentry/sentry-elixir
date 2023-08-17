@@ -10,10 +10,10 @@ defmodule Sentry.PlugCapture do
   In a Phoenix application, it is important to use this module **before**
   the Phoenix endpoint itself. It should be added to your `endpoint.ex` file:
 
-
       defmodule MyApp.Endpoint
         use Sentry.PlugCapture
         use Phoenix.Endpoint, otp_app: :my_app
+
         # ...
       end
 
@@ -22,10 +22,18 @@ defmodule Sentry.PlugCapture do
       defmodule MyApp.PlugRouter do
         use Plug.Router
         use Sentry.PlugCapture
+
         # ...
       end
 
+  > #### `use Sentry.PlugCapture` {: .info}
+  >
+  > When you `use Sentry.PlugCapture`, Sentry overrides your `c:Plug.call/2` callback
+  > and adds capturing errors and reporting to Sentry. You can still re-override
+  > that callback after `use Sentry.PlugCapture` if you need to.
+
   """
+
   defmacro __using__(_opts) do
     quote do
       @before_compile Sentry.PlugCapture
