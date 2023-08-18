@@ -4,8 +4,10 @@ defmodule Sentry.UUID do
   @rfc_4122_variant10 2
   @uuid_v4_identifier 4
 
+  @type t() :: <<_::128>>
+
   # Per http://www.ietf.org/rfc/rfc4122.txt
-  @spec uuid4_hex() :: <<_::128>>
+  @spec uuid4_hex() :: t()
   def uuid4_hex do
     <<time_low_mid::48, _version::4, time_high::12, _reserved::2, rest::62>> =
       :crypto.strong_rand_bytes(16)

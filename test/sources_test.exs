@@ -3,8 +3,6 @@ defmodule Sentry.SourcesTest do
   use Plug.Test
   import Sentry.TestEnvironmentHelper
 
-  alias Sentry.Envelope
-
   describe "load_files/0" do
     test "loads files" do
       paths = [
@@ -62,10 +60,7 @@ defmodule Sentry.SourcesTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event =
-        body
-        |> Envelope.from_binary!()
-        |> Envelope.event()
+      event = TestHelpers.decode_event_from_envelope!(body)
 
       frames = Enum.reverse(event.stacktrace.frames)
 

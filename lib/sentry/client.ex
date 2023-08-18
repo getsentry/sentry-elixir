@@ -72,8 +72,8 @@ defmodule Sentry.Client do
   @spec encode_and_send(Event.t(), result()) :: send_event_result()
   defp encode_and_send(event, result) do
     result =
-      Sentry.Envelope.new()
-      |> Sentry.Envelope.add_event(event)
+      event
+      |> Sentry.Envelope.new()
       |> Sentry.Envelope.to_binary()
       |> case do
         {:ok, body} ->
