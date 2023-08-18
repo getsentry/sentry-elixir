@@ -1,82 +1,31 @@
 defmodule Sentry.Sources do
+  @moduledoc false
+
   alias Sentry.Config
 
-  @moduledoc """
-  This module is responsible for providing functionality that stores
-  the text of source files during compilation for displaying the
-  source code that caused an exception.
+  @type source_map :: %{
+          optional(String.t()) => %{
+            (line_no :: pos_integer()) => line_contents :: String.t()
+          }
+        }
 
-  An example configuration:
-
-      config :sentry,
-        dsn: "https://public:secret@app.getsentry.com/1",
-        enable_source_code_context: true,
-        root_source_code_paths: [File.cwd!()],
-        context_lines: 5
-
-  ### Source code storage
-
-  The file contents are saved when Sentry is compiled, which can cause some
-  complications. If a file is changed, and Sentry is not recompiled,
-  it will still report old source code.
-
-  The best way to ensure source code is up to date is to recompile Sentry
-  itself via `mix deps.compile sentry --force`.  It's possible to create a Mix
-  Task alias in `mix.exs` to do this.  The example below would allow one to
-  run `mix sentry_recompile && mix compile` which will force recompilation of Sentry so
-  it has the newest source and then compile the project. The second `mix compile`
-  is required due to Mix only invoking the same task once in an alias.
-
-      defp aliases do
-        [sentry_recompile: ["compile", "deps.compile sentry --force"]]
-      end
-
-  This is an important to note especially when building for production. If your
-  build or deployment system caches prior builds, it may not recompile Sentry
-  and could cause issues with reported source code being out of date.
-
-  Due to Sentry reading the file system and defaulting to a recursive search
-  of directories, it is important to check your configuration and compilation
-  environment to avoid a folder recursion issue. Problems may be seen when
-  deploying to the root folder, so it is best to follow the practice of
-  compiling your application in its own folder. Modifying the
-  `source_code_path_pattern` configuration option from its default is also
-  an avenue to avoid compile problems.
-
-  """
-  @type file_map :: %{pos_integer() => String.t()}
-  @type source_map :: %{String.t() => file_map}
-
-  @doc false
   @spec load_files([Path.t()]) :: source_map()
   def load_files(paths \\ Config.root_source_code_paths()) do
     Enum.reduce(paths, %{}, &load_files_for_root_path/2)
   end
 
-  @doc """
-  Given the source code map, a filename and a line number, this method retrieves the source code context.
-
-  When reporting source code context to the Sentry API, it expects three separate values.  They are the source code
-  for the specific line the error occurred on, the list of the source code for the lines preceding, and the
-  list of the source code for the lines following.  The number of lines in the lists depends on what is
-  configured in `:context_lines`.  The number configured is how many lines to get on each side of the line that
-  caused the error.  If it is configured to be `3`, the method will attempt to get the 3 lines preceding, the
-  3 lines following, and the line that the error occurred on, for a possible maximum of 7 lines.
-
-  The three values are returned in a three element tuple as `{preceding_source_code_list, source_code_from_error_line, following_source_code_list}`.
-  """
-  @spec get_source_context(source_map, String.t(), pos_integer()) ::
+  @spec get_source_context(source_map, String.t() | nil, pos_integer() | nil) ::
           {[String.t()], String.t() | nil, [String.t()]}
-  def get_source_context(files, file_name, line_number) do
+  def get_source_context(%{} = files, file_name, line_number) do
     context_lines = Config.context_lines()
-    file = Map.get(files, file_name)
 
-    do_get_source_context(file, line_number, context_lines)
+    case Map.fetch(files, file_name) do
+      :error -> {[], nil, []}
+      {:ok, file} -> get_source_context_for_file(file, line_number, context_lines)
+    end
   end
 
-  defp do_get_source_context(nil, _, _), do: {[], nil, []}
-
-  defp do_get_source_context(file, line_number, context_lines) do
+  defp get_source_context_for_file(file, line_number, context_lines) do
     context_line_indices = 0..(2 * context_lines)
 
     Enum.reduce(context_line_indices, {[], nil, []}, fn i, {pre_context, context, post_context} ->

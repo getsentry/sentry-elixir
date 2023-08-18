@@ -272,6 +272,45 @@ defmodule Sentry do
         end
       end
 
+  ## Reporting Source Code
+
+  Sentry supports reporting the source code of (and around) the line that
+  caused an issue. To support this functionality, this library stores
+  the text of source files during compilation. An example configuration
+  to enable this functionality is:
+
+      config :sentry,
+        dsn: "https://public:secret@app.getsentry.com/1",
+        enable_source_code_context: true,
+        root_source_code_paths: [File.cwd!()],
+        context_lines: 5
+
+  File contents are saved when Sentry is compiled, which can cause some
+  complications. If a file is changed, and Sentry is not recompiled,
+  it will still report old source code.
+
+  The best way to ensure source code is up to date is to recompile Sentry
+  itself via `mix deps.compile sentry --force`. It's possible to create a Mix
+  task alias in `mix.exs` to do this. The example below would allow you to
+  run `mix sentry_recompile && mix compile` which will force recompilation of Sentry so
+  it has the newest source and then compile the project. The second `mix compile`
+  is required due to Mix only invoking the same task once in an alias.
+
+      defp aliases do
+        [sentry_recompile: ["compile", "deps.compile sentry --force"]]
+      end
+
+  This is an important to note especially when building for production. If your
+  build or deployment system caches prior builds, it may not recompile Sentry
+  and could cause issues with reported source code being out of date.
+
+  Due to Sentry reading the file system and defaulting to a recursive search
+  of directories, it is important to check your configuration and compilation
+  environment to avoid a folder recursion issue. Problems may be seen when
+  deploying to the root folder, so it is best to follow the practice of
+  compiling your application in its own folder. Modifying the
+  `:source_code_path_pattern` configuration option from its default is also
+  an avenue to avoid compile problems.
   """
 
   @typedoc """
