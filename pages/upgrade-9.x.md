@@ -68,7 +68,7 @@ Sentry used to support setting configuration options to `{:system, var}` in orde
 
 With Mix releases, you can use `config/runtime.exs` to have runtime configuration that works both within releases and using Mix (like during local development).
 
-To fix this, remove all the `{:system, var}` values from the Sentry configuration, move those options to `config/runtime.exs`, and use normal `System` functions to read the environment (such as `System.fetch_env!/2`).
+To fix this, remove all the `{:system, var}` values from the Sentry configuration, move those options to `config/runtime.exs`, and use normal `System` functions to read the environment (such as `System.fetch_env!/1`).
 
 ```elixir
 # Before, in config/config.exs ❌

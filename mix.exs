@@ -36,7 +36,10 @@ defmodule Sentry.Mixfile do
         source_ref: "#{@version}",
         source_url: @source_url,
         main: "readme",
-        skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+        skip_undefined_reference_warnings_on: [
+          "CHANGELOG.md",
+          "pages/upgrade-9.x.md"
+        ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
