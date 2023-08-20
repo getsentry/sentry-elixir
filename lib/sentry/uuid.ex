@@ -4,7 +4,7 @@ defmodule Sentry.UUID do
   @rfc_4122_variant10 2
   @uuid_v4_identifier 4
 
-  @type t() :: <<_::128>>
+  @type t() :: <<_::256>>
 
   # Per http://www.ietf.org/rfc/rfc4122.txt
   @spec uuid4_hex() :: t()
