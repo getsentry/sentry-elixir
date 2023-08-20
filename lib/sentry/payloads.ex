@@ -1,6 +1,10 @@
 defmodule Sentry.Payloads do
   @moduledoc false
 
+  # The schemas in this module are taken from the Sentry documentation, but also
+  # from the JSONSchema definitions at:
+  # https://github.com/getsentry/sentry-data-schemas/blob/ebc77d3cb2f3ef288913cce80a292ca0389a08e7/relay/event.schema.json
+
   defmodule Event do
     @moduledoc """
     The struct for the top-level Sentry event payload.
