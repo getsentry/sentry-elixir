@@ -33,6 +33,11 @@ defmodule Sentry.Mixfile do
             "pages/upgrade-9.x.md"
           ]
         ],
+        groups_for_modules: [
+          "Payload Structs": [
+            ~r/^Sentry\.Payloads/
+          ]
+        ],
         source_ref: "#{@version}",
         source_url: @source_url,
         main: "readme",
