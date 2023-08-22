@@ -33,10 +33,13 @@ defmodule Sentry.Payloads do
             modules: %{optional(String.t()) => String.t()},
             extra: map(),
             fingerprint: [String.t()],
-            sdk: Sentry.Payloads.SDK.t() | nil,
 
-            # Possible payloads.
-            exception: [Sentry.Payloads.Exception.t(), ...] | nil
+            # Interfaces.
+            breadcrumbs: [Sentry.Payloads.Breadcrumb.t()] | nil,
+            exception: [Sentry.Payloads.Exception.t(), ...] | nil,
+            request: Sentry.Payload.Request.t() | nil,
+            sdk: Sentry.Payloads.SDK.t() | nil,
+            user: Sentry.Payloads.User.t() | nil
           }
 
     @enforce_keys [:event_id, :timestamp]
@@ -57,8 +60,13 @@ defmodule Sentry.Payloads do
       :server_name,
       :release,
       :dist,
+
+      # Interfaces.
+      :breadcrumbs,
       :exception,
+      :request,
       :sdk,
+      :user,
 
       # Required. Has to be "elixir".
       platform: :elixir,
@@ -157,5 +165,99 @@ defmodule Sentry.Payloads do
 
     @enforce_keys [:frames]
     defstruct [:frames]
+  end
+
+  defmodule User do
+    @moduledoc """
+    The struct for the **user** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/user>.
+    """
+
+    @moduledoc since: "9.0.0"
+
+    @typedoc since: "9.0.0"
+    @type t() :: %__MODULE__{
+            id: term(),
+            username: term(),
+            email: String.t() | nil,
+            ip_address: String.t() | nil,
+            segment: term(),
+            geo: Sentry.Payloads.User.Geo.t() | nil
+          }
+
+    defstruct [:id, :username, :email, :ip_address, :segment, :geo]
+  end
+
+  defmodule User.Geo do
+    @moduledoc """
+    The struct for the "geo" field of the **user** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/user>.
+    """
+
+    @moduledoc since: "9.0.0"
+
+    @typedoc since: "9.0.0"
+    @type t() :: %__MODULE__{
+            city: String.t() | nil,
+            country_code: String.t() | nil,
+            region: String.t() | nil
+          }
+
+    defstruct [:city, :country_code, :region]
+  end
+
+  defmodule Request do
+    @moduledoc """
+    The struct for the **request** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/request>.
+    """
+
+    @moduledoc since: "9.0.0"
+
+    @typedoc since: "9.0.0"
+    @type t() :: %__MODULE__{
+            method: String.t() | nil,
+            url: String.t() | nil,
+            query_string: String.t() | map() | [{String.t(), String.t()}] | nil,
+            data: term(),
+            cookies: String.t() | map() | [{String.t(), String.t()}] | nil,
+            headers: map() | nil,
+            env: map() | nil
+          }
+
+    defstruct [
+      :method,
+      :url,
+      :query_string,
+      :data,
+      :cookies,
+      :headers,
+      :env
+    ]
+  end
+
+  defmodule Breadcrumb do
+    @moduledoc """
+    The struct for a single **breadcrumb** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/breadcrumbs>.
+    """
+
+    @moduledoc since: "9.0.0"
+
+    @typedoc since: "9.0.0"
+    @type t() :: %__MODULE__{
+            type: String.t(),
+            category: String.t(),
+            message: String.t(),
+            data: term(),
+            level: String.t() | nil,
+            timestamp: String.t() | number()
+          }
+
+    defstruct [:type, :category, :message, :data, :level, :timestamp]
   end
 end
