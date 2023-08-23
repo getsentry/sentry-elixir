@@ -40,13 +40,13 @@ defmodule Sentry.Interfaces do
   """
   @typedoc since: "9.0.0"
   @type request() :: %{
-          method: String.t() | nil,
-          url: String.t() | nil,
-          query_string: String.t() | map() | [{String.t(), String.t()}] | nil,
-          data: term(),
-          cookies: String.t() | map() | [{String.t(), String.t()}] | nil,
-          headers: map() | nil,
-          env: map() | nil
+          optional(:method) => String.t() | nil,
+          optional(:url) => String.t() | nil,
+          optional(:query_string) => String.t() | map() | [{String.t(), String.t()}] | nil,
+          optional(:data) => term(),
+          optional(:cookies) => String.t() | map() | [{String.t(), String.t()}] | nil,
+          optional(:headers) => map() | nil,
+          optional(:env) => map() | nil
         }
 
   @typedoc """

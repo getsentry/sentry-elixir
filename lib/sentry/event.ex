@@ -33,7 +33,7 @@ defmodule Sentry.Event do
   """
   @type t() :: %__MODULE__{
           # Required
-          event_id: <<_::128>>,
+          event_id: <<_::256>>,
           timestamp: String.t() | number(),
           platform: :elixir,
 
@@ -51,17 +51,17 @@ defmodule Sentry.Event do
           fingerprint: [String.t()],
 
           # Interfaces.
-          breadcrumbs: [Interfaces.Breadcrumb.t()] | nil,
-          contexts: Interfaces.context() | nil,
-          exception: [Interfaces.Exception.t(), ...] | nil,
+          breadcrumbs: [Interfaces.Breadcrumb.t()],
+          contexts: Interfaces.context(),
+          exception: Interfaces.Exception.t() | nil,
           message: String.t() | nil,
-          request: Interfaces.request() | nil,
+          request: Interfaces.request(),
           sdk: Interfaces.SDK.t() | nil,
           user: Interfaces.user() | nil,
 
           # Non-payload fields.
           __source__: term(),
-          __original_exception__: term()
+          __original_exception__: Exception.t() | nil
         }
 
   @doc """
