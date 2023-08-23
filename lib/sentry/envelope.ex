@@ -6,7 +6,7 @@ defmodule Sentry.Envelope do
 
   @type t :: %__MODULE__{
           event_id: UUID.t(),
-          items: list()
+          items: [Event.t(), ...]
         }
 
   @enforce_keys [:event_id, :items]
@@ -126,26 +126,23 @@ defmodule Sentry.Envelope do
     case result do
       {:ok, fields} ->
         {:ok,
-         %Sentry.Event{
+         %Event{
            breadcrumbs: fields["breadcrumbs"],
            culprit: fields["culprit"],
            environment: fields["environment"],
            event_id: fields["event_id"],
-           event_source: fields["event_source"],
+           __source__: fields["event_source"],
            exception: fields["exception"],
            extra: fields["extra"],
            fingerprint: fields["fingerprint"],
            level: fields["level"],
            message: fields["message"],
            modules: fields["modules"],
-           original_exception: fields["original_exception"],
+           __original_exception__: fields["original_exception"],
            platform: fields["platform"],
            release: fields["release"],
            request: fields["request"],
            server_name: fields["server_name"],
-           stacktrace: %{
-             frames: fields["stacktrace"]["frames"]
-           },
            tags: fields["tags"],
            timestamp: fields["timestamp"],
            user: fields["user"]

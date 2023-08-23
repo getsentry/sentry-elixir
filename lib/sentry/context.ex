@@ -32,26 +32,13 @@ defmodule Sentry.Context do
   Sentry itself documents the meaning of the various contexts:
 
     * [General context interface](https://develop.sentry.dev/sdk/event-payloads/contexts/)
+    * [Breadcrumbs interface](https://develop.sentry.dev/sdk/event-payloads/breadcrumbs/)
     * [Request context](https://develop.sentry.dev/sdk/event-payloads/request/)
     * [User context](https://develop.sentry.dev/sdk/event-payloads/user/)
 
   """
 
-  @typedoc """
-  Request context.
-
-  See `set_request_context/1`.
-  """
-  @typedoc since: "9.0.0"
-  @type request_context() :: %{
-          optional(:method) => String.t(),
-          optional(:url) => String.t(),
-          optional(:query_string) => String.t(),
-          optional(:data) => term(),
-          optional(:cookies) => String.t() | map() | [{String.t(), String.t()}],
-          optional(:headers) => %{optional(String.t()) => String.t()},
-          optional(:env) => %{optional(String.t()) => String.t()}
-        }
+  alias Sentry.Interfaces
 
   @typedoc """
   User context.
@@ -122,8 +109,24 @@ defmodule Sentry.Context do
           optional(:data) => map(),
           optional(:level) => :fatal | :error | :warning | :info | :debug,
           optional(:timestamp) => String.t() | integer(),
-          optional(String.t()) => term()
+          optional(atom()) => term()
         }
+
+  @typedoc """
+  A map of **tags**.
+
+  See `set_tags_context/1`.
+  """
+  @typedoc since: "9.0.0"
+  @type tags() :: %{optional(atom()) => term()}
+
+  @typedoc """
+  A map of **extra** data.
+
+  See `set_extra_context/1`.
+  """
+  @typedoc since: "9.0.0"
+  @type extra() :: %{optional(atom()) => term()}
 
   @logger_metadata_key :sentry
   @user_key :user
@@ -151,9 +154,9 @@ defmodule Sentry.Context do
   """
   @spec get_all() :: %{
           user: user_context(),
-          tags: map(),
-          extra: map(),
-          request: request_context(),
+          tags: tags(),
+          extra: extra(),
+          request: Interfaces.request(),
           breadcrumbs: list()
         }
   def get_all do
@@ -192,7 +195,7 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_extra_context(map()) :: :ok
+  @spec set_extra_context(extra()) :: :ok
   def set_extra_context(map) when is_map(map) do
     set_context(@extra_key, map)
   end
@@ -205,6 +208,11 @@ defmodule Sentry.Context do
 
   The user context is documented [in the Sentry
   documentation](https://develop.sentry.dev/sdk/event-payloads/user/).
+
+  > #### Additional Keys {: .error}
+  >
+  > While at least one of the keys described in `t:Sentry.Interfaces.user/0` is
+  > recommended, you can also add any arbitrary key to the user context.
 
   ## Example
 
@@ -222,7 +230,7 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_user_context(user_context()) :: :ok
+  @spec set_user_context(Interfaces.user()) :: :ok
   def set_user_context(user_context) when is_map(user_context) do
     set_context(@user_key, user_context)
   end
@@ -249,7 +257,7 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_tags_context(map()) :: :ok
+  @spec set_tags_context(tags()) :: :ok
   def set_tags_context(map) when is_map(map) do
     set_context(@tags_key, map)
   end
@@ -267,7 +275,7 @@ defmodule Sentry.Context do
   > #### Invalid Keys {: .error}
   >
   > While this function accepts any map with atom keys, the only keys that
-  > are valid are those in `t:request_context/0`. We don't validate
+  > are valid are those in `t:Sentry.Interfaces.request/0`. We don't validate
   > keys because of performance concerns, so it's up to you to ensure that
   > you're passing valid keys.
 
@@ -288,7 +296,7 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_request_context(request_context()) :: :ok
+  @spec set_request_context(Interfaces.request()) :: :ok
   def set_request_context(request_context) when is_map(request_context) do
     set_context(@request_key, request_context)
   end
@@ -377,7 +385,7 @@ defmodule Sentry.Context do
   end
 
   def add_breadcrumb(map) when is_map(map) do
-    map = Map.put_new(map, "timestamp", System.system_time(:second))
+    map = Map.put_new(map, :timestamp, System.system_time(:second))
 
     sentry_metadata =
       get_sentry_context()

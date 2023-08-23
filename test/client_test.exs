@@ -7,6 +7,20 @@ defmodule Sentry.ClientTest do
 
   alias Sentry.Client
 
+  doctest Sentry.Client, import: true
+
+  describe "render_event/1" do
+    test "transforms structs into maps" do
+      event = Sentry.Event.transform_exception(%RuntimeError{message: "foo"}, user: %{id: 1})
+
+      assert %{
+               user: %{id: 1},
+               exception: [%{type: "RuntimeError", value: "foo"}],
+               sdk: %{name: "sentry-elixir"}
+             } = Client.render_event(event)
+    end
+  end
+
   test "authorization" do
     modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1")
     {_endpoint, public_key, private_key} = Client.get_dsn()
@@ -90,7 +104,11 @@ defmodule Sentry.ClientTest do
 
   test "errors when attempting to report invalid JSON" do
     modify_env(:sentry, dsn: "http://public:secret@localhost:3000/1")
-    unencodable_event = %Sentry.Event{message: "error", level: {:a, :b}}
+
+    unencodable_event =
+      []
+      |> Sentry.Event.create_event()
+      |> Map.replace!(:level, {:a, :b})
 
     capture_log(fn ->
       assert {:error, {:invalid_json, _}} = Sentry.Client.send_event(unencodable_event)
@@ -107,7 +125,7 @@ defmodule Sentry.ClientTest do
 
       assert event.extra == %{"key" => "value"}
       assert event.user["id"] == 1
-      assert event.stacktrace.frames == []
+      assert length(List.first(event.exception)["stacktrace"]["frames"]) > 0
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -128,7 +146,7 @@ defmodule Sentry.ClientTest do
     rescue
       e ->
         assert capture_log(fn ->
-                 Sentry.capture_exception(e, result: :sync)
+                 Sentry.capture_exception(e, result: :sync, stacktrace: __STACKTRACE__)
                end)
     end
   end
@@ -240,7 +258,7 @@ defmodule Sentry.ClientTest do
 
       event = TestHelpers.decode_event_from_envelope!(body)
 
-      assert Enum.count(event.stacktrace.frames) > 0
+      assert Enum.count(List.first(event.exception)["stacktrace"]) > 0
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)

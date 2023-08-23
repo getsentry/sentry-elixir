@@ -2,16 +2,20 @@ defmodule Sentry.Client do
   @moduledoc """
   This module interfaces directly with Sentry via HTTP.
 
-  The client itself can be configured via the :client
-  configuration. It must implement the `Sentry.HTTPClient`
-  behaviour and it defaults to `Sentry.HackneyClient`.
+  See `Sentry.HTTPClient` for more information. This module provides an interface
+  to talk to Sentry through the configured HTTP client.
 
-  It makes use of `Task.Supervisor` to allow sending tasks
-  synchronously or asynchronously, and defaulting to asynchronous.
+  Most of the time, **you won't have to use this module** directly. Instead, you
+  will mostly use the functions in the `Sentry` module.
+
+  ## Sending Events
+
+  This module makes use of `Task.Supervisor` to allow sending events
+  synchronously or asynchronously, defaulting to asynchronous.
   See `send_event/2` for more information.
   """
 
-  alias Sentry.{Config, Event}
+  alias Sentry.{Config, Event, Interfaces}
 
   require Logger
 
@@ -29,7 +33,7 @@ defmodule Sentry.Client do
   Attempts to send the event to the Sentry API up to 4 times with exponential backoff.
 
   The event is dropped if it all retries fail.
-  Errors will be logged unless the source is the Sentry.LoggerBackend, which can
+  Errors will be logged unless the source is the `Sentry.LoggerBackend`, which can
   deadlock by logging within a logger.
 
   ### Options
@@ -53,38 +57,30 @@ defmodule Sentry.Client do
   @spec send_event(Event.t()) :: send_event_result
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, Config.send_result())
-    sample_rate = Keyword.get(opts, :sample_rate) || Config.sample_rate()
+    sample_rate = Keyword.get(opts, :sample_rate, Config.sample_rate())
 
-    event = maybe_call_before_send_event(event)
-
-    case {event, sample_event?(sample_rate)} do
-      {false, _} ->
-        :excluded
-
-      {%Event{}, false} ->
-        :unsampled
-
-      {%Event{}, true} ->
-        encode_and_send(event, result)
+    case {maybe_call_before_send_event(event), sample_event?(sample_rate)} do
+      {false, _} -> :excluded
+      {%Event{}, false} -> :unsampled
+      {%Event{} = event, true} -> encode_and_send(event, result)
     end
   end
 
-  @spec encode_and_send(Event.t(), result()) :: send_event_result()
-  defp encode_and_send(event, result) do
+  defp encode_and_send(%Event{} = event, result_type) do
     result =
       event
       |> Sentry.Envelope.new()
       |> Sentry.Envelope.to_binary()
       |> case do
         {:ok, body} ->
-          do_send_event(event, body, result)
+          do_send_event(event, body, result_type)
 
         {:error, error} ->
           {:error, {:invalid_json, error}}
       end
 
     if match?({:ok, _}, result) do
-      Sentry.put_last_event_id_and_source(event.event_id, event.event_source)
+      Sentry.put_last_event_id_and_source(event.event_id, event.__source__)
     end
 
     maybe_log_result(result, event)
@@ -162,11 +158,16 @@ defmodule Sentry.Client do
   end
 
   @doc """
-  Makes the HTTP request to Sentry using the configured HTTP client.
+  Makes an HTTP request to Sentry using the configured HTTP client.
+
+  If the request returns a `200` response status code, then this function returns
+  the `"id"` found in the JSON response body (or `nil` if none is found). If the
+  request fails returns any other status code, invalid JSON, or fails, then
+  this function returns `{:error, reason}`.
   """
-  @spec request(String.t(), list({String.t(), String.t()}), String.t()) ::
-          {:ok, String.t()} | {:error, term()}
-  def request(url, headers, body) do
+  @spec request(String.t(), [{String.t(), String.t()}], String.t()) ::
+          {:ok, String.t() | nil} | {:error, reason :: term()}
+  def request(url, headers, body) when is_binary(url) and is_list(headers) do
     json_library = Config.json_library()
 
     with {:ok, 200, _, body} <- Config.client().post(url, headers, body),
@@ -178,8 +179,8 @@ defmodule Sentry.Client do
         error = "Received #{status} from Sentry server: #{error_header}"
         {:error, error}
 
-      e ->
-        {:error, e}
+      {:error, reason} ->
+        {:error, reason}
     end
   catch
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
@@ -274,42 +275,46 @@ defmodule Sentry.Client do
   end
 
   @doc """
-  Transform the Event struct into JSON map.
+  Transform a Sentry event into a JSON-encodable map.
 
-  Most Event attributes map directly to JSON map, with stacktrace being the
-  exception.  If the event does not have stacktrace frames, it should not
-  be included in the JSON body.
+  Some event attributes map directly to JSON, while others are structs that need to
+  be converted to maps. This function does that conversion.
+
+  ## Examples
+
+      iex> event = Sentry.Event.create_event(message: "Something went wrong", extra: %{foo: "bar"})
+      iex> jsonable_map = render_event(event)
+      iex> jsonable_map[:message]
+      "Something went wrong"
+      iex> jsonable_map[:level]
+      :error
+      iex> jsonable_map[:extra]
+      %{foo: "bar"}
+
   """
   @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
-    map = %{
-      event_id: event.event_id,
-      culprit: event.culprit,
-      timestamp: event.timestamp,
-      message: String.slice(event.message, 0, @max_message_length),
-      tags: event.tags,
-      level: event.level,
-      platform: event.platform,
-      server_name: event.server_name,
-      stacktrace: event.stacktrace,
-      environment: event.environment,
-      exception: event.exception,
-      release: event.release,
-      request: event.request,
-      extra: event.extra,
-      user: event.user,
-      breadcrumbs: event.breadcrumbs,
-      fingerprint: event.fingerprint,
-      contexts: event.contexts,
-      modules: event.modules
-    }
+    event
+    |> Map.from_struct()
+    |> update_if_present(:message, &String.slice(&1, 0, @max_message_length))
+    |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
+    |> update_if_present(:sdk, &Map.from_struct/1)
+    |> update_if_present(:exception, &[render_exception(&1)])
+    |> Map.drop([:__source__, :__original_exception__])
+  end
 
-    case event.stacktrace do
-      %{frames: [_ | _]} ->
-        Map.put(map, :stacktrace, event.stacktrace)
+  defp render_exception(%Interfaces.Exception{} = exception) do
+    exception
+    |> Map.from_struct()
+    |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
+      %{frames: Enum.map(frames, &Map.from_struct/1)}
+    end)
+  end
 
-      _ ->
-        map
+  defp update_if_present(map, key, fun) do
+    case Map.pop(map, key) do
+      {nil, _} -> map
+      {value, map} -> Map.put(map, key, fun.(value))
     end
   end
 
@@ -399,7 +404,7 @@ defmodule Sentry.Client do
     :rand.uniform() < sample_rate
   end
 
-  defp should_log?(%Event{event_source: event_source}) do
+  defp should_log?(%Event{__source__: event_source}) do
     event_source != :logger
   end
 end

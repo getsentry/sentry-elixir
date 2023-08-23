@@ -1,5 +1,13 @@
 # Changelog
 
+## 9.0.0
+
+### Breaking changes
+
+- Removed the `Sentry.Event.sentry_exception/0` type
+- Removed `Sentry.Event.add_metadata/1`
+- Removed `Sentry.Event.culprit_from_stacktrace/1`
+
 ## 8.1.0
 
 ### Various fixes & improvements

@@ -429,9 +429,19 @@ defmodule Sentry do
   end
 
   @doc """
-  Sends a `Sentry.Event`
+  Sends an event to Sentry.
 
-  `opts` argument is passed as the second argument to `send_event/2` of the configured `Sentry.HTTPClient`.  See `Sentry.Client.send_event/2` for more information.
+  An **event** is the most generic payload you can send to Sentry. It encapsulates
+  information about an exception, a message, or any other event that you want to
+  report. To manually build events, see the functions in `Sentry.Event`.
+
+  `opts` is passed down to the client's `Sentry.Client.send_event/2`.
+
+  > #### Sending Exceptions and Messages {: .tip}
+  >
+  > This function is **low-level**, and mostly intended for library developers,
+  > or folks that want to have full control on what they report to Sentry. For most
+  > use cases, use `capture_exception/2` or `capture_message/2`.
   """
   @spec send_event(Event.t(), Keyword.t()) :: send_result
   def send_event(event, opts \\ [])
