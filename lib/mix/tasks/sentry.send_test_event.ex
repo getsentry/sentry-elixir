@@ -49,10 +49,12 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     if env_name in included_envs do
       Mix.shell().info("Sending test event...")
 
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+
       result =
         "Testing sending Sentry event"
         |> RuntimeError.exception()
-        |> Sentry.capture_exception(result: :sync)
+        |> Sentry.capture_exception(result: :sync, stacktrace: stacktrace)
 
       case result do
         {:ok, id} ->
