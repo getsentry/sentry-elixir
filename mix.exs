@@ -54,7 +54,11 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry, []},
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      registered: [
+        Sentry.SenderRegistry,
+        Sentry.Supervisor
+      ]
     ]
   end
 

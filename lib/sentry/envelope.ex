@@ -23,6 +23,13 @@ defmodule Sentry.Envelope do
     }
   end
 
+  def new(events) when is_list(events) do
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: events
+    }
+  end
+
   @doc """
   Encodes the envelope into its binary representation.
   """
