@@ -101,3 +101,34 @@ The settings that are now *compile-time settings* are:
 ## Stop Using `Sentry.Sources`
 
 `Sentry.Sources` was meant to be private API and has been removed. Its functionality is very specific to Sentry, and it's not a good general mechanism to retrieve source code. This way, we can also have the freedom to improve this functionality without making potential breaking changes to the API of this library.
+
+## Stop Using `result: :async`
+
+We removed the `:async` possible value from the `:result` option of `Sentry.Client.send_event/2`. Instead, you can spawn a task yourself.
+
+If you had something like this before:
+
+```elixir
+{:ok, sentry_task} = Sentry.capture_exception(my_exception, result: :async)
+
+# Do other stuff...
+
+Task.await(sentry_task)
+```
+
+you can now replace it with something like:
+
+```elixir
+# Start a supervisor for this somewhere, maybe in your application's
+# start/2 callback.
+{:ok, _} = Task.Supervisor.start_link(name: SentryAsyncSupervisor)
+
+{:ok, sentry_task} =
+  Task.Supervisor.async_nolink(fn ->
+    Sentry.capture_exception(my_exception, result: :async)
+  end)
+
+# Do other stuff...
+
+Task.await(sentry_task)
+```
