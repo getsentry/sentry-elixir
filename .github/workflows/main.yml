@@ -13,81 +13,79 @@ env:
 
 jobs:
   test:
+    name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
 
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        # https://hexdocs.pm/elixir/1.14/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
-        elixir: ['1.12.x', '1.13.x', '1.14.x', '1.15.x']
-        otp: ['22.3.x', '23.3.x', '24.3.x', '25.2.x', '26.0.x']
-        exclude:
-          - elixir: '1.12.x'
-            otp: '25.2.x'
-          - elixir: '1.12.x'
-            otp: '26.0.x'
-          - elixir: '1.13.x'
-            otp: '25.2.x'
-          - elixir: '1.13.x'
-            otp: '26.0.x'
-          - elixir: '1.14.x'
-            otp: '22.3.x'
-          - elixir: '1.14.x'
-            otp: '26.0.x'
-          - elixir: '1.15.x'
-            otp: '22.3.x'
-          - elixir: '1.15.x'
-            otp: '23.3.x'
+        # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
-          - elixir: '1.11.x'
-            otp: '23.3.x'
-          # - elixir: 'master'
-          #   otp: '24.3.x'
+          # Newest supported Elixir/Erlang pair.
+          - elixir: '1.15'
+            otp: '26.0'
+            lint: true
+            dialyzer: true
+
+          # One version before the last supported one.
+          - elixir: '1.14.5'
+            otp: '25.2'
+
+          # Oldest supported Elixir/Erlang pair.
+          - elixir: '1.11.4'
+            otp: '21.3'
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Check out this repository
+      uses: actions/checkout@v3
 
-    - name: Setup elixir
+    - name: Setup Elixir and Erlang
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: ${{ matrix.elixir }} # Define the elixir version [required]
-        otp-version: ${{ matrix.otp }} # Define the OTP version [required]
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
 
-    - name: Retrieve Mix Dependencies Cache
-      uses: actions/cache@v1
-      id: mix-cache #id to use in retrieve action
+    - name: Cache Mix dependencies
+      uses: actions/cache@v3
+      id: mix-cache
       with:
         path: deps
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+        key: |
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
 
-    - name: Install Mix Dependencies
+    - name: Install Mix dependencies
       if: steps.mix-cache.outputs.cache-hit != 'true'
-      run: |
-        mix local.rebar --force
-        mix local.hex --force
-        mix deps.get
-    - name: Check Formatting
-      run: mix format --check-formatted
-      if: matrix.elixir == '1.15.x'
+      run: mix deps.get
 
-    - name: Check Compile Warnings
+    - name: Check formatting
+      if: matrix.lint
+      run: mix format --check-formatted
+
+    - name: Check compiler warnings
+      if: matrix.lint
       run: mix compile --warnings-as-errors
 
-    - name: Run Tests
+    - name: Run tests
       run: mix test
 
     - name: Retrieve PLT Cache
-      uses: actions/cache@v1
+      uses: actions/cache@v3
+      if: matrix.dialyzer
       id: plt-cache
-      if: matrix.elixir == '1.15.x'
       with:
         path: priv/plts
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+        key: |
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-
 
     - name: Create PLTs
-      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.elixir == '1.15.x'
+      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.dialyzer
       run: |
         mkdir -p priv/plts
         mix dialyzer --plt
+
     - name: Run dialyzer
+      if: matrix.dialyzer
       run: mix dialyzer --no-check --halt-exit-status
-      if: matrix.elixir == '1.15.x'
