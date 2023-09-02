@@ -38,20 +38,30 @@ defmodule Sentry.Client do
 
   ### Options
 
-  * `:result` - Allows specifying how the result should be returned. Options include
-    `:sync`, `:none`, and `:async`.  `:sync` will make the API call synchronously, and
-    return `{:ok, event_id}` if successful.  `:none` sends the event from an unlinked
-    child process under `Sentry.TaskSupervisor` and will return `{:ok, ""}` regardless
-    of the result.  `:async` will start an unlinked task and return a tuple of `{:ok, Task.t}`
-    on success where the Task should be awaited upon to receive the result asynchronously.
-    If you do not call `Task.await/2`, messages will be leaked to the inbox of the current
-    process.  See `Task.Supervisor.async_nolink/2` for more information. `:none` is the default.
+  * `:result` - Allows specifying how the result should be returned. The possible values are:
+
+    * `:sync` - Sentry will make an API call synchronously (including retries) and will
+      return `{:ok, event_id}` if successful.
+
+    * `:none` - Sentry will send the event in the background, in a *fire-and-forget*
+      fashion. The function will return `{:ok, ""}` regardless of whether the API
+      call ends up being successful or not.
+
+    * `:async` - **not supported anymore**, see the information below.
 
   * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending
     any events, and a value of 1.0 will send 100% of events.
 
   * Other options, such as `:stacktrace` or `:extra` will be passed to `Sentry.Event.create_event/1`
     downstream. See `Sentry.Event.create_event/1` for available options.
+
+  > #### Async Send {: .error}
+  >
+  > Before v9.0.0 of this library, the `:result` option also supported the `:async` value.
+  > This would spawn a `Task` to make the API call, and would return a `{:ok, Task.t()}` tuple.
+  > You could use `Task` operations to wait for the result asynchronously. Since v9.0.0, this
+  > option is not present anymore. Instead, you can spawn a task yourself that then calls this
+  > function with `result: :sync`. The effect is exactly the same.
 
   """
   @spec send_event(Event.t()) :: send_event_result
@@ -64,6 +74,13 @@ defmodule Sentry.Client do
       {%Event{}, false} -> :unsampled
       {%Event{} = event, true} -> encode_and_send(event, result)
     end
+  end
+
+  defp encode_and_send(_event, :async) do
+    raise ArgumentError, """
+    the :async result type is not supported anymore. Instead, you can spawn a task yourself that \
+    then calls Sentry.send_event/2 with result: :sync. The effect is exactly the same.
+    """
   end
 
   defp encode_and_send(%Event{} = event, result_type) do
@@ -86,22 +103,6 @@ defmodule Sentry.Client do
     maybe_log_result(result, event)
 
     result
-  end
-
-  @spec do_send_event(Event.t(), binary(), :async) :: {:ok, Task.t()} | {:error, any()}
-  defp do_send_event(event, body, :async) do
-    case get_headers_and_endpoint() do
-      {endpoint, auth_headers} when is_binary(endpoint) ->
-        {:ok,
-         Task.Supervisor.async_nolink(Sentry.TaskSupervisor, fn ->
-           try_request(endpoint, auth_headers, {event, body}, Config.send_max_attempts())
-           |> maybe_call_after_send_event(event)
-           |> maybe_log_result(event)
-         end)}
-
-      {:error, :invalid_dsn} ->
-        {:error, :invalid_dsn}
-    end
   end
 
   @spec do_send_event(Event.t(), binary(), :sync) :: {:ok, String.t()} | {:error, any()}

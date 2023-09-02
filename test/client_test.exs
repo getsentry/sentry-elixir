@@ -223,33 +223,6 @@ defmodule Sentry.ClientTest do
     end
   end
 
-  test "calls anonymous after_send_event asynchronously" do
-    bypass = Bypass.open()
-
-    Bypass.expect(bypass, fn conn ->
-      {:ok, _body, conn} = Plug.Conn.read_body(conn)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(
-      :sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      after_send_event: fn _e, _r ->
-        Logger.error("AFTER_SEND_EVENT")
-      end
-    )
-
-    try do
-      apply(Event, :not_a_function, [])
-    rescue
-      e ->
-        assert capture_log(fn ->
-                 {:ok, task} = Sentry.capture_exception(e, result: :async)
-                 Task.await(task)
-               end) =~ "AFTER_SEND_EVENT"
-    end
-  end
-
   test "sends event with sample_rate of 1" do
     bypass = Bypass.open()
 
@@ -337,16 +310,10 @@ defmodule Sentry.ClientTest do
                apply(Event, :not_a_function, [])
              rescue
                e ->
-                 {:ok, %{ref: ref}} =
-                   Sentry.capture_exception(
-                     e,
-                     stacktrace: __STACKTRACE__,
-                     result: :async
-                   )
+                 assert {:error, {:request_failure, _}} =
+                          Sentry.capture_exception(e, stacktrace: __STACKTRACE__, result: :sync)
 
                  assert_receive "API called"
-                 assert_receive {^ref, {:error, {:request_failure, _}}}
-                 assert_receive {:DOWN, ^ref, :process, _pid, :normal}
              end
            end) =~ "[error] Failed to send Sentry event"
   end
@@ -368,8 +335,7 @@ defmodule Sentry.ClientTest do
 
       faulty_capture_message = fn failure ->
         expect(Sentry.HTTPClientMock, :post, fn _url, _headers, _body -> failure.() end)
-        {:ok, task} = Sentry.capture_message("all your code are belong to us", result: :async)
-        Task.await(task)
+        Sentry.capture_message("all your code are belong to us", result: :sync)
       end
 
       {:ok, faulty_capture_message: faulty_capture_message}
