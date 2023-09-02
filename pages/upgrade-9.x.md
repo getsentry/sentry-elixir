@@ -102,6 +102,10 @@ The settings that are now *compile-time settings* are:
 
 `Sentry.Sources` was meant to be private API and has been removed. Its functionality is very specific to Sentry, and it's not a good general mechanism to retrieve source code. This way, we can also have the freedom to improve this functionality without making potential breaking changes to the API of this library.
 
+## Stop Using `Sentry.Client`
+
+Most of the functionality that you could find in `Sentry.Client` was also available in the `Sentry` module. Additionally, most of the functions within `Sentry.Client` were not really usable in a generic way without deep knowledge of this library and the Sentry ecosystem.
+
 ## Stop Using `result: :async`
 
 We removed the `:async` possible value from the `:result` option of `Sentry.Client.send_event/2`. Instead, you can spawn a task yourself.

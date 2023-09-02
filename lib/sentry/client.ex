@@ -1,19 +1,8 @@
 defmodule Sentry.Client do
-  @moduledoc """
-  This module interfaces directly with Sentry via HTTP.
+  @moduledoc false
 
-  See `Sentry.HTTPClient` for more information. This module provides an interface
-  to talk to Sentry through the configured HTTP client.
-
-  Most of the time, **you won't have to use this module** directly. Instead, you
-  will mostly use the functions in the `Sentry` module.
-
-  ## Sending Events
-
-  This module makes use of `Task.Supervisor` to allow sending events
-  synchronously or asynchronously, defaulting to asynchronous.
-  See `send_event/2` for more information.
-  """
+  # A Client is the part of the SDK that is responsible for event creation.
+  # See https://develop.sentry.dev/sdk/unified-api/#client.
 
   alias Sentry.{Config, Event, Interfaces}
 
@@ -29,41 +18,6 @@ defmodule Sentry.Client do
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 
-  @doc """
-  Attempts to send the event to the Sentry API up to 4 times with exponential backoff.
-
-  The event is dropped if it all retries fail.
-  Errors will be logged unless the source is the `Sentry.LoggerBackend`, which can
-  deadlock by logging within a logger.
-
-  ### Options
-
-  * `:result` - Allows specifying how the result should be returned. The possible values are:
-
-    * `:sync` - Sentry will make an API call synchronously (including retries) and will
-      return `{:ok, event_id}` if successful.
-
-    * `:none` - Sentry will send the event in the background, in a *fire-and-forget*
-      fashion. The function will return `{:ok, ""}` regardless of whether the API
-      call ends up being successful or not.
-
-    * `:async` - **not supported anymore**, see the information below.
-
-  * `:sample_rate` - The sampling factor to apply to events.  A value of 0.0 will deny sending
-    any events, and a value of 1.0 will send 100% of events.
-
-  * Other options, such as `:stacktrace` or `:extra` will be passed to `Sentry.Event.create_event/1`
-    downstream. See `Sentry.Event.create_event/1` for available options.
-
-  > #### Async Send {: .error}
-  >
-  > Before v9.0.0 of this library, the `:result` option also supported the `:async` value.
-  > This would spawn a `Task` to make the API call, and would return a `{:ok, Task.t()}` tuple.
-  > You could use `Task` operations to wait for the result asynchronously. Since v9.0.0, this
-  > option is not present anymore. Instead, you can spawn a task yourself that then calls this
-  > function with `result: :sync`. The effect is exactly the same.
-
-  """
   @spec send_event(Event.t()) :: send_event_result
   def send_event(%Event{} = event, opts \\ []) do
     result = Keyword.get(opts, :result, Config.send_result())
@@ -158,14 +112,6 @@ defmodule Sentry.Client do
     end
   end
 
-  @doc """
-  Makes an HTTP request to Sentry using the configured HTTP client.
-
-  If the request returns a `200` response status code, then this function returns
-  the `"id"` found in the JSON response body (or `nil` if none is found). If the
-  request fails returns any other status code, invalid JSON, or fails, then
-  this function returns `{:error, reason}`.
-  """
   @spec request(String.t(), [{String.t(), String.t()}], String.t()) ::
           {:ok, String.t() | nil} | {:error, reason :: term()}
   def request(url, headers, body) when is_binary(url) and is_list(headers) do
@@ -187,35 +133,25 @@ defmodule Sentry.Client do
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
   end
 
-  @doc """
-  Generates a Sentry API authorization header.
-  """
+  # Made public for testing.
   @spec authorization_header(String.t(), String.t()) :: String.t()
   def authorization_header(public_key, secret_key) do
-    timestamp = System.system_time(:second)
-
     data = [
       sentry_version: @sentry_version,
       sentry_client: @sentry_client,
-      sentry_timestamp: timestamp,
+      sentry_timestamp: System.system_time(:second),
       sentry_key: public_key,
       sentry_secret: secret_key
     ]
 
     query =
       data
-      |> Enum.filter(fn {_, value} -> value != nil end)
-      |> Enum.map(fn {name, value} -> "#{name}=#{value}" end)
-      |> Enum.join(", ")
+      |> Enum.reject(fn {_, value} -> is_nil(value) end)
+      |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
 
     "Sentry " <> query
   end
 
-  @doc """
-  Get a Sentry DSN which is simply a URI.
-
-  {PROTOCOL}://{PUBLIC_KEY}[:{SECRET_KEY}]@{HOST}/{PATH}{PROJECT_ID}
-  """
   @spec get_dsn :: dsn | {:error, :invalid_dsn}
   def get_dsn do
     dsn = Config.dsn()
@@ -275,24 +211,6 @@ defmodule Sentry.Client do
     end
   end
 
-  @doc """
-  Transform a Sentry event into a JSON-encodable map.
-
-  Some event attributes map directly to JSON, while others are structs that need to
-  be converted to maps. This function does that conversion.
-
-  ## Examples
-
-      iex> event = Sentry.Event.create_event(message: "Something went wrong", extra: %{foo: "bar"})
-      iex> jsonable_map = render_event(event)
-      iex> jsonable_map[:message]
-      "Something went wrong"
-      iex> jsonable_map[:level]
-      :error
-      iex> jsonable_map[:extra]
-      %{foo: "bar"}
-
-  """
   @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
     event

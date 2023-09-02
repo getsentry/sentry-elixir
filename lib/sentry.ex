@@ -435,7 +435,35 @@ defmodule Sentry do
   information about an exception, a message, or any other event that you want to
   report. To manually build events, see the functions in `Sentry.Event`.
 
-  `opts` is passed down to the client's `Sentry.Client.send_event/2`.
+  ## Options
+
+  The supported options are:
+
+    * `:result` - Allows specifying how the result should be returned. The possible values are:
+
+      * `:sync` - Sentry will make an API call synchronously (including retries) and will
+        return `{:ok, event_id}` if successful.
+
+      * `:none` - Sentry will send the event in the background, in a *fire-and-forget*
+        fashion. The function will return `{:ok, ""}` regardless of whether the API
+        call ends up being successful or not.
+
+      * `:async` - **Not supported anymore**, see the information below.
+
+    * `:sample_rate` - The sampling factor to apply to events. A value of `0.0` will deny sending
+      any events, and a value of `1.0` will send 100% of events.
+
+    * Other options, such as `:stacktrace` or `:extra`, will be passed to
+      `Sentry.Event.create_event/1` downstream. See `Sentry.Event.create_event/1`
+      for available options.
+
+  > #### Async Send {: .error}
+  >
+  > Before v9.0.0 of this library, the `:result` option also supported the `:async` value.
+  > This would spawn a `Task` to make the API call, and would return a `{:ok, Task.t()}` tuple.
+  > You could use `Task` operations to wait for the result asynchronously. Since v9.0.0, this
+  > option is not present anymore. Instead, you can spawn a task yourself that then calls this
+  > function with `result: :sync`. The effect is exactly the same.
 
   > #### Sending Exceptions and Messages {: .tip}
   >
