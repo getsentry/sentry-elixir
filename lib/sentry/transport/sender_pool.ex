@@ -1,4 +1,6 @@
-defmodule Sentry.SenderPool do
+defmodule Sentry.Transport.SenderPool do
+  @moduledoc false
+
   use Supervisor
 
   def start_link([] = _opts) do
