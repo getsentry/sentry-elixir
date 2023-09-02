@@ -60,7 +60,7 @@ jobs:
 
     - name: Install and compile Mix dependencies
       if: steps.mix-deps-cache.outputs.cache-hit != 'true'
-      run: mix deps.get, deps.compile
+      run: mix do deps.get, deps.compile
 
     - name: Save Mix dependencies cache
       uses: actions/cache/save@v3
