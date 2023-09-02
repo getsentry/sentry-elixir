@@ -34,8 +34,8 @@ defmodule Sentry.Mixfile do
           ]
         ],
         groups_for_modules: [
-          "Payload Structs": [
-            ~r/^Sentry\.Payloads/
+          Interfaces: [
+            ~r/^Sentry\.Interfaces/
           ]
         ],
         source_ref: "#{@version}",

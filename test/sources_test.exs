@@ -62,7 +62,7 @@ defmodule Sentry.SourcesTest do
 
       event = TestHelpers.decode_event_from_envelope!(body)
 
-      frames = Enum.reverse(event.stacktrace.frames)
+      frames = Enum.reverse(List.first(event.exception)["stacktrace"]["frames"])
 
       assert ^correct_context =
                Enum.at(frames, 0)

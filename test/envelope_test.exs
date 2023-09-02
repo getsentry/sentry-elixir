@@ -1,7 +1,7 @@
 defmodule Sentry.EnvelopeTest do
   use ExUnit.Case, async: true
 
-  alias Sentry.Envelope
+  alias Sentry.{Envelope, Event}
 
   describe "from_binary/1" do
     test "parses envelope with empty headers" do
@@ -23,12 +23,11 @@ defmodule Sentry.EnvelopeTest do
     end
 
     test "parses envelope containing an event" do
-      event = %Sentry.Event{
+      event = %Event{
         breadcrumbs: [],
-        culprit: nil,
         environment: :test,
         event_id: "1d208b37d9904203918a9c2125ea91fa",
-        event_source: nil,
+        __source__: nil,
         exception: nil,
         extra: %{},
         fingerprint: ["{{ default }}"],
@@ -60,12 +59,11 @@ defmodule Sentry.EnvelopeTest do
           telemetry: "0.4.2",
           unicode_util_compat: "0.7.0"
         },
-        original_exception: nil,
-        platform: "elixir",
+        __original_exception__: nil,
+        platform: :elixir,
         release: nil,
         request: %{},
         server_name: "john-linux",
-        stacktrace: %{frames: []},
         tags: %{},
         timestamp: "2021-10-09T03:53:22",
         user: %{}
@@ -81,12 +79,10 @@ defmodule Sentry.EnvelopeTest do
       assert envelope.event_id == event.event_id
 
       assert envelope.items == [
-               %Sentry.Event{
+               %Event{
                  breadcrumbs: [],
-                 culprit: nil,
                  environment: "test",
                  event_id: "1d208b37d9904203918a9c2125ea91fa",
-                 event_source: nil,
                  exception: nil,
                  extra: %{},
                  fingerprint: ["{{ default }}"],
@@ -118,12 +114,10 @@ defmodule Sentry.EnvelopeTest do
                    "telemetry" => "0.4.2",
                    "unicode_util_compat" => "0.7.0"
                  },
-                 original_exception: nil,
                  platform: "elixir",
                  release: nil,
                  request: %{},
                  server_name: "john-linux",
-                 stacktrace: %{frames: []},
                  tags: %{},
                  timestamp: "2021-10-09T03:53:22",
                  user: %{}
@@ -133,5 +127,24 @@ defmodule Sentry.EnvelopeTest do
   end
 
   describe "to_binary/1" do
+    test "encodes an envelope" do
+      event = Event.create_event([])
+      envelope = Envelope.new(event)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+      assert Jason.decode!(id_line) == %{"event_id" => event.event_id}
+      assert %{"type" => "event", "length" => _} = Jason.decode!(header_line)
+
+      assert {:ok, decoded_event} = Jason.decode(event_line)
+      assert decoded_event["event_id"] == event.event_id
+      assert decoded_event["breadcrumbs"] == []
+      assert decoded_event["environment"] == "test"
+      assert decoded_event["exception"] == nil
+      assert decoded_event["extra"] == %{}
+      assert decoded_event["user"] == %{}
+      assert decoded_event["request"] == %{}
+    end
   end
 end

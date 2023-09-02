@@ -161,7 +161,10 @@ defmodule Sentry.PlugCaptureTest do
       event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
-      assert event.message == "(RuntimeError PhoenixError)"
+
+      assert List.first(event.exception)["type"] == "RuntimeError"
+      assert List.first(event.exception)["value"] == "PhoenixError"
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -342,9 +345,7 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-
       event = TestHelpers.decode_event_from_envelope!(body)
-
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)

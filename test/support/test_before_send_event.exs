@@ -5,7 +5,7 @@ defmodule Sentry.BeforeSendEventTest do
   end
 
   def before_send_event_ignore_arithmetic(event) do
-    case event.original_exception do
+    case event.__original_exception__ do
       %ArithmeticError{} ->
         false
 

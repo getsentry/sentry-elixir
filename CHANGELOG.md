@@ -1,5 +1,15 @@
 # Changelog
 
+## 9.0.0
+
+### Breaking changes
+
+- Removed `Sentry.Sources`
+- Removed the `Sentry.Event.sentry_exception/0` type
+- Removed `Sentry.Event.add_metadata/1`
+- Removed `Sentry.Event.culprit_from_stacktrace/1`
+- Removed the `:async` value for the `:result` option in `Sentry.Client.send_event/2` (and friends)
+
 ## 8.1.0
 
 ### Various fixes & improvements

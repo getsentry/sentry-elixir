@@ -114,9 +114,9 @@ defmodule Sentry.LoggerBackendTest do
                "context_line" => nil,
                "pre_context" => [],
                "post_context" => []
-             } = List.last(event.stacktrace.frames)
+             } = List.last(List.first(event.exception)["stacktrace"]["frames"])
 
-      assert [%{"test" => "test", "timestamp" => _}] = event.breadcrumbs
+      assert [%{"timestamp" => _, "message" => "test"}] = event.breadcrumbs
 
       assert List.first(event.exception)["type"] == "FunctionClauseError"
       assert conn.request_path == "/api/1/envelope/"
@@ -130,7 +130,7 @@ defmodule Sentry.LoggerBackendTest do
     capture_log(fn ->
       {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
 
-      Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{test: "test"})
+      Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
       Sentry.TestGenServer.invalid_function(pid)
       assert_receive "terminating"
       assert_receive "API called"
@@ -147,9 +147,9 @@ defmodule Sentry.LoggerBackendTest do
 
       event = TestHelpers.decode_event_from_envelope!(body)
 
-      assert length(event.stacktrace.frames) == 1
+      assert length(List.first(event.exception)["stacktrace"]["frames"]) == 1
 
-      assert List.first(event.stacktrace.frames)["filename"] ==
+      assert List.first(List.first(event.exception)["stacktrace"]["frames"])["filename"] ==
                "test/support/example_plug_application.ex"
 
       send(pid, "API called")
@@ -192,7 +192,7 @@ defmodule Sentry.LoggerBackendTest do
 
     capture_log(fn ->
       Task.start(fn ->
-        GenServer.call(pid1, {:sleep, 20}, 1)
+        GenServer.call(pid1, {:sleep, 20}, 0)
       end)
 
       assert_receive "API called"
@@ -435,7 +435,8 @@ defmodule Sentry.LoggerBackendTest do
       event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.user["user_id"] == 3
-      assert event.message == "(RuntimeError oops)"
+      assert List.first(event.exception)["type"] == "RuntimeError"
+      assert List.first(event.exception)["value"] == "oops"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
@@ -462,7 +463,8 @@ defmodule Sentry.LoggerBackendTest do
       event = TestHelpers.decode_event_from_envelope!(body)
 
       assert event.extra["day_of_week"] == "Friday"
-      assert event.message == "(RuntimeError oops)"
+      assert List.first(event.exception)["type"] == "RuntimeError"
+      assert List.first(event.exception)["value"] == "oops"
       send(pid, "API called")
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
