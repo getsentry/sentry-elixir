@@ -133,7 +133,6 @@ defmodule Sentry.Client do
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
   end
 
-
   # Made public for testing.
   @spec authorization_header(String.t(), String.t()) :: String.t()
   def authorization_header(public_key, secret_key) do
