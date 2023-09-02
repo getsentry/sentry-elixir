@@ -44,19 +44,33 @@ jobs:
         elixir-version: ${{ matrix.elixir }}
         otp-version: ${{ matrix.otp }}
 
-    - name: Cache Mix dependencies
-      uses: actions/cache@v3
-      id: mix-cache
+    # We need to manually restore and then save, so that we can save the "_build" directory
+    # *without* the Elixir compiled code in it.
+    - name: Restore Mix dependencies cache
+      uses: actions/cache/restore@v3
+      id: mix-deps-cache
       with:
-        path: deps
+        path: |
+          _build
+          deps
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
         restore-keys: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
 
-    - name: Install Mix dependencies
-      if: steps.mix-cache.outputs.cache-hit != 'true'
-      run: mix deps.get
+    - name: Install and compile Mix dependencies
+      if: steps.mix-deps-cache.outputs.cache-hit != 'true'
+      run: mix deps.get, deps.compile
+
+    - name: Save Mix dependencies cache
+      uses: actions/cache/save@v3
+      if: steps.mix-deps-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          _build
+          deps
+        key: |
+          ${{ steps.mix-deps-cache.outputs.cache-primary-key }}
 
     - name: Check formatting
       if: matrix.lint
