@@ -70,7 +70,7 @@ defmodule Sentry.EnvelopeTest do
       }
 
       {:ok, raw_envelope} =
-        event
+        [event]
         |> Sentry.Envelope.new()
         |> Sentry.Envelope.to_binary()
 
@@ -129,7 +129,7 @@ defmodule Sentry.EnvelopeTest do
   describe "to_binary/1" do
     test "encodes an envelope" do
       event = Event.create_event([])
-      envelope = Envelope.new(event)
+      envelope = Envelope.new([event])
 
       assert {:ok, encoded} = Envelope.to_binary(envelope)
 
