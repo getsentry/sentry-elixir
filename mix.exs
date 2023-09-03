@@ -17,7 +17,7 @@ defmodule Sentry.Mixfile do
         plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
         plt_core_path: "priv/plts",
         plt_add_deps: :app_tree,
-        plt_add_apps: [:mix]
+        plt_add_apps: [:mix, :ex_unit]
       ],
       docs: [
         extra_section: "Guides",
