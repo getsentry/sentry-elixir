@@ -136,7 +136,7 @@ defmodule Sentry.LoggerBackendTest do
     {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
 
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-    assert_receive {^ref, _event}
+    assert_receive {^ref, _event}, 1000
   after
     :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
