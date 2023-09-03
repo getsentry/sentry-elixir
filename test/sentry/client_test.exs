@@ -56,7 +56,7 @@ defmodule Sentry.ClientTest do
       assert rendered.user.email == ~s({"user", "@example.com"})
 
       assert rendered.tags.valid == "yes"
-      assert rendered.tags.tokens == ~s{MapSet.new([1])}
+      assert rendered.tags.tokens == inspect(MapSet.new([1]))
     end
   end
 
