@@ -61,8 +61,4 @@ defmodule Sentry.TestGenServer do
 
     {:ok, state}
   end
-
-  def terminate(_, state) do
-    send(state, "terminating")
-  end
 end

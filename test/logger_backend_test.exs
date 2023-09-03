@@ -53,7 +53,6 @@ defmodule Sentry.LoggerBackendTest do
 
     {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
     Sentry.TestGenServer.do_throw(pid)
-    assert_receive "terminating"
     assert_receive {^ref, event}
     assert event.exception.value == ~s[** (exit) bad return value: "I am throwing"]
   end
@@ -65,7 +64,6 @@ defmodule Sentry.LoggerBackendTest do
 
     {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
     Sentry.TestGenServer.bad_exit(pid)
-    assert_receive "terminating"
     assert_receive {^ref, event}
     assert event.exception.type == "Sentry.CrashError"
     assert event.exception.value == "** (exit) :bad_exit"
@@ -81,7 +79,6 @@ defmodule Sentry.LoggerBackendTest do
 
     Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
     Sentry.TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
     assert_receive {^ref, event}
 
     assert event.exception.type == "FunctionClauseError"
@@ -169,7 +166,6 @@ defmodule Sentry.LoggerBackendTest do
     Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
     Sentry.TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
     Sentry.TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
 
     assert_receive {^ref, event}
     assert event.extra.logger_metadata.string == "string"
@@ -189,7 +185,6 @@ defmodule Sentry.LoggerBackendTest do
     Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
     Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
     Sentry.TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
 
     assert_receive {^ref, event}
     assert event.extra.logger_metadata == %{}
