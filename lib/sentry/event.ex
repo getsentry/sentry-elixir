@@ -392,6 +392,7 @@ defmodule Sentry.Event do
     |> String.split(".")
   end
 
+  @doc false
   def do_put_source_context(%Interfaces.Stacktrace.Frame{} = frame, file, line) do
     {pre_context, context, post_context} =
       Sentry.Sources.get_source_context(@source_files, file, line)
@@ -404,14 +405,13 @@ defmodule Sentry.Event do
     }
   end
 
-  @spec culprit_from_stacktrace(Exception.stacktrace()) :: String.t() | nil
-  def culprit_from_stacktrace([]), do: nil
+  defp culprit_from_stacktrace([]), do: nil
 
-  def culprit_from_stacktrace([{m, f, a, _} | _]) do
+  defp culprit_from_stacktrace([{m, f, a, _} | _]) do
     Exception.format_mfa(m, f, arity_to_integer(a))
   end
 
-  def culprit_from_stacktrace([{m, f, a} | _]) do
+  defp culprit_from_stacktrace([{m, f, a} | _]) do
     Exception.format_mfa(m, f, arity_to_integer(a))
   end
 

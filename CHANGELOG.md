@@ -9,6 +9,7 @@
 - Removed the `Sentry.Event.sentry_exception/0` type
 - Removed `Sentry.Event.add_metadata/1`
 - Removed `Sentry.Event.culprit_from_stacktrace/1`
+- Removed `Sentry.Event.do_put_source_context/3`
 - Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
 - Removed the `Sentry.Event.sentry_exception/0` type
 
