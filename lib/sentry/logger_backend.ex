@@ -43,10 +43,16 @@ defmodule Sentry.LoggerBackend do
         # Send messages like `Logger.error("error")` to Sentry
         capture_log_messages: true
   """
+
   @behaviour :gen_event
+
+  ## State
 
   defstruct level: :error, metadata: [], excluded_domains: [:cowboy], capture_log_messages: false
 
+  ## Callbacks
+
+  @impl :gen_event
   def init(__MODULE__) do
     config = Application.get_env(:logger, __MODULE__, [])
     {:ok, struct(%__MODULE__{}, config)}
@@ -60,6 +66,7 @@ defmodule Sentry.LoggerBackend do
     {:ok, struct(%__MODULE__{}, config)}
   end
 
+  @impl :gen_event
   def handle_call({:configure, options}, state) do
     config =
       Application.get_env(:logger, __MODULE__, [])
@@ -69,6 +76,7 @@ defmodule Sentry.LoggerBackend do
     {:ok, :ok, struct(state, config)}
   end
 
+  @impl :gen_event
   def handle_event({level, _gl, {Logger, msg, _ts, meta}}, state) do
     level = maybe_ensure_warning_level(level)
 
@@ -84,29 +92,34 @@ defmodule Sentry.LoggerBackend do
     {:ok, state}
   end
 
+  @impl :gen_event
   def handle_info(_, state) do
     {:ok, state}
   end
 
+  @impl :gen_event
   def code_change(_old_vsn, state, _extra) do
     {:ok, state}
   end
 
+  @impl :gen_event
   def terminate(_reason, _state) do
     :ok
   end
+
+  ## Helpers
 
   defp log(level, msg, meta, state) do
     opts = build_opts(level, meta, state)
 
     case meta[:crash_reason] do
-      {%_{__exception__: true} = exception, stacktrace} when is_list(stacktrace) ->
-        Sentry.capture_exception(exception, [stacktrace: stacktrace] ++ opts)
+      {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
+        Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
 
       {other, stacktrace} when is_list(stacktrace) ->
         Sentry.capture_exception(
           Sentry.CrashError.exception(other),
-          [stacktrace: stacktrace] ++ opts
+          Keyword.put(opts, :stacktrace, stacktrace)
         )
 
       _ ->
@@ -161,35 +174,17 @@ defmodule Sentry.LoggerBackend do
         into: %{}
   end
 
-  @spec elixir_logger_level_to_sentry_level(Logger.level()) :: String.t()
   defp elixir_logger_level_to_sentry_level(level) do
     case level do
-      :emergency ->
-        "fatal"
-
-      :alert ->
-        "fatal"
-
-      :critical ->
-        "fatal"
-
-      :error ->
-        "error"
-
-      :warning ->
-        "warning"
-
-      :warn ->
-        "warning"
-
-      :notice ->
-        "info"
-
-      :info ->
-        "info"
-
-      :debug ->
-        "debug"
+      :emergency -> "fatal"
+      :alert -> "fatal"
+      :critical -> "fatal"
+      :error -> "error"
+      :warning -> "warning"
+      :warn -> "warning"
+      :notice -> "info"
+      :info -> "info"
+      :debug -> "debug"
     end
   end
 
