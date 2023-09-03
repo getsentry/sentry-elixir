@@ -363,7 +363,7 @@ defmodule Sentry do
 
   The `opts` argument is passed as the second argument to `send_event/2`.
   """
-  @spec capture_exception(Exception.t(), Keyword.t()) :: send_result
+  @spec capture_exception(Exception.t(), keyword()) :: send_result
   def capture_exception(exception, opts \\ []) do
     filter_module = Config.filter()
     event_source = Keyword.get(opts, :event_source)
@@ -401,7 +401,7 @@ defmodule Sentry do
 
   `opts` argument is passed as the second argument to `Sentry.send_event/2`.
   """
-  @spec capture_message(String.t(), Keyword.t()) :: send_result
+  @spec capture_message(String.t(), keyword()) :: send_result
   def capture_message(message, opts \\ []) when is_binary(message) do
     opts
     |> Keyword.put(:message, message)
@@ -452,7 +452,7 @@ defmodule Sentry do
   > or folks that want to have full control on what they report to Sentry. For most
   > use cases, use `capture_exception/2` or `capture_message/2`.
   """
-  @spec send_event(Event.t(), Keyword.t()) :: send_result
+  @spec send_event(Event.t(), keyword()) :: send_result
   def send_event(event, opts \\ [])
 
   def send_event(%Event{message: nil, exception: nil}, _opts) do
