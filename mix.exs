@@ -12,11 +12,12 @@ defmodule Sentry.Mixfile do
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
+      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [
         plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
         plt_core_path: "priv/plts",
         plt_add_deps: :app_tree,
-        plt_add_apps: [:mix, :plug, :hackney]
+        plt_add_apps: [:mix]
       ],
       docs: [
         extra_section: "Guides",
@@ -61,6 +62,9 @@ defmodule Sentry.Mixfile do
       ]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["test/mocks"] ++ elixirc_paths(:dev)
+  defp elixirc_paths(_other), do: ["lib"]
 
   defp deps do
     [

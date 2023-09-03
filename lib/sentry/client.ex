@@ -151,10 +151,7 @@ defmodule Sentry.Client do
               "Error in HTTP Request to Sentry - #{inspect(last_error)}"
           end
 
-        {:error, error} ->
-          inspect(error)
-
-        _ ->
+        {:ok, _} ->
           nil
       end
 

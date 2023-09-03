@@ -16,7 +16,7 @@ defmodule Sentry.Event do
   }
 
   @source_files if Config.enable_source_code_context(),
-                  do: Sentry.Sources.load_files(),
+                  do: Sentry.Sources.load_files(Config.root_source_code_paths()),
                   else: nil
   @deps if Config.report_deps(), do: Map.keys(Mix.Project.deps_paths()), else: []
 
