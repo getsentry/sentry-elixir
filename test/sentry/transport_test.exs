@@ -46,7 +46,8 @@ defmodule Sentry.TransportTest do
 
       Bypass.down(bypass)
 
-      assert {:error, :econnrefused} = Transport.post_envelope(envelope, _retries = [])
+      assert {:error, {:request_failure, :econnrefused}} =
+               Transport.post_envelope(envelope, _retries = [])
     end
 
     test "returns an error if the response from Sentry is not 200", %{bypass: bypass} do
@@ -58,7 +59,7 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(400, ~s<{}>)
       end)
 
-      assert {:error, "Received 400 from Sentry server: some error"} =
+      assert {:error, {:request_failure, "Received 400 from Sentry server: some error"}} =
                Transport.post_envelope(envelope, _retries = [])
     end
 
@@ -74,7 +75,9 @@ defmodule Sentry.TransportTest do
 
       modify_env(:sentry, client: RaisingHTTPClient)
 
-      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:error, {:request_failure, reason}} =
+               Transport.post_envelope(envelope, _retries = [])
+
       assert {:error, %RuntimeError{} = exception, _stacktrace} = reason
       assert exception.message == "I'm a really bad HTTP client"
     after
@@ -94,7 +97,9 @@ defmodule Sentry.TransportTest do
 
       modify_env(:sentry, client: ExitingHTTPClient)
 
-      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:error, {:request_failure, reason}} =
+               Transport.post_envelope(envelope, _retries = [])
+
       assert {:exit, :through_the_window, _stacktrace} = reason
     after
       :code.delete(ExitingHTTPClient)
@@ -113,7 +118,9 @@ defmodule Sentry.TransportTest do
 
       modify_env(:sentry, client: ThrowingHTTPClient)
 
-      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:error, {:request_failure, reason}} =
+               Transport.post_envelope(envelope, _retries = [])
+
       assert {:throw, :catch_me_if_you_can, _stacktrace} = reason
     after
       :code.delete(ThrowingHTTPClient)
@@ -138,7 +145,9 @@ defmodule Sentry.TransportTest do
 
       modify_env(:sentry, json_library: CrashingJSONLibrary)
 
-      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:error, {:request_failure, reason}} =
+               Transport.post_envelope(envelope, _retries = [])
+
       assert {:error, %RuntimeError{} = exception, _stacktrace} = reason
       assert exception.message == "I'm a really bad JSON library"
     after
@@ -157,7 +166,8 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<invalid JSON>)
       end)
 
-      assert {:error, %Jason.DecodeError{}} = Transport.post_envelope(envelope, _retries = [0])
+      assert {:error, {:request_failure, %Jason.DecodeError{}}} =
+               Transport.post_envelope(envelope, _retries = [0])
 
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}

@@ -12,6 +12,11 @@ defmodule Sentry.Client do
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 
+  # We read this at compile time and use it exclusively for tests. Any user of the Sentry
+  # application will get the real deal, but we'll be able to swap this out with a mock
+  # in tests.
+  @sender_module Application.compile_env(:sentry, :__sender_module__, Transport.Sender)
+
   # This is what executes the "Event Pipeline".
   # See: https://develop.sentry.dev/sdk/unified-api/#event-pipeline
   @spec send_event(Event.t(), keyword()) ::
@@ -20,9 +25,15 @@ defmodule Sentry.Client do
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
 
+    # This is a "private" option, only really used in testing.
+    request_retries =
+      Keyword.get_lazy(opts, :request_retries, fn ->
+        Application.get_env(:sentry, :request_retries, Transport.default_retries())
+      end)
+
     with :ok <- sample_event(sample_rate),
          {:ok, %Event{} = event} <- maybe_call_before_send(event) do
-      send_result = encode_and_send(event, result_type)
+      send_result = encode_and_send(event, result_type, request_retries)
       _ignored = maybe_call_after_send(event, send_result)
       send_result
     else
@@ -65,17 +76,17 @@ defmodule Sentry.Client do
     end
   end
 
-  defp encode_and_send(_event, _result_type = :async) do
+  defp encode_and_send(_event, _result_type = :async, _request_retries) do
     raise ArgumentError, """
     the :async result type is not supported anymore. Instead, you can spawn a task yourself that \
     then calls Sentry.send_event/2 with result: :sync. The effect is exactly the same.
     """
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :sync) do
+  defp encode_and_send(%Event{} = event, _result_type = :sync, request_retries) do
     envelope = Envelope.new([event])
 
-    send_result = Transport.post_envelope(envelope)
+    send_result = Transport.post_envelope(envelope, request_retries)
 
     if match?({:ok, _}, send_result) do
       Sentry.put_last_event_id_and_source(event.event_id, event.__source__)
@@ -85,8 +96,8 @@ defmodule Sentry.Client do
     send_result
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :none) do
-    :ok = Transport.Sender.send_async(event)
+  defp encode_and_send(%Event{} = event, _result_type = :none, _request_retries) do
+    :ok = @sender_module.send_async(event)
     Sentry.put_last_event_id_and_source(event.event_id, event.__source__)
     {:ok, ""}
   end

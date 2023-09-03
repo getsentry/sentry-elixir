@@ -2,9 +2,18 @@ defmodule Sentry.ClientTest do
   use ExUnit.Case
 
   import ExUnit.CaptureLog
+  import Mox
   import Sentry.TestEnvironmentHelper
 
   alias Sentry.{Client, Event}
+
+  setup :set_mox_global
+  setup :verify_on_exit!
+
+  setup do
+    Mox.stub_with(Sentry.TransportSenderMock, Sentry.Transport.Sender)
+    :ok
+  end
 
   describe "render_event/1" do
     test "transforms structs into maps" do
@@ -105,7 +114,7 @@ defmodule Sentry.ClientTest do
       end
     end
 
-    test "calls anonymous after_send_event synchronously", %{bypass: bypass} do
+    test "calls anonymous :after_send_event callback synchronously", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
@@ -136,7 +145,7 @@ defmodule Sentry.ClientTest do
 
       log =
         capture_log(fn ->
-          Client.send_event(event, result: :sync)
+          Client.send_event(event, result: :sync, request_retries: [])
         end)
 
       assert log =~ "[notice]"

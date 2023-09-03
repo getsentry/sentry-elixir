@@ -47,7 +47,7 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
+      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, Sentry.TransportSenderMock]]
     ]
   end
 

@@ -6,10 +6,14 @@ defmodule Sentry.Transport do
   alias Sentry.Config
   alias Sentry.Envelope
 
-  # @default_retries [1000, 2000, 4000, 8000]
-  @default_retries []
+  @default_retries [1000, 2000, 4000, 8000]
   @sentry_version 5
   @sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}"
+
+  @spec default_retries() :: [pos_integer(), ...]
+  def default_retries do
+    @default_retries
+  end
 
   # The "retries" parameter is there for better testing.
   @spec post_envelope(Envelope.t(), [non_neg_integer()]) ::
@@ -35,7 +39,7 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(endpoint, headers, payload, retries_left)
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, {:request_failure, reason}}
     end
   end
 

@@ -12,12 +12,23 @@ defmodule Sentry.Transport.Sender do
   @async_queue_max_size 10
   @async_queue_timeout 500
 
+  # This behaviour is only present for mocks in tests.
+  defmodule Behaviour do
+    @moduledoc false
+    @callback send_async(Event.t()) :: :ok
+  end
+
+  @behaviour Behaviour
+
+  ## Public API
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) when is_list(options) do
     index = Keyword.fetch!(options, :index)
     GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
   end
 
+  @impl Behaviour
   @spec send_async(Event.t()) :: :ok
   def send_async(%Event{} = event) do
     pool_size = Application.fetch_env!(:sentry, :sender_pool_size)
@@ -32,13 +43,13 @@ defmodule Sentry.Transport.Sender do
 
   ## Callbacks
 
-  @impl true
+  @impl GenServer
   def init([]) do
     Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
     {:ok, %__MODULE__{}}
   end
 
-  @impl true
+  @impl GenServer
   def handle_cast({:send, %Event{} = event}, %__MODULE__{} = state) do
     state = update_in(state.async_queue, &:queue.in(event, &1))
 
@@ -52,7 +63,7 @@ defmodule Sentry.Transport.Sender do
     {:noreply, state}
   end
 
-  @impl true
+  @impl GenServer
   def handle_info(:flush_async_queue, %__MODULE__{} = state) do
     state = flush_async_queue(state)
     Process.send_after(self(), :flush_async_queue, @async_queue_timeout)

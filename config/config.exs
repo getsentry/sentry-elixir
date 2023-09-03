@@ -8,6 +8,7 @@ config :sentry,
   root_source_code_paths: [File.cwd!()],
   hackney_opts: [recv_timeout: 50],
   send_result: :sync,
-  send_max_attempts: 1
+  send_max_attempts: 1,
+  __sender_module__: Sentry.TransportSenderMock
 
 config :phoenix, :json_library, Jason
