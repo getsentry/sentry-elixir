@@ -3,6 +3,7 @@ defmodule Sentry.Transport.SenderPool do
 
   use Supervisor
 
+  @spec start_link(keyword()) :: Supervisor.on_start()
   def start_link([] = _opts) do
     Supervisor.start_link(__MODULE__, [])
   end
@@ -15,7 +16,9 @@ defmodule Sentry.Transport.SenderPool do
 
     children =
       for index <- 1..pool_size do
-        Supervisor.child_spec({Sentry.Sender, []}, id: {Sentry.Sender, index})
+        Supervisor.child_spec({Sentry.Transport.Sender, index: index},
+          id: {Sentry.Transport.Sender, index}
+        )
       end
 
     Supervisor.init(children, strategy: :one_for_one)

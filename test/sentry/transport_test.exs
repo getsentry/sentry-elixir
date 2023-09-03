@@ -8,9 +8,7 @@ defmodule Sentry.TransportTest do
   describe "post_envelope/2" do
     setup do
       bypass = Bypass.open()
-
       modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
       %{bypass: bypass}
     end
 
@@ -32,12 +30,8 @@ defmodule Sentry.TransportTest do
         assert ["application/octet-stream"] = Plug.Conn.get_req_header(conn, "content-type")
         assert [sentry_auth_header] = Plug.Conn.get_req_header(conn, "x-sentry-auth")
 
-        assert sentry_auth_header =~ "Sentry"
-        assert sentry_auth_header =~ "sentry_version="
-        assert sentry_auth_header =~ "sentry_client=sentry-elixir/"
-        assert sentry_auth_header =~ "sentry_timestamp="
-        assert sentry_auth_header =~ "sentry_key=public"
-        assert sentry_auth_header =~ "sentry_secret=secret"
+        assert sentry_auth_header =~
+                 ~r/^Sentry sentry_version=5, sentry_client=sentry-elixir\/#{Application.spec(:sentry, :vsn)}, sentry_timestamp=\d{10}, sentry_key=public, sentry_secret=secret$/
 
         assert {:ok, ^body} = Envelope.to_binary(envelope)
 
@@ -68,24 +62,62 @@ defmodule Sentry.TransportTest do
                Transport.post_envelope(envelope, _retries = [])
     end
 
-    test "returns an error if the HTTP client crashes when making the request",
+    test "returns an error if the HTTP client raises an error when making the request",
          %{bypass: bypass} do
       envelope = Envelope.new([Event.create_event(message: "Hello")])
 
-      defmodule CrashingHTTPClient do
+      defmodule RaisingHTTPClient do
         def post(_endpoint, _headers, _body) do
           raise "I'm a really bad HTTP client"
         end
       end
 
-      modify_env(:sentry, client: CrashingHTTPClient)
+      modify_env(:sentry, client: RaisingHTTPClient)
 
       assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
       assert {:error, %RuntimeError{} = exception, _stacktrace} = reason
       assert exception.message == "I'm a really bad HTTP client"
     after
-      :code.delete(CrashingHTTPClient)
-      :code.purge(CrashingHTTPClient)
+      :code.delete(RaisingHTTPClient)
+      :code.purge(RaisingHTTPClient)
+    end
+
+    test "returns an error if the HTTP client EXITs when making the request",
+         %{bypass: bypass} do
+      envelope = Envelope.new([Event.create_event(message: "Hello")])
+
+      defmodule ExitingHTTPClient do
+        def post(_endpoint, _headers, _body) do
+          exit(:through_the_window)
+        end
+      end
+
+      modify_env(:sentry, client: ExitingHTTPClient)
+
+      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:exit, :through_the_window, _stacktrace} = reason
+    after
+      :code.delete(ExitingHTTPClient)
+      :code.purge(ExitingHTTPClient)
+    end
+
+    test "returns an error if the HTTP client throws when making the request",
+         %{bypass: bypass} do
+      envelope = Envelope.new([Event.create_event(message: "Hello")])
+
+      defmodule ThrowingHTTPClient do
+        def post(_endpoint, _headers, _body) do
+          throw(:catch_me_if_you_can)
+        end
+      end
+
+      modify_env(:sentry, client: ThrowingHTTPClient)
+
+      assert {:error, reason} = Transport.post_envelope(envelope, _retries = [])
+      assert {:throw, :catch_me_if_you_can, _stacktrace} = reason
+    after
+      :code.delete(ThrowingHTTPClient)
+      :code.purge(ThrowingHTTPClient)
     end
 
     test "returns an error if the JSON library crashes when decoding the response",
@@ -157,6 +189,38 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}
+    end
+  end
+
+  describe "get_dsn/0" do
+    test "parses correct DSNs" do
+      modify_env(:sentry, dsn: "http://public:secret@localhost:3000/1")
+      assert {"http://localhost:3000/api/1/envelope/", "public", "secret"} = Transport.get_dsn()
+    end
+
+    test "errors on bad public keys" do
+      modify_env(:sentry, dsn: "https://app.getsentry.com/1")
+      assert {:error, :invalid_dsn} = Transport.get_dsn()
+    end
+
+    test "errors on non-integer project_id" do
+      modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/Mitchell")
+      assert {:error, :invalid_dsn} = Transport.get_dsn()
+    end
+
+    test "errors on no project_id" do
+      modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com")
+      assert {:error, :invalid_dsn} = Transport.get_dsn()
+    end
+
+    test "errors on nil dsn" do
+      modify_env(:sentry, dsn: nil)
+      assert {:error, :invalid_dsn} = Transport.get_dsn()
+    end
+
+    test "errors on atom dsn" do
+      modify_env(:sentry, dsn: :error)
+      assert {:error, :invalid_dsn} = Transport.get_dsn()
     end
   end
 end

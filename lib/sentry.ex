@@ -251,7 +251,7 @@ defmodule Sentry do
 
       config :sentry,
         before_send_event: {MyModule, :before_send},
-        before_send_event: {MyModule, :after_send}
+        after_send_event: {MyModule, :after_send}
 
   `MyModule` could look like this:
 
@@ -339,12 +339,25 @@ defmodule Sentry do
           (Sentry.Event.t(), result :: term() -> term())
           | {module(), function_name :: atom()}
 
-  @type send_result :: Sentry.Client.send_event_result() | :excluded | :ignored
+  @typedoc """
+  The strategy to use when sending an event to Sentry.
+  """
+  @typedoc since: "9.0.0"
+  @type send_type() :: :sync | :none
+
+  @type send_result() ::
+          {:ok, event_or_envelope_id :: String.t()}
+          | {:error, term()}
+          | :ignored
+          | :unsampled
+          | :excluded
 
   def start(_type, _opts) do
     children = [
       {Task.Supervisor, name: Sentry.TaskSupervisor},
-      Config.client().child_spec()
+      {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
+      Config.client().child_spec(),
+      Sentry.Transport.SenderPool
     ]
 
     if Config.client() == Sentry.HackneyClient do

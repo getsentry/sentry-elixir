@@ -1,85 +1,114 @@
-defmodule Sentry.Sender do
-  # @moduledoc false
+defmodule Sentry.Transport.Sender do
+  @moduledoc false
 
-  # use GenServer
+  use GenServer
 
-  # alias Sentry.{Envelope, Event}
+  alias Sentry.{Config, Envelope, Event, Transport}
 
-  # @registry Sentry.SenderRegistry
+  require Logger
 
-  # @async_queue_max_size 10
-  # @async_queue_timeout 500
+  @registry Sentry.Transport.SenderRegistry
 
-  # def start_link(options) when is_list(options) do
-  #   index = Keyword.fetch!(options, :index)
-  #   GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
-  # end
+  @async_queue_max_size 10
+  @async_queue_timeout 500
 
-  # def send_async(%Event{} = event) do
-  #   pool_size = Application.fetch_env!(:sentry, :sender_pool_size)
-  #   random_index = Enum.random(1..pool_size)
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(options) when is_list(options) do
+    index = Keyword.fetch!(options, :index)
+    GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
+  end
 
-  #   GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, event})
-  # end
+  @spec send_async(Event.t()) :: :ok
+  def send_async(%Event{} = event) do
+    pool_size = Application.fetch_env!(:sentry, :sender_pool_size)
+    random_index = Enum.random(1..pool_size)
 
-  # ## State
+    GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, event})
+  end
 
-  # defstruct async_queue: :queue.new()
+  ## State
 
-  # ## Callbacks
+  defstruct async_queue: :queue.new()
 
-  # @impl true
-  # def init([]) do
-  #   Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
-  #   {:ok, %__MODULE__{}}
-  # end
+  ## Callbacks
 
-  # @impl true
-  # def handle_call({:send, %Event{} = _event}, _from, %__MODULE__{} = state) do
-  #   {:reply, raise("not implemented yet"), state}
-  # end
+  @impl true
+  def init([]) do
+    Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
+    {:ok, %__MODULE__{}}
+  end
 
-  # @impl true
-  # def handle_cast({:send, %Event{} = event}, %__MODULE__{} = state) do
-  #   state = update_in(state.async_queue, &:queue.in(event, &1))
+  @impl true
+  def handle_cast({:send, %Event{} = event}, %__MODULE__{} = state) do
+    state = update_in(state.async_queue, &:queue.in(event, &1))
 
-  #   state =
-  #     if :queue.len(state.async_queue) >= @async_queue_max_size do
-  #       flush_async_queue(state)
-  #     else
-  #       state
-  #     end
+    state =
+      if :queue.len(state.async_queue) >= @async_queue_max_size do
+        flush_async_queue(state)
+      else
+        state
+      end
 
-  #   {:noreply, state}
-  # end
+    {:noreply, state}
+  end
 
-  # @impl true
-  # def handle_info(:flush_async_queue, %__MODULE__{} = state) do
-  #   state = flush_async_queue(state)
-  #   Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
-  #   {:noreply, state}
-  # end
+  @impl true
+  def handle_info(:flush_async_queue, %__MODULE__{} = state) do
+    state = flush_async_queue(state)
+    Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
+    {:noreply, state}
+  end
 
-  # ## Helpers
+  ## Helpers
 
-  # defp flush_async_queue(%__MODULE__{} = state) do
-  #   {events, state} = get_and_update_in(state.async_queue, &{&1, :queue.new()})
+  defp flush_async_queue(%__MODULE__{async_queue: events_queue} = state) do
+    if :queue.is_empty(events_queue) do
+      state
+    else
+      events = :queue.to_list(events_queue)
 
-  #   envelope = Envelope.new(events)
+      events
+      |> Envelope.new()
+      |> Transport.post_envelope()
+      |> maybe_log_send_result(events)
 
-  #   case Envelope.to_binary(envelope) do
-  #     {:ok, binary} ->
-  #       try_request(endpoint, auth_headers, {event, body}, Config.send_max_attempts())
-  #       |> maybe_call_after_send_event(event)
-  #       |> maybe_log_result(event)
+      %__MODULE__{state | async_queue: :queue.new()}
+    end
+  end
 
-  #     {:error, reason} ->
-  #       IO.puts(
-  #         :stderr,
-  #         "Failed to encode Sentry events when trying to send them async: #{inspect(reason)} "
-  #       )
-  #   end
+  defp maybe_log_send_result(send_result, events) do
+    if Enum.any?(events, &(&1.__source__ == :logger)) do
+      :ok
+    else
+      message =
+        case send_result do
+          {:error, :invalid_dsn} ->
+            "Cannot send Sentry event because of invalid DSN"
 
-  #   state
-  # end
+          {:error, {:invalid_json, error}} ->
+            "Unable to encode JSON Sentry error - #{inspect(error)}"
+
+          {:error, {:request_failure, last_error}} ->
+            case last_error do
+              {kind, data, stacktrace}
+              when kind in [:exit, :throw, :error] and is_list(stacktrace) ->
+                Exception.format(kind, data, stacktrace)
+
+              _other ->
+                "Error in HTTP Request to Sentry - #{inspect(last_error)}"
+            end
+
+          {:error, error} ->
+            inspect(error)
+
+          _ ->
+            nil
+        end
+
+      if message do
+        level = Config.log_level()
+        Logger.log(level, fn -> ["Failed to send Sentry event. ", message] end, domain: [:sentry])
+      end
+    end
+  end
 end

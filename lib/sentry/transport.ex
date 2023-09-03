@@ -6,19 +6,21 @@ defmodule Sentry.Transport do
   alias Sentry.Config
   alias Sentry.Envelope
 
-  @default_retries [1000, 2000, 4000, 8000]
+  # @default_retries [1000, 2000, 4000, 8000]
+  @default_retries []
   @sentry_version 5
   @sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}"
 
   # The "retries" parameter is there for better testing.
-  @spec post_envelope(Envelope.t(), [non_neg_integer()]) :: :ok
+  @spec post_envelope(Envelope.t(), [non_neg_integer()]) ::
+          {:ok, envelope_id :: String.t()} | {:error, term()}
   def post_envelope(%Envelope{} = envelope, retries \\ @default_retries) when is_list(retries) do
-    with {:ok, body} <- Envelope.to_binary(envelope),
+    with {:json, {:ok, body}} <- {:json, Envelope.to_binary(envelope)},
          {:ok, endpoint, headers} <- get_endpoint_and_headers() do
       post_envelope_with_retries(endpoint, headers, body, retries)
     else
-      {:error, _reason} = error ->
-        error
+      {:json, {:error, reason}} -> {:error, {:invalid_json, reason}}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -66,7 +68,9 @@ defmodule Sentry.Transport do
     end
   end
 
-  defp get_dsn do
+  # Made public for testing.
+  @spec get_dsn() :: {String.t(), String.t(), String.t()} | {:error, :invalid_dsn}
+  def get_dsn do
     with dsn when is_binary(dsn) <- Config.dsn(),
          %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
          when is_binary(path) and is_binary(userinfo) <- URI.parse(dsn),
