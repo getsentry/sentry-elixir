@@ -104,11 +104,16 @@ defmodule Sentry.Client do
 
   @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
+    json_library = Config.json_library()
+
     event
     |> Map.from_struct()
     |> update_if_present(:message, &String.slice(&1, 0, @max_message_length))
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
     |> update_if_present(:sdk, &Map.from_struct/1)
+    |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
+    |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
+    |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:exception, &[render_exception(&1)])
     |> Map.drop([:__source__, :__original_exception__])
   end
@@ -119,6 +124,47 @@ defmodule Sentry.Client do
     |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
       %{frames: Enum.map(frames, &Map.from_struct/1)}
     end)
+  end
+
+  defp sanitize_non_jsonable_values(map, json_library) do
+    # We update the existing map instead of building a new one from scratch
+    # due to performance reasons. See the docs for :maps.map/2.
+    Enum.reduce(map, map, fn {key, value}, acc ->
+      case sanitize_non_jsonable_value(value, json_library) do
+        :unchanged -> acc
+        {:changed, value} -> Map.put(acc, key, value)
+      end
+    end)
+  end
+
+  # For performance, skip all the keys that we know for sure are JSON encodable.
+  defp sanitize_non_jsonable_value(value, _json_library)
+       when is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value) do
+    :unchanged
+  end
+
+  defp sanitize_non_jsonable_value(value, json_library) when is_list(value) do
+    mapped =
+      Enum.map(value, fn value ->
+        case sanitize_non_jsonable_value(value, json_library) do
+          :unchanged -> value
+          {:changed, value} -> value
+        end
+      end)
+
+    {:changed, mapped}
+  end
+
+  defp sanitize_non_jsonable_value(value, json_library)
+       when is_map(value) and not is_struct(value) do
+    {:changed, sanitize_non_jsonable_values(value, json_library)}
+  end
+
+  defp sanitize_non_jsonable_value(value, json_library) do
+    case json_library.encode(value) do
+      {:ok, _encoded} -> :unchanged
+      {:error, _reason} -> {:changed, inspect(value)}
+    end
   end
 
   defp update_if_present(map, key, fun) do
