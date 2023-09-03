@@ -13,6 +13,10 @@
 - Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
 - Removed the `Sentry.Event.sentry_exception/0` type
 
+### Improvements
+
+- Make the `Sentry.HTTPClient.child_spec/0` callback optional
+
 ## 8.1.0
 
 ### Various fixes & improvements

@@ -7,13 +7,21 @@ defmodule Sentry.Application do
 
   @impl true
   def start(_type, _opts) do
-    children = [
-      {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
-      Config.client().child_spec(),
-      Sentry.Transport.SenderPool
-    ]
+    http_client = Config.client()
 
-    if Config.client() == Sentry.HackneyClient do
+    maybe_http_client_spec =
+      if Code.ensure_loaded?(http_client) and function_exported?(http_client, :child_spec, 0) do
+        [http_client.child_spec()]
+      else
+        []
+      end
+
+    children =
+      [{Registry, keys: :unique, name: Sentry.Transport.SenderRegistry}] ++
+        maybe_http_client_spec ++
+        [Sentry.Transport.SenderPool]
+
+    if http_client == Sentry.HackneyClient do
       unless Code.ensure_loaded?(:hackney) do
         raise """
         cannot start the :sentry application because the HTTP client is set to \
@@ -35,8 +43,7 @@ defmodule Sentry.Application do
     Config.validate_environment_name!()
     Config.assert_dsn_has_no_query_params!()
 
-    opts = [strategy: :one_for_one, name: Sentry.Supervisor]
-    Supervisor.start_link(children, opts)
+    Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end
 
   defp validate_json_config!() do
