@@ -139,7 +139,7 @@ defmodule Sentry.ClientTest do
         |> Plug.Conn.resp(400, "{}")
       end)
 
-      modify_env(:sentry, log_level: :notice)
+      modify_env(:sentry, log_level: :info)
 
       event = Event.create_event(message: "Something went wrong")
 
@@ -148,7 +148,7 @@ defmodule Sentry.ClientTest do
           Client.send_event(event, result: :sync, request_retries: [])
         end)
 
-      assert log =~ "[notice]"
+      assert log =~ "[info]"
       assert log =~ "Failed to send Sentry event."
       assert log =~ "Received 400 from Sentry server: Rate limiting."
     end
