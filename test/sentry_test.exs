@@ -55,7 +55,7 @@ defmodule SentryTest do
     )
 
     capture_log(fn ->
-      assert {:error, _} = Sentry.capture_message("error", [])
+      assert {:error, _} = Sentry.capture_message("error", request_retries: [])
     end)
 
     Bypass.pass(bypass)

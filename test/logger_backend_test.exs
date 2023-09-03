@@ -1,10 +1,14 @@
 defmodule Sentry.LoggerBackendTest do
   use ExUnit.Case
 
-  import ExUnit.CaptureLog
-  import Sentry.TestEnvironmentHelper
+  import Mox
 
   require Logger
+
+  @moduletag :capture_log
+
+  setup :set_mox_global
+  setup :verify_on_exit!
 
   setup do
     {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
@@ -15,238 +19,124 @@ defmodule Sentry.LoggerBackendTest do
     end)
   end
 
-  test "exception makes call to Sentry API" do
-    Process.flag(:trap_exit, true)
-    bypass = Bypass.open()
+  defp expect_sender_call do
     pid = self()
+    ref = make_ref()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "RuntimeError"
-      assert body =~ "Unique Error"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    expect(Sentry.TransportSenderMock, :send_async, fn event ->
+      send(pid, {ref, event})
+      :ok
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      Task.start(fn ->
-        raise "Unique Error"
-      end)
-
-      assert_receive "API called"
-    end)
+    ref
   end
 
-  test "GenServer throw makes call to Sentry API" do
+  test "a logged raised exception is reported" do
+    Process.flag(:trap_exit, true)
+
+    ref = expect_sender_call()
+
+    Task.start(fn ->
+      raise "Unique Error"
+    end)
+
+    assert_receive {^ref, event}
+    assert event.exception.type == "RuntimeError"
+    assert event.exception.value == "Unique Error"
+  end
+
+  test "a GenServer throw is reported" do
     self_pid = self()
     Process.flag(:trap_exit, true)
-    bypass = Bypass.open()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    ref = expect_sender_call()
 
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert List.first(event.exception)["value"] ==
-               ~s[** (exit) bad return value: "I am throwing"]
-
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      send(self_pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
-      Sentry.TestGenServer.do_throw(pid)
-      assert_receive "terminating"
-      assert_receive "API called"
-    end)
+    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
+    Sentry.TestGenServer.do_throw(pid)
+    assert_receive "terminating"
+    assert_receive {^ref, event}
+    assert event.exception.value == ~s[** (exit) bad return value: "I am throwing"]
   end
 
-  test "abnormal GenServer exit makes call to Sentry API" do
+  test "abnormal GenServer exit is reported" do
     self_pid = self()
     Process.flag(:trap_exit, true)
-    bypass = Bypass.open()
+    ref = expect_sender_call()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert List.first(event.exception)["type"] == "Sentry.CrashError"
-      assert List.first(event.exception)["value"] == "** (exit) :bad_exit"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      send(self_pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
-      Sentry.TestGenServer.bad_exit(pid)
-      assert_receive "terminating"
-      assert_receive "API called"
-    end)
+    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
+    Sentry.TestGenServer.bad_exit(pid)
+    assert_receive "terminating"
+    assert_receive {^ref, event}
+    assert event.exception.type == "Sentry.CrashError"
+    assert event.exception.value == "** (exit) :bad_exit"
   end
 
-  test "Bad function call causing GenServer crash makes call to Sentry API" do
+  test "bad function call causing GenServer crash is reported" do
     self_pid = self()
     Process.flag(:trap_exit, true)
-    bypass = Bypass.open()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    ref = expect_sender_call()
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
 
-      assert %{
-               "in_app" => false,
-               "module" => "Elixir.NaiveDateTime",
-               "context_line" => nil,
-               "pre_context" => [],
-               "post_context" => []
-             } = List.last(List.first(event.exception)["stacktrace"]["frames"])
+    Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
+    Sentry.TestGenServer.invalid_function(pid)
+    assert_receive "terminating"
+    assert_receive {^ref, event}
 
-      assert [%{"timestamp" => _, "message" => "test"}] = event.breadcrumbs
+    assert event.exception.type == "FunctionClauseError"
+    assert [%{message: "test"}] = event.breadcrumbs
 
-      assert List.first(event.exception)["type"] == "FunctionClauseError"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      send(self_pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
-
-      Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
-      Sentry.TestGenServer.invalid_function(pid)
-      assert_receive "terminating"
-      assert_receive "API called"
-      Bypass.down(bypass)
-    end)
+    assert %{
+             in_app: false,
+             module: NaiveDateTime,
+             context_line: nil,
+             pre_context: [],
+             post_context: []
+           } = List.last(event.exception.stacktrace.frames)
   end
 
-  test "captures errors from spawn() in Plug app" do
-    bypass = Bypass.open()
-    pid = self()
-
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert length(List.first(event.exception)["stacktrace"]["frames"]) == 1
-
-      assert List.first(List.first(event.exception)["stacktrace"]["frames"])["filename"] ==
-               "test/support/example_plug_application.ex"
-
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      Plug.Test.conn(:get, "/spawn_error_route")
-      |> Sentry.ExamplePlugApplication.call([])
-
-      assert_receive "API called"
-    end)
-  end
-
-  test "GenServer timeout makes call to Sentry API" do
+  test "GenServer timeout is reported" do
     self_pid = self()
     Process.flag(:trap_exit, true)
-    bypass = Bypass.open()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert List.first(event.exception)["type"] == "Sentry.CrashError"
-      assert List.first(event.exception)["value"] =~ "** (EXIT) time out"
-      assert List.first(event.exception)["value"] =~ "GenServer\.call"
-
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      send(self_pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    ref = expect_sender_call()
 
     {:ok, pid1} = Sentry.TestGenServer.start_link(self_pid)
 
-    capture_log(fn ->
-      Task.start(fn ->
-        GenServer.call(pid1, {:sleep, 20}, 0)
-      end)
-
-      assert_receive "API called"
+    Task.start(fn ->
+      GenServer.call(pid1, {:sleep, 20}, 0)
     end)
+
+    assert_receive {^ref, event}
+
+    assert event.exception.type == "Sentry.CrashError"
+    assert event.exception.value =~ "** (EXIT) time out"
+    assert event.exception.value =~ "GenServer\.call"
   end
 
-  test "only sends one error when a Plug process when configured to exclude cowboy domain" do
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
-    bypass = Bypass.open()
-    pid = self()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+  test "captures errors from spawn/0 in Plug app" do
+    ref = expect_sender_call()
 
-    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
+    :get
+    |> Plug.Test.conn("/spawn_error_route")
+    |> Plug.run([{Sentry.ExamplePlugApplication, []}])
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    assert_receive {^ref, event}
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
-
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-      assert_receive "API called"
-      refute_receive "API called"
-    end)
-  after
-    :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
+    assert [stacktrace_frame] = event.exception.stacktrace.frames
+    assert stacktrace_frame.filename == "test/support/example_plug_application.ex"
   end
 
   test "sends two errors when a Plug process crashes if cowboy domain is not excluded" do
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
-    bypass = Bypass.open()
-    pid = self()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+    ref = expect_sender_call()
 
     {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      _event = TestHelpers.decode_event_from_envelope!(body)
-
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-      assert_receive "API called"
-      assert_receive "API called"
-    end)
+    :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+    assert_receive {^ref, _event}
   after
     :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
@@ -258,110 +148,62 @@ defmodule Sentry.LoggerBackendTest do
       excluded_domains: [:test_domain]
     )
 
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
+    ref = expect_sender_call()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Logger.error("no domain")
+    Logger.error("test_domain", domain: [:test_domain])
 
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      send(pid, event.message)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Logger.error("no domain")
-      Logger.error("test_domain", domain: [:test_domain])
-      assert_receive("no domain")
-      refute_receive("test_domain")
-    end)
+    assert_receive {^ref, event}
+    assert event.message == "no domain"
   end
 
-  test "includes Logger.metadata for keys configured to be included" do
+  test "includes Logger metadata for keys configured to be included" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :number, :map, :list])
-    bypass = Bypass.open()
     Process.flag(:trap_exit, true)
-    pid = self()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    ref = expect_sender_call()
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    {:ok, pid} = Sentry.TestGenServer.start_link(self())
+    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+    Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+    Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
+    Sentry.TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
+    Sentry.TestGenServer.invalid_function(pid)
+    assert_receive "terminating"
 
-      assert event.extra["logger_metadata"]["string"] == "string"
-      assert event.extra["logger_metadata"]["map"] == %{"a" => "b"}
-      assert event.extra["logger_metadata"]["list"] == [1, 2, 3]
-      assert event.extra["logger_metadata"]["number"] == 43
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      {:ok, pid} = Sentry.TestGenServer.start_link(pid)
-      Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
-      Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
-      Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
-      Sentry.TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
-      Sentry.TestGenServer.invalid_function(pid)
-      assert_receive "terminating"
-      assert_receive "API called"
-    end)
+    assert_receive {^ref, event}
+    assert event.extra.logger_metadata.string == "string"
+    assert event.extra.logger_metadata.map == %{a: "b"}
+    assert event.extra.logger_metadata.list == [1, 2, 3]
+    assert event.extra.logger_metadata.number == 43
   end
 
-  test "does not include Logger.metadata when disabled" do
+  test "does not include Logger metadata when disabled" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
-    bypass = Bypass.open()
     Process.flag(:trap_exit, true)
-    pid = self()
+    ref = expect_sender_call()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    {:ok, pid} = Sentry.TestGenServer.start_link(self())
+    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+    Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
+    Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
+    Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
+    Sentry.TestGenServer.invalid_function(pid)
+    assert_receive "terminating"
 
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert event.extra["logger_metadata"] == %{}
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-
-    capture_log(fn ->
-      {:ok, pid} = Sentry.TestGenServer.start_link(pid)
-      Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
-      Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
-      Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
-      Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
-      Sentry.TestGenServer.invalid_function(pid)
-      assert_receive "terminating"
-      assert_receive "API called"
-    end)
+    assert_receive {^ref, event}
+    assert event.extra.logger_metadata == %{}
   end
 
-  test "sends all messages if capture_log_messages is true" do
+  test "sends all messages if :capture_log_messages is true" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    ref = expect_sender_call()
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    Logger.error("Testing")
 
-      assert event.message == "testing"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Logger.error("testing")
-      assert_receive("API called")
-    end)
+    assert_receive {^ref, event}
+    assert event.message == "Testing"
   after
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
   end
@@ -372,135 +214,64 @@ defmodule Sentry.LoggerBackendTest do
       capture_log_messages: true
     )
 
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
+    ref = expect_sender_call()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Sentry.Context.set_user_context(%{user_id: 3})
+    Logger.log(:warning, "Testing")
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    assert_receive {^ref, event}
 
-      assert event.message == "testing"
-      assert event.user["user_id"] == 3
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Sentry.Context.set_user_context(%{user_id: 3})
-      Logger.log(:warning, "testing")
-      assert_receive("API called")
-    end)
+    assert event.message == "Testing"
+    assert event.user.user_id == 3
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
   test "does not send debug messages when configured to :error" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    ref = expect_sender_call()
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    Sentry.Context.set_user_context(%{user_id: 3})
 
-      assert event.message == "error"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+    Logger.error("Error")
+    Logger.debug("Debug")
 
-    capture_log(fn ->
-      Sentry.Context.set_user_context(%{user_id: 3})
-      Logger.error("error")
-      Logger.debug("debug")
-      assert_receive("API called")
-      refute_receive("API called")
-    end)
+    assert_receive {^ref, event}
+
+    assert event.message == "Error"
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
-  test "sentry metadata is retrieved from callers" do
+  test "Sentry metadata and extra context are retrieved from callers" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
+    ref = expect_sender_call()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+    Sentry.Context.set_user_context(%{user_id: 3})
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    {:ok, task} = Task.start_link(__MODULE__, :task, [self()])
+    send(task, :go)
 
-      assert event.user["user_id"] == 3
-      assert List.first(event.exception)["type"] == "RuntimeError"
-      assert List.first(event.exception)["value"] == "oops"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+    assert_receive {^ref, event}
 
-    capture_log(fn ->
-      Sentry.Context.set_user_context(%{user_id: 3})
-
-      {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
-      send(task, :go)
-
-      assert_receive("API called")
-    end)
-  end
-
-  test "sentry extra context is retrieved from callers" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
-
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert event.extra["day_of_week"] == "Friday"
-      assert List.first(event.exception)["type"] == "RuntimeError"
-      assert List.first(event.exception)["value"] == "oops"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
-
-      {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
-      send(task, :go)
-
-      assert_receive("API called")
-    end)
+    assert event.user.user_id == 3
+    assert event.extra.day_of_week == "Friday"
+    assert event.exception.type == "RuntimeError"
+    assert event.exception.value == "oops"
   end
 
   test "handles malformed :callers metadata" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
-    {:ok, dead_pid} = Task.start(fn -> nil end)
+    ref = expect_sender_call()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    dead_pid = spawn(fn -> :ok end)
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+    Logger.error("Error", callers: [dead_pid, nil])
 
-      assert event.message == "error"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Logger.error("error", callers: [dead_pid, nil])
-
-      assert_receive("API called")
-    end)
+    assert_receive {^ref, event}
+    assert event.message == "Error"
   end
 
   test "sets event level to Logger message level" do
@@ -509,25 +280,12 @@ defmodule Sentry.LoggerBackendTest do
       capture_log_messages: true
     )
 
-    bypass = Bypass.open()
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    pid = self()
+    ref = expect_sender_call()
 
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Logger.log(:warning, "warn")
 
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert event.message == "warn"
-      assert event.level == "warning"
-      send(pid, "API called")
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    capture_log(fn ->
-      Logger.log(:warning, "warn")
-      assert_receive("API called")
-    end)
+    assert_receive {^ref, event}
+    assert event.level == "warning"
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end

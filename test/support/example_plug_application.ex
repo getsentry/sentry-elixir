@@ -42,23 +42,24 @@ defmodule Sentry.ExamplePlugApplication do
   end
 
   def handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack}) do
-    response = case Sentry.get_last_event_id_and_source() do
-      {event_id, :plug} ->
-        opts =
-          %{title: "Testing", eventId: event_id}
-          |> Jason.encode!()
+    response =
+      case Sentry.get_last_event_id_and_source() do
+        {event_id, :plug} ->
+          opts =
+            %{title: "Testing", eventId: event_id}
+            |> Jason.encode!()
 
-        """
-        <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
-        <script>
-        Sentry.init({ dsn: '#{Sentry.Config.dsn()}' });
-        Sentry.showReportDialog(#{opts})
-        </script>
-        """
+          """
+          <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
+          <script>
+          Sentry.init({ dsn: '#{Sentry.Config.dsn()}' });
+          Sentry.showReportDialog(#{opts})
+          </script>
+          """
 
-      _ ->
-        "error"
-    end
+        _ ->
+          "error"
+      end
 
     send_resp(conn, conn.status, response)
   end

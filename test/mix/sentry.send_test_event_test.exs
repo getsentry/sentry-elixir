@@ -62,7 +62,10 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 500, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_env(:sentry,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      request_retries: []
+    )
 
     assert capture_log(fn ->
              assert capture_io(fn ->

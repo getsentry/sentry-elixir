@@ -4,7 +4,7 @@ defmodule Sentry.Envelope do
 
   alias Sentry.{Config, Event, UUID}
 
-  @type t :: %__MODULE__{
+  @type t() :: %__MODULE__{
           event_id: UUID.t(),
           items: [Event.t(), ...]
         }
@@ -13,13 +13,13 @@ defmodule Sentry.Envelope do
   defstruct [:event_id, :items]
 
   @doc """
-  Creates a new empty envelope.
+  Creates a new envelope containing the given events.
   """
-  @spec new(Event.t()) :: t()
-  def new(%{event_id: event_id} = event) do
+  @spec new([Event.t(), ...]) :: t()
+  def new([%Event{event_id: event_id} | _rest] = events) do
     %__MODULE__{
       event_id: event_id,
-      items: [event]
+      items: events
     }
   end
 
