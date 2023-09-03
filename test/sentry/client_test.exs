@@ -17,13 +17,46 @@ defmodule Sentry.ClientTest do
 
   describe "render_event/1" do
     test "transforms structs into maps" do
-      event = Sentry.Event.transform_exception(%RuntimeError{message: "foo"}, user: %{id: 1})
+      event = Event.transform_exception(%RuntimeError{message: "foo"}, user: %{id: 1})
 
       assert %{
                user: %{id: 1},
                exception: [%{type: "RuntimeError", value: "foo"}],
                sdk: %{name: "sentry-elixir"}
              } = Client.render_event(event)
+    end
+
+    test "truncates the message to a max length" do
+      max_length = 8_192
+      event = Event.create_event(message: String.duplicate("a", max_length + 1))
+      assert Client.render_event(event).message == String.duplicate("a", max_length)
+    end
+
+    test "safely inspects terms that cannot be converted to JSON" do
+      event =
+        Event.create_event(
+          extra: %{
+            valid: "yes",
+            self: self(),
+            keyword: [key: "value"],
+            nested: %{self: self()}
+          },
+          user: %{id: "valid-ID", email: {"user", "@example.com"}},
+          tags: %{valid: "yes", tokens: MapSet.new([1])}
+        )
+
+      rendered = Client.render_event(event)
+
+      assert rendered.extra.valid == "yes"
+      assert rendered.extra.self == inspect(self())
+      assert rendered.extra.keyword == [~s({:key, "value"})]
+      assert rendered.extra.nested.self == inspect(self())
+
+      assert rendered.user.id == "valid-ID"
+      assert rendered.user.email == ~s({"user", "@example.com"})
+
+      assert rendered.tags.valid == "yes"
+      assert rendered.tags.tokens == ~s{MapSet.new([1])}
     end
   end
 
@@ -154,8 +187,13 @@ defmodule Sentry.ClientTest do
     end
 
     test "logs an error when unable to encode JSON" do
-      event =
-        Event.create_event(message: "Something went wrong", extra: %{metadata: [keyword: "list"]})
+      defmodule BadJSONClient do
+        def encode(_term), do: {:error, :im_just_bad}
+      end
+
+      modify_env(:sentry, json_library: BadJSONClient)
+
+      event = Event.create_event(message: "Something went wrong")
 
       assert capture_log(fn ->
                Client.send_event(event, result: :sync)
