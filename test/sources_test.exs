@@ -6,8 +6,8 @@ defmodule Sentry.SourcesTest do
   describe "load_files/0" do
     test "loads files" do
       paths = [
-        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_a",
-        File.cwd!() <> "/test/support/example-umbrella-app/apps/app_b"
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_a",
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_b"
       ]
 
       assert %{
@@ -30,8 +30,8 @@ defmodule Sentry.SourcesTest do
 
     test "raises error when two files have the same relative path" do
       paths = [
-        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_a",
-        File.cwd!() <> "/test/support/example-umbrella-app-with-conflict/apps/app_b"
+        File.cwd!() <> "/test/fixtures/example-umbrella-app-with-conflict/apps/app_a",
+        File.cwd!() <> "/test/fixtures/example-umbrella-app-with-conflict/apps/app_b"
       ]
 
       expected_error_message = """

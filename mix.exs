@@ -63,7 +63,7 @@ defmodule Sentry.Mixfile do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["test/mocks"] ++ elixirc_paths(:dev)
+  defp elixirc_paths(:test), do: ["test/support"] ++ elixirc_paths(:dev)
   defp elixirc_paths(_other), do: ["lib"]
 
   defp deps do

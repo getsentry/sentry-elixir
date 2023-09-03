@@ -3,6 +3,8 @@ defmodule Sentry.LoggerBackendTest do
 
   import Mox
 
+  alias Sentry.TestGenServer
+
   require Logger
 
   @moduletag :capture_log
@@ -32,8 +34,6 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "a logged raised exception is reported" do
-    Process.flag(:trap_exit, true)
-
     ref = expect_sender_call()
 
     Task.start(fn ->
@@ -46,36 +46,28 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "a GenServer throw is reported" do
-    self_pid = self()
-    Process.flag(:trap_exit, true)
-
     ref = expect_sender_call()
 
-    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
-    Sentry.TestGenServer.do_throw(pid)
+    pid = start_supervised!(TestGenServer)
+    Sentry.TestGenServer.throw(pid)
     assert_receive {^ref, event}
     assert event.exception.value == ~s[** (exit) bad return value: "I am throwing"]
   end
 
   test "abnormal GenServer exit is reported" do
-    self_pid = self()
-    Process.flag(:trap_exit, true)
     ref = expect_sender_call()
 
-    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
-    Sentry.TestGenServer.bad_exit(pid)
+    pid = start_supervised!(TestGenServer)
+    Sentry.TestGenServer.exit(pid)
     assert_receive {^ref, event}
     assert event.exception.type == "Sentry.CrashError"
     assert event.exception.value == "** (exit) :bad_exit"
   end
 
   test "bad function call causing GenServer crash is reported" do
-    self_pid = self()
-    Process.flag(:trap_exit, true)
-
     ref = expect_sender_call()
 
-    {:ok, pid} = Sentry.TestGenServer.start_link(self_pid)
+    pid = start_supervised!(TestGenServer)
 
     Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
     Sentry.TestGenServer.invalid_function(pid)
@@ -94,15 +86,12 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "GenServer timeout is reported" do
-    self_pid = self()
-    Process.flag(:trap_exit, true)
-
     ref = expect_sender_call()
 
-    {:ok, pid1} = Sentry.TestGenServer.start_link(self_pid)
+    pid = start_supervised!(TestGenServer)
 
     Task.start(fn ->
-      GenServer.call(pid1, {:sleep, 20}, 0)
+      Sentry.TestGenServer.sleep(pid, _timeout = 0)
     end)
 
     assert_receive {^ref, event}
@@ -156,11 +145,10 @@ defmodule Sentry.LoggerBackendTest do
 
   test "includes Logger metadata for keys configured to be included" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :number, :map, :list])
-    Process.flag(:trap_exit, true)
 
     ref = expect_sender_call()
 
-    {:ok, pid} = Sentry.TestGenServer.start_link(self())
+    pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
     Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
     Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
@@ -176,10 +164,9 @@ defmodule Sentry.LoggerBackendTest do
 
   test "does not include Logger metadata when disabled" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
-    Process.flag(:trap_exit, true)
     ref = expect_sender_call()
 
-    {:ok, pid} = Sentry.TestGenServer.start_link(self())
+    pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
     Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
     Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)

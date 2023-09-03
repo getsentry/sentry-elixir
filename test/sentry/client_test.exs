@@ -114,6 +114,12 @@ defmodule Sentry.ClientTest do
     end
 
     test "calls MFA :before_send_event callback", %{bypass: bypass} do
+      defmodule CallbackModuleLoggerMeta do
+        def before_send_event(event) do
+          update_in(event.extra, &Map.merge(&1, Map.new(Logger.metadata())))
+        end
+      end
+
       Bypass.expect(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
@@ -124,19 +130,28 @@ defmodule Sentry.ClientTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(:sentry, before_send_event: {Sentry.BeforeSendEventTest, :before_send_event})
+      modify_env(:sentry, before_send_event: {CallbackModuleLoggerMeta, :before_send_event})
 
       event = Event.create_event([])
       Logger.metadata(key: "value", user_id: 1)
 
       assert {:ok, _} = Client.send_event(event, result: :sync)
+    after
+      :code.delete(CallbackModuleLoggerMeta)
+      :code.purge(CallbackModuleLoggerMeta)
     end
 
     test "if :before_send_event callback returns falsey, the event is not sent" do
-      modify_env(
-        :sentry,
-        before_send_event: {Sentry.BeforeSendEventTest, :before_send_event_ignore_arithmetic}
-      )
+      defmodule CallbackModuleArithmeticError do
+        def before_send_event(event) do
+          case event.__original_exception__ do
+            %ArithmeticError{} -> false
+            _ -> event
+          end
+        end
+      end
+
+      modify_env(:sentry, before_send_event: {CallbackModuleArithmeticError, :before_send_event})
 
       try do
         :rand.uniform() + "1"
@@ -145,6 +160,9 @@ defmodule Sentry.ClientTest do
           event = Event.transform_exception(exception, _opts = [])
           assert Client.send_event(event, result: :sync) == :excluded
       end
+    after
+      :code.delete(CallbackModuleArithmeticError)
+      :code.purge(CallbackModuleArithmeticError)
     end
 
     test "calls anonymous :after_send_event callback synchronously", %{bypass: bypass} do

@@ -3,6 +3,13 @@ defmodule SentryTest do
   import ExUnit.CaptureLog
   import Sentry.TestEnvironmentHelper
 
+  defmodule TestFilter do
+    @behaviour Sentry.EventFilter
+
+    def exclude_exception?(%ArithmeticError{}, :plug), do: true
+    def exclude_exception?(_, _), do: false
+  end
+
   test "excludes events properly" do
     bypass = Bypass.open()
 
@@ -16,7 +23,7 @@ defmodule SentryTest do
 
     modify_env(
       :sentry,
-      filter: Sentry.TestFilter,
+      filter: TestFilter,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
@@ -50,7 +57,7 @@ defmodule SentryTest do
 
     modify_env(
       :sentry,
-      filter: Sentry.TestFilter,
+      filter: TestFilter,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
 
