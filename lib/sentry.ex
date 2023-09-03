@@ -242,7 +242,9 @@ defmodule Sentry do
   ## Event Callbacks
 
   You can configure the `:before_send_event` and `:after_send_event` options to
-  customize what happens before and/or after sending an event. For example, you
+  customize what happens before and/or after sending an event. The `:before_send_event`
+  callback must be of type `t:before_send_event_callback/0` and the `:after_send_event`
+  callback must be of type `t:after_send_event_callback/0`. For example, you
   can set:
 
       config :sentry,
@@ -254,7 +256,7 @@ defmodule Sentry do
       defmodule MyModule do
         def before_send(event) do
           metadata = Map.new(Logger.metadata())
-          %{event | extra: Map.merge(event.extra, metadata)}
+          %Sentry.Event{event | extra: Map.merge(event.extra, metadata)}
         end
 
         def after_send_event(event, result) do
@@ -262,7 +264,7 @@ defmodule Sentry do
             {:ok, id} ->
               Logger.info("Successfully sent event!")
 
-            _ ->
+            {:error, _reason} ->
               Logger.info(fn -> "Did not successfully send event! #{inspect(event)}" end)
           end
         end
