@@ -21,6 +21,51 @@ defmodule Sentry.HTTPClient do
   >
   > The `c:child_spec/0` callback is optional only since v9.0.0 of Sentry, and was required
   > before.
+
+  ## Alternative Clients
+
+  Let's look at an example of using an alternative HTTP client. In this example, we'll
+  use [Finch](https://github.com/sneako/finch), a lightweight HTTP client for Elixir.
+
+  First, we need to add Finch to our dependencies:
+
+      # In mix.exs
+      defp deps do
+        [
+          # ...
+          {:finch, "~> 0.16"}
+        ]
+      end
+
+  Then, we need to define a module that implements the `Sentry.HTTPClient` behaviour:
+
+      defmodule MyApp.SentryFinchHTTPClient do
+        @behaviour Sentry.HTTPClient
+
+        @impl true
+        def child_spec do
+          Supervisor.child_spec({Finch, name: __MODULE__}, id: __MODULE__)
+        end
+
+        @impl true
+        def post(url, headers, body) do
+          request = Finch.build(:post, url, headers, body)
+
+          case Finch.request(request, __MODULE__) do
+            {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
+              {:ok, status, headers, body}
+
+            {:error, error} ->
+              {:error, error}
+          end
+        end
+      end
+
+  Last, we need to configure Sentry to use our new HTTP client:
+
+      config :sentry,
+        client: MyApp.SentryFinchHTTPClient
+
   """
 
   @typedoc """
