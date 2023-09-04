@@ -131,14 +131,14 @@ defmodule Sentry.LoggerBackend do
 
         case msg_to_binary(msg) do
           {:ok, msg} -> Sentry.capture_message(msg, opts)
-          {:error, _} -> :ok
+          :error -> :ok
         end
 
       _ ->
         if state.capture_log_messages do
           case msg_to_binary(msg) do
             {:ok, msg} -> Sentry.capture_message(msg, opts)
-            {:error, _} -> :ok
+            :error -> :ok
           end
         end
     end
