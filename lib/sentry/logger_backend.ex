@@ -48,6 +48,8 @@ defmodule Sentry.LoggerBackend do
 
   @behaviour :gen_event
 
+  alias Sentry.LoggerUtils
+
   ## State
 
   defstruct level: :error, metadata: [], excluded_domains: [:cowboy], capture_log_messages: false
@@ -83,7 +85,7 @@ defmodule Sentry.LoggerBackend do
     level = maybe_ensure_warning_level(level)
 
     if Logger.compare_levels(level, state.level) != :lt and
-         not excluded_domain?(meta[:domain], state) do
+         not LoggerUtils.excluded_domain?(meta[:domain], state.excluded_domains) do
       log(level, msg, meta, state)
     end
 
@@ -112,7 +114,7 @@ defmodule Sentry.LoggerBackend do
   ## Helpers
 
   defp log(level, msg, meta, state) do
-    opts = build_opts(level, meta, state)
+    opts = LoggerUtils.build_sentry_options(level, meta, state.metadata)
 
     case meta[:crash_reason] do
       # If the crash reason is an exception, we want to report the exception itself
@@ -150,63 +152,6 @@ defmodule Sentry.LoggerBackend do
     {:ok, :unicode.characters_to_binary(msg)}
   rescue
     _ -> :error
-  end
-
-  defp get_sentry_from_callers([head | tail]) when is_pid(head) do
-    with {:current_node, true} <- {:current_node, node(head) == Node.self()},
-         {:dictionary, [_ | _] = dictionary} <- :erlang.process_info(head, :dictionary),
-         %{sentry: sentry} <- dictionary[:"$logger_metadata$"] do
-      sentry
-    else
-      _ -> get_sentry_from_callers(tail)
-    end
-  end
-
-  defp get_sentry_from_callers(_), do: %{}
-
-  defp build_opts(level, meta, state) do
-    default_extra = %{logger_metadata: logger_metadata(meta, state), logger_level: level}
-
-    sentry =
-      (meta[:sentry] || get_sentry_from_callers(meta[:callers] || []))
-      |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
-
-    [
-      event_source: :logger,
-      level: elixir_logger_level_to_sentry_level(level),
-      result: :none
-    ] ++ Map.to_list(sentry)
-  end
-
-  defp excluded_domain?([head | rest], state) do
-    head in state.excluded_domains or excluded_domain?(rest, state)
-  end
-
-  defp excluded_domain?(_, _), do: false
-
-  defp logger_metadata(meta, %__MODULE__{metadata: :all}) do
-    Map.new(meta)
-  end
-
-  defp logger_metadata(meta, state) do
-    for key <- state.metadata,
-        value = meta[key],
-        do: {key, value},
-        into: %{}
-  end
-
-  defp elixir_logger_level_to_sentry_level(level) do
-    case level do
-      :emergency -> "fatal"
-      :alert -> "fatal"
-      :critical -> "fatal"
-      :error -> "error"
-      :warning -> "warning"
-      :warn -> "warning"
-      :notice -> "info"
-      :info -> "info"
-      :debug -> "debug"
-    end
   end
 
   defp maybe_ensure_warning_level(:warn), do: :warning
