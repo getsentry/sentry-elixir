@@ -115,26 +115,41 @@ defmodule Sentry.LoggerBackend do
     opts = build_opts(level, meta, state)
 
     case meta[:crash_reason] do
+      # If the crash reason is an exception, we want to report the exception itself
+      # for better event reporting.
       {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
         Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
 
+      # If the crash reason is a {reason, stacktrace} tuple, then we can report
+      # the originally-logged message (as a message) and include the stacktrace in
+      # the event plus the original crash reason in the extra data.
       {other, stacktrace} when is_list(stacktrace) ->
-        Sentry.capture_exception(
-          Sentry.CrashError.exception(other),
-          Keyword.put(opts, :stacktrace, stacktrace)
-        )
+        opts =
+          opts
+          |> Keyword.put(:stacktrace, stacktrace)
+          |> Keyword.update!(:extra, &Map.put(&1, :crash_reason, inspect(other)))
+
+        case msg_to_binary(msg) do
+          {:ok, msg} -> Sentry.capture_message(msg, opts)
+          :error -> :ok
+        end
 
       _ ->
         if state.capture_log_messages do
-          try do
-            if is_binary(msg), do: msg, else: :unicode.characters_to_binary(msg)
-          rescue
-            _ -> :ok
-          else
-            msg -> Sentry.capture_message(msg, opts)
+          case msg_to_binary(msg) do
+            {:ok, msg} -> Sentry.capture_message(msg, opts)
+            :error -> :ok
           end
         end
     end
+  end
+
+  defp msg_to_binary(msg) when is_binary(msg), do: {:ok, msg}
+
+  defp msg_to_binary(msg) do
+    {:ok, :unicode.characters_to_binary(msg)}
+  rescue
+    _ -> :error
   end
 
   defp get_sentry_from_callers([head | tail]) when is_pid(head) do

@@ -13,6 +13,7 @@
 - Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
 - Removed the `Sentry.Event.sentry_exception/0` type
 - Accept all environments by default by changing the default for the `:included_environments` configuration option from `[:prod]` to `:all`
+- Removed `Sentry.CrashError` — now, crash reports (detected through `Sentry.LoggerBackend`) that do not contain exceptions are reported as *messages* in Sentry
 
 ### Improvements
 

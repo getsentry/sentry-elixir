@@ -51,7 +51,11 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.throw(pid)
     assert_receive {^ref, event}
-    assert event.exception.value == ~s[** (exit) bad return value: "I am throwing"]
+    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert event.exception.value =~ "** (stop) bad return value: \"I am throwing\"\n"
+    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :throw}\n"
+    assert event.exception.value =~ "State: []"
+    assert event.exception.stacktrace.frames == []
   end
 
   test "abnormal GenServer exit is reported" do
@@ -60,8 +64,11 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.exit(pid)
     assert_receive {^ref, event}
-    assert event.exception.type == "Sentry.CrashError"
-    assert event.exception.value == "** (exit) :bad_exit"
+    assert event.exception.type == "message"
+    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert event.exception.value =~ "** (stop) :bad_exit\n"
+    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :exit}\n"
+    assert event.exception.value =~ "State: []"
   end
 
   test "bad function call causing GenServer crash is reported" do
@@ -90,15 +97,21 @@ defmodule Sentry.LoggerBackendTest do
 
     pid = start_supervised!(TestGenServer)
 
-    Task.start(fn ->
-      Sentry.TestGenServer.sleep(pid, _timeout = 0)
-    end)
+    {:ok, task_pid} =
+      Task.start(fn ->
+        Sentry.TestGenServer.sleep(pid, _timeout = 0)
+      end)
 
     assert_receive {^ref, event}
 
-    assert event.exception.type == "Sentry.CrashError"
+    assert event.exception.type == "message"
+
+    assert event.exception.value =~
+             "Task #{inspect(task_pid)} started from #{inspect(self())} terminating\n"
+
+    assert event.exception.value =~ "** (stop) exited in: GenServer.call("
     assert event.exception.value =~ "** (EXIT) time out"
-    assert event.exception.value =~ "GenServer\.call"
+    assert length(event.exception.stacktrace.frames) > 0
   end
 
   test "captures errors from spawn/0 in Plug app" do
