@@ -10,6 +10,17 @@ defmodule Sentry.HTTPClient do
       config :sentry,
         client: MyHTTPClient
 
+  ## Child Spec
+
+  The `c:child_spec/0` callback is a callback that should be used when you want Sentry
+  to start the HTTP client *under its supervision tree*. If you want to start your own
+  HTTP client under your application's supervision tree, just don't implement the callback
+  and Sentry won't do anything to start the client.
+
+  > #### Optional Since v9.0.0 {: .warning}
+  >
+  > The `c:child_spec/0` callback is optional only since v9.0.0 of Sentry, and was required
+  > before.
   """
 
   @typedoc """
@@ -33,6 +44,8 @@ defmodule Sentry.HTTPClient do
   Should return a **child specification** to start the HTTP client.
 
   For example, this can start a pool of HTTP connections dedicated to Sentry.
+  If not provided, Sentry won't do anything to start your HTTP client. See
+  [the module documentation](#module-child-spec) for more info.
   """
   @callback child_spec() :: :supervisor.child_spec()
 
@@ -42,4 +55,6 @@ defmodule Sentry.HTTPClient do
   @callback post(url :: String.t(), request_headers :: headers(), request_body :: body()) ::
               {:ok, status(), response_headers :: headers(), response_body :: body()}
               | {:error, term()}
+
+  @optional_callbacks [child_spec: 0]
 end

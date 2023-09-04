@@ -64,7 +64,7 @@ defmodule Sentry.TestGenServer do
   end
 
   def handle_cast(:invalid_function, state) do
-    NaiveDateTime.from_erl({}, {}, {})
+    apply(NaiveDateTime, :from_erl, [{}, {}, {}])
     {:noreply, state}
   end
 end
