@@ -1,7 +1,7 @@
 defmodule Sentry.LoggerHandlerTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case
 
-  import Sentry.TestEnvironmentHelper
+  import Mox
 
   alias Sentry.TestGenServer
 
@@ -11,15 +11,8 @@ defmodule Sentry.LoggerHandlerTest do
 
   @handler_name :sentry_handler
 
-  setup context do
-    if Map.has_key?(context, :bypass) do
-      bypass = Bypass.open()
-      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
-      %{bypass: bypass}
-    else
-      %{}
-    end
-  end
+  setup :set_mox_global
+  setup :verify_on_exit!
 
   setup do
     on_exit(fn ->
@@ -39,330 +32,278 @@ defmodule Sentry.LoggerHandlerTest do
     Logger.debug("Debug message")
   end
 
-  test "skips logs if the domain is excluded" do
-    add_handler(%{excluded_domains: [:plug, :phoenix]})
-    Logger.error("Error message", domain: [:phoenix, :broadway])
-  end
-
-  @tag :bypass
-  test "reports exceptions", %{bypass: bypass} do
+  test "a logged raised exception is reported" do
     add_handler(%{})
 
-    Process.flag(:trap_exit, true)
-
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert %{
-                 exception: [
-                   %{
-                     "type" => "RuntimeError",
-                     "value" => "unique error",
-                     "stacktrace" => %{
-                       "frames" => [
-                         %{"module" => "Elixir.Task.Supervised"} | _rest
-                       ]
-                     }
-                   }
-                 ]
-               } = event
-      end)
+    ref = expect_sender_call()
 
     Task.start(fn ->
-      raise "unique error"
+      raise "Unique Error"
     end)
 
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+    assert event.exception.type == "RuntimeError"
+    assert event.exception.value == "Unique Error"
   end
 
-  @tag :bypass
-  test "reports non-exception crashes", %{bypass: bypass} do
+  test "a GenServer throw is reported" do
     add_handler(%{})
 
-    self_pid = self()
-    Process.flag(:trap_exit, true)
+    ref = expect_sender_call()
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert List.first(event.exception)["value"] ==
-                 ~s[** (exit) bad return value: "I am throwing"]
-      end)
-
-    {:ok, pid} = TestGenServer.start_link(self_pid)
+    pid = start_supervised!(TestGenServer)
     TestGenServer.throw(pid)
-    assert_receive "terminating"
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert event.exception.value =~ "** (stop) bad return value: \"I am throwing\"\n"
+    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :throw}\n"
+    assert event.exception.value =~ "State: []"
+    assert event.exception.stacktrace.frames == []
   end
 
-  @tag :bypass
-  test "abnormal GenServer exit makes call to Sentry API", %{bypass: bypass} do
+  test "abnormal GenServer exit is reported" do
     add_handler(%{})
-    self_pid = self()
-    Process.flag(:trap_exit, true)
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert List.first(event.exception)["type"] == "Sentry.CrashError"
-        assert List.first(event.exception)["value"] == "** (exit) :bad_exit"
-      end)
+    ref = expect_sender_call()
 
-    {:ok, pid} = TestGenServer.start_link(self_pid)
+    pid = start_supervised!(TestGenServer)
     TestGenServer.exit(pid)
-    assert_receive "terminating"
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+    assert event.exception.type == "message"
+    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert event.exception.value =~ "** (stop) :bad_exit\n"
+    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :exit}\n"
+    assert event.exception.value =~ "State: []"
   end
 
-  @tag :bypass
-  test "bad function call causing GenServer crash makes call to Sentry API", %{bypass: bypass} do
+  @tag :focus
+  test "bad function call causing GenServer crash is reported" do
     add_handler(%{})
-    self_pid = self()
-    Process.flag(:trap_exit, true)
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert %{
-                 "in_app" => false,
-                 "module" => "Elixir.NaiveDateTime",
-                 "context_line" => nil,
-                 "pre_context" => [],
-                 "post_context" => []
-               } = List.last(List.first(event.exception)["stacktrace"]["frames"])
+    ref = expect_sender_call()
 
-        assert [%{"timestamp" => _, "message" => "test"}] = event.breadcrumbs
-
-        assert List.first(event.exception)["type"] == "FunctionClauseError"
-      end)
-
-    {:ok, pid} = TestGenServer.start_link(self_pid)
+    pid = start_supervised!(TestGenServer)
 
     TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
     TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+
+    assert event.exception.type == "FunctionClauseError"
+    assert [%{message: "test"}] = event.breadcrumbs
+
+    assert %{
+             in_app: false,
+             module: NaiveDateTime,
+             context_line: nil,
+             pre_context: [],
+             post_context: []
+           } = List.last(event.exception.stacktrace.frames)
   end
 
-  @tag :bypass
-  test "captures errors from spawn() in Plug app", %{bypass: bypass} do
+  test "GenServer timeout is reported" do
     add_handler(%{})
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert length(List.first(event.exception)["stacktrace"]["frames"]) == 1
+    ref = expect_sender_call()
 
-        assert List.first(List.first(event.exception)["stacktrace"]["frames"])["filename"] ==
-                 "test/support/example_plug_application.ex"
+    pid = start_supervised!(TestGenServer)
+
+    {:ok, task_pid} =
+      Task.start(fn ->
+        TestGenServer.sleep(pid, _timeout = 0)
       end)
 
-    Plug.Test.conn(:get, "/spawn_error_route")
-    |> Sentry.ExamplePlugApplication.call([])
+    assert_receive {^ref, event}
 
-    assert_receive ^bypass_ref
+    assert event.exception.type == "message"
+
+    assert event.exception.value =~
+             "Task #{inspect(task_pid)} started from #{inspect(self())} terminating\n"
+
+    assert event.exception.value =~ "** (stop) exited in: GenServer.call("
+    assert event.exception.value =~ "** (EXIT) time out"
+    assert length(event.exception.stacktrace.frames) > 0
   end
 
-  @tag :bypass
-  test "GenServer timeout makes call to Sentry API", %{bypass: bypass} do
+  test "captures errors from spawn/0 in Plug app" do
     add_handler(%{})
-    self_pid = self()
-    Process.flag(:trap_exit, true)
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert List.first(event.exception)["type"] == "Sentry.CrashError"
-        assert List.first(event.exception)["value"] =~ "** (EXIT) time out"
-        assert List.first(event.exception)["value"] =~ "GenServer\.call"
-      end)
+    ref = expect_sender_call()
 
-    {:ok, pid1} = TestGenServer.start_link(self_pid)
+    :get
+    |> Plug.Test.conn("/spawn_error_route")
+    |> Plug.run([{Sentry.ExamplePlugApplication, []}])
 
-    Task.start(fn ->
-      GenServer.call(pid1, {:sleep, 20}, 0)
-    end)
+    assert_receive {^ref, event}
 
-    assert_receive ^bypass_ref
+    assert [stacktrace_frame] = event.exception.stacktrace.frames
+    assert stacktrace_frame.filename == "test/support/example_plug_application.ex"
   end
 
-  @tag :bypass
-  test "only sends one error when a Plug process when configured to exclude cowboy domain",
-       %{bypass: bypass} do
-    add_handler(%{excluded_domains: [:cowboy]})
-
-    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
-
-    bypass_ref = expect_request(bypass, fn _event -> nil end)
-
-    :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-    assert_receive ^bypass_ref
-    refute_receive "API called"
-  after
-    :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
-  end
-
-  @tag :bypass
-  test "sends two errors when a Plug process crashes if cowboy domain is not excluded",
-       %{bypass: bypass} do
+  test "sends two errors when a Plug process crashes if cowboy domain is not excluded" do
     add_handler(%{excluded_domains: []})
 
+    ref = expect_sender_call()
+
     {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
 
-    bypass_ref = expect_request(bypass, fn _event -> nil end)
-
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-    assert_receive ^bypass_ref
-    assert_receive ^bypass_ref
+    assert_receive {^ref, _event}, 1000
   after
     :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
+    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
   end
 
-  @tag :bypass
-  test "sends all messages if capture_log_messages is true", %{bypass: bypass} do
-    add_handler(%{capture_log_messages: true})
+  test "ignores log messages with excluded domains" do
+    add_handler(%{capture_log_messages: true, excluded_domains: [:test_domain]})
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.message == "testing"
-      end)
+    ref = expect_sender_call()
 
-    Logger.error("testing")
-    assert_receive ^bypass_ref
+    Logger.error("no domain")
+    Logger.error("test_domain", domain: [:test_domain])
+
+    assert_receive {^ref, event}
+    assert event.message == "no domain"
   end
 
-  @tag :bypass
-  test "does not include Logger metadata when disabled", %{bypass: bypass} do
-    add_handler(%{})
-    Process.flag(:trap_exit, true)
-    pid = self()
-
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.extra["logger_metadata"] == %{}
-      end)
-
-    {:ok, pid} = TestGenServer.start_link(pid)
-    TestGenServer.add_logger_metadata(pid, :string, "string")
-    TestGenServer.add_logger_metadata(pid, :atom, :atom)
-    TestGenServer.add_logger_metadata(pid, :number, 43)
-    TestGenServer.add_logger_metadata(pid, :list, [])
-    TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
-    assert_receive ^bypass_ref
-  end
-
-  @tag :bypass
-  test "includes Logger.metadata for keys configured to be included", %{bypass: bypass} do
+  test "includes Logger metadata for keys configured to be included" do
     add_handler(%{metadata: [:string, :number, :map, :list]})
 
-    Process.flag(:trap_exit, true)
-    pid = self()
+    ref = expect_sender_call()
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.extra["logger_metadata"]["string"] == "string"
-        assert event.extra["logger_metadata"]["map"] == %{"a" => "b"}
-        assert event.extra["logger_metadata"]["list"] == [1, 2, 3]
-        assert event.extra["logger_metadata"]["number"] == 43
-      end)
-
-    {:ok, pid} = TestGenServer.start_link(pid)
+    pid = start_supervised!(TestGenServer)
     TestGenServer.add_logger_metadata(pid, :string, "string")
     TestGenServer.add_logger_metadata(pid, :number, 43)
     TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
     TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
     TestGenServer.invalid_function(pid)
-    assert_receive "terminating"
-    assert_receive ^bypass_ref
+
+    assert_receive {^ref, event}
+    assert event.extra.logger_metadata.string == "string"
+    assert event.extra.logger_metadata.map == %{a: "b"}
+    assert event.extra.logger_metadata.list == [1, 2, 3]
+    assert event.extra.logger_metadata.number == 43
   end
 
-  @tag :bypass
-  test "sets event level to Logger message level", %{bypass: bypass} do
-    add_handler(%{level: :warning, capture_log_messages: true})
+  test "does not include Logger metadata when disabled" do
+    add_handler(%{metadata: []})
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.message == "warn"
-        assert event.level == "warning"
-      end)
+    ref = expect_sender_call()
 
-    Logger.log(:warning, "warn")
-    assert_receive ^bypass_ref
+    pid = start_supervised!(TestGenServer)
+    TestGenServer.add_logger_metadata(pid, :string, "string")
+    TestGenServer.add_logger_metadata(pid, :atom, :atom)
+    TestGenServer.add_logger_metadata(pid, :number, 43)
+    TestGenServer.add_logger_metadata(pid, :list, [])
+    TestGenServer.invalid_function(pid)
+
+    assert_receive {^ref, event}
+    assert event.extra.logger_metadata == %{}
   end
 
-  @tag :bypass
-  test "sentry metadata is retrieved from callers", %{bypass: bypass} do
+  test "supports :all for Logger metadata" do
+    add_handler(%{metadata: :all})
+
+    ref = expect_sender_call()
+
+    pid = start_supervised!(TestGenServer)
+    TestGenServer.add_logger_metadata(pid, :string, "string")
+    TestGenServer.invalid_function(pid)
+
+    assert_receive {^ref, event}
+
+    assert event.extra.logger_metadata.string == "string"
+    assert event.extra.logger_metadata.domain == [:otp]
+    assert is_integer(event.extra.logger_metadata.time)
+    assert is_pid(event.extra.logger_metadata.pid)
+    assert {%FunctionClauseError{}, _stacktrace} = event.extra.logger_metadata.crash_reason
+
+    # Make sure that all this stuff is serializable.
+    assert Sentry.Client.render_event(event).extra.logger_metadata.pid =~ "#PID<"
+  end
+
+  test "sends all messages if :capture_log_messages is true" do
     add_handler(%{capture_log_messages: true})
 
-    pid = self()
+    ref = expect_sender_call()
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.user["user_id"] == 3
-        assert List.first(event.exception)["type"] == "RuntimeError"
-        assert List.first(event.exception)["value"] == "oops"
-      end)
+    Logger.error("Testing")
+
+    assert_receive {^ref, event}
+    assert event.message == "Testing"
+  after
+    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
+  end
+
+  test "sends warning messages when configured to :warning" do
+    add_handler(%{level: :warning, capture_log_messages: true})
+
+    ref = expect_sender_call()
+
+    Sentry.Context.set_user_context(%{user_id: 3})
+    Logger.log(:warning, "Testing")
+
+    assert_receive {^ref, event}
+
+    assert event.message == "Testing"
+    assert event.user.user_id == 3
+  end
+
+  test "does not send debug messages when configured to :error" do
+    add_handler(%{capture_log_messages: true})
+
+    ref = expect_sender_call()
 
     Sentry.Context.set_user_context(%{user_id: 3})
 
-    {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
-    send(task, :go)
+    Logger.error("Error")
+    Logger.debug("Debug")
 
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+
+    assert event.message == "Error"
   end
 
-  @tag :bypass
-  test "sentry extra context is retrieved from callers", %{bypass: bypass} do
+  test "Sentry metadata and extra context are retrieved from callers" do
     add_handler(%{capture_log_messages: true})
 
-    pid = self()
-
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.extra["day_of_week"] == "Friday"
-        assert List.first(event.exception)["type"] == "RuntimeError"
-        assert List.first(event.exception)["value"] == "oops"
-      end)
+    ref = expect_sender_call()
 
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+    Sentry.Context.set_user_context(%{user_id: 3})
 
-    {:ok, task} = Task.start_link(__MODULE__, :task, [pid])
+    {:ok, task} = Task.start_link(__MODULE__, :task, [self()])
     send(task, :go)
 
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+
+    assert event.user.user_id == 3
+    assert event.extra.day_of_week == "Friday"
+    assert event.exception.type == "RuntimeError"
+    assert event.exception.value == "oops"
   end
 
-  @tag :bypass
-  test "handles malformed :callers metadata", %{bypass: bypass} do
+  test "handles malformed :callers metadata" do
     add_handler(%{capture_log_messages: true})
 
-    {:ok, dead_pid} = Task.start(fn -> nil end)
+    ref = expect_sender_call()
 
-    bypass_ref =
-      expect_request(bypass, fn event ->
-        assert event.message == "error"
-      end)
+    dead_pid = spawn(fn -> :ok end)
 
-    Logger.error("error", callers: [dead_pid, nil])
+    Logger.error("Error", callers: [dead_pid, nil])
 
-    assert_receive ^bypass_ref
+    assert_receive {^ref, event}
+    assert event.message == "Error"
   end
 
-  defp add_handler(config) do
-    assert :ok = :logger.add_handler(@handler_name, Sentry.LoggerHandler, %{config: config})
-  end
+  test "sets event level to Logger message level" do
+    add_handler(%{level: :warning, capture_log_messages: true})
 
-  defp expect_request(bypass, assertions_fun) do
-    parent = self()
-    ref = make_ref()
+    ref = expect_sender_call()
 
-    Bypass.expect(bypass, fn conn ->
-      assert conn.method == "POST"
-      assert conn.request_path == "/api/1/envelope/"
-      assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-      event = TestHelpers.decode_event_from_envelope!(body)
+    Logger.log(:warning, "warn")
 
-      assertions_fun.(event)
-      send(parent, ref)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    ref
+    assert_receive {^ref, event}
+    assert event.level == "warning"
   end
 
   def task(parent, fun \\ fn -> raise "oops" end) do
@@ -376,5 +317,21 @@ defmodule Sentry.LoggerHandlerTest do
       {:DOWN, ^mon, _, _, _} ->
         exit(:shutdown)
     end
+  end
+
+  defp expect_sender_call do
+    pid = self()
+    ref = make_ref()
+
+    expect(Sentry.TransportSenderMock, :send_async, fn event ->
+      send(pid, {ref, event})
+      :ok
+    end)
+
+    ref
+  end
+
+  defp add_handler(config) do
+    assert :ok = :logger.add_handler(@handler_name, Sentry.LoggerHandler, %{config: config})
   end
 end

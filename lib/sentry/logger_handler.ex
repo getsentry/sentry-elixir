@@ -41,6 +41,19 @@ defmodule Sentry.LoggerHandler do
   @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
   def log(%{} = log_event, %{config: %__MODULE__{} = config}) do
+    # Logger handlers run in the process that logs, so we already read all the
+    # necessary Sentry context from the process dictionary (when creating the event).
+    # If we take meta[:sentry] here, we would duplicate all the stuff. This
+    # behavior is different than the one in Sentry.LoggerBackend because the Logger
+    # backend runs in its own process.
+    opts =
+      LoggerUtils.build_sentry_options(
+        log_event.level,
+        _sentry_context = nil,
+        log_event.meta,
+        config.metadata
+      )
+
     cond do
       Logger.compare_levels(log_event.level, config.level) == :lt ->
         :skip
@@ -49,8 +62,6 @@ defmodule Sentry.LoggerHandler do
         :skip
 
       crash_reason = log_event.meta[:crash_reason] ->
-        opts = LoggerUtils.build_sentry_options(log_event.level, log_event.meta, config.metadata)
-
         case crash_reason do
           {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
             Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
@@ -68,8 +79,6 @@ defmodule Sentry.LoggerHandler do
         end
 
       config.capture_log_messages ->
-        opts = LoggerUtils.build_sentry_options(log_event.level, log_event.meta, config.metadata)
-
         case msg_to_binary(log_event.msg) do
           {:ok, msg} -> Sentry.capture_message(msg, opts)
           :error -> :ok

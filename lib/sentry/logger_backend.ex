@@ -85,7 +85,7 @@ defmodule Sentry.LoggerBackend do
     level = maybe_ensure_warning_level(level)
 
     if Logger.compare_levels(level, state.level) != :lt and
-         not LoggerUtils.excluded_domain?(meta[:domain], state.excluded_domains) do
+         not LoggerUtils.excluded_domain?(meta[:domain] || [], state.excluded_domains) do
       log(level, msg, meta, state)
     end
 
@@ -114,7 +114,17 @@ defmodule Sentry.LoggerBackend do
   ## Helpers
 
   defp log(level, msg, meta, state) do
-    opts = LoggerUtils.build_sentry_options(level, meta, state.metadata)
+    # Logger backends run in their own process, that's why we read the context from meta[:sentry].
+    # The context in the Logger backend process is not the same as the one in the process
+    # that did the logging. This behavior is different than the one in Sentry.LoggerHandler,
+    # since Logger handlers run in the caller process.
+    opts =
+      LoggerUtils.build_sentry_options(
+        level,
+        _sentry_context = meta[:sentry],
+        meta,
+        state.metadata
+      )
 
     case meta[:crash_reason] do
       # If the crash reason is an exception, we want to report the exception itself

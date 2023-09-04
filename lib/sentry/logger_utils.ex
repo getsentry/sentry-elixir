@@ -3,11 +3,13 @@ defmodule Sentry.LoggerUtils do
 
   # Utilities that are shared between Sentry.LoggerHandler and Sentry.LoggerBackend.
 
-  @spec build_sentry_options(Logger.level(), Logger.metadata(), [atom()] | :all) :: keyword()
-  def build_sentry_options(level, meta, allowed_meta) do
+  @spec build_sentry_options(Logger.level(), keyword() | nil, Logger.metadata(), [atom()] | :all) ::
+          keyword()
+  def build_sentry_options(level, sentry_context, meta, allowed_meta) do
     default_extra = %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level}
 
-    (meta[:sentry] || get_sentry_options_from_callers(meta[:callers]) || %{})
+    (sentry_context || get_sentry_options_from_callers(meta[:callers]) || %{})
+    |> Map.new()
     |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
     |> Map.merge(%{
       event_source: :logger,
