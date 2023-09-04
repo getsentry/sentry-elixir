@@ -177,6 +177,29 @@ defmodule Sentry.LoggerBackendTest do
     assert event.extra.logger_metadata == %{}
   end
 
+  test "supports :all for Logger metadata" do
+    Logger.configure_backend(Sentry.LoggerBackend, metadata: :all)
+    ref = expect_sender_call()
+
+    pid = start_supervised!(TestGenServer)
+    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
+    Sentry.TestGenServer.invalid_function(pid)
+
+    assert_receive {^ref, event}
+
+    assert event.extra.logger_metadata.string == "string"
+    assert event.extra.logger_metadata.domain == [:otp]
+    assert event.extra.logger_metadata.module == :gen_server
+    assert event.extra.logger_metadata.file == "gen_server.erl"
+    assert event.extra.logger_metadata.function == "error_info/8"
+    assert is_integer(event.extra.logger_metadata.time)
+    assert is_pid(event.extra.logger_metadata.pid)
+    assert {%FunctionClauseError{}, _stacktrace} = event.extra.logger_metadata.crash_reason
+
+    # Make sure that all this stuff is serializable.
+    assert Sentry.Client.render_event(event).extra.logger_metadata.pid =~ "#PID<"
+  end
+
   test "sends all messages if :capture_log_messages is true" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
 

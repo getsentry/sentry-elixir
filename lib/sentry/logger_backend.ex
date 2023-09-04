@@ -22,10 +22,11 @@ defmodule Sentry.LoggerBackend do
   * `:metadata` - To include non-Sentry Logger metadata in reports, the
   `:metadata` key can be set to a list of keys. Metadata under those keys will
   be added in the `:extra` context under the `:logger_metadata` key. Defaults
-  to `[]`.
+  to `[]`. If set to `:all`, all metadata will be included. `:all` is available
+  since v9.0.0 of this library.
 
-  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
-  Defaults to `:error`.
+  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels
+    to send events for. Defaults to `:error`.
 
   * `:capture_log_messages` - When `true`, this module will send all Logger
   messages. Defaults to `false`, which will only send messages with metadata
@@ -42,6 +43,7 @@ defmodule Sentry.LoggerBackend do
         metadata: [:foo_bar],
         # Send messages like `Logger.error("error")` to Sentry
         capture_log_messages: true
+
   """
 
   @behaviour :gen_event
@@ -166,6 +168,10 @@ defmodule Sentry.LoggerBackend do
   end
 
   defp excluded_domain?(_, _), do: false
+
+  defp logger_metadata(meta, %__MODULE__{metadata: :all}) do
+    Map.new(meta)
+  end
 
   defp logger_metadata(meta, state) do
     for key <- state.metadata,

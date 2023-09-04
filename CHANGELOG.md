@@ -17,6 +17,7 @@
 ### Improvements
 
 - Make the `Sentry.HTTPClient.child_spec/0` callback optional
+- Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
 
 ## 8.1.0
 
