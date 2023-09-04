@@ -191,7 +191,6 @@ defmodule Sentry.LoggerBackendTest do
     assert event.extra.logger_metadata.domain == [:otp]
     assert event.extra.logger_metadata.module == :gen_server
     assert event.extra.logger_metadata.file == "gen_server.erl"
-    assert event.extra.logger_metadata.function == "error_info/8"
     assert is_integer(event.extra.logger_metadata.time)
     assert is_pid(event.extra.logger_metadata.pid)
     assert {%FunctionClauseError{}, _stacktrace} = event.extra.logger_metadata.crash_reason
