@@ -12,6 +12,7 @@
 - Removed `Sentry.Event.do_put_source_context/3`
 - Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
 - Removed the `Sentry.Event.sentry_exception/0` type
+- Accept all environments by default by changing the default for the `:included_environments` configuration option from `[:prod]` to `:all`
 
 ### Improvements
 

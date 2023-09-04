@@ -26,13 +26,13 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     Mix.shell().info("public_key: #{public_key}")
     Mix.shell().info("secret_key: #{secret_key}")
     Mix.shell().info("included_environments: #{inspect(included_environments())}")
-    Mix.shell().info("current environment_name: #{inspect(Config.environment_name())}")
+    Mix.shell().info("current environment_name: #{inspect(to_string(Config.environment_name()))}")
     Mix.shell().info("hackney_opts: #{inspect(Config.hackney_opts())}\n")
   end
 
   defp included_environments do
     case Application.fetch_env(:sentry, :included_environments) do
-      {:ok, envs} when is_list(envs) ->
+      {:ok, envs} when is_list(envs) or envs == :all ->
         envs
 
       _ ->
@@ -43,10 +43,10 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   end
 
   defp maybe_send_event do
-    env_name = Config.environment_name()
+    env_name = to_string(Config.environment_name())
     included_envs = included_environments()
 
-    if env_name in included_envs do
+    if included_envs == :all or env_name in included_envs do
       Mix.shell().info("Sending test event...")
 
       {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
