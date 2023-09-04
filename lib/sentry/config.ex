@@ -1,7 +1,6 @@
 defmodule Sentry.Config do
   @moduledoc false
 
-  @default_included_environments [:prod]
   @default_max_hackney_connections 50
   @default_hackney_timeout 5000
   @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/"]
@@ -32,25 +31,34 @@ defmodule Sentry.Config do
 
   @spec validate_included_environments!() :: :ok
   def validate_included_environments! do
-    case included_environments() do
-      comma_separated_envs when is_binary(comma_separated_envs) ->
-        IO.warn("""
-        setting :included_environments to a comma-separated string is deprecated and won't \
-        be supported in the next major version. Set :included_environments to a list of \
-        atoms instead.\
-        """)
+    normalized_environments =
+      case included_environments() do
+        comma_separated_envs when is_binary(comma_separated_envs) ->
+          IO.warn("""
+          setting :included_environments to a comma-separated string is deprecated and won't \
+          be supported in the next major version. Set :included_environments to a list of \
+          atoms instead.\
+          """)
 
-        Application.put_env(
-          :sentry,
-          :included_environments,
           String.split(comma_separated_envs, ",")
-        )
 
-      list_of_atoms when is_list(list_of_atoms) ->
-        :ok
-    end
+        list when is_list(list) ->
+          Enum.map(list, fn
+            env when is_atom(env) or is_binary(env) ->
+              to_string(env)
 
-    :ok
+            other ->
+              raise ArgumentError, """
+              expected environments in :included_environments to be atoms or strings, \
+              got: #{inspect(other)}\
+              """
+          end)
+
+        :all ->
+          :all
+      end
+
+    :ok = Application.put_env(:sentry, :included_environments, normalized_environments)
   end
 
   @spec assert_dsn_has_no_query_params!() :: :ok
@@ -87,7 +95,7 @@ defmodule Sentry.Config do
   end
 
   def included_environments do
-    Application.get_env(:sentry, :included_environments, @default_included_environments)
+    Application.get_env(:sentry, :included_environments, :all)
   end
 
   def environment_name do

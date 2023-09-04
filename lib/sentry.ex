@@ -26,15 +26,16 @@ defmodule Sentry do
         }
 
   The `:environment_name` and `:included_environments` options work together to determine
-  if and when Sentry should record exceptions. The `en:vironment_name` is the
+  if and when Sentry should record exceptions. The `:environment_name` is the
   name of the current environment. In the example above, we have explicitly set
   the environment to `:prod` which works well if you are inside an environment
   specific configuration `config/prod.exs`.
 
-  An alternative is to use `Config.config_env/0` in your general configuration file:
+  An alternative is to use `Config.config_env/0` in your general `config/config.exs`
+  configuration file:
 
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: [:prod],
+        included_environments: ["prod"],
         environment_name: config_env()
 
   This will set the environment name to whatever the current environment
@@ -42,7 +43,7 @@ defmodule Sentry do
   since that is the only entry in the `:included_environments` key.
 
   You can even rely on more specific logic to determine the environment name. It's
-  not uncommmon for most applications to have a "staging" environment. In order
+  not uncommon for most applications to have a "staging" environment. In order
   to handle this without adding an additional Mix environment, you can set an
   environment variable that determines the release level. By default, Sentry
   picks up the `SENTRY_ENVIRONMENT` variable. Otherwise, you can read the
@@ -51,7 +52,7 @@ defmodule Sentry do
 
       # In config/runtime.exs
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: ~w(production staging),
+        included_environments: ["production", "staging"],
         environment_name: System.get_env("RELEASE_LEVEL", "development")
 
   In this example, we are getting the environment name from the `RELEASE_LEVEL`
@@ -59,6 +60,15 @@ defmodule Sentry do
   Now, on our servers, we can set the environment variable appropriately. On
   our local development machines, exceptions will never be sent, because the
   default value is not in the list of `:included_environments`.
+
+  > #### Using the DSN To Send Events {: .warning}
+  >
+  > We recommend to use the `:dsn` configuration to control whether to report
+  > events. If `:dsn` is not set (or set to `nil`), then we won't report
+  > events to Sentry. Thanks to this behavior, you can essentially
+  > only set `:dsn` in environments where you want to report events to Sentry.
+  > In the future, we might remove the `:included_environments` configuration
+  > altogether.
 
   Sentry supports many configuration options. See the [*Configuration*
   section](#module-configuration) for complete documentation.
@@ -90,9 +100,11 @@ defmodule Sentry do
       If the `SENTRY_ENVIRONMENT` environment variable is set, it will
       be used as the defaults value. Otherwise, defaults to `"dev"`.
 
-    * `:included_environments` (list of `t:atom/0` or `t:String.t/0`) -
-      the environments in which Sentry can report events. `:environment_name`
-      needs to be in this list for events to be reported. Defaults to `[:prod]`.
+    * `:included_environments` (list of `t:atom/0` or `t:String.t/0`, or the atom `:all`) -
+      the environments in which Sentry can report events. If this is a list,
+      then `:environment_name` needs to be in this list for events to be reported.
+      If this is `:all`, then Sentry will report events regardless of the value
+      of `:environment_name`. Defaults to `:all`.
 
     * `:tags` (`t:map/0`) - a map of tags to be sent with every event.
       Defaults to `%{}`.
@@ -463,9 +475,9 @@ defmodule Sentry do
 
   def send_event(%Event{} = event, opts) do
     included_environments = Config.included_environments()
-    environment_name = Config.environment_name()
+    environment_name = to_string(Config.environment_name())
 
-    if environment_name in included_environments do
+    if included_environments == :all or environment_name in included_environments do
       Sentry.Client.send_event(event, opts)
     else
       :ignored

@@ -15,10 +15,10 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            public_key: public
            secret_key: secret
            included_environments: []
-           current environment_name: :test
+           current environment_name: "test"
            hackney_opts: [recv_timeout: 50]
 
-           :test is not in [] so no test event will be sent
+           "test" is not in [] so no test event will be sent
            """
   end
 
@@ -35,7 +35,8 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
     modify_env(
       :sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1"
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      included_environments: :all
     )
 
     assert capture_io(fn ->
@@ -45,8 +46,8 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            server: http://localhost:#{bypass.port}/api/1/envelope/
            public_key: public
            secret_key: secret
-           included_environments: [:test]
-           current environment_name: :test
+           included_environments: :all
+           current environment_name: "test"
            hackney_opts: [recv_timeout: 50]
 
            Sending test event...
@@ -75,8 +76,8 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
                     server: http://localhost:#{bypass.port}/api/1/envelope/
                     public_key: public
                     secret_key: secret
-                    included_environments: [:test]
-                    current environment_name: :test
+                    included_environments: ["test"]
+                    current environment_name: "test"
                     hackney_opts: [recv_timeout: 50]
 
                     Sending test event...

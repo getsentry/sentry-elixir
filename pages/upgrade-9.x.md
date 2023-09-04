@@ -98,6 +98,16 @@ The settings that are now *compile-time settings* are:
   * `:source_code_path_pattern`
   * `:source_code_exclude_patterns`
 
+## Check Your Use of `:included_environments`
+
+If you were relying on the default value for the `:included_environments` configuration option (which was `[:prod]`), then you'll need to make an adjustment. In v9.0.0, the default value is now `:all` (see [this issue](https://github.com/getsentry/sentry-elixir/issues/483) for some context). If you want to keep the old behavior, explicitly set this in your configuration:
+
+```elixir
+# In config/config.exs
+config :sentry,
+  included_environments: [:prod]
+```
+
 ## Stop Using `Sentry.Sources`
 
 `Sentry.Sources` was meant to be private API and has been removed. Its functionality is very specific to Sentry, and it's not a good general mechanism to retrieve source code. This way, we can also have the freedom to improve this functionality without making potential breaking changes to the API of this library.
