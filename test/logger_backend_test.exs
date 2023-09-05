@@ -71,7 +71,6 @@ defmodule Sentry.LoggerBackendTest do
     assert event.exception.value =~ "State: []"
   end
 
-  @tag :focus
   test "bad function call causing GenServer crash is reported" do
     ref = expect_sender_call()
 

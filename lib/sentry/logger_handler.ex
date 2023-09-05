@@ -155,6 +155,43 @@ defmodule Sentry.LoggerHandler do
       excluded_domain?(config, log_event) ->
         :skip
 
+      match?({:report, _report}, log_event.msg) ->
+        {:report, report} = log_event.msg
+
+        case report do
+          %{report: %{reason: {exception, stacktrace}}}
+          when is_exception(exception) and is_list(stacktrace) ->
+            Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
+
+          %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
+            opts = Keyword.put(opts, :stacktrace, stacktrace)
+            Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), opts)
+
+          %{report: report_info} ->
+            Sentry.capture_message(inspect(report_info), opts)
+
+          %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
+            opts = Keyword.put(opts, :stacktrace, stacktrace)
+            Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), opts)
+
+          %{reason: reason} ->
+            opts = Keyword.update!(opts, :extra, &Map.put(&1, :crash_reason, inspect(reason)))
+
+            msg = "** (stop) #{Exception.format_exit(reason)}"
+            Sentry.capture_message(msg, opts)
+
+          _other ->
+            :ok
+        end
+
+      match?({format, args} when is_list(format) and is_list(args), log_event.msg) ->
+        {format, args} = log_event.msg
+
+        format
+        |> :io_lib.format(args)
+        |> :unicode.characters_to_binary()
+        |> Sentry.capture_message(opts)
+
       crash_reason = log_event.meta[:crash_reason] ->
         case crash_reason do
           {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
