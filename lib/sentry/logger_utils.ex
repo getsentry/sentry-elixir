@@ -3,7 +3,7 @@ defmodule Sentry.LoggerUtils do
 
   # Utilities that are shared between Sentry.LoggerHandler and Sentry.LoggerBackend.
 
-  @spec build_sentry_options(Logger.level(), keyword() | nil, Logger.metadata(), [atom()] | :all) ::
+  @spec build_sentry_options(Logger.level(), keyword() | nil, map(), [atom()] | :all) ::
           keyword()
   def build_sentry_options(level, sentry_context, meta, allowed_meta) do
     default_extra = %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level}
@@ -31,7 +31,6 @@ defmodule Sentry.LoggerUtils do
       :critical -> "fatal"
       :error -> "error"
       :warning -> "warning"
-      :warn -> "warning"
       :notice -> "info"
       :info -> "info"
       :debug -> "debug"

@@ -129,7 +129,7 @@ defmodule Sentry.LoggerBackend do
       LoggerUtils.build_sentry_options(
         level,
         _sentry_context = meta[:sentry],
-        meta,
+        Map.new(meta),
         state.metadata
       )
 

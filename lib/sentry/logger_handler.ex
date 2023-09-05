@@ -134,90 +134,73 @@ defmodule Sentry.LoggerHandler do
   # Callback for :logger handlers
   @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
-  def log(%{} = log_event, %{config: %__MODULE__{} = config}) do
-    # Logger handlers run in the process that logs, so we already read all the
-    # necessary Sentry context from the process dictionary (when creating the event).
-    # If we take meta[:sentry] here, we would duplicate all the stuff. This
-    # behavior is different than the one in Sentry.LoggerBackend because the Logger
-    # backend runs in its own process.
-    opts =
-      LoggerUtils.build_sentry_options(
-        log_event.level,
-        _sentry_context = nil,
-        log_event.meta,
-        config.metadata
-      )
-
+  def log(%{level: log_level, meta: log_meta} = log_event, %{config: %__MODULE__{} = config}) do
     cond do
-      Logger.compare_levels(log_event.level, config.level) == :lt ->
-        :skip
+      Logger.compare_levels(log_level, config.level) == :lt ->
+        :ok
 
-      excluded_domain?(config, log_event) ->
-        :skip
-
-      match?({:report, _report}, log_event.msg) ->
-        {:report, report} = log_event.msg
-
-        case report do
-          %{report: %{reason: {exception, stacktrace}}}
-          when is_exception(exception) and is_list(stacktrace) ->
-            Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
-
-          %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
-            opts = Keyword.put(opts, :stacktrace, stacktrace)
-            Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), opts)
-
-          %{report: report_info} ->
-            Sentry.capture_message(inspect(report_info), opts)
-
-          %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
-            opts = Keyword.put(opts, :stacktrace, stacktrace)
-            Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), opts)
-
-          %{reason: reason} ->
-            opts = Keyword.update!(opts, :extra, &Map.put(&1, :crash_reason, inspect(reason)))
-
-            msg = "** (stop) #{Exception.format_exit(reason)}"
-            Sentry.capture_message(msg, opts)
-
-          _other ->
-            :ok
-        end
-
-      match?({format, args} when is_list(format) and is_list(args), log_event.msg) ->
-        {format, args} = log_event.msg
-
-        format
-        |> :io_lib.format(args)
-        |> :unicode.characters_to_binary()
-        |> Sentry.capture_message(opts)
-
-      crash_reason = log_event.meta[:crash_reason] ->
-        case crash_reason do
-          {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
-            Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
-
-          {reason, stacktrace} when is_list(stacktrace) ->
-            opts =
-              opts
-              |> Keyword.put(:stacktrace, stacktrace)
-              |> Keyword.update!(:extra, &Map.put(&1, :crash_reason, inspect(reason)))
-
-            case msg_to_binary(log_event.msg) do
-              {:ok, msg} -> Sentry.capture_message(msg, opts)
-              :error -> :ok
-            end
-        end
-
-      config.capture_log_messages ->
-        case msg_to_binary(log_event.msg) do
-          {:ok, msg} -> Sentry.capture_message(msg, opts)
-          :error -> :ok
-        end
+      LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.excluded_domains) ->
+        :ok
 
       true ->
-        :skip
+        # Logger handlers run in the process that logs, so we already read all the
+        # necessary Sentry context from the process dictionary (when creating the event).
+        # If we take meta[:sentry] here, we would duplicate all the stuff. This
+        # behavior is different than the one in Sentry.LoggerBackend because the Logger
+        # backend runs in its own process.
+        sentry_opts = LoggerUtils.build_sentry_options(log_level, nil, log_meta, config.metadata)
+        log_unfiltered(log_event, sentry_opts, config)
     end
+  end
+
+  # A string was logged. We check for the :crash_reason metadata and try to build a sensible
+  # report from there, otherwise we use the logged string directly.
+  defp log_unfiltered(
+         %{msg: {:string, unicode_chardata}} = log_event,
+         sentry_opts,
+         %__MODULE__{} = config
+       ) do
+    message = :unicode.characters_to_binary(unicode_chardata)
+    log_from_crash_reason(log_event.meta[:crash_reason], message, sentry_opts, config)
+  end
+
+  # "report" here is of type logger:report/0, which is a map or keyword list.
+  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = _config) do
+    case Map.new(report) do
+      %{report: %{reason: {exception, stacktrace}}}
+      when is_exception(exception) and is_list(stacktrace) ->
+        Sentry.capture_exception(exception, Keyword.put(sentry_opts, :stacktrace, stacktrace))
+
+      %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
+        sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
+        Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), sentry_opts)
+
+      %{report: report_info} ->
+        Sentry.capture_message(inspect(report_info), sentry_opts)
+
+      %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
+        sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
+        Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), sentry_opts)
+
+      %{reason: reason} ->
+        sentry_opts =
+          Keyword.update!(sentry_opts, :extra, &Map.put(&1, :crash_reason, inspect(reason)))
+
+        msg = "** (stop) #{Exception.format_exit(reason)}"
+        Sentry.capture_message(msg, sentry_opts)
+
+      _other ->
+        :ok
+    end
+  end
+
+  defp log_unfiltered(
+         %{msg: {format, format_args}} = log_event,
+         sentry_opts,
+         %__MODULE__{} = config
+       ) do
+    string_message = format |> :io_lib.format(format_args) |> IO.chardata_to_string()
+    log_from_crash_reason(log_event.meta[:crash_reason], string_message, sentry_opts, config)
   end
 
   ## Helpers
@@ -227,16 +210,33 @@ defmodule Sentry.LoggerHandler do
     struct!(existing_config, config_attrs)
   end
 
-  defp msg_to_binary({:string, string}) do
-    {:ok, :unicode.characters_to_binary(string)}
-  rescue
-    _ -> :error
+  defp log_from_crash_reason(
+         {exception, stacktrace},
+         _string_message,
+         sentry_opts,
+         %__MODULE__{}
+       )
+       when is_exception(exception) and is_list(stacktrace) do
+    Sentry.capture_exception(exception, Keyword.put(sentry_opts, :stacktrace, stacktrace))
   end
 
-  defp excluded_domain?(
-         %__MODULE__{excluded_domains: excluded_domains},
-         %{meta: meta} = _log_event
-       ) do
-    LoggerUtils.excluded_domain?(Map.get(meta, :domain, []), excluded_domains)
+  defp log_from_crash_reason({reason, stacktrace}, string_message, sentry_opts, %__MODULE__{})
+       when is_list(stacktrace) do
+    sentry_opts =
+      sentry_opts
+      |> Keyword.put(:stacktrace, stacktrace)
+      |> Keyword.update!(:extra, &Map.put(&1, :crash_reason, inspect(reason)))
+
+    Sentry.capture_message(string_message, sentry_opts)
+  end
+
+  defp log_from_crash_reason(_other_reason, string_message, sentry_opts, %__MODULE__{
+         capture_log_messages: true
+       }) do
+    Sentry.capture_message(string_message, sentry_opts)
+  end
+
+  defp log_from_crash_reason(_other_reason, _string_message, _sentry_opts, _config) do
+    :ok
   end
 end
