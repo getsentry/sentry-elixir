@@ -24,6 +24,19 @@ defmodule Sentry.LoggerHandler do
   > `Logger` backends may become deprecated and hence `Sentry.LoggerBackend` may be
   > eventually removed.
 
+  ## Crash Reports
+
+  The reason you'll want to add this handler to your application is so that you can
+  report **crashes** in your system to Sentry. Sometimes, you're able to catch exceptions
+  and handle them (such as reporting them to Sentry), which is what you can do with
+  `Sentry.PlugCapture` for example.
+
+  However, Erlang/OTP systems are made of processes running concurrently, and
+  sometimes those processes **crash and exit**. If you're not explicitly catching
+  exceptions in those processes to report them to Sentry, then you won't see those
+  crash reports in Sentry. That's where this handler comes in. This handler hooks
+  into `:logger` and reports nicely-formatted crash reports to Sentry.
+
   ## Usage
 
   To add this handler to your system, see [the documentation for handlers in
