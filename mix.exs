@@ -35,9 +35,8 @@ defmodule Sentry.Mixfile do
           ]
         ],
         groups_for_modules: [
-          Interfaces: [
-            ~r/^Sentry\.Interfaces/
-          ]
+          Interfaces: [~r/^Sentry\.Interfaces/],
+          Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler]
         ],
         source_ref: "#{@version}",
         source_url: @source_url,

@@ -13,6 +13,13 @@ defmodule Sentry.LoggerBackend do
         user_id: current_user.id
       })
 
+  > #### `:logger` handler {: .tip}
+  >
+  > In new projects, try to use `Sentry.LoggerHandler` rather than this `Logger`
+  > backend. Elixir will likely deprecate `Logger` backends in the future in
+  > favor of `:logger` handlers, which would lead to us eventually removing this
+  > backend.
+
   ## Configuration
 
   * `:excluded_domains` - Any messages with a domain in the configured
