@@ -17,6 +17,7 @@
 
 ### Improvements
 
+- Add `Sentry.LoggerHandler`, which is a `:logger` handler rather than a `Logger` backend
 - Make the `Sentry.HTTPClient.child_spec/0` callback optional
 - Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
 
