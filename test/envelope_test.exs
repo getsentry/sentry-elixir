@@ -28,7 +28,7 @@ defmodule Sentry.EnvelopeTest do
         environment: :test,
         event_id: "1d208b37d9904203918a9c2125ea91fa",
         __source__: nil,
-        exception: nil,
+        exception: [],
         extra: %{},
         fingerprint: ["{{ default }}"],
         level: "error",
@@ -141,7 +141,7 @@ defmodule Sentry.EnvelopeTest do
       assert decoded_event["event_id"] == event.event_id
       assert decoded_event["breadcrumbs"] == []
       assert decoded_event["environment"] == "test"
-      assert decoded_event["exception"] == nil
+      assert decoded_event["exception"] == []
       assert decoded_event["extra"] == %{}
       assert decoded_event["user"] == %{}
       assert decoded_event["request"] == %{}

@@ -53,7 +53,7 @@ defmodule Sentry.Event do
           # Interfaces.
           breadcrumbs: [Interfaces.Breadcrumb.t()],
           contexts: Interfaces.context(),
-          exception: Interfaces.Exception.t() | nil,
+          exception: [Interfaces.Exception.t()],
           message: String.t() | nil,
           request: Interfaces.request(),
           sdk: Interfaces.SDK.t() | nil,
@@ -75,48 +75,50 @@ defmodule Sentry.Event do
   defstruct [
     # Required. Hexadecimal string representing a uuid4 value. The length is exactly 32
     # characters. Dashes are not allowed. Has to be lowercase.
-    :event_id,
+    event_id: nil,
 
     # Required. Indicates when the event was created in the Sentry SDK. The format is either a
     # string as defined in RFC 3339 or a numeric (integer or float) value representing the number
     # of seconds that have elapsed since the Unix epoch.
-    :timestamp,
+    timestamp: nil,
 
-    # Optional fields without defaults.
-    :level,
-    :logger,
-    :transaction,
-    :server_name,
-    :release,
-    :dist,
-
-    # Interfaces.
-    :breadcrumbs,
-    :contexts,
-    :exception,
-    :message,
-    :request,
-    :sdk,
-    :user,
+    # Optional fields.
+    breadcrumbs: [],
+    contexts: nil,
+    dist: nil,
+    environment: "production",
+    exception: [],
+    extra: %{},
+    fingerprint: [],
+    level: nil,
+    logger: nil,
+    message: nil,
+    modules: %{},
+    platform: :elixir,
+    release: nil,
+    request: %{},
+    sdk: nil,
+    server_name: nil,
+    tags: %{},
+    transaction: nil,
+    user: %{},
 
     # "Culprit" is not documented anymore and we should move to transactions at some point.
     # https://forum.sentry.io/t/culprit-deprecated-in-favor-of-what/4871/9
-    :culprit,
+    culprit: nil,
 
     # Non-payload "private" fields.
-    :__source__,
-    :__original_exception__,
-
-    # Required. Has to be "elixir".
-    platform: :elixir,
-
-    # Optional fields with defaults.
-    tags: %{},
-    modules: %{},
-    extra: %{},
-    fingerprint: [],
-    environment: "production"
+    __source__: nil,
+    __original_exception__: nil
   ]
+
+  # Removes all the non-payload keys from the event so that the client can render
+  @doc false
+  def remove_non_payload_keys(%__MODULE__{} = event) do
+    event
+    |> Map.from_struct()
+    |> Map.drop([:__original_exception__, :__source__])
+  end
 
   @doc """
   Creates an event struct out of collected context and options.
@@ -155,7 +157,7 @@ defmodule Sentry.Event do
       iex> event = create_event(exception: %RuntimeError{message: "oops"}, level: :warning)
       iex> event.level
       :warning
-      iex> event.exception.type
+      iex> hd(event.exception).type
       "RuntimeError"
 
       iex> event = create_event(event_source: :plug)
@@ -235,7 +237,7 @@ defmodule Sentry.Event do
       extra: extra,
       breadcrumbs: breadcrumbs,
       contexts: generate_contexts(),
-      exception: coerce_exception(exception, Keyword.get(opts, :stacktrace), message),
+      exception: List.wrap(coerce_exception(exception, Keyword.get(opts, :stacktrace), message)),
       message: message,
       fingerprint: fingerprint,
       environment: Config.environment_name(),

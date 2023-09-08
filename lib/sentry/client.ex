@@ -107,15 +107,14 @@ defmodule Sentry.Client do
     json_library = Config.json_library()
 
     event
-    |> Map.from_struct()
+    |> Event.remove_non_payload_keys()
     |> update_if_present(:message, &String.slice(&1, 0, @max_message_length))
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
     |> update_if_present(:sdk, &Map.from_struct/1)
     |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
-    |> update_if_present(:exception, &[render_exception(&1)])
-    |> Map.drop([:__source__, :__original_exception__])
+    |> update_if_present(:exception, fn list -> Enum.map(list, &render_exception/1) end)
   end
 
   defp render_exception(%Interfaces.Exception{} = exception) do

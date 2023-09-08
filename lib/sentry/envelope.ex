@@ -132,7 +132,7 @@ defmodule Sentry.Envelope do
            environment: fields["environment"],
            event_id: fields["event_id"],
            __source__: fields["event_source"],
-           exception: fields["exception"],
+           exception: List.wrap(fields["exception"]),
            extra: fields["extra"],
            fingerprint: fields["fingerprint"],
            level: fields["level"],

@@ -80,7 +80,7 @@ defmodule Sentry.LoggerBackendTest do
     Sentry.TestGenServer.invalid_function(pid)
     assert_receive {^ref, event}
 
-    assert event.exception.type == "FunctionClauseError"
+    assert hd(event.exception).type == "FunctionClauseError"
     assert [%{message: "test"}] = event.breadcrumbs
 
     assert %{
@@ -89,7 +89,7 @@ defmodule Sentry.LoggerBackendTest do
              context_line: nil,
              pre_context: [],
              post_context: []
-           } = List.last(event.exception.stacktrace.frames)
+           } = List.last(hd(event.exception).stacktrace.frames)
   end
 
   test "GenServer timeout is reported" do
