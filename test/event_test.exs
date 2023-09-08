@@ -256,8 +256,8 @@ defmodule Sentry.EventTest do
       assert %Event{} =
                event = Event.create_event(exception: exception, event_source: :plug)
 
-      assert event.__source__ == :plug
-      assert event.__original_exception__ == exception
+      assert event.source == :plug
+      assert event.original_exception == exception
     end
   end
 

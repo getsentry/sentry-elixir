@@ -42,8 +42,9 @@ defmodule Sentry.LoggerHandlerTest do
     end)
 
     assert_receive {^ref, event}
-    assert event.exception.type == "RuntimeError"
-    assert event.exception.value == "Unique Error"
+    assert [exception] = event.exception
+    assert exception.type == "RuntimeError"
+    assert exception.value == "Unique Error"
   end
 
   test "a GenServer throw is reported", %{sender_ref: ref} do
@@ -65,7 +66,7 @@ defmodule Sentry.LoggerHandlerTest do
     assert event.message =~ "** (stop) :bad_exit"
 
     if System.otp_release() >= "26" do
-      assert event.exception.type == "message"
+      assert hd(event.exception).type == "message"
     end
   end
 
@@ -80,11 +81,13 @@ defmodule Sentry.LoggerHandlerTest do
 
     assert [%{message: "test"}] = event.breadcrumbs
 
+    assert [exception] = event.exception
+
     if System.otp_release() >= "26" do
-      assert event.exception.type == "FunctionClauseError"
+      assert exception.type == "FunctionClauseError"
     else
       assert event.message =~ "** (stop) :function_clause"
-      assert event.exception.type == "message"
+      assert exception.type == "message"
     end
 
     assert %{
@@ -93,7 +96,7 @@ defmodule Sentry.LoggerHandlerTest do
              context_line: nil,
              pre_context: [],
              post_context: []
-           } = List.last(event.exception.stacktrace.frames)
+           } = List.last(exception.stacktrace.frames)
   end
 
   test "GenServer timeout is reported", %{sender_ref: ref} do
@@ -107,11 +110,13 @@ defmodule Sentry.LoggerHandlerTest do
 
     assert_receive {^ref, event}
 
-    assert event.exception.type == "message"
+    assert [exception] = event.exception
 
-    assert event.exception.value =~ "** (stop) exited in: GenServer.call("
-    assert event.exception.value =~ "** (EXIT) time out"
-    assert length(event.exception.stacktrace.frames) > 0
+    assert exception.type == "message"
+
+    assert exception.value =~ "** (stop) exited in: GenServer.call("
+    assert exception.value =~ "** (EXIT) time out"
+    assert length(exception.stacktrace.frames) > 0
   end
 
   if System.otp_release() >= "26.0" do
@@ -125,7 +130,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
 
       if System.otp_release() >= "26" do
-        assert [stacktrace_frame] = event.exception.stacktrace.frames
+        assert [stacktrace_frame] = hd(event.exception).stacktrace.frames
         assert stacktrace_frame.filename == "test/support/example_plug_application.ex"
       else
         assert event.message =~ "Error in process"
@@ -259,8 +264,9 @@ defmodule Sentry.LoggerHandlerTest do
 
     assert event.user.user_id == 3
     assert event.extra.day_of_week == "Friday"
-    assert event.exception.type == "RuntimeError"
-    assert event.exception.value == "oops"
+    assert [exception] = event.exception
+    assert exception.type == "RuntimeError"
+    assert exception.value == "oops"
   end
 
   test "handles malformed :callers metadata", %{sender_ref: ref} do

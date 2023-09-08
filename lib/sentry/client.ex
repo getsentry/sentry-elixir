@@ -89,7 +89,7 @@ defmodule Sentry.Client do
     send_result = Transport.post_envelope(envelope, request_retries)
 
     if match?({:ok, _}, send_result) do
-      Sentry.put_last_event_id_and_source(event.event_id, event.__source__)
+      Sentry.put_last_event_id_and_source(event.event_id, event.source)
     end
 
     _ = maybe_log_send_result(send_result, event)
@@ -98,7 +98,7 @@ defmodule Sentry.Client do
 
   defp encode_and_send(%Event{} = event, _result_type = :none, _request_retries) do
     :ok = @sender_module.send_async(event)
-    Sentry.put_last_event_id_and_source(event.event_id, event.__source__)
+    Sentry.put_last_event_id_and_source(event.event_id, event.source)
     {:ok, ""}
   end
 
@@ -177,7 +177,7 @@ defmodule Sentry.Client do
     end
   end
 
-  defp maybe_log_send_result(_send_result, %Event{__source__: :logger}) do
+  defp maybe_log_send_result(_send_result, %Event{source: :logger}) do
     :ok
   end
 

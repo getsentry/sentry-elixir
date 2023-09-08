@@ -60,15 +60,15 @@ defmodule Sentry.Event do
           user: Interfaces.user() | nil,
 
           # Non-payload fields.
-          __source__: term(),
-          __original_exception__: Exception.t() | nil
+          source: term(),
+          original_exception: Exception.t() | nil
         }
 
   @doc """
   The struct representing the event.
 
-  In general, you're not advised to manipulate this struct's fields directly. Instead,
-  try to use functions such as `create_event/1` or `transform_exception/2` for creating
+  You're not advised to manipulate this struct's fields directly. Instead,
+  use functions such as `create_event/1` or `transform_exception/2` for creating
   events.
   """
   @enforce_keys [:event_id, :timestamp]
@@ -108,16 +108,17 @@ defmodule Sentry.Event do
     culprit: nil,
 
     # Non-payload "private" fields.
-    __source__: nil,
-    __original_exception__: nil
+    source: nil,
+    original_exception: nil
   ]
 
   # Removes all the non-payload keys from the event so that the client can render
   @doc false
+  @spec remove_non_payload_keys(t()) :: map()
   def remove_non_payload_keys(%__MODULE__{} = event) do
     event
     |> Map.from_struct()
-    |> Map.drop([:__original_exception__, :__source__])
+    |> Map.drop([:original_exception, :source])
   end
 
   @doc """
@@ -149,7 +150,7 @@ defmodule Sentry.Event do
 
     * `:fingerprint` - list of the fingerprint for grouping this event (a list of `t:String.t/0`)
 
-    * `:event_source` - the source of the event. This fills in the `:__source__` field of the
+    * `:event_source` - the source of the event. This fills in the `:source` field of the
       returned struct.
 
   ## Examples
@@ -161,7 +162,7 @@ defmodule Sentry.Event do
       "RuntimeError"
 
       iex> event = create_event(event_source: :plug)
-      iex> event.__source__
+      iex> event.source
       :plug
 
   """
@@ -243,8 +244,8 @@ defmodule Sentry.Event do
       environment: Config.environment_name(),
       user: user,
       request: request,
-      __source__: Keyword.get(opts, :event_source),
-      __original_exception__: exception
+      source: Keyword.get(opts, :event_source),
+      original_exception: exception
     }
   end
 

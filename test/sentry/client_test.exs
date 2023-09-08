@@ -144,7 +144,7 @@ defmodule Sentry.ClientTest do
     test "if :before_send_event callback returns falsey, the event is not sent" do
       defmodule CallbackModuleArithmeticError do
         def before_send_event(event) do
-          case event.__original_exception__ do
+          case event.original_exception do
             %ArithmeticError{} -> false
             _ -> event
           end
