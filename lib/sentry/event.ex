@@ -29,7 +29,22 @@ defmodule Sentry.Event do
   @typedoc """
   The type for the event struct.
 
-  See [`%Sentry.Event{}`](`__struct__/0`) for more information.
+  All of the fields in this struct map directly to the fields described in the
+  [Sentry documentation](https://develop.sentry.dev/sdk/event-payloads). These fields
+  are the exceptions, and are specific to the Elixir Sentry SDK:
+
+    * `:source` - the source of the event. `Sentry.LoggerBackend` and `Sentry.LoggerHandler`
+      set this to `:logger`, while `Sentry.PlugCapture` and `Sentry.PlugContext` set it to
+      `:plug`. You can set it to any atom. See the `:event_source` option in `create_event/1`
+      and `transform_exception/2`.
+
+    * `:original_exception` - the original exception that is being reported, if there's one.
+      The Elixir Sentry SDK manipulates reported exceptions to make them fit the payload
+      required by the Sentry API, and these end up in the `:exception` field. The
+      `:original_exception` field, instead, contains the original exception as the raw Elixir
+      term (such as `%RuntimeError{...}`).
+
+  See also [`%Sentry.Event{}`](`__struct__/0`).
   """
   @type t() :: %__MODULE__{
           # Required
@@ -60,7 +75,7 @@ defmodule Sentry.Event do
           user: Interfaces.user() | nil,
 
           # Non-payload fields.
-          source: term(),
+          source: atom(),
           original_exception: Exception.t() | nil
         }
 
@@ -70,6 +85,8 @@ defmodule Sentry.Event do
   You're not advised to manipulate this struct's fields directly. Instead,
   use functions such as `create_event/1` or `transform_exception/2` for creating
   events.
+
+  See the `t:t/0` type for information on the fields and their types.
   """
   @enforce_keys [:event_id, :timestamp]
   defstruct [
@@ -124,34 +141,58 @@ defmodule Sentry.Event do
   @doc """
   Creates an event struct out of collected context and options.
 
+  > #### Merging Options with Context and Config {: .info}
+  >
+  > Some of the options documented below are **merged** with the Sentry context, or
+  > with the Sentry context *and* the configuration. The option you pass here always
+  > has higher precedence, followed by the context and finally by the configuration.
+  >
+  > See also `Sentry.Context` for information on the Sentry context and `Sentry` for
+  > information on configuration.
+
   ## Options
 
-    * `:exception` - an `t:Exception.t/0`
+    * `:exception` - an `t:Exception.t/0`. This is the exception that gets reported in the
+      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
+      `:original_exception` field of `t:t/0`. This option is **required** unless the
+      `:message` option is present. This is not present by default.
 
-    * `:stacktrace` - a stacktrace, as in `t:Exception.stacktrace/0`
+    * `:stacktrace` - a stacktrace, as in `t:Exception.stacktrace/0`. This is not present
+      by default.
 
-    * `:message` - a message (`t:String.t/0`)
+    * `:message` - a message (`t:String.t/0`). This is not present by default.
 
     * `:extra` - map of extra context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_extra_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
     * `:user` - map of user context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_user_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
-    * `:tags` - map of tags context, which gets merged with the current context
-      (see `Sentry.Context`)
+    * `:tags` - map of tags context, which gets merged with the current context (see
+      `Sentry.Context.set_tags_context/1`) and with the `:tags` option in the global
+      Sentry configuration. If fields collide, the ones in the map passed through
+      this option have precedence over the ones in the context, which have precedence
+      over the ones in the configuration. Defaults to `%{}`.
 
     * `:request` - map of request context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_request_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
-    * `:breadcrumbs` - list of breadcrumbs
+    * `:breadcrumbs` - list of breadcrumbs. This list gets **prepended** to the list
+      in the context (see `Sentry.Context.add_breadcrumb/1`). Defaults to `[]`.
 
-    * `:level` - error level (see `t:t/0`)
+    * `:level` - error level (see `t:t/0`). Defaults to `:error`.
 
-    * `:fingerprint` - list of the fingerprint for grouping this event (a list of `t:String.t/0`)
+    * `:fingerprint` - list of the fingerprint for grouping this event (a list
+      of `t:String.t/0`). Defaults to `["{{ default }}"]`.
 
     * `:event_source` - the source of the event. This fills in the `:source` field of the
-      returned struct.
+      returned struct. This is not present by default.
 
   ## Examples
 
@@ -160,8 +201,10 @@ defmodule Sentry.Event do
       :warning
       iex> hd(event.exception).type
       "RuntimeError"
+      iex> event.original_exception
+      %RuntimeError{message: "oops"}
 
-      iex> event = create_event(event_source: :plug)
+      iex> event = create_event(message: "Unknown route", event_source: :plug)
       iex> event.source
       :plug
 
@@ -176,7 +219,7 @@ defmodule Sentry.Event do
                | {:level, level()}
                | {:fingerprint, [String.t()]}
                | {:message, String.t()}
-               | {:event_source, term()}
+               | {:event_source, atom()}
                | {:exception, Exception.t()}
                | {:stacktrace, Exception.stacktrace()}
   def create_event(opts) when is_list(opts) do
@@ -194,24 +237,17 @@ defmodule Sentry.Event do
       request: request_context
     } = Sentry.Context.get_all()
 
+    level = Keyword.get(opts, :level, :error)
     fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
 
-    extra =
-      extra_context
-      |> Map.merge(Keyword.get(opts, :extra, %{}))
-
-    user =
-      user_context
-      |> Map.merge(Keyword.get(opts, :user, %{}))
+    extra = Map.merge(extra_context, Keyword.get(opts, :extra, %{}))
+    user = Map.merge(user_context, Keyword.get(opts, :user, %{}))
+    request = Map.merge(request_context, Keyword.get(opts, :request, %{}))
 
     tags =
       Config.tags()
       |> Map.merge(tags_context)
       |> Map.merge(Keyword.get(opts, :tags, %{}))
-
-    request =
-      request_context
-      |> Map.merge(Keyword.get(opts, :request, %{}))
 
     breadcrumbs =
       Keyword.get(opts, :breadcrumbs, [])
@@ -221,31 +257,30 @@ defmodule Sentry.Event do
 
     message = Keyword.get(opts, :message)
     exception = Keyword.get(opts, :exception)
+    stacktrace = Keyword.get(opts, :stacktrace)
+    source = Keyword.get(opts, :event_source)
 
     %__MODULE__{
-      event_id: UUID.uuid4_hex(),
-      timestamp: timestamp,
-      level: Keyword.get(opts, :level, :error),
-      server_name: Config.server_name() || to_string(:net_adm.localhost()),
-      release: Config.release(),
-      sdk: @sdk,
-      tags: tags,
-      modules:
-        Enum.reduce(@deps, %{}, fn app, acc ->
-          Map.put(acc, app, to_string(Application.spec(app, :vsn)))
-        end),
-      culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
-      extra: extra,
       breadcrumbs: breadcrumbs,
       contexts: generate_contexts(),
-      exception: List.wrap(coerce_exception(exception, Keyword.get(opts, :stacktrace), message)),
-      message: message,
-      fingerprint: fingerprint,
+      culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
       environment: Config.environment_name(),
-      user: user,
+      event_id: UUID.uuid4_hex(),
+      exception: List.wrap(coerce_exception(exception, stacktrace, message)),
+      extra: extra,
+      fingerprint: fingerprint,
+      level: level,
+      message: message,
+      modules: Map.new(@deps, &{&1, to_string(Application.spec(&1, :vsn))}),
+      original_exception: exception,
+      release: Config.release(),
       request: request,
-      source: Keyword.get(opts, :event_source),
-      original_exception: exception
+      sdk: @sdk,
+      server_name: Config.server_name() || to_string(:net_adm.localhost()),
+      source: source,
+      tags: tags,
+      timestamp: timestamp,
+      user: user
     }
   end
 
