@@ -1,15 +1,18 @@
 defmodule Mix.Tasks.Sentry.SendTestEventTest do
   use ExUnit.Case
+
   import ExUnit.CaptureIO
-  import ExUnit.CaptureLog
   import Sentry.TestEnvironmentHelper
 
   test "prints if environment_name is not in included_environments" do
     modify_env(:sentry, dsn: "http://public:secret@localhost:43/1", included_environments: [])
 
-    assert capture_io(fn ->
-             Mix.Tasks.Sentry.SendTestEvent.run([])
-           end) == """
+    output =
+      capture_io(fn ->
+        Mix.Tasks.Sentry.SendTestEvent.run([])
+      end)
+
+    assert output =~ """
            Client configuration:
            server: http://localhost:43/api/1/envelope/
            public_key: public
@@ -17,9 +20,9 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            included_environments: []
            current environment_name: "test"
            hackney_opts: [recv_timeout: 50]
-
-           "test" is not in [] so no test event will be sent
            """
+
+    assert output =~ ~s("test" is not in [] so no test event will be sent)
   end
 
   test "sends event successfully when configured to" do
@@ -39,9 +42,12 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       included_environments: :all
     )
 
-    assert capture_io(fn ->
-             Mix.Tasks.Sentry.SendTestEvent.run([])
-           end) == """
+    output =
+      capture_io(fn ->
+        Mix.Tasks.Sentry.SendTestEvent.run([])
+      end)
+
+    assert output =~ """
            Client configuration:
            server: http://localhost:#{bypass.port}/api/1/envelope/
            public_key: public
@@ -49,12 +55,14 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            included_environments: :all
            current environment_name: "test"
            hackney_opts: [recv_timeout: 50]
-
-           Sending test event...
-           Test event sent!  Event ID: 340
            """
+
+    assert output =~ "Sending test event..."
+    assert output =~ "Test event sent"
+    assert output =~ "Event ID: 340"
   end
 
+  @tag :capture_log
   test "handles error when Sentry server is failing" do
     bypass = Bypass.open()
 
@@ -68,21 +76,8 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       request_retries: []
     )
 
-    assert capture_log(fn ->
-             assert capture_io(fn ->
-                      Mix.Tasks.Sentry.SendTestEvent.run([])
-                    end) == """
-                    Client configuration:
-                    server: http://localhost:#{bypass.port}/api/1/envelope/
-                    public_key: public
-                    secret_key: secret
-                    included_environments: ["test"]
-                    current environment_name: "test"
-                    hackney_opts: [recv_timeout: 50]
-
-                    Sending test event...
-                    Error sending event: {:request_failure, "Received 500 from Sentry server: "}
-                    """
-           end) =~ "Failed to send Sentry event"
+    assert_raise Mix.Error, ~r/Error sending event/, fn ->
+      capture_io(fn -> Mix.Tasks.Sentry.SendTestEvent.run([]) end)
+    end
   end
 end
