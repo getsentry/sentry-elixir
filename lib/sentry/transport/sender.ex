@@ -88,7 +88,7 @@ defmodule Sentry.Transport.Sender do
   end
 
   defp maybe_log_send_result(send_result, events) do
-    if Enum.any?(events, &(&1.__source__ == :logger)) do
+    if Enum.any?(events, &(&1.source == :logger)) do
       :ok
     else
       message =

@@ -29,7 +29,22 @@ defmodule Sentry.Event do
   @typedoc """
   The type for the event struct.
 
-  See [`%Sentry.Event{}`](`__struct__/0`) for more information.
+  All of the fields in this struct map directly to the fields described in the
+  [Sentry documentation](https://develop.sentry.dev/sdk/event-payloads). These fields
+  are the exceptions, and are specific to the Elixir Sentry SDK:
+
+    * `:source` - the source of the event. `Sentry.LoggerBackend` and `Sentry.LoggerHandler`
+      set this to `:logger`, while `Sentry.PlugCapture` and `Sentry.PlugContext` set it to
+      `:plug`. You can set it to any atom. See the `:event_source` option in `create_event/1`
+      and `transform_exception/2`.
+
+    * `:original_exception` - the original exception that is being reported, if there's one.
+      The Elixir Sentry SDK manipulates reported exceptions to make them fit the payload
+      required by the Sentry API, and these end up in the `:exception` field. The
+      `:original_exception` field, instead, contains the original exception as the raw Elixir
+      term (such as `%RuntimeError{...}`).
+
+  See also [`%Sentry.Event{}`](`__struct__/0`).
   """
   @type t() :: %__MODULE__{
           # Required
@@ -53,113 +68,144 @@ defmodule Sentry.Event do
           # Interfaces.
           breadcrumbs: [Interfaces.Breadcrumb.t()],
           contexts: Interfaces.context(),
-          exception: Interfaces.Exception.t() | nil,
+          exception: [Interfaces.Exception.t()],
           message: String.t() | nil,
           request: Interfaces.request(),
           sdk: Interfaces.SDK.t() | nil,
           user: Interfaces.user() | nil,
 
           # Non-payload fields.
-          __source__: term(),
-          __original_exception__: Exception.t() | nil
+          source: atom(),
+          original_exception: Exception.t() | nil
         }
 
   @doc """
   The struct representing the event.
 
-  In general, you're not advised to manipulate this struct's fields directly. Instead,
-  try to use functions such as `create_event/1` or `transform_exception/2` for creating
+  You're not advised to manipulate this struct's fields directly. Instead,
+  use functions such as `create_event/1` or `transform_exception/2` for creating
   events.
+
+  See the `t:t/0` type for information on the fields and their types.
   """
   @enforce_keys [:event_id, :timestamp]
   defstruct [
     # Required. Hexadecimal string representing a uuid4 value. The length is exactly 32
     # characters. Dashes are not allowed. Has to be lowercase.
-    :event_id,
+    event_id: nil,
 
     # Required. Indicates when the event was created in the Sentry SDK. The format is either a
     # string as defined in RFC 3339 or a numeric (integer or float) value representing the number
     # of seconds that have elapsed since the Unix epoch.
-    :timestamp,
+    timestamp: nil,
 
-    # Optional fields without defaults.
-    :level,
-    :logger,
-    :transaction,
-    :server_name,
-    :release,
-    :dist,
-
-    # Interfaces.
-    :breadcrumbs,
-    :contexts,
-    :exception,
-    :message,
-    :request,
-    :sdk,
-    :user,
+    # Optional fields.
+    breadcrumbs: [],
+    contexts: nil,
+    dist: nil,
+    environment: "production",
+    exception: [],
+    extra: %{},
+    fingerprint: [],
+    level: nil,
+    logger: nil,
+    message: nil,
+    modules: %{},
+    platform: :elixir,
+    release: nil,
+    request: %{},
+    sdk: nil,
+    server_name: nil,
+    tags: %{},
+    transaction: nil,
+    user: %{},
 
     # "Culprit" is not documented anymore and we should move to transactions at some point.
     # https://forum.sentry.io/t/culprit-deprecated-in-favor-of-what/4871/9
-    :culprit,
+    culprit: nil,
 
     # Non-payload "private" fields.
-    :__source__,
-    :__original_exception__,
-
-    # Required. Has to be "elixir".
-    platform: :elixir,
-
-    # Optional fields with defaults.
-    tags: %{},
-    modules: %{},
-    extra: %{},
-    fingerprint: [],
-    environment: "production"
+    source: nil,
+    original_exception: nil
   ]
+
+  # Removes all the non-payload keys from the event so that the client can render
+  @doc false
+  @spec remove_non_payload_keys(t()) :: map()
+  def remove_non_payload_keys(%__MODULE__{} = event) do
+    event
+    |> Map.from_struct()
+    |> Map.drop([:original_exception, :source])
+  end
 
   @doc """
   Creates an event struct out of collected context and options.
 
+  > #### Merging Options with Context and Config {: .info}
+  >
+  > Some of the options documented below are **merged** with the Sentry context, or
+  > with the Sentry context *and* the configuration. The option you pass here always
+  > has higher precedence, followed by the context and finally by the configuration.
+  >
+  > See also `Sentry.Context` for information on the Sentry context and `Sentry` for
+  > information on configuration.
+
   ## Options
 
-    * `:exception` - an `t:Exception.t/0`
+    * `:exception` - an `t:Exception.t/0`. This is the exception that gets reported in the
+      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
+      `:original_exception` field of `t:t/0`. This option is **required** unless the
+      `:message` option is present. This is not present by default.
 
-    * `:stacktrace` - a stacktrace, as in `t:Exception.stacktrace/0`
+    * `:stacktrace` - a stacktrace, as in `t:Exception.stacktrace/0`. This is not present
+      by default.
 
-    * `:message` - a message (`t:String.t/0`)
+    * `:message` - a message (`t:String.t/0`). This is not present by default.
 
     * `:extra` - map of extra context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_extra_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
     * `:user` - map of user context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_user_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
-    * `:tags` - map of tags context, which gets merged with the current context
-      (see `Sentry.Context`)
+    * `:tags` - map of tags context, which gets merged with the current context (see
+      `Sentry.Context.set_tags_context/1`) and with the `:tags` option in the global
+      Sentry configuration. If fields collide, the ones in the map passed through
+      this option have precedence over the ones in the context, which have precedence
+      over the ones in the configuration. Defaults to `%{}`.
 
     * `:request` - map of request context, which gets merged with the current context
-      (see `Sentry.Context`)
+      (see `Sentry.Context.set_request_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context. Defaults to `%{}`.
 
-    * `:breadcrumbs` - list of breadcrumbs
+    * `:breadcrumbs` - list of breadcrumbs. This list gets **prepended** to the list
+      in the context (see `Sentry.Context.add_breadcrumb/1`). Defaults to `[]`.
 
-    * `:level` - error level (see `t:t/0`)
+    * `:level` - error level (see `t:t/0`). Defaults to `:error`.
 
-    * `:fingerprint` - list of the fingerprint for grouping this event (a list of `t:String.t/0`)
+    * `:fingerprint` - list of the fingerprint for grouping this event (a list
+      of `t:String.t/0`). Defaults to `["{{ default }}"]`.
 
-    * `:event_source` - the source of the event. This fills in the `:__source__` field of the
-      returned struct.
+    * `:event_source` - the source of the event. This fills in the `:source` field of the
+      returned struct. This is not present by default.
 
   ## Examples
 
       iex> event = create_event(exception: %RuntimeError{message: "oops"}, level: :warning)
       iex> event.level
       :warning
-      iex> event.exception.type
+      iex> hd(event.exception).type
       "RuntimeError"
+      iex> event.original_exception
+      %RuntimeError{message: "oops"}
 
-      iex> event = create_event(event_source: :plug)
-      iex> event.__source__
+      iex> event = create_event(message: "Unknown route", event_source: :plug)
+      iex> event.source
       :plug
 
   """
@@ -173,7 +219,7 @@ defmodule Sentry.Event do
                | {:level, level()}
                | {:fingerprint, [String.t()]}
                | {:message, String.t()}
-               | {:event_source, term()}
+               | {:event_source, atom()}
                | {:exception, Exception.t()}
                | {:stacktrace, Exception.stacktrace()}
   def create_event(opts) when is_list(opts) do
@@ -191,24 +237,17 @@ defmodule Sentry.Event do
       request: request_context
     } = Sentry.Context.get_all()
 
+    level = Keyword.get(opts, :level, :error)
     fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
 
-    extra =
-      extra_context
-      |> Map.merge(Keyword.get(opts, :extra, %{}))
-
-    user =
-      user_context
-      |> Map.merge(Keyword.get(opts, :user, %{}))
+    extra = Map.merge(extra_context, Keyword.get(opts, :extra, %{}))
+    user = Map.merge(user_context, Keyword.get(opts, :user, %{}))
+    request = Map.merge(request_context, Keyword.get(opts, :request, %{}))
 
     tags =
       Config.tags()
       |> Map.merge(tags_context)
       |> Map.merge(Keyword.get(opts, :tags, %{}))
-
-    request =
-      request_context
-      |> Map.merge(Keyword.get(opts, :request, %{}))
 
     breadcrumbs =
       Keyword.get(opts, :breadcrumbs, [])
@@ -218,31 +257,30 @@ defmodule Sentry.Event do
 
     message = Keyword.get(opts, :message)
     exception = Keyword.get(opts, :exception)
+    stacktrace = Keyword.get(opts, :stacktrace)
+    source = Keyword.get(opts, :event_source)
 
     %__MODULE__{
-      event_id: UUID.uuid4_hex(),
-      timestamp: timestamp,
-      level: Keyword.get(opts, :level, :error),
-      server_name: Config.server_name() || to_string(:net_adm.localhost()),
-      release: Config.release(),
-      sdk: @sdk,
-      tags: tags,
-      modules:
-        Enum.reduce(@deps, %{}, fn app, acc ->
-          Map.put(acc, app, to_string(Application.spec(app, :vsn)))
-        end),
-      culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
-      extra: extra,
       breadcrumbs: breadcrumbs,
       contexts: generate_contexts(),
-      exception: coerce_exception(exception, Keyword.get(opts, :stacktrace), message),
-      message: message,
-      fingerprint: fingerprint,
+      culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
       environment: Config.environment_name(),
-      user: user,
+      event_id: UUID.uuid4_hex(),
+      exception: List.wrap(coerce_exception(exception, stacktrace, message)),
+      extra: extra,
+      fingerprint: fingerprint,
+      level: level,
+      message: message,
+      modules: Map.new(@deps, &{&1, to_string(Application.spec(&1, :vsn))}),
+      original_exception: exception,
+      release: Config.release(),
       request: request,
-      __source__: Keyword.get(opts, :event_source),
-      __original_exception__: exception
+      sdk: @sdk,
+      server_name: Config.server_name() || to_string(:net_adm.localhost()),
+      source: source,
+      tags: tags,
+      timestamp: timestamp,
+      user: user
     }
   end
 

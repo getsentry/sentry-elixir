@@ -41,8 +41,9 @@ defmodule Sentry.LoggerBackendTest do
     end)
 
     assert_receive {^ref, event}
-    assert event.exception.type == "RuntimeError"
-    assert event.exception.value == "Unique Error"
+    assert [exception] = event.exception
+    assert exception.type == "RuntimeError"
+    assert exception.value == "Unique Error"
   end
 
   test "a GenServer throw is reported" do
@@ -51,11 +52,12 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.throw(pid)
     assert_receive {^ref, event}
-    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
-    assert event.exception.value =~ "** (stop) bad return value: \"I am throwing\"\n"
-    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :throw}\n"
-    assert event.exception.value =~ "State: []"
-    assert event.exception.stacktrace.frames == []
+    assert [exception] = event.exception
+    assert exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert exception.value =~ "** (stop) bad return value: \"I am throwing\"\n"
+    assert exception.value =~ "Last message: {:\"$gen_cast\", :throw}\n"
+    assert exception.value =~ "State: []"
+    assert exception.stacktrace.frames == []
   end
 
   test "abnormal GenServer exit is reported" do
@@ -64,11 +66,12 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.exit(pid)
     assert_receive {^ref, event}
-    assert event.exception.type == "message"
-    assert event.exception.value =~ "GenServer #{inspect(pid)} terminating\n"
-    assert event.exception.value =~ "** (stop) :bad_exit\n"
-    assert event.exception.value =~ "Last message: {:\"$gen_cast\", :exit}\n"
-    assert event.exception.value =~ "State: []"
+    assert [exception] = event.exception
+    assert exception.type == "message"
+    assert exception.value =~ "GenServer #{inspect(pid)} terminating\n"
+    assert exception.value =~ "** (stop) :bad_exit\n"
+    assert exception.value =~ "Last message: {:\"$gen_cast\", :exit}\n"
+    assert exception.value =~ "State: []"
   end
 
   test "bad function call causing GenServer crash is reported" do
@@ -80,7 +83,7 @@ defmodule Sentry.LoggerBackendTest do
     Sentry.TestGenServer.invalid_function(pid)
     assert_receive {^ref, event}
 
-    assert event.exception.type == "FunctionClauseError"
+    assert hd(event.exception).type == "FunctionClauseError"
     assert [%{message: "test"}] = event.breadcrumbs
 
     assert %{
@@ -89,7 +92,7 @@ defmodule Sentry.LoggerBackendTest do
              context_line: nil,
              pre_context: [],
              post_context: []
-           } = List.last(event.exception.stacktrace.frames)
+           } = List.last(hd(event.exception).stacktrace.frames)
   end
 
   test "GenServer timeout is reported" do
@@ -104,14 +107,16 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert event.exception.type == "message"
+    assert [exception] = event.exception
 
-    assert event.exception.value =~
+    assert exception.type == "message"
+
+    assert exception.value =~
              "Task #{inspect(task_pid)} started from #{inspect(self())} terminating\n"
 
-    assert event.exception.value =~ "** (stop) exited in: GenServer.call("
-    assert event.exception.value =~ "** (EXIT) time out"
-    assert length(event.exception.stacktrace.frames) > 0
+    assert exception.value =~ "** (stop) exited in: GenServer.call("
+    assert exception.value =~ "** (EXIT) time out"
+    assert length(exception.stacktrace.frames) > 0
   end
 
   test "captures errors from spawn/0 in Plug app" do
@@ -123,7 +128,7 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert [stacktrace_frame] = event.exception.stacktrace.frames
+    assert [stacktrace_frame] = hd(event.exception).stacktrace.frames
     assert stacktrace_frame.filename == "test/support/example_plug_application.ex"
   end
 
@@ -275,8 +280,10 @@ defmodule Sentry.LoggerBackendTest do
 
     assert event.user.user_id == 3
     assert event.extra.day_of_week == "Friday"
-    assert event.exception.type == "RuntimeError"
-    assert event.exception.value == "oops"
+
+    assert [exception] = event.exception
+    assert exception.type == "RuntimeError"
+    assert exception.value == "oops"
   end
 
   test "handles malformed :callers metadata" do

@@ -467,7 +467,7 @@ defmodule Sentry do
   @spec send_event(Event.t(), keyword()) :: send_result
   def send_event(event, opts \\ [])
 
-  def send_event(%Event{message: nil, exception: nil}, _opts) do
+  def send_event(%Event{message: nil, exception: []}, _opts) do
     Logger.log(Config.log_level(), "Sentry: unable to parse exception")
 
     :ignored

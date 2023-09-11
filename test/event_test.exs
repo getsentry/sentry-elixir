@@ -22,11 +22,14 @@ defmodule Sentry.EventTest do
     assert event.platform == :elixir
     assert event.extra == %{}
 
-    assert %Interfaces.Exception{
-             type: "UndefinedFunctionError",
-             value: "function Sentry.Event.not_a_function/3 is undefined or private",
-             module: nil
-           } = event.exception
+    assert [
+             %Interfaces.Exception{
+               type: "UndefinedFunctionError",
+               value: "function Sentry.Event.not_a_function/3 is undefined or private",
+               module: nil,
+               stacktrace: stacktrace
+             }
+           ] = event.exception
 
     assert event.level == :error
     assert event.message == nil
@@ -100,7 +103,7 @@ defmodule Sentry.EventTest do
                pre_context: [],
                vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}
              }
-           ] = event.exception.stacktrace.frames
+           ] = stacktrace.frames
 
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
@@ -128,7 +131,7 @@ defmodule Sentry.EventTest do
       assert %{} = event.request
       assert %{} = event.contexts
       assert event.release == nil
-      assert event.exception == nil
+      assert event.exception == []
       assert event.message == nil
       assert map_size(event.modules) > 0
     end
@@ -198,11 +201,13 @@ defmodule Sentry.EventTest do
                  stacktrace: stacktrace
                )
 
-      assert %Interfaces.Exception{
-               type: "RuntimeError",
-               value: "foo",
-               stacktrace: %Interfaces.Stacktrace{frames: [stacktrace_frame | _rest]}
-             } = event.exception
+      assert [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo",
+                 stacktrace: %Interfaces.Stacktrace{frames: [stacktrace_frame | _rest]}
+               }
+             ] = event.exception
 
       assert %Interfaces.Stacktrace.Frame{} = stacktrace_frame
       assert is_binary(stacktrace_frame.filename)
@@ -214,10 +219,12 @@ defmodule Sentry.EventTest do
       assert %Event{} =
                event = Event.create_event(exception: %RuntimeError{message: "foo"})
 
-      assert event.exception == %Interfaces.Exception{
-               type: "RuntimeError",
-               value: "foo"
-             }
+      assert event.exception == [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo"
+               }
+             ]
     end
 
     test "raises an error if passing :stacktrace without :exception" do
@@ -230,7 +237,7 @@ defmodule Sentry.EventTest do
       assert %Event{
                breadcrumbs: [],
                environment: :test,
-               exception: nil,
+               exception: [],
                extra: %{},
                level: :error,
                message: "Test message",
@@ -249,8 +256,8 @@ defmodule Sentry.EventTest do
       assert %Event{} =
                event = Event.create_event(exception: exception, event_source: :plug)
 
-      assert event.__source__ == :plug
-      assert event.__original_exception__ == exception
+      assert event.source == :plug
+      assert event.original_exception == exception
     end
   end
 
@@ -348,7 +355,7 @@ defmodule Sentry.EventTest do
                pre_context: [],
                vars: %{}
              }
-           ] == event.exception.stacktrace.frames
+           ] == hd(event.exception).stacktrace.frames
   end
 
   test "transforms mix deps to map of modules" do
