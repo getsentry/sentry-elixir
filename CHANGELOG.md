@@ -21,6 +21,10 @@
 - Make the `Sentry.HTTPClient.child_spec/0` callback optional
 - Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
 
+### Deprecations
+
+- Soft-deprecate `Sentry.EventFilter` in favour of `:before_send_event` callbacks.
+
 ## 8.1.0
 
 ### Various fixes & improvements

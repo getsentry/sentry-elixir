@@ -139,13 +139,13 @@ defmodule Sentry do
       to keep. Defaults to `100`. See `Sentry.Context.add_breadcrumb/1`.
 
     * `:before_send_event` (`t:before_send_event_callback/0`) - allows performing operations
-      on the event *before* it is sent. If the callback returns `nil` or `false`,
-      the event is not reported. If it returns an updated `Sentry.Event`, then
-      the updated event is used instead. See the [*Event Callbacks*
+      on the event *before* it is sent as well as filtering out the event altogether.
+      If the callback returns `nil` or `false`, the event is not reported. If it returns an
+      updated `Sentry.Event`, then the updated event is used instead. See the [*Event Callbacks*
       section](#module-event-callbacks) below for more information.
 
     * `:after_send_event` (`t:after_send_event_callback/0`) - callback that is called *after*
-      attempting to send an event.  The result of the HTTP call as well as the event will
+      attempting to send an event. The result of the HTTP call as well as the event will
       be passed as arguments. The return value of the callback is not returned. See the
       [*Event Callbacks* section](#module-event-callbacks) below for more information.
 
@@ -231,25 +231,12 @@ defmodule Sentry do
   ## Filtering Exceptions
 
   If you would like to prevent Sentry from sending certain exceptions, you can
-  use the `:filter` configuration option. It must be configured to be a module
-  that implements the `Sentry.EventFilter` behaviour.
+  use the `:before_send_event` configuration option. See the [*Event Callbacks*
+  section](#module-event-callbacks) below.
 
-  A configuration like the one below prevents sending `Phoenix.Router.NoRouteError`
-  exceptions coming from `Sentry.Plug`, but allows other exceptions to be sent.
-
-      defmodule MyApp.SentryEventFilter do
-        @behaviour Sentry.EventFilter
-
-        @impl true
-        def exclude_exception?(%Phoenix.Router.NoRouteError{}, :plug), do: true
-        def exclude_exception?(_exception, _source), do: false
-      end
-
-      # In config/config.exs
-      config :sentry,
-        filter: MyApp.SentryEventFilter,
-        # other config...
-
+  Before v9.0.0, the recommended way to filter out exceptions was to use a *filter*,
+  that is, a module implementing the `Sentry.EventFilter` behaviour. This is still supported,
+  but is not deprecated. See `Sentry.EventFilter` for more information.
 
   ## Event Callbacks
 
