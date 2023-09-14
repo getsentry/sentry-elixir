@@ -64,11 +64,26 @@ defmodule Sentry.Config do
   @spec assert_dsn_has_no_query_params!() :: :ok
   def assert_dsn_has_no_query_params! do
     if sentry_dsn = dsn() do
-      if URI.parse(sentry_dsn).query do
+      uri_dsn = URI.parse(sentry_dsn)
+
+      if uri_dsn.query do
         raise ArgumentError, """
-        using a Sentry DSN with query parameters is not supported since v9.0.0 of this library. \
-        Please remove the query parameters from your DSN and pass them in as regular \
-        configuration. See the documentation for the Sentry module for more information.\
+        using a Sentry DSN with query parameters is not supported since v9.0.0 of this library.
+        The configured DSN was:
+
+            #{inspect(sentry_dsn)}
+
+        The query string in that DSN is:
+
+            #{inspect(uri_dsn.query)}
+
+        Please remove the query parameters from your DSN and pass them in as regular
+        configuration. Check out the guide to upgrade to 9.0.0 at:
+
+          https://hexdocs.pm/sentry/upgrade-9.x.html
+
+        See the documentation for the Sentry module for more information on configuration
+        in general.
         """
       end
     end
