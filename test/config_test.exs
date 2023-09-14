@@ -33,7 +33,7 @@ defmodule Sentry.ConfigTest do
   describe "included_environments" do
     test "retrieves from app env" do
       modify_env(:sentry, included_environments: [:test, :dev])
-      assert [:test, :dev] == Config.included_environments()
+      assert ["test", "dev"] == Config.included_environments()
     end
   end
 

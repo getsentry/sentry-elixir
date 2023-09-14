@@ -35,7 +35,7 @@ defmodule Sentry do
   configuration file:
 
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: ["prod"],
+        included_environments: [:prod],
         environment_name: config_env()
 
   This will set the environment name to whatever the current environment

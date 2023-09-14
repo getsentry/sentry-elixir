@@ -12,7 +12,6 @@
 - Removed `Sentry.Event.do_put_source_context/3`
 - Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
 - Removed `Sentry.CrashError` — now, crash reports (detected through `Sentry.LoggerBackend`) that do not contain exceptions are reported as *messages* in Sentry
-- Started accepting all environments by default by changing the default for the `:included_environments` configuration option from `[:prod]` to `:all`
 - Changed the shape of the `Sentry.Event` struct - check out the new fields (and typespec for `Sentry.Event.t/0`)
 
 ### Improvements
@@ -20,6 +19,7 @@
 - Add `Sentry.LoggerHandler`, which is a `:logger` handler rather than a `Logger` backend
 - Make the `Sentry.HTTPClient.child_spec/0` callback optional
 - Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
+- Add `:all` as a possible value for the `:included_environment` configuration option
 - Add `Sentry.Interfaces` with all the child modules, which are useful if you're working directly with the Sentry API
 
 ### Deprecations

@@ -110,7 +110,18 @@ defmodule Sentry.Config do
   end
 
   def included_environments do
-    Application.get_env(:sentry, :included_environments, :all)
+    case Application.fetch_env(:sentry, :included_environments) do
+      {:ok, :all} ->
+        :all
+
+      {:ok, envs} when is_list(envs) ->
+        string_envs = Enum.map(envs, &to_string/1)
+        Application.put_env(:sentry, :included_environments, string_envs)
+        string_envs
+
+      :error ->
+        _default = ["prod"]
+    end
   end
 
   def environment_name do
