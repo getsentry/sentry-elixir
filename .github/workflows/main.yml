@@ -28,7 +28,7 @@ jobs:
 
           # One version before the last supported one.
           - elixir: '1.14.5'
-            otp: '25.2'
+            otp: '25.3'
 
           # Oldest supported Elixir/Erlang pair.
           - elixir: '1.11.4'
