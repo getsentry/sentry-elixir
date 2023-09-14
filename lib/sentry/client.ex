@@ -84,9 +84,7 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :sync, request_retries) do
-    envelope = Envelope.new([event])
-
-    send_result = Transport.post_envelope(envelope, request_retries)
+    send_result = [event] |> Envelope.new() |> Transport.post_envelope(request_retries)
 
     if match?({:ok, _}, send_result) do
       Sentry.put_last_event_id_and_source(event.event_id, event.source)
