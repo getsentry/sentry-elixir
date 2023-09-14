@@ -2,10 +2,14 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   use Mix.Task
   alias Sentry.Config
 
-  @shortdoc "Attempts to send a test event to check the Sentry configuration"
+  @shortdoc "Send a test event to Sentry to check your Sentry configuration"
 
   @moduledoc """
-  Send test event to check if Sentry configuration is correct.
+  Sends a test event to Sentry to check if your Sentry configuration is correct.
+
+  This task reports a `RuntimeError` exception like this one:
+
+      %RuntimeError{message: "Testing sending Sentry event"}
 
   ## Options
 
