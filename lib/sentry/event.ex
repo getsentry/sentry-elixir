@@ -70,7 +70,7 @@ defmodule Sentry.Event do
           contexts: Interfaces.context(),
           exception: [Interfaces.Exception.t()],
           message: String.t() | nil,
-          request: Interfaces.request(),
+          request: Interfaces.Request.t() | nil,
           sdk: Interfaces.SDK.t() | nil,
           user: Interfaces.user() | nil,
 
@@ -113,7 +113,7 @@ defmodule Sentry.Event do
     modules: %{},
     platform: :elixir,
     release: nil,
-    request: %{},
+    request: %Interfaces.Request{},
     sdk: nil,
     server_name: nil,
     tags: %{},
@@ -212,7 +212,7 @@ defmodule Sentry.Event do
   @spec create_event([option]) :: t()
         when option:
                {:user, Interfaces.user()}
-               | {:request, Interfaces.request()}
+               | {:request, map()}
                | {:extra, Context.extra()}
                | {:breadcrumbs, Context.breadcrumb()}
                | {:tags, Context.tags()}
@@ -274,7 +274,7 @@ defmodule Sentry.Event do
       modules: Map.new(@deps, &{&1, to_string(Application.spec(&1, :vsn))}),
       original_exception: exception,
       release: Config.release(),
-      request: request,
+      request: coerce_request(request),
       sdk: @sdk,
       server_name: Config.server_name() || to_string(:net_adm.localhost()),
       source: source,
@@ -319,6 +319,18 @@ defmodule Sentry.Event do
       raise ArgumentError,
             "cannot provide a :stacktrace option without an exception or a message, got: #{inspect(stacktrace)}"
     end
+  end
+
+  @request_fields %Interfaces.Request{} |> Map.from_struct() |> Map.keys() |> MapSet.new()
+
+  defp coerce_request(request) do
+    Enum.reduce(request, %Interfaces.Request{}, fn {key, value}, acc ->
+      if key in @request_fields do
+        Map.replace!(acc, key, value)
+      else
+        raise ArgumentError, "unknown field for the request interface: #{inspect(key)}"
+      end
+    end)
   end
 
   @doc """

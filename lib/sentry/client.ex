@@ -111,6 +111,7 @@ defmodule Sentry.Client do
     |> update_if_present(:message, &String.slice(&1, 0, @max_message_length))
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
     |> update_if_present(:sdk, &Map.from_struct/1)
+    |> update_if_present(:request, &(&1 |> Map.from_struct() |> remove_nils()))
     |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
@@ -123,6 +124,10 @@ defmodule Sentry.Client do
     |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
       %{frames: Enum.map(frames, &Map.from_struct/1)}
     end)
+  end
+
+  defp remove_nils(map) when is_map(map) do
+    :maps.filter(fn _key, value -> not is_nil(value) end, map)
   end
 
   defp sanitize_non_jsonable_values(map, json_library) do
