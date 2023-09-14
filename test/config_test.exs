@@ -1,5 +1,6 @@
 defmodule Sentry.ConfigTest do
   use ExUnit.Case
+  import ExUnit.CaptureIO
   import Sentry.TestEnvironmentHelper
   alias Sentry.Config
 
@@ -36,6 +37,11 @@ defmodule Sentry.ConfigTest do
       modify_env(:sentry, included_environments: [:test, :dev])
       assert Config.included_environments() == ["test", "dev"]
     end
+
+    test "defaults to [\"prod\"]" do
+      delete_env(:sentry, :included_environments)
+      assert Config.included_environments() == ["prod"]
+    end
   end
 
   describe "environment_name/0" do
@@ -55,6 +61,40 @@ defmodule Sentry.ConfigTest do
         modify_env(:sentry, environment_name: nil)
         Config.environment_name()
       end
+    end
+  end
+
+  describe "validate_log_level!/0" do
+    test "raises for invalid log levels" do
+      modify_env(:sentry, log_level: :invalid)
+
+      assert_raise ArgumentError, ":invalid is not a valid :log_level configuration", fn ->
+        Config.validate_log_level!()
+      end
+    end
+  end
+
+  describe "assert_dsn_has_no_query_params!/0" do
+    test "raises if DSN has query params" do
+      modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/1?send_max_attempts=5")
+
+      assert_raise ArgumentError, ~r/using a Sentry DSN/, fn ->
+        Config.assert_dsn_has_no_query_params!()
+      end
+    end
+  end
+
+  describe "warn_for_deprecated_env_vars!/0" do
+    test "emits the right warning" do
+      delete_env(:sentry, :included_environments)
+      modify_system_env(%{"SENTRY_INCLUDED_ENVIRONMENTS" => "test,dev"})
+
+      output =
+        capture_io(:stderr, fn ->
+          assert :ok = Config.warn_for_deprecated_env_vars!()
+        end)
+
+      assert output =~ "setting SENTRY_INCLUDED_ENVIRONMENTS is deprecated"
     end
   end
 end

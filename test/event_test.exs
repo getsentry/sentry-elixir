@@ -381,6 +381,7 @@ defmodule Sentry.EventTest do
              :cowlib,
              :dialyxir,
              :erlex,
+             :excoveralls,
              :hackney,
              :idna,
              :jason,

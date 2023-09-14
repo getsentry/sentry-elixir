@@ -85,4 +85,13 @@ defmodule SentryTest do
     assert {event_id, nil} = Sentry.get_last_event_id_and_source()
     assert is_binary(event_id)
   end
+
+  test "ignores events without message and exception" do
+    log =
+      capture_log(fn ->
+        assert Sentry.send_event(Sentry.Event.create_event([])) == :ignored
+      end)
+
+    assert log =~ "Sentry: unable to parse exception"
+  end
 end

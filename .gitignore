@@ -5,3 +5,4 @@ erl_crash.dump
 /doc
 /priv/plts/*.plt
 /priv/plts/*.plt.hash
+/cover

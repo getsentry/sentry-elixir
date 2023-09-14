@@ -19,6 +19,10 @@ defmodule Sentry.Mixfile do
         plt_add_deps: :app_tree,
         plt_add_apps: [:mix, :ex_unit]
       ],
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        "coveralls.html": :test
+      ],
       name: "Sentry",
       docs: [
         extra_section: "Guides",
@@ -73,12 +77,15 @@ defmodule Sentry.Mixfile do
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:plug_cowboy, "~> 2.3", optional: true},
+
+      # Dev and test dependencies
+      {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
-      {:bypass, "~> 2.0", only: [:test]},
+      {:excoveralls, "~> 0.17.1", only: [:test]},
+      {:mox, "~> 1.0", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
-      {:phoenix_html, "~> 2.0", only: [:test]},
-      {:mox, "~> 1.0", only: [:test]}
+      {:phoenix_html, "~> 2.0", only: [:test]}
     ]
   end
 

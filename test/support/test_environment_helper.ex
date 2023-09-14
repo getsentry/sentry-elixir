@@ -14,6 +14,19 @@ defmodule Sentry.TestEnvironmentHelper do
     end)
   end
 
+  def delete_env(app, key) do
+    original_env = Application.fetch_env(app, key)
+
+    Application.delete_env(app, key)
+
+    ExUnit.Callbacks.on_exit(fn ->
+      case original_env do
+        {:ok, val} -> Application.put_env(app, key, val)
+        :error -> :ok
+      end
+    end)
+  end
+
   def modify_system_env(overrides) when is_map(overrides) do
     original_env = System.get_env()
     System.put_env(overrides)
