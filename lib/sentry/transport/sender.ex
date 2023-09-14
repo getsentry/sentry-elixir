@@ -9,9 +9,6 @@ defmodule Sentry.Transport.Sender do
 
   @registry Sentry.Transport.SenderRegistry
 
-  @async_queue_max_size 10
-  @async_queue_timeout 500
-
   # This behaviour is only present for mocks in tests.
   defmodule Behaviour do
     @moduledoc false
@@ -39,53 +36,26 @@ defmodule Sentry.Transport.Sender do
 
   ## State
 
-  defstruct async_queue: :queue.new()
+  defstruct []
 
   ## Callbacks
 
   @impl GenServer
   def init([]) do
-    Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
     {:ok, %__MODULE__{}}
   end
 
   @impl GenServer
   def handle_cast({:send, %Event{} = event}, %__MODULE__{} = state) do
-    state = update_in(state.async_queue, &:queue.in(event, &1))
+    [event]
+    |> Envelope.new()
+    |> Transport.post_envelope()
+    |> maybe_log_send_result([event])
 
-    state =
-      if :queue.len(state.async_queue) >= @async_queue_max_size do
-        flush_async_queue(state)
-      else
-        state
-      end
-
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def handle_info(:flush_async_queue, %__MODULE__{} = state) do
-    state = flush_async_queue(state)
-    Process.send_after(self(), :flush_async_queue, @async_queue_timeout)
     {:noreply, state}
   end
 
   ## Helpers
-
-  defp flush_async_queue(%__MODULE__{async_queue: events_queue} = state) do
-    if :queue.is_empty(events_queue) do
-      state
-    else
-      events = :queue.to_list(events_queue)
-
-      events
-      |> Envelope.new()
-      |> Transport.post_envelope()
-      |> maybe_log_send_result(events)
-
-      %__MODULE__{state | async_queue: :queue.new()}
-    end
-  end
 
   defp maybe_log_send_result(send_result, events) do
     if Enum.any?(events, &(&1.source == :logger)) do

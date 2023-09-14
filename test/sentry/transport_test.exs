@@ -15,9 +15,7 @@ defmodule Sentry.TransportTest do
     test "sends a POST request with the right headers and payload", %{bypass: bypass} do
       envelope =
         Envelope.new([
-          Event.create_event(message: "Hello 1"),
-          Event.create_event(message: "Hello 2"),
-          Event.create_event(message: "Hello 3")
+          Event.create_event(message: "Hello 1")
         ])
 
       Bypass.expect_once(bypass, fn conn ->

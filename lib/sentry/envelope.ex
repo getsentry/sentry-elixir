@@ -13,10 +13,13 @@ defmodule Sentry.Envelope do
   defstruct [:event_id, :items]
 
   @doc """
-  Creates a new envelope containing the given events.
+  Creates a new envelope containing the given event.
+
+  Envelopes can only have a single element of type "event", so that's why we
+  restrict on a single-element list.
   """
   @spec new([Event.t(), ...]) :: t()
-  def new([%Event{event_id: event_id} | _rest] = events) do
+  def new([%Event{event_id: event_id}] = events) do
     %__MODULE__{
       event_id: event_id,
       items: events
@@ -25,36 +28,33 @@ defmodule Sentry.Envelope do
 
   @doc """
   Encodes the envelope into its binary representation.
+
+  For now, we support only envelopes with a single event in them.
   """
   @spec to_binary(t()) :: {:ok, binary()} | {:error, any()}
-  def to_binary(%__MODULE__{} = envelope) do
+  def to_binary(%__MODULE__{items: [%Event{} = event]} = envelope) do
     json_library = Config.json_library()
 
-    encoded_items =
-      Enum.map(envelope.items, fn item ->
-        case encode_item(item, json_library) do
-          {:ok, encoded_item} ->
-            type =
-              if is_struct(item, Event) do
-                "event"
-              else
-                raise "unexpected item in envelope: #{inspect(item)}"
-              end
+    headers_iodata =
+      case envelope.event_id do
+        nil -> "{{}}\n"
+        event_id -> ~s({"event_id":"#{event_id}"}\n)
+      end
 
-            [
-              ~s({"type": "#{type}", "length": #{byte_size(encoded_item)}}\n),
-              encoded_item,
-              ?\n
-            ]
+    case event |> Sentry.Client.render_event() |> json_library.encode() do
+      {:ok, encoded_event} ->
+        body = [
+          headers_iodata,
+          ~s({"type": "event", "length": #{byte_size(encoded_event)}}\n),
+          encoded_event,
+          ?\n
+        ]
 
-          {:error, _reason} = error ->
-            throw(error)
-        end
-      end)
+        {:ok, IO.iodata_to_binary(body)}
 
-    {:ok, IO.iodata_to_binary([encode_headers(envelope) | encoded_items])}
-  catch
-    {:error, reason} -> {:error, reason}
+      {:error, _reason} = error ->
+        error
+    end
   end
 
   @doc """
@@ -77,23 +77,6 @@ defmodule Sentry.Envelope do
       {:error, :missing_header} = error -> error
       {:error, _json_error} -> {:error, :invalid_envelope}
     end
-  end
-
-  #
-  # Encoding
-  #
-
-  defp encode_headers(%__MODULE__{} = envelope) do
-    case envelope.event_id do
-      nil -> "{{}}\n"
-      event_id -> ~s({"event_id":"#{event_id}"}\n)
-    end
-  end
-
-  defp encode_item(%Event{} = event, json_library) do
-    event
-    |> Sentry.Client.render_event()
-    |> json_library.encode()
   end
 
   #
