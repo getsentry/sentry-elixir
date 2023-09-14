@@ -34,28 +34,43 @@ defmodule Sentry.Interfaces do
         }
 
   @typedoc """
-  The **request** interface.
-
-  See <https://develop.sentry.dev/sdk/event-payloads/request>.
-  """
-  @typedoc since: "9.0.0"
-  @type request() :: %{
-          optional(:method) => String.t() | nil,
-          optional(:url) => String.t() | nil,
-          optional(:query_string) => String.t() | map() | [{String.t(), String.t()}] | nil,
-          optional(:data) => term(),
-          optional(:cookies) => String.t() | map() | [{String.t(), String.t()}] | nil,
-          optional(:headers) => map() | nil,
-          optional(:env) => map() | nil
-        }
-
-  @typedoc """
   The generic **context** interface.
 
   See <https://develop.sentry.dev/sdk/event-payloads/contexts>.
   """
   @typedoc since: "9.0.0"
   @type context() :: map()
+
+  defmodule Request do
+    @moduledoc """
+    The struct for the **request** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/request>.
+    """
+
+    @moduledoc since: "9.0.0"
+
+    @typedoc since: "9.0.0"
+    @type t() :: %__MODULE__{
+            method: String.t() | nil,
+            url: String.t() | nil,
+            query_string: String.t() | map() | [{String.t(), String.t()}] | nil,
+            data: term(),
+            cookies: String.t() | map() | [{String.t(), String.t()}] | nil,
+            headers: map() | nil,
+            env: map() | nil
+          }
+
+    defstruct [
+      :method,
+      :url,
+      :query_string,
+      :data,
+      :cookies,
+      :headers,
+      :env
+    ]
+  end
 
   defmodule SDK do
     @moduledoc """

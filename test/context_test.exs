@@ -3,7 +3,7 @@ defmodule Sentry.ContextTest do
 
   import Sentry.TestEnvironmentHelper
 
-  alias Sentry.{Context, Event}
+  alias Sentry.{Context, Event, Interfaces}
 
   doctest Context, except: [add_breadcrumb: 1]
 
@@ -64,7 +64,7 @@ defmodule Sentry.ContextTest do
 
     event = Event.create_event(request: %{method: "GET"})
 
-    assert event.request == %{url: "https://wow", method: "GET"}
+    assert event.request == %Interfaces.Request{url: "https://wow", method: "GET"}
   end
 
   test "passing in extra context as option overrides Context" do

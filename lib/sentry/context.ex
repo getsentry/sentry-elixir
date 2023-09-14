@@ -83,6 +83,23 @@ defmodule Sentry.Context do
         }
 
   @typedoc """
+  Request context.
+
+  See `set_request_context/1`. This map gets eventually converted
+  into a `Sentry.Interfaces.Request` struct.
+  """
+  @typedoc since: "9.0.0"
+  @type request_context() :: %{
+          optional(:method) => String.t() | nil,
+          optional(:url) => String.t() | nil,
+          optional(:query_string) => String.t() | map() | [{String.t(), String.t()}] | nil,
+          optional(:data) => term(),
+          optional(:cookies) => String.t() | map() | [{String.t(), String.t()}] | nil,
+          optional(:headers) => map() | nil,
+          optional(:env) => map() | nil
+        }
+
+  @typedoc """
   Breadcrumb info.
 
   See `add_breadcrumb/1`.
@@ -154,9 +171,9 @@ defmodule Sentry.Context do
   """
   @spec get_all() :: %{
           user: user_context(),
+          request: request_context(),
           tags: tags(),
           extra: extra(),
-          request: Interfaces.request(),
           breadcrumbs: list()
         }
   def get_all do
@@ -296,7 +313,7 @@ defmodule Sentry.Context do
       }
 
   """
-  @spec set_request_context(Interfaces.request()) :: :ok
+  @spec set_request_context(request_context()) :: :ok
   def set_request_context(request_context) when is_map(request_context) do
     set_context(@request_key, request_context)
   end

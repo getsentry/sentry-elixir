@@ -1,7 +1,7 @@
 defmodule Sentry.EnvelopeTest do
   use ExUnit.Case, async: true
 
-  alias Sentry.{Envelope, Event}
+  alias Sentry.{Envelope, Event, Interfaces}
 
   describe "from_binary/1" do
     test "parses envelope with empty headers" do
@@ -62,7 +62,7 @@ defmodule Sentry.EnvelopeTest do
         original_exception: nil,
         platform: :elixir,
         release: nil,
-        request: %{},
+        request: %Interfaces.Request{},
         server_name: "john-linux",
         tags: %{},
         timestamp: "2021-10-09T03:53:22",
