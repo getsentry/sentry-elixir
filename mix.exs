@@ -19,6 +19,7 @@ defmodule Sentry.Mixfile do
         plt_add_deps: :app_tree,
         plt_add_apps: [:mix, :ex_unit]
       ],
+      name: "Sentry",
       docs: [
         extra_section: "Guides",
         extras: [
@@ -41,6 +42,7 @@ defmodule Sentry.Mixfile do
         source_ref: "#{@version}",
         source_url: @source_url,
         main: "readme",
+        logo: "assets/logo.png",
         skip_undefined_reference_warnings_on: [
           "CHANGELOG.md",
           "pages/upgrade-9.x.md"
