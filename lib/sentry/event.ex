@@ -362,27 +362,7 @@ defmodule Sentry.Event do
     end
   end
 
-  @doc """
-  Converts the given stacktrace to a list of Sentry stacktrace frames.
-
-  ## Examples
-
-      iex> stacktrace = [{URI, :default_port, [:https, 4443], [file: "uri.ex", line: 12]}]
-      iex> stacktrace_to_frames(stacktrace)
-      [
-        %Interfaces.Stacktrace.Frame{
-          module: URI,
-          function: "URI.default_port/2",
-          filename: "uri.ex",
-          lineno: 12,
-          in_app: false,
-          vars: %{"arg0" => ":https", "arg1" => "4443"}
-        }
-      ]
-
-  """
-  @spec stacktrace_to_frames(Exception.stacktrace()) :: [Interfaces.Stacktrace.Frame.t()]
-  def stacktrace_to_frames(stacktrace) when is_list(stacktrace) do
+  defp stacktrace_to_frames(stacktrace) when is_list(stacktrace) do
     in_app_module_allow_list = Config.in_app_module_allow_list()
 
     Enum.reduce(stacktrace, [], fn entry, acc ->
@@ -465,29 +445,13 @@ defmodule Sentry.Event do
     Exception.format_mfa(m, f, arity_to_integer(a))
   end
 
-  @doc ~S"""
-  Builds a map of *variables* and their values from the given stacktrace.
-
-  For Sentry, typically the key in the map would be the name of the variable,
-  but we don't have that available, so we fall back to `arg<x>` (see examples).
-
-  ## Examples
-
-      iex> stacktrace = [{URI, :default_port, [:https, 4443], _location = []}]
-      iex> args_from_stacktrace(stacktrace)
-      %{"arg0" => ":https", "arg1" => "4443"}
-
-  """
-  @spec args_from_stacktrace(Exception.stacktrace()) :: %{optional(String.t()) => String.t()}
-  def args_from_stacktrace(stacktrace)
-
-  def args_from_stacktrace([{_mod, _fun, args, _location} | _rest]) when is_list(args),
+  defp args_from_stacktrace([{_mod, _fun, args, _location} | _rest]) when is_list(args),
     do: stacktrace_args_to_vars(args)
 
-  def args_from_stacktrace([{_fun, args, _location} | _rest]) when is_list(args),
+  defp args_from_stacktrace([{_fun, args, _location} | _rest]) when is_list(args),
     do: stacktrace_args_to_vars(args)
 
-  def args_from_stacktrace([_other | _rest]), do: %{}
+  defp args_from_stacktrace([_other | _rest]), do: %{}
 
   defp stacktrace_args_to_vars(args) do
     for {arg, index} <- Enum.with_index(args), into: %{} do
