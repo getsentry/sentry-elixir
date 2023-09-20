@@ -1,35 +1,5 @@
 # Changelog
 
-## 9.0.0
-
-### Breaking changes
-
-- Removed `Sentry.Sources`
-- Removed `Sentry.Client`, as it's an internal module
-- Removed the `Sentry.Event.sentry_exception/0` type
-- Removed `Sentry.Event.add_metadata/1`
-- Removed `Sentry.Event.culprit_from_stacktrace/1`
-- Removed `Sentry.Event.do_put_source_context/3`
-- Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
-- Removed `Sentry.CrashError` — now, crash reports (detected through `Sentry.LoggerBackend`) that do not contain exceptions are reported as *messages* in Sentry
-- Changed the shape of the `Sentry.Event` struct - check out the new fields (and typespec for `Sentry.Event.t/0`)
-
-### Improvements
-
-- Add `Sentry.LoggerHandler`, which is a `:logger` handler rather than a `Logger` backend
-- Make the `Sentry.HTTPClient.child_spec/0` callback optional
-- Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
-- Add `:all` as a possible value for the `:included_environment` configuration option
-- Add `Sentry.Interfaces` with all the child modules, which are useful if you're working directly with the Sentry API
-
-### Deprecations
-
-- Soft-deprecate `Sentry.EventFilter` in favour of `:before_send_event` callbacks.
-
-### Bug fixes
-
-- Fix an issue with JSON-encoding non-encodable terms (such as PIDs, which are pretty common)
-
 ## 8.1.0
 
 ### Various fixes & improvements
