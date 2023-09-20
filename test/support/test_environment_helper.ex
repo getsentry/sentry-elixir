@@ -41,4 +41,17 @@ defmodule Sentry.TestEnvironmentHelper do
       end)
     end)
   end
+
+  def delete_system_env(variable) do
+    original_env = System.fetch_env(variable)
+
+    System.delete_env(variable)
+
+    ExUnit.Callbacks.on_exit(fn ->
+      case original_env do
+        {:ok, val} -> System.put_env(variable, val)
+        :error -> :ok
+      end
+    end)
+  end
 end

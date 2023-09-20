@@ -59,7 +59,7 @@ defmodule Sentry.ConfigTest do
     test "raises if not set" do
       assert_raise RuntimeError, ~r/:environment_name must be set/, fn ->
         modify_env(:sentry, environment_name: nil)
-        modify_system_env(%{"SENTRY_ENVIRONMENT" => nil})
+        delete_system_env("SENTRY_ENVIRONMENT")
         Config.environment_name()
       end
     end
