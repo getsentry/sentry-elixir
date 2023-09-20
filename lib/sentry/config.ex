@@ -33,15 +33,6 @@ defmodule Sentry.Config do
   def validate_included_environments! do
     normalized_environments =
       case included_environments() do
-        comma_separated_envs when is_binary(comma_separated_envs) ->
-          IO.warn("""
-          setting :included_environments to a comma-separated string is deprecated and won't \
-          be supported in the next major version. Set :included_environments to a list of \
-          atoms instead.\
-          """)
-
-          String.split(comma_separated_envs, ",")
-
         list when is_list(list) ->
           Enum.map(list, fn
             env when is_atom(env) or is_binary(env) ->
@@ -113,6 +104,12 @@ defmodule Sentry.Config do
     case Application.fetch_env(:sentry, :included_environments) do
       {:ok, :all} ->
         :all
+
+      {:ok, envs} when is_binary(envs) ->
+        raise ArgumentError, """
+        setting :included_environments to a comma-separated string is not supported anymore. \
+        Set :included_environments to a list of atoms instead.\
+        """
 
       {:ok, envs} when is_list(envs) ->
         string_envs = Enum.map(envs, &to_string/1)
