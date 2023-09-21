@@ -1,5 +1,59 @@
 # Changelog
 
+## 9.0.0
+
+### Breaking changes
+
+- Removed `Sentry.Sources`
+- Removed `Sentry.Client`, as it's an internal module
+- Removed the `Sentry.Event.sentry_exception/0` type
+- Removed `Sentry.Event.add_metadata/1`
+- Removed `Sentry.Event.culprit_from_stacktrace/1`
+- Removed `Sentry.Event.do_put_source_context/3`
+- Removed the `:async` value for the `:result` option in `Sentry.send_event/2` (and friends)
+- Removed `Sentry.CrashError` — now, crash reports (detected through `Sentry.LoggerBackend`) that do not contain exceptions are reported as *messages* in Sentry
+- Changed the shape of the `Sentry.Event` struct - check out the new fields (and typespec for `Sentry.Event.t/0`)
+
+### Various fixes & improvements
+
+- Add `Sentry.LoggerHandler`, which is a `:logger` handler rather than a `Logger` backend
+- Make the `Sentry.HTTPClient.child_spec/0` callback optional
+- Add `:all` as a possible value of the `:metadata` configuration option for `Sentry.LoggerBackend`
+- Add `:all` as a possible value for the `:included_environment` configuration option
+- Add `Sentry.Interfaces` with all the child modules, which are useful if you're working directly with the Sentry API
+- Fix an issue with JSON-encoding non-encodable terms (such as PIDs, which are pretty common)
+
+### Deprecations
+
+- Soft-deprecate `Sentry.EventFilter` in favour of `:before_send_event` callbacks.
+
+### Various fixes & improvements
+
+- Remove manually-entered entries from the CHANGELOG (48cf37d9) by @whatyouhide
+- Don't cover test/support in tests (8cfe14b1) by @whatyouhide
+- Make two more funs private in Sentry.Event (340ba143) by @whatyouhide
+- Add excoveralls for code coverage (58d94cf2) by @whatyouhide
+- Clean up Sentry.Config (f996c7d3) by @whatyouhide
+- Revert default :included_environments to [:prod] (d33bf19d) by @whatyouhide
+- Send async events right away without queueing (#612) by @whatyouhide
+- Make Sentry.Interfaces.Request a struct (#611) by @whatyouhide
+- Improve some tests (59e8ebb0) by @whatyouhide
+- Add Sentry logo to the docs (6d27eacf) by @whatyouhide
+- Polish docs for "mix sentry.send_test_event" (903aeb93) by @whatyouhide
+- Update changelog and error messages (f6f577f4) by @whatyouhide
+- Soft-deprecate Sentry.EventFilter (#608) by @whatyouhide
+- Improve Sentry.Event struct definition (#609) by @whatyouhide
+- Clean up docs and tests for "mix sentry.send_test_event" (#610) by @whatyouhide
+- Add Sentry.LoggerHandler (#607) by @whatyouhide
+- Remove Sentry.CrashError and improve EXIT reporting (#606) by @whatyouhide
+- Support :all in Sentry.LoggerBackend's :metadata (#605) by @whatyouhide
+- Optimize JSON sanitization step (b96d6cfd) by @whatyouhide
+- Accept all environments by default (#604) by @whatyouhide
+- Add example about alternative HTTP client to docs (38e80edf) by @whatyouhide
+- Make Sentry.HTTPClient.child_spec/0 optional (#603) by @whatyouhide
+- Clean up a bunch of little non-important things (18e83ae9) by @whatyouhide
+- Simplify test GenServer (30a9828e) by @whatyouhide
+
 ## 8.1.0
 
 ### Various fixes & improvements
