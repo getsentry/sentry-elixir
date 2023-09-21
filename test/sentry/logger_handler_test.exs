@@ -272,6 +272,53 @@ defmodule Sentry.LoggerHandlerTest do
       assert exception.value =~ "** (EXIT) time out"
       assert length(exception.stacktrace.frames) > 0
     end
+
+    test "reports crashes on c:GenServer.init/1", %{sender_ref: ref} do
+      enable_sasl_reports()
+
+      defmodule CrashingGenServerInInit do
+        use GenServer
+        def init(_args), do: raise("oops")
+      end
+
+      assert {:error, _reason_and_stacktrace} = GenServer.start(CrashingGenServerInInit, :no_arg)
+
+      assert_receive {^ref, event}
+
+      assert [exception] = event.exception
+      assert exception.type == "RuntimeError"
+      assert exception.value == "oops"
+    end
+  end
+
+  describe "with a crashing :gen_statem" do
+    defmodule TestGenStagem do
+      @behaviour :gen_statem
+
+      def child_spec(_opts) do
+        %{id: __MODULE__, start: {:gen_statem, :start, [__MODULE__, :no_arg, _opts = []]}}
+      end
+
+      def run(pid, fun), do: :gen_statem.call(pid, {:run, fun})
+
+      ## Callbacks
+      def callback_mode, do: :state_functions
+      def init(_arg), do: {:ok, :main_state, %{}}
+      def main_state({:call, _from}, {:run, fun}, _data), do: fun.()
+    end
+
+    test "needs handle_sasl_reports: true to report crashes", %{sender_ref: ref} do
+      enable_sasl_reports()
+
+      pid = start_supervised!(TestGenStagem, restart: :temporary)
+
+      catch_exit(TestGenStagem.run(pid, fn -> raise "oops" end))
+
+      assert_receive {^ref, event}
+      assert [exception] = event.exception
+      assert exception.type == "RuntimeError"
+      assert exception.value == "oops"
+    end
   end
 
   defp register_before_send(_context) do
@@ -303,5 +350,17 @@ defmodule Sentry.LoggerHandlerTest do
 
   defp invalid_function do
     NaiveDateTime.from_erl({}, {}, {})
+  end
+
+  defp enable_sasl_reports do
+    Application.stop(:logger)
+    Application.put_env(:logger, :handle_sasl_reports, true)
+    Application.start(:logger)
+
+    on_exit(fn ->
+      Application.stop(:logger)
+      Application.put_env(:logger, :handle_sasl_reports, false)
+      Application.start(:logger)
+    end)
   end
 end
