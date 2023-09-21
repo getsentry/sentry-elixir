@@ -83,7 +83,6 @@ defmodule Sentry.Mixfile do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
-      {:mox, "~> 1.0", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
       {:phoenix_html, "~> 2.0", only: [:test]}
     ]

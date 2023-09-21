@@ -12,11 +12,6 @@ defmodule Sentry.Client do
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 
-  # We read this at compile time and use it exclusively for tests. Any user of the Sentry
-  # application will get the real deal, but we'll be able to swap this out with a mock
-  # in tests.
-  @sender_module Application.compile_env(:sentry, :__sender_module__, Transport.Sender)
-
   # This is what executes the "Event Pipeline".
   # See: https://develop.sentry.dev/sdk/unified-api/#event-pipeline
   @spec send_event(Event.t(), keyword()) ::
@@ -95,7 +90,7 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :none, _request_retries) do
-    :ok = @sender_module.send_async(event)
+    :ok = Transport.Sender.send_async(event)
     Sentry.put_last_event_id_and_source(event.event_id, event.source)
     {:ok, ""}
   end

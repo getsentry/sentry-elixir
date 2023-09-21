@@ -9,8 +9,9 @@ if config_env() == :test do
     root_source_code_paths: [File.cwd!()],
     hackney_opts: [recv_timeout: 50],
     send_result: :sync,
-    send_max_attempts: 1,
-    __sender_module__: Sentry.TransportSenderMock
+    send_max_attempts: 1
+
+  config :logger, backends: []
 end
 
 config :phoenix, :json_library, Jason

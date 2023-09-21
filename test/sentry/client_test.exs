@@ -2,18 +2,9 @@ defmodule Sentry.ClientTest do
   use ExUnit.Case
 
   import ExUnit.CaptureLog
-  import Mox
   import Sentry.TestEnvironmentHelper
 
   alias Sentry.{Client, Event}
-
-  setup :set_mox_global
-  setup :verify_on_exit!
-
-  setup do
-    Mox.stub_with(Sentry.TransportSenderMock, Sentry.Transport.Sender)
-    :ok
-  end
 
   describe "render_event/1" do
     test "transforms structs into maps" do

@@ -9,14 +9,6 @@ defmodule Sentry.Transport.Sender do
 
   @registry Sentry.Transport.SenderRegistry
 
-  # This behaviour is only present for mocks in tests.
-  defmodule Behaviour do
-    @moduledoc false
-    @callback send_async(Event.t()) :: :ok
-  end
-
-  @behaviour Behaviour
-
   ## Public API
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -25,7 +17,6 @@ defmodule Sentry.Transport.Sender do
     GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
   end
 
-  @impl Behaviour
   @spec send_async(Event.t()) :: :ok
   def send_async(%Event{} = event) do
     pool_size = Application.fetch_env!(:sentry, :sender_pool_size)

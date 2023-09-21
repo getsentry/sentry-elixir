@@ -7,6 +7,10 @@ defmodule Sentry.TestGenServer do
     GenServer.start_link(__MODULE__, test_pid)
   end
 
+  def run(server, fun, timeout \\ :infinity) do
+    GenServer.call(server, {:run, fun}, timeout)
+  end
+
   def throw(server) do
     GenServer.cast(server, :throw)
   end
@@ -34,6 +38,10 @@ defmodule Sentry.TestGenServer do
   @impl true
   def init(test_pid) do
     {:ok, test_pid}
+  end
+
+  def handle_call({:run, fun}, _from, _state) do
+    fun.()
   end
 
   @impl true

@@ -1,40 +1,24 @@
 defmodule Sentry.LoggerBackendTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
-  import Mox
-
+  alias Sentry.TestEnvironmentHelper
   alias Sentry.TestGenServer
 
   require Logger
 
   @moduletag :capture_log
 
-  setup :set_mox_global
-  setup :verify_on_exit!
-
   setup do
-    {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
+    assert {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
-    ExUnit.Callbacks.on_exit(fn ->
+    on_exit(fn ->
       Logger.configure_backend(Sentry.LoggerBackend, [])
       :ok = Logger.remove_backend(Sentry.LoggerBackend)
     end)
   end
 
-  defp expect_sender_call do
-    pid = self()
-    ref = make_ref()
-
-    expect(Sentry.TransportSenderMock, :send_async, fn event ->
-      send(pid, {ref, event})
-      :ok
-    end)
-
-    ref
-  end
-
   test "a logged raised exception is reported" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Task.start(fn ->
       raise "Unique Error"
@@ -47,7 +31,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "a GenServer throw is reported" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.throw(pid)
@@ -61,7 +45,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "abnormal GenServer exit is reported" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.exit(pid)
@@ -75,7 +59,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "bad function call causing GenServer crash is reported" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
 
@@ -96,7 +80,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "GenServer timeout is reported" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
 
@@ -120,7 +104,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "captures errors from spawn/0 in Plug app" do
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     :get
     |> Plug.Test.conn("/spawn_error_route")
@@ -135,7 +119,7 @@ defmodule Sentry.LoggerBackendTest do
   test "sends two errors when a Plug process crashes if cowboy domain is not excluded" do
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
 
@@ -152,7 +136,7 @@ defmodule Sentry.LoggerBackendTest do
       excluded_domains: [:test_domain]
     )
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Logger.error("no domain")
     Logger.error("test_domain", domain: [:test_domain])
@@ -164,7 +148,7 @@ defmodule Sentry.LoggerBackendTest do
   test "includes Logger metadata for keys configured to be included" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :number, :map, :list])
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
@@ -182,7 +166,7 @@ defmodule Sentry.LoggerBackendTest do
 
   test "does not include Logger metadata when disabled" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
@@ -197,7 +181,7 @@ defmodule Sentry.LoggerBackendTest do
 
   test "supports :all for Logger metadata" do
     Logger.configure_backend(Sentry.LoggerBackend, metadata: :all)
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
     Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
@@ -220,7 +204,7 @@ defmodule Sentry.LoggerBackendTest do
   test "sends all messages if :capture_log_messages is true" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Logger.error("Testing")
 
@@ -236,7 +220,7 @@ defmodule Sentry.LoggerBackendTest do
       capture_log_messages: true
     )
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Sentry.Context.set_user_context(%{user_id: 3})
     Logger.log(:warning, "Testing")
@@ -252,7 +236,7 @@ defmodule Sentry.LoggerBackendTest do
   test "does not send debug messages when configured to :error" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Sentry.Context.set_user_context(%{user_id: 3})
 
@@ -268,7 +252,7 @@ defmodule Sentry.LoggerBackendTest do
 
   test "Sentry metadata and extra context are retrieved from callers" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
     Sentry.Context.set_user_context(%{user_id: 3})
@@ -288,7 +272,7 @@ defmodule Sentry.LoggerBackendTest do
 
   test "handles malformed :callers metadata" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     dead_pid = spawn(fn -> :ok end)
 
@@ -304,7 +288,7 @@ defmodule Sentry.LoggerBackendTest do
       capture_log_messages: true
     )
 
-    ref = expect_sender_call()
+    ref = register_before_send()
 
     Logger.log(:warning, "warn")
 
@@ -325,5 +309,19 @@ defmodule Sentry.LoggerBackendTest do
       {:DOWN, ^mon, _, _, _} ->
         exit(:shutdown)
     end
+  end
+
+  defp register_before_send(_context \\ %{}) do
+    pid = self()
+    ref = make_ref()
+
+    TestEnvironmentHelper.modify_env(:sentry,
+      before_send_event: fn event ->
+        send(pid, {ref, event})
+        false
+      end
+    )
+
+    ref
   end
 end

@@ -388,7 +388,6 @@ defmodule Sentry.EventTest do
              :metrics,
              :mime,
              :mimerl,
-             :mox,
              :parse_trans,
              :phoenix,
              :phoenix_html,
