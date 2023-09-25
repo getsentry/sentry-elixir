@@ -135,7 +135,7 @@ defmodule Sentry.Context do
   See `set_tags_context/1`.
   """
   @typedoc since: "9.0.0"
-  @type tags() :: %{optional(atom()) => term()}
+  @type tags() :: %{optional(atom()) => String.t() | number() | boolean() | nil}
 
   @typedoc """
   A map of **extra** data.
