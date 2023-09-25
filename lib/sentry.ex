@@ -431,7 +431,9 @@ defmodule Sentry do
       * `:async` - **Not supported anymore**, see the information below.
 
     * `:sample_rate` - The sampling factor to apply to events. A value of `0.0` will deny sending
-      any events, and a value of `1.0` will send 100% of events.
+      any events, and a value of `1.0` will send 100% of events. Sampling is applied **after**
+      the `:before_send_event` callback. See where [the Sentry
+      documentation](https://develop.sentry.dev/sdk/sessions/#filter-order) suggests this.
 
     * Other options, such as `:stacktrace` or `:extra`, will be passed to
       `Sentry.Event.create_event/1` downstream. See `Sentry.Event.create_event/1`

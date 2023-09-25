@@ -26,14 +26,29 @@ defmodule Sentry.Client do
         Application.get_env(:sentry, :request_retries, Transport.default_retries())
       end)
 
-    with :ok <- sample_event(sample_rate),
-         {:ok, %Event{} = event} <- maybe_call_before_send(event) do
-      send_result = encode_and_send(event, result_type, request_retries)
-      _ignored = maybe_call_after_send(event, send_result)
-      send_result
-    else
-      :unsampled -> :unsampled
-      :excluded -> :excluded
+    result =
+      with {:ok, %Event{} = event} <- maybe_call_before_send(event),
+           :ok <- sample_event(sample_rate) do
+        send_result = encode_and_send(event, result_type, request_retries)
+        _ignored = maybe_call_after_send(event, send_result)
+        send_result
+      end
+
+    case result do
+      {:ok, _id} ->
+        Sentry.put_last_event_id_and_source(event.event_id, event.source)
+        result
+
+      :unsampled ->
+        # See https://github.com/getsentry/develop/pull/551/files
+        Sentry.put_last_event_id_and_source(event.event_id, event.source)
+        :unsampled
+
+      :excluded ->
+        :excluded
+
+      {:error, _reason} ->
+        result
     end
   end
 
@@ -81,17 +96,12 @@ defmodule Sentry.Client do
   defp encode_and_send(%Event{} = event, _result_type = :sync, request_retries) do
     send_result = [event] |> Envelope.new() |> Transport.post_envelope(request_retries)
 
-    if match?({:ok, _}, send_result) do
-      Sentry.put_last_event_id_and_source(event.event_id, event.source)
-    end
-
     _ = maybe_log_send_result(send_result, event)
     send_result
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :none, _request_retries) do
     :ok = Transport.Sender.send_async(event)
-    Sentry.put_last_event_id_and_source(event.event_id, event.source)
     {:ok, ""}
   end
 

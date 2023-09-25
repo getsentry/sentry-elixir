@@ -156,6 +156,23 @@ defmodule Sentry.ClientTest do
       :code.purge(CallbackModuleArithmeticError)
     end
 
+    test "calls the :before_send_event callback before using the sample rate and sets the session" do
+      test_pid = self()
+      ref = make_ref()
+      event = Event.create_event(source: :plug)
+
+      modify_env(:sentry,
+        before_send_event: fn event ->
+          send(test_pid, {ref, event})
+          event
+        end
+      )
+
+      assert :unsampled = Client.send_event(event, sample_rate: 0.0)
+      assert_received {^ref, ^event}
+      assert Sentry.get_last_event_id_and_source() == {event.event_id, event.source}
+    end
+
     test "calls anonymous :after_send_event callback synchronously", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
