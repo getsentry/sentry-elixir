@@ -7,9 +7,14 @@ defmodule Sentry.PlugCaptureTest do
 
   defmodule PhoenixController do
     use Phoenix.Controller
+
     def error(_conn, _params), do: raise("PhoenixError")
     def exit(_conn, _params), do: exit(:test)
     def throw(_conn, _params), do: throw(:test)
+
+    def action_clause_error(conn, %{"required_param" => true}) do
+      send_resp(conn, 200, "")
+    end
 
     def assigns(conn, _params) do
       _test = conn.assigns2.test
@@ -22,6 +27,7 @@ defmodule Sentry.PlugCaptureTest do
     get "/error_route", PhoenixController, :error
     get "/exit_route", PhoenixController, :exit
     get "/throw_route", PhoenixController, :throw
+    get "/action_clause_error", PhoenixController, :action_clause_error
     get "/assigns_route", PhoenixController, :assigns
   end
 
@@ -152,91 +158,135 @@ defmodule Sentry.PlugCaptureTest do
     )
   end
 
-  test "reports errors occurring in Phoenix Endpoint" do
-    bypass = Bypass.open()
+  describe "with errors in the Phoenix endpoint" do
+    test "reports raised exceptions" do
+      bypass = Bypass.open()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+        event = TestHelpers.decode_event_from_envelope!(body)
 
-      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
+        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
 
-      assert List.first(event.exception)["type"] == "RuntimeError"
-      assert List.first(event.exception)["value"] == "PhoenixError"
+        assert List.first(event.exception)["type"] == "RuntimeError"
+        assert List.first(event.exception)["value"] == "PhoenixError"
 
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
 
-    modify_env(:sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
+      modify_env(:sentry,
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        "#{__MODULE__.PhoenixEndpoint}": [
+          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+        ]
+      )
 
-    {:ok, _} = PhoenixEndpoint.start_link()
+      {:ok, _} = PhoenixEndpoint.start_link()
 
-    capture_log(fn ->
-      assert_raise RuntimeError, "PhoenixError", fn ->
-        conn(:get, "/error_route")
-        |> PhoenixEndpoint.call([])
+      capture_log(fn ->
+        assert_raise RuntimeError, "PhoenixError", fn ->
+          conn(:get, "/error_route")
+          |> PhoenixEndpoint.call([])
+        end
+      end)
+    end
+
+    test "reports exits" do
+      bypass = Bypass.open()
+
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        event = TestHelpers.decode_event_from_envelope!(body)
+
+        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
+        assert event.message == "Uncaught exit - :test"
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      modify_env(:sentry,
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        "#{__MODULE__.PhoenixEndpoint}": [
+          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+        ]
+      )
+
+      {:ok, _} = PhoenixEndpoint.start_link()
+
+      capture_log(fn ->
+        catch_exit(conn(:get, "/exit_route") |> PhoenixEndpoint.call([]))
+      end)
+    end
+
+    test "reports throws" do
+      bypass = Bypass.open()
+
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        event = TestHelpers.decode_event_from_envelope!(body)
+
+        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
+        assert event.message == "Uncaught throw - :test"
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      modify_env(:sentry,
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        "#{__MODULE__.PhoenixEndpoint}": [
+          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+        ]
+      )
+
+      {:ok, _} = PhoenixEndpoint.start_link()
+
+      capture_log(fn ->
+        catch_throw(conn(:get, "/throw_route") |> PhoenixEndpoint.call([]))
+      end)
+    end
+  end
+
+  describe "with specific Phoenix errors" do
+    @tag :capture_log
+    test "does not send Phoenix.Router.NoRouteError" do
+      start_supervised!(PhoenixEndpoint)
+
+      assert_raise Phoenix.Router.NoRouteError, ~r"no route found for GET /not_found", fn ->
+        conn(:get, "/not_found")
+        |> Plug.run([{PhoenixEndpoint, []}])
       end
-    end)
-  end
+    end
 
-  test "reports exits occurring in Phoenix Endpoint" do
-    bypass = Bypass.open()
+    test "scrubs Phoenix.ActionClauseError" do
+      bypass = Bypass.open()
+      test_pid = self()
+      ref = make_ref()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test_pid, {ref, body})
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
-      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
-      assert event.message == "Uncaught exit - :test"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+      start_supervised!(PhoenixEndpoint)
 
-    modify_env(:sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?password=secret")
+        |> Plug.Conn.put_req_header("authorization", "yes")
+        |> Plug.run([{PhoenixEndpoint, []}])
+      end
 
-    {:ok, _} = PhoenixEndpoint.start_link()
+      assert_receive {^ref, sentry_body}
+      event = TestHelpers.decode_event_from_envelope!(sentry_body)
 
-    capture_log(fn ->
-      catch_exit(conn(:get, "/exit_route") |> PhoenixEndpoint.call([]))
-    end)
-  end
-
-  test "reports throws occurring in Phoenix Endpoint" do
-    bypass = Bypass.open()
-
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = TestHelpers.decode_event_from_envelope!(body)
-
-      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
-      assert event.message == "Uncaught throw - :test"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
-
-    {:ok, _} = PhoenixEndpoint.start_link()
-
-    capture_log(fn ->
-      catch_throw(conn(:get, "/throw_route") |> PhoenixEndpoint.call([]))
-    end)
+      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+      assert [exception] = event.exception
+      assert exception["type"] == "Phoenix.ActionClauseError"
+      assert exception["value"] =~ ~s(params: %{"password" => "*********"})
+    end
   end
 
   test "can render feedback form in Phoenix ErrorView" do
@@ -274,43 +324,6 @@ defmodule Sentry.PlugCaptureTest do
     assert body =~ "sentry-cdn"
     assert body =~ event_id
     assert body =~ ~s{"title":"Testing"}
-  end
-
-  test "does not send NoRouteError in Phoenix application" do
-    bypass = Bypass.open()
-
-    Bypass.expect_once(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      _event = TestHelpers.decode_event_from_envelope!(body)
-
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    modify_env(:sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
-
-    {:ok, _} = PhoenixEndpoint.start_link()
-
-    capture_log(fn ->
-      assert_raise RuntimeError, "PhoenixError", fn ->
-        conn(:get, "/error_route")
-        |> PhoenixEndpoint.call([])
-      end
-
-      assert_raise(
-        Phoenix.Router.NoRouteError,
-        "no route found for GET /not_found (Sentry.PlugCaptureTest.PhoenixRouter)",
-        fn ->
-          conn(:get, "/not_found")
-          |> PhoenixEndpoint.call([])
-        end
-      )
-    end)
   end
 
   test "can render feedback form in Plug application" do
