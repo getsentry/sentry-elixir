@@ -1,13 +1,22 @@
 defmodule Sentry.PlugContext do
   @moduledoc """
+  A **Plug** for adding request context to Sentry events.
+
   This module adds Sentry context metadata during the request in a Plug
-  application.
+  application. It includes defaults for scrubbing sensitive data, and options for
+  customizing such behavior.
 
-  It includes defaults for scrubbing sensitive data, and options for customizing it
-  by default. It is intended for usage with `Sentry.PlugCapture` as metadata added
-  here will appear in events captured.
+  ## Usage
 
-  ## Scrubbing `POST` Body Params
+  You can use this module in a Plug pipeline to add Sentry metadata:
+
+      plug Sentry.PlugContext
+
+  However, this module is generally intended to be used with `Sentry.PlugCapture`:
+  this plug will add context metadata to the request, while `Sentry.PlugCapture` will
+  capture raised exceptions and errors and report them to Sentry with the added metadata.
+
+  ### Scrubbing `POST` Body Params
 
   In order to send `POST` body parameters you should first scrub them of sensitive
   information. By default, they will be scrubbed with `default_body_scrubber/1`. This
@@ -127,18 +136,16 @@ defmodule Sentry.PlugContext do
   @default_plug_request_id_header "x-request-id"
 
   @doc false
-  @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: map()
+  @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
   def build_request_interface_data(conn, opts) do
     body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
-
     header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
-
     cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
-
-    request_id = Keyword.get(opts, :request_id_header) || @default_plug_request_id_header
 
     remote_address_reader =
       Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
+
+    request_id_header = Keyword.get(opts, :request_id_header, @default_plug_request_id_header)
 
     conn =
       Plug.Conn.fetch_cookies(conn)
@@ -147,16 +154,16 @@ defmodule Sentry.PlugContext do
     %{
       url: Plug.Conn.request_url(conn),
       method: conn.method,
-      data: handle_data(conn, body_scrubber),
+      data: apply_fun_with_conn(conn, body_scrubber),
       query_string: conn.query_string,
-      cookies: handle_data(conn, cookie_scrubber),
-      headers: handle_data(conn, header_scrubber),
+      cookies: apply_fun_with_conn(conn, cookie_scrubber),
+      headers: apply_fun_with_conn(conn, header_scrubber),
       env: %{
-        "REMOTE_ADDR" => handle_data(conn, remote_address_reader),
+        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader),
         "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
-        "REQUEST_ID" => Plug.Conn.get_resp_header(conn, request_id) |> List.first()
+        "REQUEST_ID" => conn |> Plug.Conn.get_resp_header(request_id_header) |> List.first()
       }
     }
   end
@@ -166,15 +173,11 @@ defmodule Sentry.PlugContext do
   def default_remote_address_reader(conn) do
     case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
       [header_value | _rest] ->
-        header_value
-        |> String.split(",")
-        |> hd()
-        |> String.trim()
+        [address | _rest] = String.split(header_value, ",", parts: 2)
+        String.trim(address)
 
       [] ->
-        conn.remote_ip
-        |> :inet.ntoa()
-        |> case do
+        case :inet.ntoa(conn.remote_ip) do
           {:error, _} -> ""
           address -> to_string(address)
         end
@@ -188,15 +191,9 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  defp handle_data(_conn, nil), do: %{}
-
-  defp handle_data(conn, {module, fun}) do
-    apply(module, fun, [conn])
-  end
-
-  defp handle_data(conn, fun) when is_function(fun) do
-    fun.(conn)
-  end
+  defp apply_fun_with_conn(_conn, _function = nil), do: %{}
+  defp apply_fun_with_conn(conn, {module, fun}), do: apply(module, fun, [conn])
+  defp apply_fun_with_conn(conn, fun) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
   Scrubs **all** cookies off of the request.
