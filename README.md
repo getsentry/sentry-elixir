@@ -1,63 +1,69 @@
-# sentry
+# Sentry
 
 ![Build Status](https://github.com/getsentry/sentry-elixir/actions/workflows/main.yml/badge.svg)
 [![Hex Package](https://img.shields.io/hexpm/v/sentry.svg)](https://hex.pm/packages/sentry)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/sentry)
 
-The official Sentry client for Elixir which provides a simple API to capture exceptions, automatically handle Plug exceptions, and provides a backend for the Elixir Logger. This documentation represents unreleased features, for documentation on the current release, see [here](https://hexdocs.pm/sentry/readme.html).
+The official Sentry client for Elixir which provides a simple API to capture exceptions, automatically handle Plug exceptions, and provides a backend for the Elixir Logger.
+
+💁: This README documents unreleased features (from the `master` branch). For documentation on the current release, see [the official documentation][docs].
 
 ## Installation
 
-To use Sentry with your projects, edit your mix.exs file and add it as a dependency. Sentry does not install a JSON library nor HTTP client by itself.  Sentry will default to trying to use Jason for JSON operations and Hackney for HTTP requests, but can be configured to use other ones. To use the default ones, do:
+To use Sentry in your project, add it as a dependency in your `mix.exs` file. Sentry does not install a JSON library nor HTTP client by itself. Sentry will default to trying to use [Jason] for JSON serialization and [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
 
 ```elixir
 defp deps do
   [
     # ...
+
     {:sentry, "8.0.0"},
-    {:jason, "~> 1.1"},
-    {:hackney, "~> 1.8"},
-    # if you are using plug_cowboy
-    {:plug_cowboy, "~> 2.3"},
+    {:jason, "~> 1.4"},
+    {:hackney, "~> 1.19"}
   ]
 end
 ```
 
+## Usage
+
+This is a short overview of how to use the library. For complete documentation, refer to [HexDocs][docs].
+
 ### Capture Crashed Process Exceptions
 
-This library comes with an extension to capture all error messages that the Plug handler might not.  This is based on [Logger.Backend](https://hexdocs.pm/logger/Logger.html#module-backends). You can add it as a backend when your application starts:
+This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add the handler when your application starts:
 
 ```diff
-# lib/my_app/application.ex
+  def start(_type, _args) do
++   :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
 
-+   def start(_type, _args) do
-+     Logger.add_backend(Sentry.LoggerBackend)
+    # ...
+  end
 ```
 
-The backend can also be configured to capture Logger metadata, which is detailed [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
+The handler can also be configured to capture `Logger` metadata. See the documentation [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
 
 ### Capture Arbitrary Exceptions
 
-Sometimes you want to capture specific exceptions.  To do so, use `Sentry.capture_exception/2`.
+Sometimes you want to capture specific exceptions manually. To do so, use [`Sentry.capture_exception/2`](https://hexdocs.pm/sentry/Sentry.html#capture_exception/2).
 
 ```elixir
 try do
   ThisWillError.really()
 rescue
   my_exception ->
-    Sentry.capture_exception(my_exception, [stacktrace: __STACKTRACE__, extra: %{extra: information}])
+    Sentry.capture_exception(my_exception, stacktrace: __STACKTRACE__)
 end
 ```
 
 ### Capture Non-Exception Events
 
-Sometimes you want to capture messages that are not Exceptions.
+Sometimes you want to capture **messages** that are not exceptions. To do that, use [`Sentry.capture_message/2`](https://hexdocs.pm/sentry/Sentry.html#capture_exception/2):
 
 ```elixir
-    Sentry.capture_message("custom_event_name", extra: %{extra: information})
+Sentry.capture_message("custom_event_name", extra: %{extra: information})
 ```
 
-For optional settings check the [docs](https://hexdocs.pm/sentry/readme.html).
+For optional settings check the [documentation][docs].
 
 ## Configuration
 
@@ -189,3 +195,8 @@ When testing, you will also want to set the `send_result` type to `:sync`, so th
 ## License
 
 This project is Licensed under the [MIT License](https://github.com/getsentry/sentry-elixir/blob/master/LICENSE).
+
+[Jason]: https://github.com/michalmuskala/jason
+[Hackney]: https://github.com/benoitc/hackney
+[docs]: https://hexdocs.pm/sentry/readme.html
+[logger-handlers]: https://www.erlang.org/doc/apps/kernel/logger_chapter#handlers
