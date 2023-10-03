@@ -4,4 +4,8 @@ artifactProvider:
   name: none
 targets:
   - name: hex
+  - name: registry
+    type: sdk
+    sdks:
+      'hex:sentry':
   - name: github
