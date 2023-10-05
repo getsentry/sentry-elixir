@@ -1,5 +1,13 @@
 # Changelog
 
+## 9.1.0
+
+### Various fixes & improvements
+
+- Attempt to scrub all `Plug.Conn`s in `Sentry.PlugCapture` (#619) by @whatyouhide
+- Fix typespec for the `Sentry.Context.t/0` type (#618) by @whatyouhide
+- Apply `:sample_rate` *after* event callbacks, rather than *before* (ab5c7485) by @whatyouhide
+
 ## 9.0.0
 
 ### Breaking changes
