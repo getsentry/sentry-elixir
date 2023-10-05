@@ -1,5 +1,19 @@
 # Changelog
 
+## 9.1.0
+
+### Various fixes & improvements
+
+- Attempt to scrub all `Plug.Conn`s in `Sentry.PlugCapture` (#619) by @whatyouhide
+- update craft config for release registry (#621) by @stephanie-anderson
+- Bring README and CONTRIBUTING in line with SDKs (#620) by @whatyouhide
+- Do a little README makeover (6c5703a0) by @whatyouhide
+- More module grouping in the docs (ff0bbbed) by @whatyouhide
+- Clean up docs for Sentry.PlugContext (a60a2944) by @whatyouhide
+- Fix t:Sentry.Context.t/0 (#618) by @whatyouhide
+- Apply :sample_rate after callbacks (ab5c7485) by @whatyouhide
+- Add tests around SASL reports in Sentry.LoggerHandler (dd0c61be) by @whatyouhide
+
 ## 9.0.0
 
 ### Breaking changes
