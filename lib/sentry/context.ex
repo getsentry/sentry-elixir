@@ -290,7 +290,7 @@ defmodule Sentry.Context do
   > #### Invalid Keys {: .error}
   >
   > While this function accepts any map with atom keys, the only keys that
-  > are valid are those in `t:Sentry.Interfaces.request/0`. We don't validate
+  > are valid are those in `t:request_context/0`. We don't validate
   > keys because of performance concerns, so it's up to you to ensure that
   > you're passing valid keys.
 
