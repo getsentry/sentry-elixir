@@ -104,8 +104,6 @@ defmodule Sentry.Context do
 
   See `add_breadcrumb/1`.
 
-  All the atom keys in this map can also be specified as strings.
-
   ## Example
 
       %{
@@ -355,8 +353,11 @@ defmodule Sentry.Context do
   See the [Sentry documentation](https://develop.sentry.dev/sdk/event-payloads/breadcrumbs/)
   for more information.
 
-  If `breadcrumb_info` is a keyword list, it should be convertable to a map of type
+  If `breadcrumb_info` is a keyword list, it should be convertible to a map of type
   `t:breadcrumb/0`.
+
+  If not present, the `:timestamp` key is filled in automatically with the current
+  Unix timestamp (in seconds).
 
   ## Example
 
