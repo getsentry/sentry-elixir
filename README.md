@@ -85,7 +85,7 @@ To learn more about how to use this SDK, refer to [the documentation][docs].
 
 ## Contributing to the SDK
 
-Please refer to [`CONTRIBUTING.md``](CONTRIBUTING.md).
+Please refer to [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Getting Help/Support
 
