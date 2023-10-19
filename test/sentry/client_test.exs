@@ -70,6 +70,16 @@ defmodule Sentry.ClientTest do
 
       # Never sends with sample rate of 0.
       assert :unsampled = Client.send_event(event, sample_rate: 0.0)
+
+      # Either sends or doesn't with :sample_rate of 0.5.
+      Bypass.expect(bypass, fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      for _ <- 1..10 do
+        result = Client.send_event(event, sample_rate: 0.5)
+        assert match?({:ok, _}, result) or result == :unsampled
+      end
     end
 
     test "calls anonymous :before_send_event callback", %{bypass: bypass} do
@@ -156,6 +166,24 @@ defmodule Sentry.ClientTest do
       :code.purge(CallbackModuleArithmeticError)
     end
 
+    test "if :before_send_event is invalid, using it raises" do
+      modify_env(:sentry, before_send_event: :not_a_function)
+
+      try do
+        :rand.uniform() + "1"
+      rescue
+        exception ->
+          message =
+            ":before_send_event must be an anonymous function or a {module, function} tuple"
+
+          assert_raise ArgumentError, message, fn ->
+            exception
+            |> Event.transform_exception(_opts = [])
+            |> Client.send_event(result: :sync)
+          end
+      end
+    end
+
     test "calls the :before_send_event callback before using the sample rate and sets the session" do
       test_pid = self()
       ref = make_ref()
@@ -173,7 +201,8 @@ defmodule Sentry.ClientTest do
       assert Sentry.get_last_event_id_and_source() == {event.event_id, event.source}
     end
 
-    test "calls anonymous :after_send_event callback synchronously", %{bypass: bypass} do
+    test "calls anonymous :after_send_event callback (as anon function) synchronously",
+         %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
@@ -189,6 +218,44 @@ defmodule Sentry.ClientTest do
       event = Event.create_event(message: "Something went wrong")
       assert {:ok, _} = Client.send_event(event, result: :sync)
       assert_received {^ref, ^event, {:ok, _id}}
+    end
+
+    test "calls anonymous :after_send_event callback (as MFA) synchronously", %{bypass: bypass} do
+      defmodule SenderMirror do
+        def after_send_event(event, result) do
+          send(:persistent_term.get(:__after_send_event_mfa_test_pid__), {:called, event, result})
+        end
+      end
+
+      Bypass.expect(bypass, fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      :persistent_term.put(:__after_send_event_mfa_test_pid__, self())
+
+      modify_env(:sentry, after_send_event: {SenderMirror, :after_send_event})
+
+      event = Event.create_event(message: "Something went wrong")
+      assert {:ok, _} = Client.send_event(event, result: :sync)
+      assert_received {:called, ^event, {:ok, _id}}
+    after
+      :code.delete(SenderMirror)
+      :code.purge(SenderMirror)
+    end
+
+    test "raises if :after_send_event is invalid", %{bypass: bypass} do
+      Bypass.expect(bypass, fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      modify_env(:sentry, after_send_event: :not_a_function)
+
+      message = ":after_send_event must be an anonymous function or a {module, function} tuple"
+
+      assert_raise ArgumentError, message, fn ->
+        event = Event.create_event(message: "Something went wrong")
+        {:ok, _} = Client.send_event(event, result: :sync)
+      end
     end
 
     test "logs API errors at the configured level", %{bypass: bypass} do

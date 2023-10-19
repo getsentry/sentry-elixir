@@ -60,13 +60,13 @@ defmodule Sentry.Envelope do
   @doc """
   Decodes the envelope from its binary representation.
   """
-  @spec from_binary(String.t()) :: {:ok, t()} | {:error, reason}
-        when reason: :invalid_envelope | :missing_header
+  @spec from_binary(String.t()) :: {:ok, t()} | {:error, :invalid_envelope}
   def from_binary(binary) when is_binary(binary) do
     json_library = Config.json_library()
 
-    with {:ok, {raw_headers, raw_items}} <- decode_lines(binary),
-         {:ok, headers} <- json_library.decode(raw_headers),
+    [raw_headers | raw_items] = String.split(binary, "\n")
+
+    with {:ok, headers} <- json_library.decode(raw_headers),
          {:ok, items} <- decode_items(raw_items, json_library) do
       {:ok,
        %__MODULE__{
@@ -74,7 +74,6 @@ defmodule Sentry.Envelope do
          items: items
        }}
     else
-      {:error, :missing_header} = error -> error
       {:error, _json_error} -> {:error, :invalid_envelope}
     end
   end
@@ -140,11 +139,4 @@ defmodule Sentry.Envelope do
     do: {:error, "unexpected item type '#{type}'"}
 
   defp decode_item(_, _data, _json_library), do: {:error, "Missing item type header"}
-
-  defp decode_lines(binary) do
-    case String.split(binary, "\n") do
-      [headers | items] -> {:ok, {headers, items}}
-      _ -> {:error, :missing_header}
-    end
-  end
 end

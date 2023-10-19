@@ -124,6 +124,10 @@ defmodule Sentry.EnvelopeTest do
                }
              ]
     end
+
+    test "returns an error if headers are missing" do
+      assert {:error, :invalid_envelope} = Envelope.from_binary("no newlines here")
+    end
   end
 
   describe "to_binary/1" do
@@ -145,6 +149,17 @@ defmodule Sentry.EnvelopeTest do
       assert decoded_event["extra"] == %{}
       assert decoded_event["user"] == %{}
       assert decoded_event["request"] == %{}
+    end
+
+    test "works without an event ID" do
+      envelope = Envelope.new([Event.create_event([])])
+      envelope = %Envelope{envelope | event_id: nil}
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, _header_line, _event_line] = String.split(encoded, "\n", trim: true)
+
+      assert id_line == "{{}}"
     end
   end
 end
