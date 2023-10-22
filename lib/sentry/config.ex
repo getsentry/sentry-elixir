@@ -212,8 +212,16 @@ defmodule Sentry.Config do
     Application.get_env(:sentry, :after_send_event)
   end
 
-  @report_deps Application.compile_env(:sentry, :report_deps, true)
-  def report_deps, do: @report_deps
+  @spec report_deps?() :: boolean()
+  def report_deps? do
+    case Application.get_env(:sentry, :report_deps, true) do
+      val when is_boolean(val) ->
+        val
+
+      other ->
+        raise ArgumentError, "expected :report_deps to be a boolean, got: #{inspect(other)}"
+    end
+  end
 
   def json_library do
     Application.get_env(:sentry, :json_library, Jason)

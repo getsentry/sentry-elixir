@@ -364,41 +364,13 @@ defmodule Sentry.EventTest do
            ] == hd(event.exception).stacktrace.frames
   end
 
-  test "transforms mix deps to map of modules" do
+  test "transforms loaded applications to map of application -> version" do
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [])
 
-    modules =
-      event.modules
-      |> Map.keys()
-      |> Enum.sort()
-
-    assert modules == [
-             :bypass,
-             :certifi,
-             :cowboy,
-             :cowboy_telemetry,
-             :cowlib,
-             :dialyxir,
-             :erlex,
-             :excoveralls,
-             :hackney,
-             :idna,
-             :jason,
-             :metrics,
-             :mime,
-             :mimerl,
-             :parse_trans,
-             :phoenix,
-             :phoenix_html,
-             :phoenix_pubsub,
-             :plug,
-             :plug_cowboy,
-             :plug_crypto,
-             :ranch,
-             :ssl_verify_fun,
-             :telemetry,
-             :unicode_util_compat
-           ]
+    assert ["asn1", "bypass", "certifi", "compiler" | _rest] =
+             event.modules
+             |> Map.keys()
+             |> Enum.sort()
   end
 end

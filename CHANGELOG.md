@@ -1,5 +1,9 @@
 # Changelog
 
+## 10.0.0
+
+- `:report_deps` now reports all loaded applications at the time the `:sentry` application starts. This is not a compile-time configuration option anymore.
+
 ## 9.1.0
 
 ### Various fixes & improvements

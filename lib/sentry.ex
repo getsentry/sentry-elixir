@@ -178,9 +178,9 @@ defmodule Sentry do
   To customize options related to reporting source code context, you can use these
   options:
 
-    * `:report_deps` (`t:boolean/0`) - whether to report Mix dependencies of your
-      application alongside events. If `true`, this attempts to load dependencies
-      *at compile time*. Defaults to `true`.
+    * `:report_deps` (`t:boolean/0`) - whether to report application dependencies of your
+      application alongside events. This list contains applications (alongside their version)
+      that are **loaded** when the `:sentry` application starts. Defaults to `true`.
 
     * `:enable_source_code_context` (`t:boolean/0`) - whether to report source
       code context alongside events. Defaults to `false`.
@@ -208,7 +208,6 @@ defmodule Sentry do
   > These options are only available at compile-time:
   >   * `:enable_source_code_context`
   >   * `:root_source_code_paths`
-  >   * `:report_deps`
   >   * `:source_code_path_pattern`
   >   * `:source_code_exclude_patterns`
   >
