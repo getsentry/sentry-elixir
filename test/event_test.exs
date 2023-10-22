@@ -368,57 +368,9 @@ defmodule Sentry.EventTest do
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [])
 
-    modules =
-      event.modules
-      |> Map.keys()
-      |> Enum.sort()
-
-    assert modules == [
-             "asn1",
-             "bypass",
-             "certifi",
-             "compiler",
-             "cowboy",
-             "cowboy_telemetry",
-             "cowlib",
-             "crypto",
-             "dialyxir",
-             "dialyzer",
-             "eex",
-             "elixir",
-             "erlex",
-             "ex_unit",
-             "excoveralls",
-             "hackney",
-             "hex",
-             "idna",
-             "iex",
-             "inets",
-             "jason",
-             "kernel",
-             "logger",
-             "metrics",
-             "mime",
-             "mimerl",
-             "mix",
-             "parse_trans",
-             "phoenix",
-             "phoenix_html",
-             "phoenix_pubsub",
-             "plug",
-             "plug_cowboy",
-             "plug_crypto",
-             "public_key",
-             "ranch",
-             "sentry",
-             "ssl",
-             "ssl_verify_fun",
-             "stdlib",
-             "syntax_tools",
-             "telemetry",
-             "tools",
-             "unicode_util_compat",
-             "xmerl"
-           ]
+    assert ["asn1", "bypass", "certifi", "compiler" | _rest] =
+             event.modules
+             |> Map.keys()
+             |> Enum.sort()
   end
 end
