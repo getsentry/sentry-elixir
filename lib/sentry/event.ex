@@ -18,7 +18,6 @@ defmodule Sentry.Event do
   @source_files if Config.enable_source_code_context(),
                   do: Sentry.Sources.load_files(Config.root_source_code_paths()),
                   else: nil
-  @deps if Config.report_deps(), do: Map.keys(Mix.Project.deps_paths()), else: []
 
   @typedoc """
   The level of an event.
@@ -271,7 +270,7 @@ defmodule Sentry.Event do
       fingerprint: fingerprint,
       level: level,
       message: message,
-      modules: Map.new(@deps, &{&1, to_string(Application.spec(&1, :vsn))}),
+      modules: :persistent_term.get({:sentry, :loaded_applications}),
       original_exception: exception,
       release: Config.release(),
       request: coerce_request(request),

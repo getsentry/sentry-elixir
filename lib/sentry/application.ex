@@ -43,6 +43,8 @@ defmodule Sentry.Application do
     Config.validate_environment_name!()
     Config.assert_dsn_has_no_query_params!()
 
+    cache_loaded_applications()
+
     Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end
 
@@ -71,5 +73,18 @@ defmodule Sentry.Application do
                     __STACKTRACE__
         end
     end
+  end
+
+  defp cache_loaded_applications do
+    apps_with_vsns =
+      if Config.report_deps?() do
+        Map.new(Application.loaded_applications(), fn {app, _description, vsn} ->
+          {Atom.to_string(app), to_string(vsn)}
+        end)
+      else
+        %{}
+      end
+
+    :persistent_term.put({:sentry, :loaded_applications}, apps_with_vsns)
   end
 end
