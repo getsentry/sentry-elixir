@@ -8,16 +8,12 @@ defmodule Sentry.Event do
   See <https://develop.sentry.dev/sdk/event-payloads>.
   """
 
-  alias Sentry.{Config, Context, Interfaces, UUID}
+  alias Sentry.{Config, Context, Interfaces, Sources, UUID}
 
   @sdk %Interfaces.SDK{
     name: "sentry-elixir",
     version: Mix.Project.config()[:version]
   }
-
-  @source_files if Config.enable_source_code_context(),
-                  do: Sentry.Sources.load_files(Config.root_source_code_paths()),
-                  else: nil
 
   @typedoc """
   The level of an event.
@@ -349,18 +345,6 @@ defmodule Sentry.Event do
     |> create_event()
   end
 
-  defmacrop put_source_context_if_enabled(frame, file, line_number) do
-    if Config.enable_source_code_context() do
-      quote do
-        do_put_source_context(unquote(frame), unquote(file), unquote(line_number))
-      end
-    else
-      quote do
-        unquote(frame)
-      end
-    end
-  end
-
   defp stacktrace_to_frames(stacktrace) when is_list(stacktrace) do
     in_app_module_allow_list = Config.in_app_module_allow_list()
 
@@ -396,7 +380,7 @@ defmodule Sentry.Event do
       vars: args_from_stacktrace([entry])
     }
 
-    put_source_context_if_enabled(frame, file, line)
+    maybe_put_source_context(frame, file, line)
   end
 
   # There's no module here.
@@ -421,17 +405,19 @@ defmodule Sentry.Event do
     |> String.split(".")
   end
 
-  @doc false
-  def do_put_source_context(%Interfaces.Stacktrace.Frame{} = frame, file, line) do
-    {pre_context, context, post_context} =
-      Sentry.Sources.get_source_context(@source_files, file, line)
+  defp maybe_put_source_context(%Interfaces.Stacktrace.Frame{} = frame, file, line) do
+    if source_map = :persistent_term.get({:sentry, :source_code_map}, nil) do
+      {pre_context, context, post_context} = Sources.get_source_context(source_map, file, line)
 
-    %Interfaces.Stacktrace.Frame{
+      %Interfaces.Stacktrace.Frame{
+        frame
+        | context_line: context,
+          pre_context: pre_context,
+          post_context: post_context
+      }
+    else
       frame
-      | context_line: context,
-        pre_context: pre_context,
-        post_context: post_context
-    }
+    end
   end
 
   defp culprit_from_stacktrace([]), do: nil

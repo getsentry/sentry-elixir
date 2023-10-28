@@ -11,10 +11,13 @@ defmodule Sentry.Sources do
 
   @spec load_files([Path.t()]) :: source_map()
   def load_files(paths) when is_list(paths) do
-    Enum.reduce(paths, %{}, &load_files_for_root_path/2)
+    path_pattern = Config.source_code_path_pattern()
+    exclude_patterns = Config.source_code_exclude_patterns()
+
+    Enum.reduce(paths, %{}, &load_files_for_root_path(&1, &2, path_pattern, exclude_patterns))
   end
 
-  @spec get_source_context(source_map | nil, String.t() | nil, pos_integer() | nil) ::
+  @spec get_source_context(source_map(), String.t() | nil, pos_integer() | nil) ::
           {[String.t()], String.t() | nil, [String.t()]}
   def get_source_context(%{} = files, file_name, line_number) do
     context_lines = Config.context_lines()
@@ -24,8 +27,6 @@ defmodule Sentry.Sources do
       {:ok, file} -> get_source_context_for_file(file, line_number, context_lines)
     end
   end
-
-  def get_source_context(nil, _file_name, _line_number), do: {[], nil, []}
 
   defp get_source_context_for_file(file, line_number, context_lines) do
     context_line_indices = 0..(2 * context_lines)
@@ -50,9 +51,9 @@ defmodule Sentry.Sources do
     end)
   end
 
-  defp load_files_for_root_path(root_path, files) do
+  defp load_files_for_root_path(root_path, files, path_pattern, exclude_patterns) do
     root_path
-    |> find_files_for_root_path()
+    |> find_files_for_root_path(path_pattern, exclude_patterns)
     |> Enum.reduce(files, fn path, acc ->
       key = Path.relative_to(path, root_path)
 
@@ -72,11 +73,9 @@ defmodule Sentry.Sources do
     end)
   end
 
-  defp find_files_for_root_path(root_path) do
-    path_pattern = Config.source_code_path_pattern()
-    exclude_patterns = Config.source_code_exclude_patterns()
-
-    Path.join(root_path, path_pattern)
+  defp find_files_for_root_path(root_path,path_pattern, exclude_patterns) do
+    root_path
+    |> Path.join(path_pattern)
     |> Path.wildcard()
     |> exclude_files(exclude_patterns)
   end
