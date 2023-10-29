@@ -66,6 +66,30 @@ defmodule Sentry.HTTPClient do
       config :sentry,
         client: MyApp.SentryFinchHTTPClient
 
+  ### Umbrella Apps
+
+  The HTTP client for Sentry is configured globally for the `:sentry` application. In an
+  umbrella setup, this means that all applications must configure Sentry to use the same
+  HTTP client.
+
+  If you want to use an alternative Sentry HTTP client in your umbrella application, we
+  recommend to do this:
+
+    1. Create a new application in the umbrella (we'll call it `sentry_http_client`).
+
+    1. Add `:sentry` as a dependency of the new application.
+
+    1. Add a new module to the new application (such as `SentryHTTPClient`) which implements
+       the desired `Sentry.HTTPClient` behaviour.
+
+    1. Configure `:sentry` to use the "shared" HTTP client. This works because configuration
+       in umbrella apps is generally shared by all apps within the umbrella (and it's in
+       `config/config.exs` at the root of the umbrella).
+
+           config :sentry,
+             # ...
+             client: SentryHTTPClient
+
   """
 
   @typedoc """
