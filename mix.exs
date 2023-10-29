@@ -31,12 +31,14 @@ defmodule Sentry.Mixfile do
           "CHANGELOG.md",
           "pages/setup-with-plug-and-phoenix.md",
           "pages/upgrade-8.x.md",
-          "pages/upgrade-9.x.md"
+          "pages/upgrade-9.x.md",
+          "pages/upgrade-10.x.md"
         ],
         groups_for_extras: [
           "Upgrade Guides": [
             "pages/upgrade-8.x.md",
-            "pages/upgrade-9.x.md"
+            "pages/upgrade-9.x.md",
+            "pages/upgrade-10.x.md"
           ]
         ],
         groups_for_modules: [

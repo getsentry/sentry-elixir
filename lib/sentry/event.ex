@@ -406,17 +406,22 @@ defmodule Sentry.Event do
   end
 
   defp maybe_put_source_context(%Interfaces.Stacktrace.Frame{} = frame, file, line) do
-    if source_map = :persistent_term.get({:sentry, :source_code_map}, nil) do
-      {pre_context, context, post_context} = Sources.get_source_context(source_map, file, line)
-
-      %Interfaces.Stacktrace.Frame{
+    cond do
+      not Config.enable_source_code_context?() ->
         frame
-        | context_line: context,
-          pre_context: pre_context,
-          post_context: post_context
-      }
-    else
-      frame
+
+      source_map = Sources.get_source_code_map_from_persistent_term() ->
+        {pre_context, context, post_context} = Sources.get_source_context(source_map, file, line)
+
+        %Interfaces.Stacktrace.Frame{
+          frame
+          | context_line: context,
+            pre_context: pre_context,
+            post_context: post_context
+        }
+
+      true ->
+        frame
     end
   end
 

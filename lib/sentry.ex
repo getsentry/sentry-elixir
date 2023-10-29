@@ -175,12 +175,12 @@ defmodule Sentry do
       connection to become available. Only applied if `:client` is set to
       `Sentry.HackneyClient`. Defaults to `5000`.
 
-  To customize options related to reporting source code context, you can use these
-  options:
-
     * `:report_deps` (`t:boolean/0`) - whether to report application dependencies of your
       application alongside events. This list contains applications (alongside their version)
       that are **loaded** when the `:sentry` application starts. Defaults to `true`.
+
+  To customize options related to reporting source code context, you can use these
+  options (see also the [dedicated section](#module-reporting-source-code)):
 
     * `:enable_source_code_context` (`t:boolean/0`) - whether to report source
       code context alongside events. Defaults to `false`.
@@ -201,18 +201,7 @@ defmodule Sentry do
       context. Defaults to `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
 
     * `:context_lines` (`t:integer/0`) - the number of lines of source code
-      before and after the line that caused the exception to report. Defaults to `3`.
-
-  > #### Compile-time Configuration {: .tip}
-  >
-  > These options are only available at compile-time:
-  >   * `:enable_source_code_context`
-  >   * `:root_source_code_paths`
-  >   * `:source_code_path_pattern`
-  >   * `:source_code_exclude_patterns`
-  >
-  > If you change the value of any of these, you'll need to recompile Sentry itself.
-  > You can run `mix deps.compile sentry` to do that.
+      before and after the line that caused the exception to report. Defaults to `5`.
 
   ### Configuration Through System Environment
 
@@ -271,9 +260,7 @@ defmodule Sentry do
   ## Reporting Source Code
 
   Sentry supports reporting the source code of (and around) the line that
-  caused an issue. To support this functionality, this library stores
-  the text of source files during compilation. An example configuration
-  to enable this functionality is:
+  caused an issue. An example configuration to enable this functionality is:
 
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
@@ -281,32 +268,27 @@ defmodule Sentry do
         root_source_code_paths: [File.cwd!()],
         context_lines: 5
 
-  File contents are saved when Sentry is compiled, which can cause some
-  complications. If a file is changed, and Sentry is not recompiled,
-  it will still report old source code.
+  To support this functionality, Sentry needs to **package** source code
+  and store it so that it's available in the compiled application. Packaging source
+  code is an active step you have to take; use the [`mix
+  sentry.package_source_code`](`Mix.Tasks.Sentry.PackageSourceCode`) Mix task to do that.
 
-  The best way to ensure source code is up to date is to recompile Sentry
-  itself via `mix deps.compile sentry --force`. It's possible to create a Mix
-  task alias in `mix.exs` to do this. The example below would allow you to
-  run `mix sentry_recompile && mix compile` which will force recompilation of Sentry so
-  it has the newest source and then compile the project. The second `mix compile`
-  is required due to Mix only invoking the same task once in an alias.
+  Sentry stores the packaged source code in its `priv` directory. This is included by
+  default in [Mix releases](`Mix.Tasks.Release`). Once the source code is packaged
+  and ready to ship with your release, Sentry will load it when the `:sentry` application
+  starts. If there are issues with loading the packaged code, Sentry will log some warnings
+  but will boot up normally and it just won't report source code context.
 
-      defp aliases do
-        [sentry_recompile: ["compile", "deps.compile sentry --force"]]
-      end
-
-  This is an important to note especially when building for production. If your
-  build or deployment system caches prior builds, it may not recompile Sentry
-  and could cause issues with reported source code being out of date.
-
-  Due to Sentry reading the file system and defaulting to a recursive search
-  of directories, it is important to check your configuration and compilation
-  environment to avoid a folder recursion issue. Problems may be seen when
-  deploying to the root folder, so it is best to follow the practice of
-  compiling your application in its own folder. Modifying the
-  `:source_code_path_pattern` configuration option from its default is also
-  an avenue to avoid compile problems.
+  > #### Prune Large File Trees {: .tip}
+  >
+  > Due to Sentry reading the file system and defaulting to a recursive search
+  > of directories, it is important to check your configuration and compilation
+  > environment to avoid a folder recursion issue. You might see problems when
+  > deploying to the root folder, so it is best to follow the practice of
+  > compiling your application in its own folder. Modifying the
+  > `:source_code_path_pattern` configuration option from its default is also
+  > an avenue to avoid compile problems, as well as pruning unnecessary files
+  > with `:source_code_exclude_patterns`.
   """
 
   alias Sentry.{Config, Event}

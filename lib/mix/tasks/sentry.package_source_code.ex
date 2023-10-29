@@ -1,13 +1,49 @@
 defmodule Mix.Tasks.Sentry.PackageSourceCode do
+  @shortdoc "Packages source code for Sentry to use when reporting errors"
+
   @moduledoc """
-  TODO
+  Packages source code for Sentry to use when reporting errors.
+
+  This task should be used in production settings, before building a release of your
+  application. It packages all the source code of your application in a single file
+  (called `sentry.map`), which is optimized for fast retrieval of source code lines.
+  Sentry then uses this to report source code context. See the documentation for the
+  `Sentry` module for configuration options related to the source code context.
+
+  *This task is available since v10.0.0 of this library*.
+
+  ## Usage
+
+  ```shell
+  mix sentry.package_source_code
+  ```
+
+  ### Using in Production
+
+  In production settings, call this task before building a release. This way, the source
+  code packaged by this task will be included in the release.
+
+  For example, in a release script (this could also be in a `Dockerfile`, if you're using
+  Docker):
+
+  ```shell
+  # ...
+
+  mix sentry.package_source_code
+  mix release
+  ```
+
+  ## Options
+
+    * `--debug` - print more information about collecting and encoding source code
+
   """
 
-  @shortdoc "TODO"
+  @moduledoc since: "10.0.0"
 
   use Mix.Task
 
-  alias Sentry.{Config, Sources}
+  alias Sentry.Sources
 
   @bytes_in_kb 1024
   @bytes_in_mb 1024 * 1024
@@ -19,26 +55,17 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   def run(args) do
     {opts, _args} = OptionParser.parse!(args, strict: @switches)
 
-    output_dir = Application.app_dir(:sentry, "priv")
-    root_paths = Config.root_source_code_paths()
-
-    {elapsed, files_map} = :timer.tc(fn -> Sources.load_files(root_paths) end)
+    {elapsed, source_map} = :timer.tc(&Sources.load_files/0)
 
     log_debug(
       opts,
-      "Loaded source code map with #{map_size(files_map)} files in #{format_time(elapsed)}"
+      "Loaded source code map with #{map_size(source_map)} files in #{format_time(elapsed)}"
     )
 
-    term = %{
-      version: 1,
-      files_map: files_map
-    }
-
-    output_path = Path.join(output_dir, "sentry.map")
-
-    {elapsed, contents} = :timer.tc(fn -> :erlang.term_to_binary(term, [:compressed]) end)
+    {elapsed, contents} = :timer.tc(fn -> Sources.encode_source_code_map(source_map) end)
     log_debug(opts, "Encoded source code map in #{format_time(elapsed)}")
 
+    output_path = Sources.path_of_packaged_source_code()
     File.mkdir_p!(Path.dirname(output_path))
     File.write!(output_path, contents)
 

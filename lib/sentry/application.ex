@@ -3,7 +3,7 @@ defmodule Sentry.Application do
 
   use Application
 
-  alias Sentry.Config
+  alias Sentry.{Config, Sources}
 
   @impl true
   def start(_type, _opts) do
@@ -44,7 +44,7 @@ defmodule Sentry.Application do
     Config.assert_dsn_has_no_query_params!()
 
     cache_loaded_applications()
-    maybe_load_source_code_map()
+    Sources.load_source_code_map_if_present()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end
@@ -87,24 +87,5 @@ defmodule Sentry.Application do
       end
 
     :persistent_term.put({:sentry, :loaded_applications}, apps_with_vsns)
-  end
-
-  defp maybe_load_source_code_map do
-    path = Path.join([Application.app_dir(:sentry), "priv", "sentry.map"])
-
-    case File.read(path) do
-      {:ok, contents} ->
-        source_map = :erlang.binary_to_term(contents, [:safe])
-        :persistent_term.put({:sentry, :source_code_map}, source_map)
-
-      {:error, :enoent} ->
-        :ok
-
-      {:error, reason} ->
-        IO.warn("""
-        Sentry found a source code map file at #{path}, but it was unable to read it.
-        The reason was: #{:file.format_error(reason)}
-        """)
-    end
   end
 end

@@ -3,6 +3,7 @@
 ## 10.0.0
 
 - `:report_deps` now reports all loaded applications at the time the `:sentry` application starts. This is not a compile-time configuration option anymore.
+- Add the `mix sentry.package_source_code` Mix task. See the upgrade guide for more information.
 
 ## 9.1.0
 

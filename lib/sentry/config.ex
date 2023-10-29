@@ -154,31 +154,25 @@ defmodule Sentry.Config do
     Application.get_env(:sentry, :client, Sentry.HackneyClient)
   end
 
-  @enable_source_code_context Application.compile_env(:sentry, :enable_source_code_context, false)
-  def enable_source_code_context, do: @enable_source_code_context
-
-  if root_source_code_paths = Application.compile_env(:sentry, :root_source_code_paths, nil) do
-    def root_source_code_paths, do: unquote(root_source_code_paths)
-  else
-    def root_source_code_paths do
-      raise ArgumentError,
-            ":root_source_code_paths must be configured if :enable_source_code_context is true"
-    end
+  @spec enable_source_code_context?() :: boolean()
+  def enable_source_code_context? do
+    Application.get_env(:sentry, :enable_source_code_context, false)
   end
 
-  @source_code_path_pattern Application.compile_env(
-                              :sentry,
-                              :source_code_path_pattern,
-                              @default_path_pattern
-                            )
-  def source_code_path_pattern, do: @source_code_path_pattern
+  @spec root_source_code_paths() :: [Path.t()]
+  def root_source_code_paths do
+    Application.get_env(:sentry, :root_source_code_paths, [])
+  end
 
-  @source_code_exclude_patterns Application.compile_env(
-                                  :sentry,
-                                  :source_code_exclude_patterns,
-                                  @default_exclude_patterns
-                                )
-  def source_code_exclude_patterns, do: @source_code_exclude_patterns
+  @spec source_code_path_pattern() :: String.t()
+  def source_code_path_pattern do
+    Application.get_env(:sentry, :source_code_path_pattern, @default_path_pattern)
+  end
+
+  @spec source_code_exclude_patterns() :: [Regex.t()]
+  def source_code_exclude_patterns do
+    Application.get_env(:sentry, :source_code_exclude_patterns, @default_exclude_patterns)
+  end
 
   def context_lines do
     Application.get_env(:sentry, :context_lines, @default_context_lines)
