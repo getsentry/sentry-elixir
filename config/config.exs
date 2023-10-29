@@ -5,6 +5,7 @@ if config_env() == :test do
     included_environments: [:test],
     environment_name: :test,
     tags: %{},
+    enable_source_code_context: true,
     root_source_code_paths: [File.cwd!()],
     hackney_opts: [recv_timeout: 50],
     send_result: :sync,
