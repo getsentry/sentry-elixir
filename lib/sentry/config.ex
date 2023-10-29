@@ -3,13 +3,17 @@ defmodule Sentry.Config do
 
   @default_max_hackney_connections 50
   @default_hackney_timeout 5000
-  @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/"]
+  @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"]
   @default_path_pattern "**/*.ex"
   @default_context_lines 3
   @default_sample_rate 1.0
   @default_send_result :none
   @default_send_max_attempts 4
   @default_log_level :warning
+
+  # Also exposed as a function to be used in docs in the Sentry module.
+  @spec default_source_code_exclude_patterns() :: [Regex.t(), ...]
+  def default_source_code_exclude_patterns, do: @default_exclude_patterns
 
   @spec validate_log_level!() :: :ok
   def validate_log_level! do

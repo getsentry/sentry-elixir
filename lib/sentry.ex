@@ -1,5 +1,5 @@
 defmodule Sentry do
-  @moduledoc ~S"""
+  @moduledoc """
   Provides the functionality to submit events to [Sentry](https://sentry.io).
 
   This library can be used to submit events to Sentry from any Elixir application.
@@ -198,7 +198,7 @@ defmodule Sentry do
 
     * `:source_code_exclude_patterns` (list of `t:Regex.t/0`) - a list of regular
       expressions used to determine which files to exclude from source code
-      context. Defaults to `[~r"/_build/", ~r"/deps/", ~r"/priv/"]`.
+      context. Defaults to `#{inspect(Sentry.Config.default_source_code_exclude_patterns())}`.
 
     * `:context_lines` (`t:integer/0`) - the number of lines of source code
       before and after the line that caused the exception to report. Defaults to `5`.
@@ -252,7 +252,7 @@ defmodule Sentry do
               Logger.info("Successfully sent event!")
 
             {:error, _reason} ->
-              Logger.info(fn -> "Did not successfully send event! #{inspect(event)}" end)
+              Logger.info(fn -> "Did not successfully send event! \#{inspect(event)}" end)
           end
         end
       end

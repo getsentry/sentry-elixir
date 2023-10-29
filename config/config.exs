@@ -7,6 +7,7 @@ if config_env() == :test do
     tags: %{},
     enable_source_code_context: true,
     root_source_code_paths: [File.cwd!()],
+    source_code_exclude_patterns: [],
     hackney_opts: [recv_timeout: 50],
     send_result: :sync,
     send_max_attempts: 1

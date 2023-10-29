@@ -4,6 +4,7 @@
 
 - `:report_deps` now reports all loaded applications at the time the `:sentry` application starts. This is not a compile-time configuration option anymore.
 - Add the `mix sentry.package_source_code` Mix task. See the upgrade guide for more information.
+- Add `~r"/test/"` to the default source code exclude patterns (see the `:source_code_exclude_patterns` option).
 
 ## 9.1.0
 
