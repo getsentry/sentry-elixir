@@ -3,7 +3,7 @@ defmodule Sentry.Application do
 
   use Application
 
-  alias Sentry.Config
+  alias Sentry.{Config, Sources}
 
   @impl true
   def start(_type, _opts) do
@@ -44,6 +44,7 @@ defmodule Sentry.Application do
     Config.assert_dsn_has_no_query_params!()
 
     cache_loaded_applications()
+    Sources.load_source_code_map_if_present()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end

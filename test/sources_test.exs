@@ -1,6 +1,7 @@
 defmodule Sentry.SourcesTest do
   use ExUnit.Case
   use Plug.Test
+
   import Sentry.TestEnvironmentHelper
 
   describe "load_files/0" do
@@ -49,6 +50,16 @@ defmodule Sentry.SourcesTest do
   end
 
   test "exception makes call to Sentry API" do
+    modify_env(:sentry, enable_source_code_context: true)
+
+    mix_shell = Mix.shell()
+    on_exit(fn -> Mix.shell(mix_shell) end)
+
+    Mix.shell(Mix.Shell.Quiet)
+    Mix.Task.rerun("sentry.package_source_code", ["--debug"])
+
+    :ok = Sentry.Sources.load_source_code_map_if_present()
+
     correct_context = %{
       "context_line" => "    raise RuntimeError, \"Error\"",
       "post_context" => ["  end", "", "  get \"/exit_route\" do"],
