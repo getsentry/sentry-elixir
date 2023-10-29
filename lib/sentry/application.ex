@@ -21,21 +21,6 @@ defmodule Sentry.Application do
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
 
-    if http_client == Sentry.HackneyClient do
-      unless Code.ensure_loaded?(:hackney) do
-        raise """
-        cannot start the :sentry application because the HTTP client is set to \
-        Sentry.HackneyClient (which is the default), but the Hackney library is not loaded. \
-        Add :hackney to your dependencies to fix this.
-        """
-      end
-
-      case Application.ensure_all_started(:hackney) do
-        {:ok, _apps} -> :ok
-        {:error, reason} -> raise "failed to start the :hackney application: #{inspect(reason)}"
-      end
-    end
-
     Config.warn_for_deprecated_env_vars!()
     validate_json_config!()
     Config.validate_log_level!()
