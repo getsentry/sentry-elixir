@@ -102,6 +102,7 @@ defmodule Sentry.LoggerHandler do
 
   alias Sentry.LoggerUtils
 
+  # The config for this logger handler.
   defstruct level: :error,
             excluded_domains: [:cowboy],
             metadata: [],
@@ -120,6 +121,7 @@ defmodule Sentry.LoggerHandler do
   @doc false
   @spec adding_handler(:logger.handler_config()) :: {:ok, :logger.handler_config()}
   def adding_handler(config) do
+    config = Map.put_new(config, :config, %__MODULE__{})
     {:ok, update_in(config.config, &cast_config(__MODULE__, &1))}
   end
 

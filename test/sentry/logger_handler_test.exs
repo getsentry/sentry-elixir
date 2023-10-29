@@ -336,8 +336,13 @@ defmodule Sentry.LoggerHandlerTest do
   end
 
   defp add_handler(context) do
-    config = Map.get(context, :handler_config, %{})
-    assert :ok = :logger.add_handler(@handler_name, Sentry.LoggerHandler, %{config: config})
+    handler_config =
+      case Map.fetch(context, :handler_config) do
+        {:ok, config} -> %{config: config}
+        :error -> %{}
+      end
+
+    assert :ok = :logger.add_handler(@handler_name, Sentry.LoggerHandler, handler_config)
 
     on_exit(fn ->
       _ = :logger.remove_handler(@handler_name)
