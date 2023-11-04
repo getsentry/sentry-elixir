@@ -379,7 +379,7 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
 
-  `opts` argument is passed as the second argument to `Sentry.send_event/2`.
+  `opts` argument is passed as the second argument to `send_event/2`.
   """
   @spec capture_message(String.t(), keyword()) :: send_result
   def capture_message(message, opts \\ []) when is_binary(message) do
@@ -415,10 +415,6 @@ defmodule Sentry do
       any events, and a value of `1.0` will send 100% of events. Sampling is applied **after**
       the `:before_send_event` callback. See where [the Sentry
       documentation](https://develop.sentry.dev/sdk/sessions/#filter-order) suggests this.
-
-    * Other options, such as `:stacktrace` or `:extra`, will be passed to
-      `Sentry.Event.create_event/1` downstream. See `Sentry.Event.create_event/1`
-      for available options.
 
   > #### Async Send {: .error}
   >
