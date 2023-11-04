@@ -19,6 +19,9 @@ defmodule Sentry.Client do
   def send_event(%Event{} = event, opts) when is_list(opts) do
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
+    before_send_event = Keyword.get_lazy(opts, :before_send_event, &Config.before_send_event/0)
+    after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
+    client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
     # This is a "private" option, only really used in testing.
     request_retries =
@@ -27,10 +30,10 @@ defmodule Sentry.Client do
       end)
 
     result =
-      with {:ok, %Event{} = event} <- maybe_call_before_send(event),
+      with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send_event),
            :ok <- sample_event(sample_rate) do
-        send_result = encode_and_send(event, result_type, request_retries)
-        _ignored = maybe_call_after_send(event, send_result)
+        send_result = encode_and_send(event, result_type, client, request_retries)
+        _ignored = maybe_call_after_send(event, send_result, after_send_event)
         send_result
       end
 
@@ -61,24 +64,37 @@ defmodule Sentry.Client do
     end
   end
 
-  defp maybe_call_before_send(event) do
-    message = ":before_send_event must be an anonymous function or a {module, function} tuple"
-
-    result =
-      case Config.before_send_event() do
-        function when is_function(function, 1) -> function.(event) || false
-        {module, function} -> apply(module, function, [event]) || false
-        nil -> event
-        _other -> raise ArgumentError, message
-      end
-
-    if result, do: {:ok, result}, else: :excluded
+  defp maybe_call_before_send(event, nil) do
+    {:ok, event}
   end
 
-  defp maybe_call_after_send(%Event{} = event, result) do
+  defp maybe_call_before_send(event, callback) do
+    if result = call_before_send(event, callback) do
+      {:ok, result}
+    else
+      :excluded
+    end
+  end
+
+  defp call_before_send(event, function) when is_function(function, 1) do
+    function.(event) || false
+  end
+
+  defp call_before_send(event, {mod, fun}) do
+    apply(mod, fun, [event]) || false
+  end
+
+  defp call_before_send(_event, other) do
+    raise ArgumentError, """
+    :before_send_event must be an anonymous function or a {module, function} tuple, got: \
+    #{inspect(other)}\
+    """
+  end
+
+  defp maybe_call_after_send(%Event{} = event, result, callback) do
     message = ":after_send_event must be an anonymous function or a {module, function} tuple"
 
-    case Config.after_send_event() do
+    case callback do
       function when is_function(function, 2) -> function.(event, result)
       {module, function} -> apply(module, function, [event, result])
       nil -> nil
@@ -86,22 +102,22 @@ defmodule Sentry.Client do
     end
   end
 
-  defp encode_and_send(_event, _result_type = :async, _request_retries) do
+  defp encode_and_send(_event, _result_type = :async, _client, _request_retries) do
     raise ArgumentError, """
     the :async result type is not supported anymore. Instead, you can spawn a task yourself that \
     then calls Sentry.send_event/2 with result: :sync. The effect is exactly the same.
     """
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :sync, request_retries) do
-    send_result = [event] |> Envelope.new() |> Transport.post_envelope(request_retries)
+  defp encode_and_send(%Event{} = event, _result_type = :sync, client, request_retries) do
+    send_result = [event] |> Envelope.new() |> Transport.post_envelope(client, request_retries)
 
     _ = maybe_log_send_result(send_result, event)
     send_result
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :none, _request_retries) do
-    :ok = Transport.Sender.send_async(event)
+  defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
+    :ok = Transport.Sender.send_async(client, event)
     {:ok, ""}
   end
 

@@ -126,8 +126,12 @@ defmodule Sentry do
 
   To customize what happens when sending an event, you can use these options:
 
-    * `:sample_rate` (`t:float/0` between `0.0` and `1.0`) - the percentage
-      of events to send to Sentry. Defaults to `1.0` (100% of events).
+    * `:sample_rate` (`t:float/0` between `0.0` and `1.0`) - the percentage of
+      events to send to Sentry. A value of `0.0` will deny sending any events,
+      and a value of `1.0` will send 100% of events. Sampling is applied
+      **after** the `:before_send_event` callback. See where [the Sentry
+      documentation](https://develop.sentry.dev/sdk/sessions/#filter-order)
+      suggests this. Defaults to `1.0`
 
     * `:send_result` (`t:atom/0`) - controls what to return when reporting exceptions
       to Sentry. Defaults to `:none`.
@@ -411,10 +415,17 @@ defmodule Sentry do
 
       * `:async` - **Not supported anymore**, see the information below.
 
-    * `:sample_rate` - The sampling factor to apply to events. A value of `0.0` will deny sending
-      any events, and a value of `1.0` will send 100% of events. Sampling is applied **after**
-      the `:before_send_event` callback. See where [the Sentry
-      documentation](https://develop.sentry.dev/sdk/sessions/#filter-order) suggests this.
+    * `:sample_rate` - same as the global `:sample_rate` configuration, but applied only to
+      this call. See the module documentation. *Available since v10.0.0*.
+
+    * `:before_send_event` - same as the global `:before_send_event` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
+
+    * `:after_send_event` - same as the global `:after_send_event` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
+
+    * `:client` - same as the global `:client` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
 
   > #### Async Send {: .error}
   >

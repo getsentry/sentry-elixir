@@ -17,12 +17,12 @@ defmodule Sentry.Transport.Sender do
     GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
   end
 
-  @spec send_async(Event.t()) :: :ok
-  def send_async(%Event{} = event) do
+  @spec send_async(module(), Event.t()) :: :ok
+  def send_async(client, %Event{} = event) when is_atom(client) do
     pool_size = Application.fetch_env!(:sentry, :sender_pool_size)
     random_index = Enum.random(1..pool_size)
 
-    GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, event})
+    GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, client, event})
   end
 
   ## State
@@ -37,10 +37,10 @@ defmodule Sentry.Transport.Sender do
   end
 
   @impl GenServer
-  def handle_cast({:send, %Event{} = event}, %__MODULE__{} = state) do
+  def handle_cast({:send, client, %Event{} = event}, %__MODULE__{} = state) do
     [event]
     |> Envelope.new()
-    |> Transport.post_envelope()
+    |> Transport.post_envelope(client)
     |> maybe_log_send_result([event])
 
     {:noreply, state}

@@ -16,35 +16,36 @@ defmodule Sentry.Transport do
   end
 
   # The "retries" parameter is there for better testing.
-  @spec post_envelope(Envelope.t(), [non_neg_integer()]) ::
+  @spec post_envelope(Envelope.t(), module(), [non_neg_integer()]) ::
           {:ok, envelope_id :: String.t()} | {:error, term()}
-  def post_envelope(%Envelope{} = envelope, retries \\ @default_retries) when is_list(retries) do
+  def post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
+      when is_atom(client) and is_list(retries) do
     with {:json, {:ok, body}} <- {:json, Envelope.to_binary(envelope)},
          {:ok, endpoint, headers} <- get_endpoint_and_headers() do
-      post_envelope_with_retries(endpoint, headers, body, retries)
+      post_envelope_with_retries(client, endpoint, headers, body, retries)
     else
       {:json, {:error, reason}} -> {:error, {:invalid_json, reason}}
       {:error, _reason} = error -> error
     end
   end
 
-  defp post_envelope_with_retries(endpoint, headers, payload, retries_left) do
-    case request(endpoint, headers, payload) do
+  defp post_envelope_with_retries(client, endpoint, headers, payload, retries_left) do
+    case request(client, endpoint, headers, payload) do
       {:ok, id} ->
         {:ok, id}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
-        post_envelope_with_retries(endpoint, headers, payload, retries_left)
+        post_envelope_with_retries(client, endpoint, headers, payload, retries_left)
 
       {:error, reason} ->
         {:error, {:request_failure, reason}}
     end
   end
 
-  defp request(endpoint, headers, body) do
-    with {:ok, 200, _headers, body} <- Config.client().post(endpoint, headers, body),
+  defp request(client, endpoint, headers, body) do
+    with {:ok, 200, _headers, body} <- client.post(endpoint, headers, body),
          {:ok, json} <- Config.json_library().decode(body) do
       {:ok, Map.get(json, "id")}
     else

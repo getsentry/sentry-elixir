@@ -173,8 +173,10 @@ defmodule Sentry.ClientTest do
         :rand.uniform() + "1"
       rescue
         exception ->
-          message =
-            ":before_send_event must be an anonymous function or a {module, function} tuple"
+          message = """
+          :before_send_event must be an anonymous function or a {module, function} \
+          tuple, got: :not_a_function\
+          """
 
           assert_raise ArgumentError, message, fn ->
             exception
