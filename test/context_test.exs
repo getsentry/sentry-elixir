@@ -1,5 +1,5 @@
 defmodule Sentry.ContextTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import Sentry.TestEnvironmentHelper
 
@@ -77,6 +77,7 @@ defmodule Sentry.ContextTest do
     assert event.user == %{}
   end
 
+  @tag start_app: false
   test "passing in tags context as option overrides Context and Application config" do
     Context.set_tags_context(%{"key" => "345", "key1" => "123"})
     modify_env(:sentry, tags: %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})

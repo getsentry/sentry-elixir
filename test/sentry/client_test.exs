@@ -114,34 +114,6 @@ defmodule Sentry.ClientTest do
       assert {:ok, _} = Client.send_event(event, result: :sync)
     end
 
-    test "calls MFA :before_send_event callback", %{bypass: bypass} do
-      defmodule CallbackModuleLoggerMeta do
-        def before_send_event(event) do
-          update_in(event.extra, &Map.merge(&1, Map.new(Logger.metadata())))
-        end
-      end
-
-      Bypass.expect(bypass, fn conn ->
-        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        event = TestHelpers.decode_event_from_envelope!(body)
-
-        assert event.extra == %{"key" => "value", "user_id" => 1}
-
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      modify_env(:sentry, before_send_event: {CallbackModuleLoggerMeta, :before_send_event})
-
-      event = Event.create_event([])
-      Logger.metadata(key: "value", user_id: 1)
-
-      assert {:ok, _} = Client.send_event(event, result: :sync)
-    after
-      :code.delete(CallbackModuleLoggerMeta)
-      :code.purge(CallbackModuleLoggerMeta)
-    end
-
     test "if :before_send_event callback returns falsey, the event is not sent" do
       defmodule CallbackModuleArithmeticError do
         def before_send_event(event) do
@@ -166,26 +138,6 @@ defmodule Sentry.ClientTest do
       :code.purge(CallbackModuleArithmeticError)
     end
 
-    test "if :before_send_event is invalid, using it raises" do
-      modify_env(:sentry, before_send_event: :not_a_function)
-
-      try do
-        :rand.uniform() + "1"
-      rescue
-        exception ->
-          message = """
-          :before_send_event must be an anonymous function or a {module, function} \
-          tuple, got: :not_a_function\
-          """
-
-          assert_raise ArgumentError, message, fn ->
-            exception
-            |> Event.transform_exception(_opts = [])
-            |> Client.send_event(result: :sync)
-          end
-      end
-    end
-
     test "calls the :before_send_event callback before using the sample rate and sets the session" do
       test_pid = self()
       ref = make_ref()
@@ -203,7 +155,7 @@ defmodule Sentry.ClientTest do
       assert Sentry.get_last_event_id_and_source() == {event.event_id, event.source}
     end
 
-    test "calls anonymous :after_send_event callback (as anon function) synchronously",
+    test "calls anonymous :after_send_event callback synchronously",
          %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -220,44 +172,6 @@ defmodule Sentry.ClientTest do
       event = Event.create_event(message: "Something went wrong")
       assert {:ok, _} = Client.send_event(event, result: :sync)
       assert_received {^ref, ^event, {:ok, _id}}
-    end
-
-    test "calls anonymous :after_send_event callback (as MFA) synchronously", %{bypass: bypass} do
-      defmodule SenderMirror do
-        def after_send_event(event, result) do
-          send(:persistent_term.get(:__after_send_event_mfa_test_pid__), {:called, event, result})
-        end
-      end
-
-      Bypass.expect(bypass, fn conn ->
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      :persistent_term.put(:__after_send_event_mfa_test_pid__, self())
-
-      modify_env(:sentry, after_send_event: {SenderMirror, :after_send_event})
-
-      event = Event.create_event(message: "Something went wrong")
-      assert {:ok, _} = Client.send_event(event, result: :sync)
-      assert_received {:called, ^event, {:ok, _id}}
-    after
-      :code.delete(SenderMirror)
-      :code.purge(SenderMirror)
-    end
-
-    test "raises if :after_send_event is invalid", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      modify_env(:sentry, after_send_event: :not_a_function)
-
-      message = ":after_send_event must be an anonymous function or a {module, function} tuple"
-
-      assert_raise ArgumentError, message, fn ->
-        event = Event.create_event(message: "Something went wrong")
-        {:ok, _} = Client.send_event(event, result: :sync)
-      end
     end
 
     test "logs API errors at the configured level", %{bypass: bypass} do
@@ -283,7 +197,10 @@ defmodule Sentry.ClientTest do
 
     test "logs an error when unable to encode JSON" do
       defmodule BadJSONClient do
+        def encode(term) when term == %{}, do: {:ok, "{}"}
         def encode(_term), do: {:error, :im_just_bad}
+
+        def decode(term), do: Jason.decode(term)
       end
 
       modify_env(:sentry, json_library: BadJSONClient)

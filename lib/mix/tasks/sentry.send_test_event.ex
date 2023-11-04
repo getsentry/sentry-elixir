@@ -31,17 +31,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
         Mix.raise("Failed to start the :sentry application:\n\n#{inspect(reason)}")
     end
 
-    included_environments =
-      case Application.fetch_env(:sentry, :included_environments) do
-        {:ok, envs} when is_list(envs) or envs == :all ->
-          envs
-
-        :error ->
-          Mix.raise("""
-          The :included_environments application configuration option is not configured for the \
-          :sentry application.
-          """)
-      end
+    included_environments = Config.included_environments()
 
     print_environment_info(Sentry.Transport.get_dsn(), included_environments)
 

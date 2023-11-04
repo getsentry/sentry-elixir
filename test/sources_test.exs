@@ -1,5 +1,5 @@
 defmodule Sentry.SourcesTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   use Plug.Test
 
   import Sentry.TestEnvironmentHelper
@@ -50,7 +50,12 @@ defmodule Sentry.SourcesTest do
   end
 
   test "exception makes call to Sentry API" do
-    modify_env(:sentry, enable_source_code_context: true)
+    bypass = Bypass.open()
+
+    modify_env(:sentry,
+      enable_source_code_context: true,
+      dsn: "http://public:secret@localhost:#{bypass.port}/1"
+    )
 
     mix_shell = Mix.shell()
     on_exit(fn -> Mix.shell(mix_shell) end)
@@ -65,8 +70,6 @@ defmodule Sentry.SourcesTest do
       "post_context" => ["  end", "", "  get \"/exit_route\" do"],
       "pre_context" => ["", "  get \"/error_route\" do", "    _ = conn"]
     }
-
-    bypass = Bypass.open()
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
@@ -85,8 +88,6 @@ defmodule Sentry.SourcesTest do
       assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
-
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
