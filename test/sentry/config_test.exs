@@ -5,6 +5,11 @@ defmodule Sentry.ConfigTest do
 
   alias Sentry.Config
 
+  setup do
+    modify_system_env(%{"SENTRY_ENVIRONMENT" => "test"})
+    :ok
+  end
+
   describe "validate!/0" do
     test ":dsn from option" do
       dsn = "https://public:secret@app.getsentry.com/1"
