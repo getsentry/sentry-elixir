@@ -126,9 +126,8 @@ defmodule Sentry.TransportTest do
       defmodule CrashingJSONLibrary do
         defdelegate encode(term), to: Jason
 
-        def decode(_body) do
-          raise "I'm a really bad JSON library"
-        end
+        def decode("{}"), do: {:ok, %{}}
+        def decode(_body), do: raise("I'm a really bad JSON library")
       end
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -212,16 +211,6 @@ defmodule Sentry.TransportTest do
 
     test "errors on no project_id" do
       modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com")
-      assert {:error, :invalid_dsn} = Transport.get_dsn()
-    end
-
-    test "errors on nil dsn" do
-      modify_env(:sentry, dsn: nil)
-      assert {:error, :invalid_dsn} = Transport.get_dsn()
-    end
-
-    test "errors on atom dsn" do
-      modify_env(:sentry, dsn: :error)
       assert {:error, :invalid_dsn} = Transport.get_dsn()
     end
   end

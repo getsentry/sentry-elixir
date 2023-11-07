@@ -1,4 +1,6 @@
 defmodule Sentry.TestEnvironmentHelper do
+  import ExUnit.Assertions
+
   def modify_env(app, overrides) do
     original_env = Application.get_all_env(app)
     Enum.each(overrides, fn {key, value} -> Application.put_env(app, key, value) end)
@@ -11,12 +13,15 @@ defmodule Sentry.TestEnvironmentHelper do
           Application.delete_env(app, key)
         end
       end)
+
+      restart_app()
     end)
+
+    restart_app()
   end
 
   def delete_env(app, key) do
     original_env = Application.fetch_env(app, key)
-
     Application.delete_env(app, key)
 
     ExUnit.Callbacks.on_exit(fn ->
@@ -24,7 +29,11 @@ defmodule Sentry.TestEnvironmentHelper do
         {:ok, val} -> Application.put_env(app, key, val)
         :error -> :ok
       end
+
+      restart_app()
     end)
+
+    restart_app()
   end
 
   def modify_system_env(overrides) when is_map(overrides) do
@@ -39,7 +48,11 @@ defmodule Sentry.TestEnvironmentHelper do
           System.delete_env(key)
         end
       end)
+
+      restart_app()
     end)
+
+    restart_app()
   end
 
   def delete_system_env(variable) do
@@ -52,6 +65,19 @@ defmodule Sentry.TestEnvironmentHelper do
         {:ok, val} -> System.put_env(variable, val)
         :error -> :ok
       end
+
+      restart_app()
     end)
+
+    restart_app()
+  end
+
+  defp restart_app do
+    for {{:sentry_config, _} = key, _val} <- :persistent_term.get() do
+      :persistent_term.erase(key)
+    end
+
+    ExUnit.CaptureLog.capture_log(fn -> Application.stop(:sentry) end)
+    assert {:ok, _} = Application.ensure_all_started(:sentry)
   end
 end

@@ -1,5 +1,5 @@
 defmodule Sentry.EventTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Sentry.Event
   alias Sentry.Interfaces
@@ -236,7 +236,7 @@ defmodule Sentry.EventTest do
     test "fills in the message interface when passing the :message option" do
       assert %Event{
                breadcrumbs: [],
-               environment: :test,
+               environment: "test",
                exception: [],
                extra: %{},
                level: :error,

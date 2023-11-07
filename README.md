@@ -195,28 +195,29 @@ Sending test event!
 
 ## Testing with Sentry
 
-In some cases, users may want to test that certain actions in their application cause a report to be sent to Sentry.  Sentry itself does this by using [Bypass](https://github.com/PSPDFKit-labs/bypass).  It is important to note that when modifying the environment configuration the test case should not be run asynchronously.  Not returning the environment configuration to its original state could also affect other tests depending on how the Sentry configuration interacts with them.
+In some cases, users may want to test that certain actions in their application cause a report to be sent to Sentry. Sentry itself does this by using [Bypass](https://github.com/PSPDFKit-labs/bypass). It is important to note that when modifying the environment configuration the test case should not be run asynchronously. Not returning the environment configuration to its original state could also affect other tests depending on how the Sentry configuration interacts with them.
 
-Example:
+For example:
 
 ```elixir
 test "add/2 does not raise but sends an event to Sentry when given bad input" do
   bypass = Bypass.open()
 
   Bypass.expect(bypass, fn conn ->
-    {:ok, _body, conn} = Plug.Conn.read_body(conn)
+    assert {:ok, _body, conn} = Plug.Conn.read_body(conn)
     Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
   end)
 
-  Application.put_env(:sentry, :dsn, "http://public:secret@localhost:#{bypass.port}/1")
-  Application.put_env(:sentry, :send_result, :sync)
+  Sentry.put_config(:dsn, "http://public:secret@localhost:#{bypass.port}/1")
+  Sentry.put_config(:send_result, :sync)
   MyModule.add(1, "a")
+after
+  # Return config to the previous value
+  # ...
 end
 ```
 
-When testing, you will also want to set the `send_result` type to `:sync`, so the request is done synchronously.
-
-
+When testing, you will also want to set the `:send_result` type to `:sync`, so that sending Sentry events blocks until the event is sent.
 
 [Sentry]: http://sentry.io/
 [Jason]: https://github.com/michalmuskala/jason

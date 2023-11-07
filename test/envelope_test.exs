@@ -1,5 +1,5 @@
 defmodule Sentry.EnvelopeTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Sentry.{Envelope, Event, Interfaces}
 
@@ -25,7 +25,7 @@ defmodule Sentry.EnvelopeTest do
     test "parses envelope containing an event" do
       event = %Event{
         breadcrumbs: [],
-        environment: :test,
+        environment: "test",
         event_id: "1d208b37d9904203918a9c2125ea91fa",
         source: nil,
         exception: [],

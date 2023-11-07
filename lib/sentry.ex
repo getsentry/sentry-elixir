@@ -83,142 +83,31 @@ defmodule Sentry do
       config :sentry,
         # ...
 
-  The basic configuration options are:
+  **Sentry reads the configuration when the `:sentry` application starts**, and
+  will not pick up any changes after that. This is in line with how other
+  Sentry SDKs (and many other Erlang/Elixir libraries) work. The reason
+  for this choice is performance: the SDK performs validation on application
+  start and then caches the configuration (in [`:persistent_term`](`:persistent_term`)).
 
-    * `:dsn` (`t:String.t/0`) - the DSN for your Sentry project.
-      If this is not set, Sentry will not be enabled. If the `SENTRY_DSN`
-      environment variable is set, it will be used as the default value.
+  > #### Updating Configuration at Runtime {: .tip}
+  >
+  > If you *must* update configuration at runtime, use `put_config/2`. This
+  > function is not efficient (since it updates terms in `:persistent_term`),
+  > but it works in a pinch. For example, it's useful if you're verifying
+  > that you send the right events to Sentry in your test suite, so you need to
+  > change the `:dsn` configuration to point to a local server that you can verify
+  > requests on.
 
-    * `:release` (`t:String.t/0`) - the release version of your application.
-      This is used to correlate events with source code. If the `SENTRY_RELEASE`
-      environment variable is set, it will be used as the default value.
+  Below you can find all the available configuration options.
 
-    * `:environment_name` (`t:atom/0` or `t:String.t/0`) - the current
-      environment name. This is used to determine if Sentry should be enabled
-      and if events should be sent. For events to be sent, the value of
-      this option must appear in the `:included_environments` list.
-      If the `SENTRY_ENVIRONMENT` environment variable is set, it will
-      be used as the defaults value. Otherwise, defaults to `"dev"`.
+  #{Sentry.Config.docs()}
 
-    * `:included_environments` (list of `t:atom/0` or `t:String.t/0`, or the atom `:all`) -
-      the environments in which Sentry can report events. If this is a list,
-      then `:environment_name` needs to be in this list for events to be reported.
-      If this is `:all`, then Sentry will report events regardless of the value
-      of `:environment_name`. Defaults to `:all`.
-
-    * `:tags` (`t:map/0`) - a map of tags to be sent with every event.
-      Defaults to `%{}`.
-
-    * `:server_name` (`t:String.t/0`) - the name of the server running the
-      application. Not used by default.
-
-    * `:filter` (`t:module/0`) - a module that implements the `Sentry.Filter`
-      behaviour. Defaults to `Sentry.DefaultEventFilter`. See the
-      [*Filtering Exceptions* section](#module-filtering-exceptions) below.
-
-    * `:json_library` (`t:module/0`) - a module that implements the "standard"
-      Elixir JSON behaviour, that is, exports the `encode/1` and `decode/1`
-      functions. Defaults to `Jason`, which requires [`:jason`](https://hex.pm/packages/jason)
-      to be a dependency of your application.
-
-    * `:log_level` (`t:Logger.level/0`) - the level to use when Sentry fails to
-      send an event due to an API failure or other reasons. Defaults to `:warning`.
-
-  To customize what happens when sending an event, you can use these options:
-
-    * `:sample_rate` (`t:float/0` between `0.0` and `1.0`) - the percentage of
-      events to send to Sentry. A value of `0.0` will deny sending any events,
-      and a value of `1.0` will send 100% of events. Sampling is applied
-      **after** the `:before_send_event` callback. See where [the Sentry
-      documentation](https://develop.sentry.dev/sdk/sessions/#filter-order)
-      suggests this. Defaults to `1.0`
-
-    * `:send_result` (`t:atom/0`) - controls what to return when reporting exceptions
-      to Sentry. Defaults to `:none`.
-
-    * `:send_max_attempts` (`t:integer/0`) - the maximum number of attempts to
-      send an event to Sentry. Defaults to `4`.
-
-    * `:max_breadcrumbs` (`t:integer/0`) - the maximum number of breadcrumbs
-      to keep. Defaults to `100`. See `Sentry.Context.add_breadcrumb/1`.
-
-    * `:before_send_event` (`t:before_send_event_callback/0`) - allows performing operations
-      on the event *before* it is sent as well as filtering out the event altogether.
-      If the callback returns `nil` or `false`, the event is not reported. If it returns an
-      updated `Sentry.Event`, then the updated event is used instead. See the [*Event Callbacks*
-      section](#module-event-callbacks) below for more information.
-
-    * `:after_send_event` (`t:after_send_event_callback/0`) - callback that is called *after*
-      attempting to send an event. The result of the HTTP call as well as the event will
-      be passed as arguments. The return value of the callback is not returned. See the
-      [*Event Callbacks* section](#module-event-callbacks) below for more information.
-
-    * `:in_app_module_allow_list` (list of `t:module/0`) - a list of modules that is used
-      to distinguish among stacktrace frames that belong to your app and ones that are
-      part of libraries or core Elixir. This is used to better display the significant part
-      of stacktraces. The logic is "greedy", so if your app's root module is `MyApp` and
-      you configure this option to `[MyApp]`, `MyApp` as well as any submodules
-      (like `MyApp.Submodule`) would be considered part of your app. Defaults to `[]`.
-
-  To customize the behaviour of the HTTP client used by Sentry, you can
-  use these options:
-
-    * `:client` (`t:module/0`) - a module that implements the `Sentry.HTTPClient`
-      behaviour. Defaults to `Sentry.HackneyClient`, which uses
-      [hackney](https://github.com/benoitc/hackney) as the HTTP client.
-
-    * `:hackney_opts` (`t:keyword/0`) - options to be passed to `hackney`. Only
-      applied if `:client` is set to `Sentry.HackneyClient`. Defaults to
-      `[pool: :sentry_pool]`.
-
-    * `:hackney_pool_max_connections` (`t:integer/0`) - the maximum number of
-      connections to keep in the pool. Only applied if `:client` is set to
-      `Sentry.HackneyClient`. Defaults to `50`.
-
-    * `:hackney_pool_timeout` (`t:integer/0`) - the maximum time to wait for a
-      connection to become available. Only applied if `:client` is set to
-      `Sentry.HackneyClient`. Defaults to `5000`.
-
-    * `:report_deps` (`t:boolean/0`) - whether to report application dependencies of your
-      application alongside events. This list contains applications (alongside their version)
-      that are **loaded** when the `:sentry` application starts. Defaults to `true`.
-
-  To customize options related to reporting source code context, you can use these
-  options (see also the [dedicated section](#module-reporting-source-code)):
-
-    * `:enable_source_code_context` (`t:boolean/0`) - whether to report source
-      code context alongside events. Defaults to `false`.
-
-    * `:root_source_code_paths` (list of `t:Path.t/0`) - a list of paths to the root of
-      your application's source code. This is used to determine the relative
-      path of files in stack traces. Usually, you'll want to set this to
-      `[File.cwd!()]`. For umbrella apps, you should set this to all the application
-      paths in your umbrella (such as `[Path.join(File.cwd!(), "apps/app1"), ...]`).
-      **Required** if `:enabled_source_code_context` is `true`.
-
-    * `:source_code_path_pattern` (`t:String.t/0`) - a glob pattern used to
-      determine which files to report source code context for. The glon "starts"
-      from `:root_source_code_paths`. Defaults to `"**/*.ex"`.
-
-    * `:source_code_exclude_patterns` (list of `t:Regex.t/0`) - a list of regular
-      expressions used to determine which files to exclude from source code
-      context. Defaults to `#{inspect(Sentry.Config.default_source_code_exclude_patterns())}`.
-
-    * `:context_lines` (`t:integer/0`) - the number of lines of source code
-      before and after the line that caused the exception to report. Defaults to `5`.
-
-  ### Configuration Through System Environment
-
-  Sentry supports loading configuration from the system environment. You can do this
-  by setting `SENTRY_<name>` environment variables. For example, to set the `:release`
-  option through the system environment, you can set the `SENTRY_RELEASE` environment
-  variable.
-
-  The supported `SENTRY_<name>` environment variables are:
-
-    * `SENTRY_RELEASE`
-    * `SENTRY_ENVIRONMENT`
-    * `SENTRY_DSN`
+  > #### Configuration Through System Environment {: .info}
+  >
+  > Sentry supports loading some configuration from the system environment.
+  > The supported environment variables are: `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT`,
+  > and `SENTRY_DSN`. See the `:release`, `:environment_name`, and `:dsn` configuration
+  > options respectively for more information.
 
   ## Filtering Exceptions
 
@@ -460,4 +349,40 @@ defmodule Sentry do
       :ignored
     end
   end
+
+  @doc ~S"""
+  Updates the value of `key` in the configuration *at runtime*.
+
+  Once the `:sentry` application starts, it validates and caches the value of the
+  configuration options you start it with. Because of this, updating configuration
+  at runtime requires this function as opposed to just changing the application
+  environment.
+
+  > #### This Function Is Slow {: .warning}
+  >
+  > This function updates terms in [`:persistent_term`](`:persistent_term`), which is what
+  > this SDK uses to cache configuration. Updating terms in `:persistent_term` is slow
+  > and can trigger full GC sweeps. We recommend only using this function in rare cases,
+  > or during tests.
+
+  ## Examples
+
+  For example, if you're using [`Bypass`](https://github.com/PSPDFKit-labs/bypass) to test
+  that you send the correct events to Sentry:
+
+      test "reports the correct event to Sentry" do
+        bypass = Bypass.open()
+
+        Bypass.expect(...)
+
+        Sentry.put_config(:dsn, "http://public:secret@localhost:#{bypass.port}/1")
+        Sentry.put_config(:send_result, :sync)
+
+        my_function_to_test()
+      end
+
+  """
+  @doc since: "10.0.0"
+  @spec put_config(atom(), term()) :: :ok
+  defdelegate put_config(key, value), to: Config
 end
