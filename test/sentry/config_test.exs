@@ -5,11 +5,6 @@ defmodule Sentry.ConfigTest do
 
   alias Sentry.Config
 
-  setup do
-    modify_system_env(%{"SENTRY_ENVIRONMENT" => "test"})
-    :ok
-  end
-
   describe "validate!/0" do
     test ":dsn from option" do
       dsn = "https://public:secret@app.getsentry.com/1"
@@ -98,14 +93,6 @@ defmodule Sentry.ConfigTest do
     test ":environment_name from system env" do
       modify_system_env(%{"SENTRY_ENVIRONMENT" => "my_env"})
       assert Config.validate!([])[:environment_name] == "my_env"
-    end
-
-    test ":environment_name is required" do
-      delete_system_env("SENTRY_ENVIRONMENT")
-
-      assert_raise ArgumentError, ~r/:environment_name must be set/, fn ->
-        Config.validate!([])
-      end
     end
 
     test ":sample_rate" do
