@@ -22,7 +22,7 @@ defmodule Sentry.Config do
       be enabled and if events should be sent. For events to be sent, the value of
       this option must appear in the `:included_environments` list.
       If the `SENTRY_ENVIRONMENT` environment variable is set, it will
-      be used as the defaults value. Otherwise, defaults to `"dev"`.
+      be used as the defaults value. Otherwise, defaults to `"production"`.
       """
     ],
     included_environments: [
@@ -286,15 +286,12 @@ defmodule Sentry.Config do
       |> Keyword.take(@valid_keys)
       |> fill_in_from_env(:dsn, "SENTRY_DSN")
       |> fill_in_from_env(:release, "SENTRY_RELEASE")
+      |> fill_in_from_env(:environment_name, "SENTRY_ENVIRONMENT")
 
     case NimbleOptions.validate(config_opts, @opts_schema) do
       {:ok, opts} ->
         opts
-        |> Keyword.put_new_lazy(:environment_name, fn ->
-          System.get_env("SENTRY_ENVIRONMENT") ||
-            raise ArgumentError,
-                  ":environment_name must be set in the application config or the SENTRY_ENVIRONMENT env var"
-        end)
+        |> Keyword.put_new(:environment_name, "production")
         |> normalize_included_environments()
         |> normalize_environment()
         |> assert_dsn_has_no_query_params!()

@@ -21,3 +21,7 @@ Now, packaging source code is an active step that you have to take. The [`mix se
   1. Add a call to `mix sentry.package_source_code` in your release script. This can be inside a `Dockerfile`, for example. Make sure to call this **before** `mix release`, so that the built release will include the packaged source code.
 
   1. That's all!
+
+## Make Sure You're Using the Right Environment
+
+Now, if you're not explicitly setting he `:environment_name` option in your config or setting the `SENTRY_ENVIRONMENT` environment variable, the environment will default to `production` (which is in line with the other Sentry SDKs).
