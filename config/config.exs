@@ -2,7 +2,6 @@ import Config
 
 if config_env() == :test do
   config :sentry,
-    included_environments: [:test],
     environment_name: :test,
     tags: %{},
     enable_source_code_context: true,

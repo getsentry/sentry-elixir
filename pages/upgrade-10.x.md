@@ -25,3 +25,39 @@ Now, packaging source code is an active step that you have to take. The [`mix se
 ## Make Sure You're Using the Right Environment
 
 Now, if you're not explicitly setting he `:environment_name` option in your config or setting the `SENTRY_ENVIRONMENT` environment variable, the environment will default to `production` (which is in line with the other Sentry SDKs).
+
+## Stop Using `:included_environments`
+
+We hard-deprecated `:included_environments`. It's a bit of a confusing option that essentially no other Sentry SDKs use. To control whether to send events to Sentry, use the `:dsn` configuration instead (if set then we send events, if not set then we don't send events). `:included_environments` will be removed in v11.0.0.
+
+For example, if you had something like this in `config/config.exs`:
+
+```elixir
+# In config/config.exs
+config :sentry,
+  dsn: "...",
+  environment_name: config_env(),
+  included_environments: [:prod]
+```
+
+Move this block to `config/prod.exs`, and turn it into:
+
+```elixir
+# In config/prod.exs
+config :sentry,
+  dsn: "...",
+  environment_name: :prod
+```
+
+This way, `:dsn` will only be set in the `:prod` environment and no events will be sent in the development or testing environments.
+
+Alternatively, if you were setting `:dsn` in `config/runtime.exs` (for use with Mix releases), change it to:
+
+```elixir
+# In config/runtime.exs
+if config_env() == :prod do
+  config :sentry,
+    dsn: "...",
+    environment_name: :prod
+end
+```

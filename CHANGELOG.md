@@ -6,6 +6,7 @@
 - Add the `mix sentry.package_source_code` Mix task. See the upgrade guide for more information.
 - Add `~r"/test/"` to the default source code exclude patterns (see the `:source_code_exclude_patterns` option).
 - `:environment_name` now defaults to `production` (if it wasn't configured explicitly and if the `SENTRY_ENVIRONMENT` environment variable is not set).
+- Hard-deprecate `:included_environments`. To control whether to send events to Sentry, use the `:dsn` configuration option instead. `:included_environments` now emits a warning if used, but will still work until v11.0.0 of this library.
 
 ## 9.1.0
 
