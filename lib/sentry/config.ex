@@ -17,23 +17,25 @@ defmodule Sentry.Config do
     environment_name: [
       type: {:or, [:string, :atom]},
       type_doc: "`t:String.t/0` or `t:atom/0`",
+      default: "production",
       doc: """
-      The current environment name. This is used to determine if Sentry should
-      be enabled and if events should be sent. For events to be sent, the value of
-      this option must appear in the `:included_environments` list.
+      The current environment name. This is used to specify the environment
+      that an event happened in. It can be any string shorter than 64 bytes,
+      except the string `"None"`. When Sentry receives an event with an environment,
+      it creates that environment if it doesn't exist yet.
       If the `SENTRY_ENVIRONMENT` environment variable is set, it will
-      be used as the defaults value. Otherwise, defaults to `"production"`.
+      be used as the value for this option.
       """
     ],
     included_environments: [
       type: {:or, [{:in, [:all]}, {:list, {:or, [:atom, :string]}}]},
-      default: :all,
+      deprecated: "Use :dsn to control whether to send events to Sentry.",
       type_doc: "list of `t:atom/0` or `t:String.t/0`, or the atom `:all`",
       doc: """
-      The environments in which Sentry can report events. If this is a list,
+      **Deprecated**. The environments in which Sentry can report events. If this is a list,
       then `:environment_name` needs to be in this list for events to be reported.
       If this is `:all`, then Sentry will report events regardless of the value
-      of `:environment_name`
+      of `:environment_name`. *This will be removed in v11.0.0*.
       """
     ],
     release: [
@@ -120,8 +122,10 @@ defmodule Sentry.Config do
     ],
     filter: [
       type: :atom,
+      type_doc: "`t:module/0`",
       default: Sentry.DefaultEventFilter,
       doc: """
+      A module that implements the `Sentry.EventFilter`
       behaviour. Defaults to `Sentry.DefaultEventFilter`. See the
       [*Filtering Exceptions* section](#module-filtering-exceptions) below.
       """
@@ -139,6 +143,7 @@ defmodule Sentry.Config do
     ],
     client: [
       type: :atom,
+      type_doc: "`t:module/0`",
       default: Sentry.HackneyClient,
       doc: """
       A module that implements the `Sentry.HTTPClient`
@@ -291,7 +296,6 @@ defmodule Sentry.Config do
     case NimbleOptions.validate(config_opts, @opts_schema) do
       {:ok, opts} ->
         opts
-        |> Keyword.put_new(:environment_name, "production")
         |> normalize_included_environments()
         |> normalize_environment()
         |> assert_dsn_has_no_query_params!()
@@ -350,6 +354,8 @@ defmodule Sentry.Config do
   @spec dsn() :: String.t() | nil
   def dsn, do: get(:dsn)
 
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
   @spec included_environments() :: :all | [String.t()]
   def included_environments, do: fetch!(:included_environments)
 
@@ -448,8 +454,10 @@ defmodule Sentry.Config do
     Keyword.put_new_lazy(config, key, fn -> System.get_env(system_key, nil) end)
   end
 
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
   defp normalize_included_environments(config) do
-    Keyword.update!(config, :included_environments, fn
+    Keyword.update(config, :included_environments, :all, fn
       :all -> :all
       envs when is_list(envs) -> Enum.map(envs, &to_string/1)
     end)

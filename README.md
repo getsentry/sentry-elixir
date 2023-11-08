@@ -41,7 +41,6 @@ Sentry has a range of configuration options, but most applications will have a c
 config :sentry,
   dsn: "https://public_key@app.getsentry.com/1",
   environment_name: Mix.env(),
-  included_environments: [:prod],
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()]
 ```
@@ -177,7 +176,6 @@ Client configuration:
 server: https://sentry.io/
 public_key: public
 secret_key: secret
-included_environments: [:prod]
 current environment_name: :dev
 
 :dev is not in [:prod] so no test event will be sent
@@ -187,7 +185,6 @@ Client configuration:
 server: https://sentry.io/
 public_key: public
 secret_key: secret
-included_environments: [:prod]
 current environment_name: :prod
 
 Sending test event!

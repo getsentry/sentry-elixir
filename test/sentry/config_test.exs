@@ -75,15 +75,21 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    # TODO: remove me on v11.0.0. :included_environments has been deprecated in v10.0.0.
     test ":included_environments" do
-      assert Config.validate!(included_environments: [:test, "dev"])[:included_environments] ==
-               ["test", "dev"]
+      output =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          assert Config.validate!(included_environments: [:test, "dev"])[:included_environments] ==
+                   ["test", "dev"]
 
-      assert Config.validate!([])[:included_environments] == :all
+          assert Config.validate!([])[:included_environments] == :all
 
-      assert_raise ArgumentError, ~r/invalid value for :included_environments/, fn ->
-        Config.validate!(included_environments: "not a list")
-      end
+          assert_raise ArgumentError, ~r/invalid value for :included_environments/, fn ->
+            Config.validate!(included_environments: "not a list")
+          end
+        end)
+
+      assert output =~ ":included_environments option is deprecated"
     end
 
     test ":environment_name from option" do

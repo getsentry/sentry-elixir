@@ -31,28 +31,28 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
         Mix.raise("Failed to start the :sentry application:\n\n#{inspect(reason)}")
     end
 
-    included_environments = Config.included_environments()
+    print_environment_info()
 
-    print_environment_info(Sentry.Transport.get_dsn(), included_environments)
-
-    env_name = to_string(Config.environment_name())
-
-    if included_environments == :all or env_name in included_environments do
+    if Config.dsn() do
       send_event()
     else
       Mix.shell().info([
         :yellow,
-        "#{inspect(env_name)} is not in #{inspect(included_environments)} so no test event will be sent"
+        "Event not sent because the :dsn option is not set (or set to nil)"
       ])
     end
   end
 
-  defp print_environment_info({endpoint, public_key, secret_key}, included_environments) do
+  defp print_environment_info do
     Mix.shell().info("Client configuration:")
-    Mix.shell().info("server: #{endpoint}")
-    Mix.shell().info("public_key: #{public_key}")
-    Mix.shell().info("secret_key: #{secret_key}")
-    Mix.shell().info("included_environments: #{inspect(included_environments)}")
+
+    if Config.dsn() do
+      {endpoint, public_key, secret_key} = Sentry.Transport.get_dsn()
+      Mix.shell().info("server: #{endpoint}")
+      Mix.shell().info("public_key: #{public_key}")
+      Mix.shell().info("secret_key: #{secret_key}")
+    end
+
     Mix.shell().info("current environment_name: #{inspect(to_string(Config.environment_name()))}")
     Mix.shell().info("hackney_opts: #{inspect(Config.hackney_opts())}\n")
   end

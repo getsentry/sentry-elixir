@@ -19,56 +19,43 @@ defmodule Sentry do
 
       # In config/prod.exs
       config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: [:prod],
         environment_name: :prod,
         tags: %{
           env: "production"
         }
 
-  The `:environment_name` and `:included_environments` options work together to determine
-  if and when Sentry should record exceptions. The `:environment_name` is the
-  name of the current environment. In the example above, we have explicitly set
-  the environment to `:prod` which works well if you are inside an environment
-  specific configuration `config/prod.exs`.
+  Sentry uses the `:dsn` option to determine whether it should record exceptions. If
+  `:dsn` is set, then Sentry records exceptions. If it's not set or set to `nil`,
+  then simply no events are sent to Sentry.
 
-  An alternative is to use `Config.config_env/0` in your general `config/config.exs`
-  configuration file:
-
-      config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: [:prod],
-        environment_name: config_env()
-
-  This will set the environment name to whatever the current environment
-  is, but it will only send events if the current environment is `:prod`,
-  since that is the only entry in the `:included_environments` key.
+  > #### Included Environments {: .warning}
+  >
+  > Before v10.0.0, the recommended way to control whether to report events to Sentry
+  > was the `:included_environments` option (a list of environments to report events for).
+  > This was used together with the `:environment_name` option to determine whether to
+  > send events. `:included_environments` is deprecated in v10.0.0 in favor of setting
+  > or not setting `:dsn`. It will be removed in v11.0.0.
 
   You can even rely on more specific logic to determine the environment name. It's
   not uncommon for most applications to have a "staging" environment. In order
   to handle this without adding an additional Mix environment, you can set an
   environment variable that determines the release level. By default, Sentry
-  picks up the `SENTRY_ENVIRONMENT` variable. Otherwise, you can read the
-  variable at runtime. Do this only in `config/runtime.exs` so that it will
-  work both for local development as well as Mix releases.
+  picks up the `SENTRY_ENVIRONMENT` variable (*at runtime, when starging*).
+  Otherwise, you can read the variable at runtime. Do this only in
+  `config/runtime.exs` so that it will work both for local development as well
+  as Mix releases.
 
       # In config/runtime.exs
-      config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
-        included_environments: ["production", "staging"],
-        environment_name: System.get_env("RELEASE_LEVEL", "development")
+      if config_env() == :prod do
+        config :sentry, dsn: "https://public:secret@app.getsentry.com/1",
+          environment_name: System.fetch_env!("RELEASE_LEVEL")
+      end
 
   In this example, we are getting the environment name from the `RELEASE_LEVEL`
-  environment variable. If that variable does not exist, we default to `"development"`.
-  Now, on our servers, we can set the environment variable appropriately. On
-  our local development machines, exceptions will never be sent, because the
-  default value is not in the list of `:included_environments`.
-
-  > #### Using the DSN To Send Events {: .warning}
-  >
-  > We recommend to use the `:dsn` configuration to control whether to report
-  > events. If `:dsn` is not set (or set to `nil`), then we won't report
-  > events to Sentry. Thanks to this behavior, you can essentially
-  > only set `:dsn` in environments where you want to report events to Sentry.
-  > In the future, we might remove the `:included_environments` configuration
-  > altogether.
+  environment variable. Now, on our servers, we can set the environment variable
+  appropriately. The `config_env() == :prod` check ensures that we only set
+  `:dsn` in production, effectively only enabling reporting in production-like
+  environments.
 
   Sentry supports many configuration options. See the [*Configuration*
   section](#module-configuration) for complete documentation.
@@ -228,10 +215,10 @@ defmodule Sentry do
           | :excluded
 
   @doc """
-  Parses and submits an exception to Sentry
+  Parses and submits an exception to Sentry.
 
-  This only sends the exception if the current Sentry environment is in
-  the `:included_environments`. See the [*Configuration* section](#module-configuration)
+  This only sends the exception if the `:dsn` configuration option is set
+  and is not `nil`. See the [*Configuration* section](#module-configuration)
   in the module documentation.
 
   The `opts` argument is passed as the second argument to `send_event/2`.
