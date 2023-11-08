@@ -234,7 +234,7 @@ defmodule Sentry.Config do
 
   hook_opts_schema = [
     before_send_event: [
-      type: {:custom, __MODULE__, :__validate_hook__, [_arity = 1, :before_send_event]},
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
       type_doc: "`t:before_send_event_callback/0`",
       doc: """
       Allows performing operations on the event *before* it is sent as
@@ -245,7 +245,7 @@ defmodule Sentry.Config do
       """
     ],
     after_send_event: [
-      type: {:custom, __MODULE__, :__validate_hook__, [_arity = 2, :after_send_event]},
+      type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
       type_doc: "`t:after_send_event_callback/0`",
       doc: """
       Callback that is called *after*
@@ -504,27 +504,6 @@ defmodule Sentry.Config do
     else
       {:error,
        "expected :sample_rate to be a float between 0.0 and 1.0 (included), got: #{inspect(float)}"}
-    end
-  end
-
-  def __validate_hook__({mod, fun} = hook, _arity, _name) when is_atom(mod) and is_atom(fun) do
-    {:ok, hook}
-  end
-
-  def __validate_hook__(fun, arity, name) do
-    cond do
-      is_function(fun, arity) ->
-        {:ok, fun}
-
-      is_function(fun) ->
-        {:arity, actual} = Function.info(fun, :arity)
-
-        {:error,
-         "expected #{inspect(name)} to be an anonymous function of arity #{arity}, but got one of arity #{actual}"}
-
-      true ->
-        {:error,
-         "expected #{inspect(name)} to be a {mod, fun} tuple or an anonymous function, got: #{inspect(fun)}"}
     end
   end
 
