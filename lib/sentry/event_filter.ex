@@ -71,13 +71,13 @@ defmodule Sentry.EventFilter do
   the `:before_send_event` callback. We can start with a module:
 
       defmodule MyApp.SentryEventFilter do
-        def filter_non_500(%Sentry.Event{ __original_exception__: exception} = event) do
+        def filter_non_500(%Sentry.Event{original_exception: exception} = event) do
           cond do
             if Plug.Exception.status(exception) < 500 ->
               false
 
             # Fall back to the default event filter.
-            Sentry.DefaultEventFilter.exclude_exception?(exception, event.__source__) ->
+            Sentry.DefaultEventFilter.exclude_exception?(exception, event.source) ->
               false
 
             true ->
