@@ -150,7 +150,9 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "includes Logger metadata for keys configured to be included" do
-    Logger.configure_backend(Sentry.LoggerBackend, metadata: [:string, :number, :map, :list])
+    Logger.configure_backend(Sentry.LoggerBackend,
+      metadata: [:string, :number, :map, :list, :chardata]
+    )
 
     ref = register_before_send()
 
@@ -161,6 +163,7 @@ defmodule Sentry.LoggerBackendTest do
       Logger.metadata(number: 43)
       Logger.metadata(map: %{a: "b"})
       Logger.metadata(list: [1, 2, 3])
+      Logger.metadata(chardata: ["π's unicode is", ?\s, [?π]])
       {:noreply, state}
     end)
 
@@ -171,6 +174,7 @@ defmodule Sentry.LoggerBackendTest do
     assert event.extra.logger_metadata.map == %{a: "b"}
     assert event.extra.logger_metadata.list == [1, 2, 3]
     assert event.extra.logger_metadata.number == 43
+    assert event.extra.logger_metadata.chardata == "π's unicode is π"
   end
 
   test "does not include Logger metadata when disabled" do

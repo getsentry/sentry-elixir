@@ -172,7 +172,7 @@ defmodule Sentry.LoggerHandlerTest do
       end
     end
 
-    @tag handler_config: %{metadata: [:string, :number, :map, :list]}
+    @tag handler_config: %{metadata: [:string, :number, :map, :list, :chardata]}
     test "includes Logger metadata for keys configured to be included",
          %{sender_ref: ref, test_genserver: test_genserver} do
       run_and_catch_exit(test_genserver, fn ->
@@ -180,7 +180,8 @@ defmodule Sentry.LoggerHandlerTest do
           string: "string",
           number: 43,
           map: %{a: "b"},
-          list: [1, 2, 3]
+          list: [1, 2, 3],
+          chardata: ["π's unicode is", ?\s, [?π]]
         )
 
         invalid_function()
@@ -191,6 +192,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.extra.logger_metadata.map == %{a: "b"}
       assert event.extra.logger_metadata.list == [1, 2, 3]
       assert event.extra.logger_metadata.number == 43
+      assert event.extra.logger_metadata.chardata == "π's unicode is π"
     end
 
     @tag handler_config: %{metadata: []}
