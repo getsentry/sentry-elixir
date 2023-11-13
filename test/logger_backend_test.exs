@@ -34,13 +34,13 @@ defmodule Sentry.LoggerBackendTest do
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
-    Sentry.TestGenServer.throw(pid)
+    TestGenServer.run_async(pid, fn _state -> throw("I am throwing") end)
     assert_receive {^ref, event}
     assert [exception] = event.exception
-    assert exception.value =~ "GenServer #{inspect(pid)} terminating\n"
-    assert exception.value =~ "** (stop) bad return value: \"I am throwing\"\n"
-    assert exception.value =~ "Last message: {:\"$gen_cast\", :throw}\n"
-    assert exception.value =~ "State: []"
+    assert exception.value =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert exception.value =~ ~s<** (stop) bad return value: "I am throwing"\n>
+    assert exception.value =~ ~s<Last message: {:"$gen_cast",>
+    assert exception.value =~ ~s<State: []>
     assert exception.stacktrace.frames == []
   end
 
@@ -48,14 +48,14 @@ defmodule Sentry.LoggerBackendTest do
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
-    Sentry.TestGenServer.exit(pid)
+    TestGenServer.run_async(pid, fn state -> {:stop, :bad_exit, state} end)
     assert_receive {^ref, event}
     assert [exception] = event.exception
     assert exception.type == "message"
-    assert exception.value =~ "GenServer #{inspect(pid)} terminating\n"
-    assert exception.value =~ "** (stop) :bad_exit\n"
-    assert exception.value =~ "Last message: {:\"$gen_cast\", :exit}\n"
-    assert exception.value =~ "State: []"
+    assert exception.value =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert exception.value =~ ~s<** (stop) :bad_exit\n>
+    assert exception.value =~ ~s<Last message: {:"$gen_cast",>
+    assert exception.value =~ ~s<State: []>
   end
 
   test "bad function call causing GenServer crash is reported" do
@@ -63,8 +63,12 @@ defmodule Sentry.LoggerBackendTest do
 
     pid = start_supervised!(TestGenServer)
 
-    Sentry.TestGenServer.add_sentry_breadcrumb(pid, %{message: "test"})
-    Sentry.TestGenServer.invalid_function(pid)
+    TestGenServer.run_async(pid, fn state ->
+      Sentry.Context.add_breadcrumb(%{message: "test"})
+      {:noreply, state}
+    end)
+
+    test_genserver_invalid_fun(pid)
     assert_receive {^ref, event}
 
     assert hd(event.exception).type == "FunctionClauseError"
@@ -86,7 +90,7 @@ defmodule Sentry.LoggerBackendTest do
 
     {:ok, task_pid} =
       Task.start(fn ->
-        Sentry.TestGenServer.sleep(pid, _timeout = 0)
+        TestGenServer.run(pid, fn -> Process.sleep(:infinity) end, _timeout = 0)
       end)
 
     assert_receive {^ref, event}
@@ -151,11 +155,16 @@ defmodule Sentry.LoggerBackendTest do
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
-    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
-    Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
-    Sentry.TestGenServer.add_logger_metadata(pid, :map, %{a: "b"})
-    Sentry.TestGenServer.add_logger_metadata(pid, :list, [1, 2, 3])
-    Sentry.TestGenServer.invalid_function(pid)
+
+    TestGenServer.run_async(pid, fn state ->
+      Logger.metadata(string: "string")
+      Logger.metadata(number: 43)
+      Logger.metadata(map: %{a: "b"})
+      Logger.metadata(list: [1, 2, 3])
+      {:noreply, state}
+    end)
+
+    test_genserver_invalid_fun(pid)
 
     assert_receive {^ref, event}
     assert event.extra.logger_metadata.string == "string"
@@ -169,11 +178,16 @@ defmodule Sentry.LoggerBackendTest do
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
-    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
-    Sentry.TestGenServer.add_logger_metadata(pid, :atom, :atom)
-    Sentry.TestGenServer.add_logger_metadata(pid, :number, 43)
-    Sentry.TestGenServer.add_logger_metadata(pid, :list, [])
-    Sentry.TestGenServer.invalid_function(pid)
+
+    TestGenServer.run_async(pid, fn state ->
+      Logger.metadata(string: "string")
+      Logger.metadata(atom: :atom)
+      Logger.metadata(number: 43)
+      Logger.metadata(list: [])
+      {:noreply, state}
+    end)
+
+    test_genserver_invalid_fun(pid)
 
     assert_receive {^ref, event}
     assert event.extra.logger_metadata == %{}
@@ -184,8 +198,13 @@ defmodule Sentry.LoggerBackendTest do
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
-    Sentry.TestGenServer.add_logger_metadata(pid, :string, "string")
-    Sentry.TestGenServer.invalid_function(pid)
+
+    TestGenServer.run_async(pid, fn state ->
+      Logger.metadata(string: "string")
+      {:noreply, state}
+    end)
+
+    test_genserver_invalid_fun(pid)
 
     assert_receive {^ref, event}
 
@@ -323,5 +342,9 @@ defmodule Sentry.LoggerBackendTest do
     )
 
     ref
+  end
+
+  defp test_genserver_invalid_fun(pid) do
+    TestGenServer.run_async(pid, fn _state -> apply(NaiveDateTime, :from_erl, [{}, {}, {}]) end)
   end
 end
