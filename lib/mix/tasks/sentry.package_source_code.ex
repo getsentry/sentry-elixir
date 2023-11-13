@@ -50,12 +50,19 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   @bytes_in_gb 1024 * 1024 * 1024
 
   @switches [debug: :boolean]
+  @requirements ["app.config"]
 
   @impl true
   def run(args) do
     {opts, _args} = OptionParser.parse!(args, strict: @switches)
 
-    {elapsed, source_map} = :timer.tc(&Sources.load_files/0)
+    {elapsed, source_map} =
+      :timer.tc(fn ->
+        case Sources.load_files() do
+          {:ok, source_map} -> source_map
+          {:error, message} -> Mix.raise(message)
+        end
+      end)
 
     log_debug(
       opts,

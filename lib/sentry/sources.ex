@@ -65,12 +65,35 @@ defmodule Sentry.Sources do
     :persistent_term.get(@source_code_map_key, nil)
   end
 
-  @spec load_files([Path.t()]) :: source_map()
-  def load_files(paths \\ Config.root_source_code_paths()) when is_list(paths) do
+  @spec load_files([Path.t()]) :: {:ok, source_map()} | {:error, message :: String.t()}
+  def load_files(root_paths \\ Config.root_source_code_paths()) when is_list(root_paths) do
     path_pattern = Config.source_code_path_pattern()
     exclude_patterns = Config.source_code_exclude_patterns()
 
-    Enum.reduce(paths, %{}, &load_files_for_root_path(&1, &2, path_pattern, exclude_patterns))
+    root_paths
+    |> Enum.reduce(%{}, &load_files_for_root_path(&1, &2, path_pattern, exclude_patterns))
+    |> Map.new(fn {path, %{lines: lines}} -> {path, lines} end)
+  catch
+    {:same_relative_path, path, root_path1, root_path2} ->
+      message = """
+      Found two source files in different source root paths with the same relative path:
+
+        1. #{root_path1 |> Path.join(path) |> Path.relative_to_cwd()}
+        2. #{root_path2 |> Path.join(path) |> Path.relative_to_cwd()}
+
+      The part of those paths that causes the conflict is:
+
+        #{path}
+
+      Sentry cannot report the right source code context if this happens, because
+      it won't be able to retrieve the correct file from exception stacktraces.
+
+      To fix this, you'll have to rename one of the conflicting paths.
+      """
+
+      {:error, message}
+  else
+    source_map -> {:ok, source_map}
   end
 
   @spec get_source_context(source_map(), String.t() | nil, pos_integer() | nil) ::
@@ -113,18 +136,13 @@ defmodule Sentry.Sources do
     |> Enum.reduce(files, fn path, acc ->
       key = Path.relative_to(path, root_path)
 
-      if Map.has_key?(acc, key) do
-        raise RuntimeError, """
-        Found two source files in different source root paths with the same relative \
-        path: #{key}
+      case Map.fetch(acc, key) do
+        :error ->
+          value = %{lines: source_to_lines(File.read!(path)), root_path: root_path}
+          Map.put(acc, key, value)
 
-        This means that both source files would be reported to Sentry as the same \
-        file. Please rename one of them to avoid this.
-        """
-      else
-        value = source_to_lines(File.read!(path))
-
-        Map.put(acc, key, value)
+        {:ok, %{root_path: existing_root_path}} ->
+          throw({:same_relative_path, key, root_path, existing_root_path})
       end
     end)
   end
