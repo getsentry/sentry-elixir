@@ -51,6 +51,29 @@ defmodule Sentry.LoggerUtils do
     nil
   end
 
-  defp logger_metadata(meta, :all), do: Map.new(meta)
-  defp logger_metadata(meta, allowed_meta), do: meta |> Map.new() |> Map.take(allowed_meta)
+  defp logger_metadata(meta, allowed_meta) do
+    meta = Map.new(meta)
+
+    # Filter allowed meta.
+    meta =
+      case allowed_meta do
+        :all -> meta
+        allowed_meta -> Map.take(meta, allowed_meta)
+      end
+
+    # Potentially convert to iodata.
+    :maps.map(fn _key, val -> attempt_to_convert_iodata(val) end, meta)
+  end
+
+  defp attempt_to_convert_iodata(list) when is_list(list) do
+    IO.chardata_to_string(list)
+  rescue
+    _exception -> list
+  else
+    str -> if String.printable?(str), do: str, else: list
+  end
+
+  defp attempt_to_convert_iodata(other) do
+    other
+  end
 end
