@@ -93,7 +93,8 @@ defmodule Sentry.LoggerBackend do
 
     if Logger.compare_levels(level, state.level) != :lt and
          not LoggerUtils.excluded_domain?(meta[:domain] || [], state.excluded_domains) do
-      log(level, msg, meta, state)
+      _ = log(level, msg, meta, state)
+      :ok
     end
 
     {:ok, state}
