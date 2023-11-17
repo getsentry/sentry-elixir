@@ -99,7 +99,7 @@ defmodule Sentry do
   ## Filtering Exceptions
 
   If you would like to prevent Sentry from sending certain exceptions, you can
-  use the `:before_send_event` configuration option. See the [*Event Callbacks*
+  use the `:before_send` configuration option. See the [*Event Callbacks*
   section](#module-event-callbacks) below.
 
   Before v9.0.0, the recommended way to filter out exceptions was to use a *filter*,
@@ -108,14 +108,14 @@ defmodule Sentry do
 
   ## Event Callbacks
 
-  You can configure the `:before_send_event` and `:after_send_event` options to
-  customize what happens before and/or after sending an event. The `:before_send_event`
+  You can configure the `:before_send` and `:after_send_event` options to
+  customize what happens before and/or after sending an event. The `:before_send`
   callback must be of type `t:before_send_event_callback/0` and the `:after_send_event`
   callback must be of type `t:after_send_event_callback/0`. For example, you
   can set:
 
       config :sentry,
-        before_send_event: {MyModule, :before_send},
+        before_send: {MyModule, :before_send},
         after_send_event: {MyModule, :after_send}
 
   `MyModule` could look like this:
@@ -176,7 +176,7 @@ defmodule Sentry do
   require Logger
 
   @typedoc """
-  A callback to use with the `:before_send_event` configuration option.
+  A callback to use with the `:before_send` configuration option.
   configuration options.k
 
   If this is `{module, function_name}`, then `module.function_name(event)` will
@@ -294,7 +294,7 @@ defmodule Sentry do
     * `:sample_rate` - same as the global `:sample_rate` configuration, but applied only to
       this call. See the module documentation. *Available since v10.0.0*.
 
-    * `:before_send_event` - same as the global `:before_send_event` configuration, but
+    * `:before_send` - same as the global `:before_send` configuration, but
       applied only to this call. See the module documentation. *Available since v10.0.0*.
 
     * `:after_send_event` - same as the global `:after_send_event` configuration, but

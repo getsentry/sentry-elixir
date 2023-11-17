@@ -7,6 +7,7 @@
 - Add `~r"/test/"` to the default source code exclude patterns (see the `:source_code_exclude_patterns` option).
 - `:environment_name` now defaults to `production` (if it wasn't configured explicitly and if the `SENTRY_ENVIRONMENT` environment variable is not set).
 - Hard-deprecate `:included_environments`. To control whether to send events to Sentry, use the `:dsn` configuration option instead. `:included_environments` now emits a warning if used, but will still work until v11.0.0 of this library.
+- Hard-deprecate `:before_send_event` in favor of the new `:before_send`. This brings this SDK in line with all other Sentry SDKs.
 
 ## 9.1.0
 

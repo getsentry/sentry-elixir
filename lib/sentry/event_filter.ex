@@ -7,10 +7,10 @@ defmodule Sentry.EventFilter do
   > #### Soft-deprecated {: .warning}
   >
   > This behaviour is soft-deprecated in favor of filtering events through the
-  > `:before_send_event` callback functionality. `:before_send_event` is described in
+  > `:before_send` callback functionality. `:before_send` is described in
   > details in the documentation for the `Sentry` module. It's a more general
   > mechanism to filter or modify events before sending them to Sentry. See below for
-  > an example of how to replace an event filter with a `:before_send_event` callback.
+  > an example of how to replace an event filter with a `:before_send` callback.
   >
   > In future major versions of this library, we might hard-deprecate or remove this
   > behaviour altogether.
@@ -65,10 +65,10 @@ defmodule Sentry.EventFilter do
         end
       end
 
-  ## Replacing With `:before_send_event`
+  ## Replacing With `:before_send`
 
   Let's look at an example of how to filter non-500 exceptions in a Plug app through
-  the `:before_send_event` callback. We can start with a module:
+  the `:before_send` callback. We can start with a module:
 
       defmodule MyApp.SentryEventFilter do
         def filter_non_500(%Sentry.Event{original_exception: exception} = event) do
@@ -86,16 +86,16 @@ defmodule Sentry.EventFilter do
         end
       end
 
-  Then, we can configure the `:before_send_event` callback.
+  Then, we can configure the `:before_send` callback.
 
       config :sentry,
-        before_send_event: {MyApp.SentryEventFilter, :filter_non_500}
+        before_send: {MyApp.SentryEventFilter, :filter_non_500}
 
   > #### Multiple Callbacks {: .tip}
   >
-  > You can only have one `:before_send_event` callback. If you change the value
+  > You can only have one `:before_send` callback. If you change the value
   > of this configuration option, you'll *override* the previous callback. If you
-  > want to do multiple things in a `:before_send_event` callback, create a function
+  > want to do multiple things in a `:before_send` callback, create a function
   > that does all the things you need and register *that* as the callback.
   """
 

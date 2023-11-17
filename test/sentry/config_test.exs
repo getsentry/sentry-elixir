@@ -120,16 +120,33 @@ defmodule Sentry.ConfigTest do
       end
     end
 
-    test ":before_send_event" do
-      assert Config.validate!(before_send_event: {MyMod, :my_fun})[:before_send_event] ==
+    test ":before_send" do
+      assert Config.validate!(before_send: {MyMod, :my_fun})[:before_send] ==
                {MyMod, :my_fun}
 
       fun = & &1
-      assert Config.validate!(before_send_event: fun)[:before_send_event] == fun
+      assert Config.validate!(before_send: fun)[:before_send] == fun
 
-      assert_raise ArgumentError, ~r/invalid value for :before_send_event option/, fn ->
-        Config.validate!(before_send_event: :not_a_function)
+      assert_raise ArgumentError, ~r/invalid value for :before_send option/, fn ->
+        Config.validate!(before_send: :not_a_function)
       end
+    end
+
+    # TODO: Remove in v11.0.0, we deprecated it in v10.0.0.
+    test ":before_send_event" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               assert Config.validate!(before_send_event: {MyMod, :my_fun})[:before_send] ==
+                        {MyMod, :my_fun}
+             end) =~ ":before_send_event option is deprecated. Use :before_send instead."
+
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert_raise ArgumentError, ~r/you cannot configure both :before_send and/, fn ->
+          assert Config.validate!(
+                   before_send_event: {MyMod, :my_fun},
+                   before_send: {MyMod, :my_fun}
+                 )
+        end
+      end)
     end
 
     test ":after_send_event" do

@@ -26,6 +26,10 @@ Now, packaging source code is an active step that you have to take. The [`mix se
 
 Now, if you're not explicitly setting he `:environment_name` option in your config or setting the `SENTRY_ENVIRONMENT` environment variable, the environment will default to `production` (which is in line with the other Sentry SDKs).
 
+## Rename `:before_send_event` to `:before_send`
+
+To be in line with all other Sentry SDKs, we renamed the `:before_send_event` configuration option to `:before_send`. Just rename `:before_send_event` to `:before_send` in your configuration and potentially in any call where you pass it directly.
+
 ## Stop Using `:included_environments`
 
 We hard-deprecated `:included_environments`. It's a bit of a confusing option that essentially no other Sentry SDKs use. To control whether to send events to Sentry, use the `:dsn` configuration instead (if set then we send events, if not set then we don't send events). `:included_environments` will be removed in v11.0.0.
