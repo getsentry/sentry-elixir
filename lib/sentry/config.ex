@@ -71,7 +71,7 @@ defmodule Sentry.Config do
       doc: """
       The percentage of events to send to Sentry. A value of `0.0` will deny sending any events,
       and a value of `1.0` will send 100% of events. Sampling is applied
-      **after** the `:before_send_event` callback. See where [the Sentry
+      **after** the `:before_send` callback. See where [the Sentry
       documentation](https://develop.sentry.dev/sdk/sessions/#filter-order)
       suggests this. Must be between `0.0` and `1.0` (included).
       """
@@ -238,7 +238,7 @@ defmodule Sentry.Config do
   ]
 
   hook_opts_schema = [
-    before_send_event: [
+    before_send: [
       type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
       type_doc: "`t:before_send_event_callback/0`",
       doc: """
@@ -247,6 +247,16 @@ defmodule Sentry.Config do
       If the callback returns `nil` or `false`, the event is not reported. If it returns an
       updated `Sentry.Event`, then the updated event is used instead. See the [*Event Callbacks*
       section](#module-event-callbacks) below for more information.
+
+      `:before_send` is available *since v10.0.0*. Before, it was called `:before_send_event`.
+      """
+    ],
+    before_send_event: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_event_callback/0`",
+      deprecated: "Use :before_send instead.",
+      doc: """
+      Exactly the same as `:before_send`, but has been **deprecated since v10.0.0**.
       """
     ],
     after_send_event: [
@@ -299,6 +309,7 @@ defmodule Sentry.Config do
         |> normalize_included_environments()
         |> normalize_environment()
         |> assert_dsn_has_no_query_params!()
+        |> handle_deprecated_before_send()
 
       {:error, error} ->
         raise ArgumentError, """
@@ -413,8 +424,8 @@ defmodule Sentry.Config do
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
 
-  @spec before_send_event() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
-  def before_send_event, do: get(:before_send_event)
+  @spec before_send() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
+  def before_send, do: get(:before_send)
 
   @spec after_send_event() ::
           (Sentry.Event.t(), term() -> Sentry.Event.t()) | {module(), atom()} | nil
@@ -461,6 +472,29 @@ defmodule Sentry.Config do
       :all -> :all
       envs when is_list(envs) -> Enum.map(envs, &to_string/1)
     end)
+  end
+
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
+  defp handle_deprecated_before_send(opts) do
+    {before_send_event, opts} = Keyword.pop(opts, :before_send_event)
+
+    case Keyword.fetch(opts, :before_send) do
+      {:ok, _before_send} when not is_nil(before_send_event) ->
+        raise ArgumentError, """
+        you cannot configure both :before_send and :before_send_event. :before_send_event
+        is deprecated, so only use :before_send from now on.
+        """
+
+      {:ok, _before_send} ->
+        opts
+
+      :error when not is_nil(before_send_event) ->
+        Keyword.put(opts, :before_send, before_send_event)
+
+      :error ->
+        opts
+    end
   end
 
   defp normalize_environment(config) do

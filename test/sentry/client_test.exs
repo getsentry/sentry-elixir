@@ -82,7 +82,7 @@ defmodule Sentry.ClientTest do
       end
     end
 
-    test "calls anonymous :before_send_event callback", %{bypass: bypass} do
+    test "calls anonymous :before_send callback", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
@@ -96,7 +96,7 @@ defmodule Sentry.ClientTest do
 
       modify_env(
         :sentry,
-        before_send_event: fn event ->
+        before_send: fn event ->
           metadata = Map.new(Logger.metadata())
           {user_id, rest_metadata} = Map.pop(metadata, :user_id)
 
@@ -114,9 +114,47 @@ defmodule Sentry.ClientTest do
       assert {:ok, _} = Client.send_event(event, result: :sync)
     end
 
-    test "if :before_send_event callback returns falsey, the event is not sent" do
+    # TODO: Remove in v11.0.0, :before_send_event has been deprecated in v10.0.0.
+    test "still supports :before_send_event callback", %{bypass: bypass} do
+      Bypass.expect(bypass, fn conn ->
+        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        event = TestHelpers.decode_event_from_envelope!(body)
+
+        assert event.extra == %{"key" => "value"}
+        assert event.user["id"] == 1
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          modify_env(
+            :sentry,
+            before_send_event: fn event ->
+              metadata = Map.new(Logger.metadata())
+              {user_id, rest_metadata} = Map.pop(metadata, :user_id)
+
+              %Event{
+                event
+                | extra: Map.merge(event.extra, rest_metadata),
+                  user: Map.put(event.user, :id, user_id)
+              }
+            end
+          )
+
+          event = Event.create_event([])
+          Logger.metadata(key: "value", user_id: 1)
+
+          assert {:ok, _} = Client.send_event(event, result: :sync)
+        end)
+
+      assert stderr =~ ":before_send_event option is deprecated. Use :before_send instead."
+    end
+
+    test "if :before_send callback returns falsey, the event is not sent" do
       defmodule CallbackModuleArithmeticError do
-        def before_send_event(event) do
+        def before_send(event) do
           case event.original_exception do
             %ArithmeticError{} -> false
             _ -> event
@@ -124,7 +162,7 @@ defmodule Sentry.ClientTest do
         end
       end
 
-      modify_env(:sentry, before_send_event: {CallbackModuleArithmeticError, :before_send_event})
+      modify_env(:sentry, before_send: {CallbackModuleArithmeticError, :before_send})
 
       try do
         :rand.uniform() + "1"
@@ -138,13 +176,13 @@ defmodule Sentry.ClientTest do
       :code.purge(CallbackModuleArithmeticError)
     end
 
-    test "calls the :before_send_event callback before using the sample rate and sets the session" do
+    test "calls the :before_send callback before using the sample rate and sets the session" do
       test_pid = self()
       ref = make_ref()
       event = Event.create_event(source: :plug)
 
       modify_env(:sentry,
-        before_send_event: fn event ->
+        before_send: fn event ->
           send(test_pid, {ref, event})
           event
         end

@@ -19,7 +19,7 @@ defmodule Sentry.Client do
   def send_event(%Event{} = event, opts) when is_list(opts) do
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
-    before_send_event = Keyword.get_lazy(opts, :before_send_event, &Config.before_send_event/0)
+    before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
     after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
@@ -30,7 +30,7 @@ defmodule Sentry.Client do
       end)
 
     result =
-      with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send_event),
+      with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
            :ok <- sample_event(sample_rate) do
         send_result = encode_and_send(event, result_type, client, request_retries)
         _ignored = maybe_call_after_send(event, send_result, after_send_event)
@@ -86,7 +86,7 @@ defmodule Sentry.Client do
 
   defp call_before_send(_event, other) do
     raise ArgumentError, """
-    :before_send_event must be an anonymous function or a {module, function} tuple, got: \
+    :before_send must be an anonymous function or a {module, function} tuple, got: \
     #{inspect(other)}\
     """
   end
