@@ -66,6 +66,7 @@ defmodule Sentry.Mixfile do
       mod: {Sentry.Application, []},
       extra_applications: [:logger],
       registered: [
+        Sentry.Dedupe,
         Sentry.Transport.SenderRegistry,
         Sentry.Supervisor
       ]

@@ -466,4 +466,16 @@ defmodule Sentry.Event do
       runtime: %{name: "elixir", version: System.build_info().build}
     }
   end
+
+  # Used to compare events for deduplication. See "Sentry.Dedupe".
+  @doc false
+  @spec hash(t()) :: non_neg_integer()
+  def hash(%__MODULE__{} = event) do
+    :erlang.phash2([
+      event.exception,
+      event.message,
+      event.level,
+      event.fingerprint
+    ])
+  end
 end

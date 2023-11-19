@@ -20,7 +20,7 @@ defmodule Sentry.Application do
       end
 
     children =
-      [{Registry, keys: :unique, name: Sentry.Transport.SenderRegistry}] ++
+      [{Registry, keys: :unique, name: Sentry.Transport.SenderRegistry}, Sentry.Dedupe] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
 
