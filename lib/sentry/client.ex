@@ -32,7 +32,7 @@ defmodule Sentry.Client do
     result =
       with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
            :ok <- sample_event(sample_rate),
-           :ok <- dedupe(event) do
+           :ok <- maybe_dedupe(event) do
         send_result = encode_and_send(event, result_type, client, request_retries)
         _ignored = maybe_call_after_send(event, send_result, after_send_event)
         send_result
@@ -65,14 +65,18 @@ defmodule Sentry.Client do
     end
   end
 
-  defp dedupe(%Event{} = event) do
-    case Dedupe.insert(event) do
-      :new ->
-        :ok
+  defp maybe_dedupe(%Event{} = event) do
+    if Config.dedup_events?() do
+      case Dedupe.insert(event) do
+        :new ->
+          :ok
 
-      :existing ->
-        log("Event dropped due to being a duplicate of a previously-captured event.")
-        :excluded
+        :existing ->
+          log("Event dropped due to being a duplicate of a previously-captured event.")
+          :excluded
+      end
+    else
+      :ok
     end
   end
 
