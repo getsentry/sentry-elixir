@@ -77,7 +77,7 @@ defmodule Sentry.TestEnvironmentHelper do
       :persistent_term.erase(key)
     end
 
-    ExUnit.CaptureLog.capture_log(fn -> Application.stop(:sentry) end)
+    _log = ExUnit.CaptureLog.capture_log(fn -> Application.stop(:sentry) end)
     assert {:ok, _} = Application.ensure_all_started(:sentry)
   end
 end
