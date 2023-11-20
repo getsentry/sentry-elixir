@@ -59,17 +59,15 @@ defmodule Sentry.ClientTest do
     end
 
     test "respects the :sample_rate option", %{bypass: bypass} do
-      event = Event.create_event([])
-
       # Always sends with sample rate of 1.
       Bypass.expect_once(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      assert {:ok, "340"} = Client.send_event(event, sample_rate: 1.0)
+      assert {:ok, "340"} = Client.send_event(Event.create_event([]), sample_rate: 1.0)
 
       # Never sends with sample rate of 0.
-      assert :unsampled = Client.send_event(event, sample_rate: 0.0)
+      assert :unsampled = Client.send_event(Event.create_event([]), sample_rate: 0.0)
 
       # Either sends or doesn't with :sample_rate of 0.5.
       Bypass.expect(bypass, fn conn ->
@@ -77,6 +75,7 @@ defmodule Sentry.ClientTest do
       end)
 
       for _ <- 1..10 do
+        event = Event.create_event(message: "Unique: #{System.unique_integer()}")
         result = Client.send_event(event, sample_rate: 0.5)
         assert match?({:ok, _}, result) or result == :unsampled
       end
@@ -275,6 +274,46 @@ defmodule Sentry.ClientTest do
 
       assert %Event{} = event
       assert event.message == "Something went wrong"
+    end
+
+    test "dedupes events", %{bypass: bypass} do
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+
+      events = [
+        Event.create_event(message: "Dedupes by message")
+        |> Tuple.duplicate(2),
+        Event.create_event(exception: %RuntimeError{message: "Dedupes by exception"})
+        |> Tuple.duplicate(2),
+        Event.create_event(message: "Dedupes by message and stacktrace", stacktrace: stacktrace)
+        |> Tuple.duplicate(2),
+        {
+          Event.create_event(
+            message: "Same message but diff extra",
+            user: %{id: 1},
+            request: %{method: :GET}
+          ),
+          Event.create_event(
+            message: "Same message but diff extra",
+            user: %{id: 2},
+            request: %{method: :POST}
+          )
+        }
+      ]
+
+      for {event, dup_event} <- events do
+        Bypass.expect_once(bypass, fn conn ->
+          Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+        end)
+
+        assert {:ok, "340"} = Client.send_event(event, [])
+
+        log =
+          capture_log(fn ->
+            assert :excluded = Client.send_event(dup_event, [])
+          end)
+
+        assert log =~ "Event dropped due to being a duplicate of a previously-captured event."
+      end
     end
   end
 end

@@ -129,6 +129,18 @@ defmodule Sentry.Config do
       behaviour. Defaults to `Sentry.DefaultEventFilter`. See the
       [*Filtering Exceptions* section](#module-filtering-exceptions) below.
       """
+    ],
+    dedup_events: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Whether to **deduplicate** events before reporting them to Sentry. If this option is `true`,
+      then the SDK will store reported events for around 30 seconds after they're reported.
+      Any time the SDK is about to report an event, it will check if it has already reported
+      within the past 30 seconds. If it has, then it will not report the event again, and will
+      log a message instead. Events are deduplicated by comparing their message, exception,
+      stacktrace, and fingerprint. *Available since v10.0.0*.
+      """
     ]
   ]
 
@@ -442,6 +454,9 @@ defmodule Sentry.Config do
 
   @spec max_breadcrumbs() :: non_neg_integer()
   def max_breadcrumbs, do: fetch!(:max_breadcrumbs)
+
+  @spec dedup_events?() :: boolean()
+  def dedup_events?, do: fetch!(:dedup_events)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

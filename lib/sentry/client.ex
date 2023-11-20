@@ -5,7 +5,7 @@ defmodule Sentry.Client do
   # and sampling.
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
-  alias Sentry.{Config, Envelope, Event, Interfaces, Transport}
+  alias Sentry.{Config, Dedupe, Envelope, Event, Interfaces, Transport}
 
   require Logger
 
@@ -31,7 +31,8 @@ defmodule Sentry.Client do
 
     result =
       with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
-           :ok <- sample_event(sample_rate) do
+           :ok <- sample_event(sample_rate),
+           :ok <- maybe_dedupe(event) do
         send_result = encode_and_send(event, result_type, client, request_retries)
         _ignored = maybe_call_after_send(event, send_result, after_send_event)
         send_result
@@ -61,6 +62,21 @@ defmodule Sentry.Client do
       sample_rate == 0 -> :unsampled
       :rand.uniform() < sample_rate -> :ok
       true -> :unsampled
+    end
+  end
+
+  defp maybe_dedupe(%Event{} = event) do
+    if Config.dedup_events?() do
+      case Dedupe.insert(event) do
+        :new ->
+          :ok
+
+        :existing ->
+          log("Event dropped due to being a duplicate of a previously-captured event.")
+          :excluded
+      end
+    else
+      :ok
     end
   end
 
@@ -228,9 +244,10 @@ defmodule Sentry.Client do
           nil
       end
 
-    if message do
-      level = Config.log_level()
-      Logger.log(level, fn -> ["Failed to send Sentry event. ", message] end, domain: [:sentry])
-    end
+    if message, do: log(fn -> ["Failed to send Sentry event. ", message] end)
+  end
+
+  defp log(message) do
+    Logger.log(Config.log_level(), message, domain: [:sentry])
   end
 end
