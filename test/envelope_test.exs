@@ -2,6 +2,7 @@ defmodule Sentry.EnvelopeTest do
   use ExUnit.Case, async: false
 
   alias Sentry.{Envelope, Event, Interfaces}
+  alias Sentry.TestEnvironmentHelper
 
   describe "from_binary/1" do
     test "parses envelope with empty headers" do
@@ -132,6 +133,8 @@ defmodule Sentry.EnvelopeTest do
 
   describe "to_binary/1" do
     test "encodes an envelope" do
+      TestEnvironmentHelper.modify_env(:sentry, environment_name: "test")
+
       event = Event.create_event([])
       envelope = Envelope.new([event])
 
