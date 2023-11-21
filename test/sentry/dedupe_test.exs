@@ -9,9 +9,6 @@ defmodule Sentry.DedupeTest do
 
   describe "insert/1" do
     test "works correctly" do
-      stop_application()
-      start_supervised({Dedupe, ttl_millisec: @ttl_millisec})
-
       event = %Event{
         message: "Something went wrong",
         timestamp: System.system_time(:millisecond),
@@ -29,20 +26,12 @@ defmodule Sentry.DedupeTest do
       # To ensure the :sweep message is processed, we use the trick
       # of asking the GenServer for its state (which is a sync call).
       Process.sleep(@ttl_millisec * 2)
-      send(Dedupe, :sweep)
+      send(Dedupe, {:sweep, @ttl_millisec})
       _ = :sys.get_state(Dedupe)
 
       # Now, it's :new again.
       assert Dedupe.insert(event) == :new
       assert Dedupe.insert(event) == :existing
     end
-  end
-
-  defp stop_application do
-    for {{:sentry_config, _} = key, _val} <- :persistent_term.get() do
-      :persistent_term.erase(key)
-    end
-
-    ExUnit.CaptureLog.capture_log(fn -> Application.stop(:sentry) end)
   end
 end

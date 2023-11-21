@@ -10,9 +10,8 @@ defmodule Sentry.Dedupe do
   @ttl_millisec 30_000
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts) when is_list(opts) do
-    ttl_millisec = Keyword.get(opts, :ttl_millisec, @ttl_millisec)
-    GenServer.start_link(__MODULE__, ttl_millisec, name: __MODULE__)
+  def start_link([] = _opts) do
+    GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
   @spec insert(Event.t()) :: :new | :existing
@@ -27,28 +26,31 @@ defmodule Sentry.Dedupe do
     end
   end
 
-  ## State
-  defstruct [:ttl_millisec]
-
   ## Callbacks
 
   @impl true
-  def init(ttl_millisec) do
+  def init(nil) do
     _table = :ets.new(@ets, [:named_table, :public, :set])
-    Process.send_after(self(), :sweep, @sweep_interval_millisec)
-    {:ok, %__MODULE__{ttl_millisec: ttl_millisec}}
+    schedule_sweep()
+    {:ok, :no_state}
   end
 
   @impl true
-  def handle_info(:sweep, %__MODULE__{} = state) do
+  def handle_info({:sweep, ttl_millisec}, state) do
     now = System.system_time(:millisecond)
 
     # All rows (which are {hash, inserted_at}) with an inserted_at older than
     # now - @ttl_millisec.
-    match_spec = [{{:"$1", :"$2"}, [], [{:<, :"$2", now - state.ttl_millisec}]}]
+    match_spec = [{{:"$1", :"$2"}, [], [{:<, :"$2", now - ttl_millisec}]}]
     _ = :ets.select_delete(@ets, match_spec)
 
-    Process.send_after(self(), :sweep, @sweep_interval_millisec)
+    schedule_sweep()
     {:noreply, state}
+  end
+
+  ## Helpers
+
+  defp schedule_sweep do
+    Process.send_after(self(), {:sweep, @ttl_millisec}, @sweep_interval_millisec)
   end
 end

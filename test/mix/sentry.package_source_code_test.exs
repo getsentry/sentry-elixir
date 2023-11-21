@@ -1,13 +1,18 @@
 defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
   use ExUnit.Case, async: false
 
+  import Sentry.TestHelpers
+
   setup do
-    shell = Mix.shell()
-    Mix.shell(Mix.Shell.Process)
-    on_exit(fn -> Mix.shell(shell) end)
+    set_mix_shell(Mix.Shell.Process)
   end
 
   test "packages source code into :sentry's priv directory" do
+    put_test_config(
+      root_source_code_paths: [File.cwd!()],
+      enable_source_code_context: true
+    )
+
     expected_path =
       [Application.app_dir(:sentry), "priv", "sentry.map"]
       |> Path.join()

@@ -80,8 +80,7 @@ defmodule Sentry.ContextTest do
   @tag start_app: false
   test "passing in tags context as option overrides Context and Application config" do
     Context.set_tags_context(%{"key" => "345", "key1" => "123"})
-    modify_app_env(tags: %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})
-
+    put_test_config(tags: %{"key" => "overridden", "key2" => "1234", "key3" => "12345"})
     event = Event.create_event(tags: %{"key" => "123"})
 
     assert event.tags == %{"key" => "123", "key1" => "123", "key2" => "1234", "key3" => "12345"}

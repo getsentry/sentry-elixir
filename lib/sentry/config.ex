@@ -462,7 +462,16 @@ defmodule Sentry.Config do
   def put_config(key, value) when is_atom(key) do
     case NimbleOptions.validate([{key, value}], @opts_schema) do
       {:ok, options} ->
-        options |> Keyword.take([key]) |> persist()
+        renamed_key =
+          case key do
+            :before_send_event -> :before_send
+            other -> other
+          end
+
+        options
+        |> handle_deprecated_before_send()
+        |> Keyword.take([renamed_key])
+        |> persist()
 
       {:error, error} ->
         raise ArgumentError, """

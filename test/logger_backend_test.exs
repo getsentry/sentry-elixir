@@ -339,7 +339,7 @@ defmodule Sentry.LoggerBackendTest do
     pid = self()
     ref = make_ref()
 
-    modify_app_env(
+    put_test_config(
       before_send: fn event ->
         send(pid, {ref, event})
         false

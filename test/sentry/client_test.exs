@@ -54,7 +54,7 @@ defmodule Sentry.ClientTest do
   describe "send_event/2" do
     setup do
       bypass = Bypass.open()
-      modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
       %{bypass: bypass}
     end
 
@@ -93,7 +93,7 @@ defmodule Sentry.ClientTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_app_env(
+      put_test_config(
         before_send: fn event ->
           metadata = Map.new(Logger.metadata())
           {user_id, rest_metadata} = Map.pop(metadata, :user_id)
@@ -127,7 +127,7 @@ defmodule Sentry.ClientTest do
 
       stderr =
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          modify_app_env(
+          put_test_config(
             before_send_event: fn event ->
               metadata = Map.new(Logger.metadata())
               {user_id, rest_metadata} = Map.pop(metadata, :user_id)
@@ -159,7 +159,7 @@ defmodule Sentry.ClientTest do
         end
       end
 
-      modify_app_env(before_send: {CallbackModuleArithmeticError, :before_send})
+      put_test_config(before_send: {CallbackModuleArithmeticError, :before_send})
 
       try do
         :rand.uniform() + "1"
@@ -178,7 +178,7 @@ defmodule Sentry.ClientTest do
       ref = make_ref()
       event = Event.create_event(source: :plug)
 
-      modify_app_env(
+      put_test_config(
         before_send: fn event ->
           send(test_pid, {ref, event})
           event
@@ -199,7 +199,7 @@ defmodule Sentry.ClientTest do
       test_pid = self()
       ref = make_ref()
 
-      modify_app_env(
+      put_test_config(
         after_send_event: fn event, result -> send(test_pid, {ref, event, result}) end
       )
 
@@ -215,7 +215,7 @@ defmodule Sentry.ClientTest do
         |> Plug.Conn.resp(400, "{}")
       end)
 
-      modify_app_env(log_level: :info)
+      put_test_config(log_level: :info)
 
       event = Event.create_event(message: "Something went wrong")
 
@@ -237,7 +237,7 @@ defmodule Sentry.ClientTest do
         def decode(term), do: Jason.decode(term)
       end
 
-      modify_app_env(json_library: BadJSONClient)
+      put_test_config(json_library: BadJSONClient)
 
       event = Event.create_event(message: "Something went wrong")
 
@@ -274,6 +274,8 @@ defmodule Sentry.ClientTest do
     end
 
     test "dedupes events", %{bypass: bypass} do
+      put_test_config(dedup_events: true)
+
       {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
 
       events = [

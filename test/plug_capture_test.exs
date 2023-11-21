@@ -50,6 +50,14 @@ defmodule Sentry.PlugCaptureTest do
     end
   end
 
+  setup_all do
+    Application.put_env(:sentry, PhoenixEndpoint,
+      render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+    )
+
+    :ok
+  end
+
   test "sends error to Sentry" do
     bypass = Bypass.open()
 
@@ -61,7 +69,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -80,7 +88,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     catch_throw(
       conn(:get, "/throw_route")
@@ -99,7 +107,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     catch_exit(
       conn(:get, "/exit_route")
@@ -122,7 +130,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -141,7 +149,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -175,12 +183,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_app_env(
-        dsn: "http://public:secret@localhost:#{bypass.port}/1",
-        "#{__MODULE__.PhoenixEndpoint}": [
-          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-        ]
-      )
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
       {:ok, _} = PhoenixEndpoint.start_link()
 
@@ -205,12 +208,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_app_env(
-        dsn: "http://public:secret@localhost:#{bypass.port}/1",
-        "#{__MODULE__.PhoenixEndpoint}": [
-          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-        ]
-      )
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
       {:ok, _} = PhoenixEndpoint.start_link()
 
@@ -232,12 +230,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_app_env(
-        dsn: "http://public:secret@localhost:#{bypass.port}/1",
-        "#{__MODULE__.PhoenixEndpoint}": [
-          render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-        ]
-      )
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
       {:ok, _} = PhoenixEndpoint.start_link()
 
@@ -269,7 +262,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
       start_supervised!(PhoenixEndpoint)
 
@@ -300,12 +293,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     {:ok, _} = PhoenixEndpoint.start_link()
 
@@ -337,7 +325,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     conn = conn(:get, "/error_route")
 
@@ -363,12 +351,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      "#{__MODULE__.PhoenixEndpoint}": [
-        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
-      ]
-    )
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     {:ok, _} = PhoenixEndpoint.start_link()
 

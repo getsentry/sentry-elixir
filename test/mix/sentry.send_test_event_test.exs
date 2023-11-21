@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
   import Sentry.TestHelpers
 
   test "prints if :dsn is not set" do
-    modify_app_env(dsn: nil)
+    put_test_config(dsn: nil, hackney_opts: [], environment_name: "some_env")
 
     output =
       capture_io(fn ->
@@ -14,8 +14,8 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
     assert output =~ """
            Client configuration:
-           current environment_name: "test"
-           hackney_opts: [recv_timeout: 50]
+           current environment_name: "some_env"
+           hackney_opts: []
            """
 
     assert output =~ ~s(Event not sent because the :dsn option is not set)
@@ -32,7 +32,11 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      environment_name: "test",
+      hackney_opts: []
+    )
 
     output =
       capture_io(fn ->
@@ -45,7 +49,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            public_key: public
            secret_key: secret
            current environment_name: "test"
-           hackney_opts: [recv_timeout: 50]
+           hackney_opts: []
            """
 
     assert output =~ "Sending test event..."
@@ -62,10 +66,14 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 500, ~s<{"id": "340"}>)
     end)
 
-    modify_app_env(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      request_retries: []
-    )
+    original_retries =
+      Application.get_env(:sentry, :request_retries, Sentry.Transport.default_retries())
+
+    on_exit(fn -> Application.put_env(:sentry, :request_retries, original_retries) end)
+
+    Application.put_env(:sentry, :request_retries, [])
+
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise Mix.Error, ~r/Error sending event/, fn ->
       capture_io(fn -> Mix.Tasks.Sentry.SendTestEvent.run([]) end)

@@ -1,8 +1,5 @@
 defmodule Sentry.SourcesTest do
-  use ExUnit.Case, async: false
-  use Plug.Test
-
-  import Sentry.TestHelpers
+  use ExUnit.Case, async: true
 
   describe "load_files/0" do
     test "loads files" do
@@ -54,51 +51,5 @@ defmodule Sentry.SourcesTest do
              To fix this, you'll have to rename one of the conflicting paths.
              """
     end
-  end
-
-  test "exception makes call to Sentry API" do
-    bypass = Bypass.open()
-
-    modify_app_env(
-      enable_source_code_context: true,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1"
-    )
-
-    mix_shell = Mix.shell()
-    on_exit(fn -> Mix.shell(mix_shell) end)
-
-    Mix.shell(Mix.Shell.Quiet)
-    Mix.Task.rerun("sentry.package_source_code", ["--debug"])
-
-    :ok = Sentry.Sources.load_source_code_map_if_present()
-
-    correct_context = %{
-      "context_line" => "    raise RuntimeError, \"Error\"",
-      "post_context" => ["  end", "", "  get \"/exit_route\" do"],
-      "pre_context" => ["", "  get \"/error_route\" do", "    _ = conn"]
-    }
-
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      event = decode_event_from_envelope!(body)
-
-      frames = Enum.reverse(List.first(event.exception)["stacktrace"]["frames"])
-
-      assert ^correct_context =
-               Enum.at(frames, 0)
-               |> Map.take(["context_line", "post_context", "pre_context"])
-
-      assert body =~ "RuntimeError"
-      assert body =~ "Example"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
-      conn(:get, "/error_route")
-      |> Sentry.ExamplePlugApplication.call([])
-    end)
   end
 end

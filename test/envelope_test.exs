@@ -134,9 +134,9 @@ defmodule Sentry.EnvelopeTest do
 
   describe "to_binary/1" do
     test "encodes an envelope" do
-      modify_app_env(environment_name: "test")
-
+      put_test_config(environment_name: "test")
       event = Event.create_event([])
+
       envelope = Envelope.new([event])
 
       assert {:ok, encoded} = Envelope.to_binary(envelope)

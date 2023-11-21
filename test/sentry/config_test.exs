@@ -1,8 +1,6 @@
 defmodule Sentry.ConfigTest do
   use ExUnit.Case, async: false
 
-  import Sentry.TestHelpers
-
   alias Sentry.Config
 
   describe "validate!/0" do
@@ -198,8 +196,6 @@ defmodule Sentry.ConfigTest do
         {:ok, original_value} -> System.put_env(key, original_value)
         :error -> System.delete_env(key)
       end
-
-      restart_app!()
     end
   end
 end
