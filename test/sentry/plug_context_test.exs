@@ -1,19 +1,21 @@
 defmodule Sentry.PlugContextTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   use Plug.Test
+
+  setup do
+    %{conn: conn(:get, "/test?hello=world")}
+  end
 
   def body_scrubber(conn) do
     Map.take(conn.params, ["foo"])
   end
 
   def header_scrubber(conn) do
-    Enum.into(conn.req_headers, %{})
-    |> Map.take(["x-not-secret-header"])
+    conn.req_headers |> Map.new() |> Map.take(["x-not-secret-header"])
   end
 
   def cookie_scrubber(conn) do
-    Enum.into(conn.cookies, %{})
-    |> Map.take(["not-secret"])
+    conn.cookies |> Map.new() |> Map.take(["not-secret"])
   end
 
   def remote_address_reader(conn) do
@@ -23,8 +25,8 @@ defmodule Sentry.PlugContextTest do
     end
   end
 
-  test "sets request context" do
-    Sentry.PlugContext.call(conn(:get, "/test?hello=world"), [])
+  test "sets request context", %{conn: conn} do
+    call(conn, [])
 
     assert %{
              request: %{
@@ -45,10 +47,10 @@ defmodule Sentry.PlugContextTest do
            } = Sentry.Context.get_all()
   end
 
-  test "sets request context with real client ip if request is forwarded" do
-    conn(:get, "/test?hello=world")
+  test "sets request context with real client ip if request is forwarded", %{conn: conn} do
+    conn
     |> put_req_header("x-forwarded-for", "10.0.0.1")
-    |> Sentry.PlugContext.call([])
+    |> call([])
 
     assert %{
              request: %{
@@ -69,45 +71,44 @@ defmodule Sentry.PlugContextTest do
            } = Sentry.Context.get_all()
   end
 
-  test "allows configuring request address reader" do
-    conn(:get, "/test")
+  test "allows configuring request address reader", %{conn: conn} do
+    conn
     |> put_req_header("cf-connecting-ip", "10.0.0.2")
-    |> Sentry.PlugContext.call(remote_address_reader: {__MODULE__, :remote_address_reader})
+    |> call(remote_address_reader: {__MODULE__, :remote_address_reader})
 
     assert %{"REMOTE_ADDR" => "10.0.0.2"} = Sentry.Context.get_all().request.env
   end
 
   test "allows configuring body scrubber" do
-    Sentry.PlugContext.call(conn(:get, "/test?hello=world&foo=bar"),
-      body_scrubber: {__MODULE__, :body_scrubber}
-    )
+    conn = conn(:get, "/test?hello=world&foo=bar")
+    call(conn, body_scrubber: {__MODULE__, :body_scrubber})
 
     assert %{
              "foo" => "bar"
            } == Sentry.Context.get_all().request.data
   end
 
-  test "allows configuring header scrubber" do
-    conn(:get, "/test?hello=world&foo=bar")
+  test "allows configuring header scrubber", %{conn: conn} do
+    conn
     |> put_req_header("x-not-secret-header", "not secrets")
     |> put_req_header("x-secret-header", "secrets")
-    |> Sentry.PlugContext.call(header_scrubber: {__MODULE__, :header_scrubber})
+    |> call(header_scrubber: {__MODULE__, :header_scrubber})
 
     assert %{"x-not-secret-header" => "not secrets"} == Sentry.Context.get_all().request.headers
   end
 
-  test "allows configuring cookie scrubber" do
-    conn(:get, "/test?hello=world&foo=bar")
+  test "allows configuring cookie scrubber", %{conn: conn} do
+    conn
     |> put_req_header("cookie", "secret=secret;not-secret=not-secret")
-    |> Sentry.PlugContext.call(cookie_scrubber: {__MODULE__, :cookie_scrubber})
+    |> call(cookie_scrubber: {__MODULE__, :cookie_scrubber})
 
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
   end
 
-  test "allows configuring request id header" do
-    conn(:get, "/test?hello=world&foo=bar")
+  test "allows configuring request id header", %{conn: conn} do
+    conn
     |> put_resp_header("my-request-id", "abc123")
-    |> Sentry.PlugContext.call(request_id_header: "my-request-id")
+    |> call(request_id_header: "my-request-id")
 
     assert %{"REQUEST_ID" => "abc123"} = Sentry.Context.get_all().request.env
   end
@@ -131,9 +132,12 @@ defmodule Sentry.PlugContextTest do
     |> put_req_header("authorization", "secrets")
     |> put_req_header("authentication", "secrets")
     |> put_req_header("content-type", "application/json")
-    |> Sentry.PlugContext.call([])
+    |> call([])
 
     request_context = Sentry.Context.get_all().request
+
+    assert request_context.headers == %{"content-type" => "application/json"}
+    assert request_context.cookies == %{}
 
     assert request_context.data == %{
              "another_cc" => "*********",
@@ -153,8 +157,8 @@ defmodule Sentry.PlugContextTest do
   test "handles data scrubbing with file upload" do
     upload = %Plug.Upload{path: "test/fixtures/my_image.png", filename: "my_image.png"}
 
-    conn(:post, "/error_route", %{"image" => upload, "password" => "my_password"})
-    |> Sentry.PlugContext.call([])
+    conn = conn(:post, "/error_route", %{"image" => upload, "password" => "my_password"})
+    call(conn, [])
 
     assert Sentry.Context.get_all().request.data == %{
              "password" => "*********",
@@ -164,5 +168,9 @@ defmodule Sentry.PlugContextTest do
                path: "test/fixtures/my_image.png"
              }
            }
+  end
+
+  defp call(conn, opts) do
+    Plug.run(conn, [{Sentry.PlugContext, opts}])
   end
 end
