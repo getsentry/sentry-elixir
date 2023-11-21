@@ -5,7 +5,7 @@ defmodule Sentry.TestHelpers do
 
   @spec decode_event_from_envelope!(binary()) :: Sentry.Event.t()
   def decode_event_from_envelope!(body) when is_binary(body) do
-    assert {:ok, %Envelope{items: items}} = Envelope.from_binary(body)
+    {:ok, %Envelope{items: items}} = Envelope.from_binary(body)
     Enum.find(items, &is_struct(&1, Sentry.Event))
   end
 

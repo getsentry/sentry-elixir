@@ -11,7 +11,7 @@ defmodule Sentry.Sources do
 
   @source_code_map_key {:sentry, :source_code_map}
 
-  @spec load_source_code_map_if_present() :: :loaded | {:error, term()}
+  @spec load_source_code_map_if_present() :: {:loaded, source_map()} | {:error, term()}
   def load_source_code_map_if_present do
     path = Path.relative_to_cwd(path_of_packaged_source_code())
 
