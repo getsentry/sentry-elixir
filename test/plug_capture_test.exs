@@ -123,7 +123,8 @@ defmodule Sentry.PlugCaptureTest do
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
       )
 
-      start_link_supervised!(PhoenixEndpoint)
+      pid = start_supervised!(PhoenixEndpoint)
+      Process.link(pid)
 
       :ok
     end
