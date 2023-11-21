@@ -2,7 +2,7 @@ defmodule Sentry.SourcesTest do
   use ExUnit.Case, async: false
   use Plug.Test
 
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   describe "load_files/0" do
     test "loads files" do
@@ -59,7 +59,7 @@ defmodule Sentry.SourcesTest do
   test "exception makes call to Sentry API" do
     bypass = Bypass.open()
 
-    modify_env(:sentry,
+    modify_app_env(
       enable_source_code_context: true,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
@@ -81,7 +81,7 @@ defmodule Sentry.SourcesTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+      event = decode_event_from_envelope!(body)
 
       frames = Enum.reverse(List.first(event.exception)["stacktrace"]["frames"])
 

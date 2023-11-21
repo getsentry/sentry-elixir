@@ -1,7 +1,8 @@
 defmodule SentryTest do
   use ExUnit.Case
+
   import ExUnit.CaptureLog
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   defmodule TestFilter do
     @behaviour Sentry.EventFilter
@@ -21,8 +22,7 @@ defmodule SentryTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(
-      :sentry,
+    modify_app_env(
       filter: TestFilter,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
@@ -55,8 +55,7 @@ defmodule SentryTest do
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(
-      :sentry,
+    modify_app_env(
       filter: TestFilter,
       dsn: "http://public:secret@localhost:#{bypass.port}/1"
     )
@@ -75,10 +74,7 @@ defmodule SentryTest do
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(
-      :sentry,
-      dsn: "http://public:secret@localhost:#{bypass.port}/1"
-    )
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     Sentry.capture_message("test")
 

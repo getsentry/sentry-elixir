@@ -1,7 +1,7 @@
 defmodule Sentry.ConfigTest do
   use ExUnit.Case, async: false
 
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   alias Sentry.Config
 
@@ -13,8 +13,10 @@ defmodule Sentry.ConfigTest do
 
     test ":dsn from system environment" do
       dsn = "https://public:secret@app.getsentry.com/1"
-      modify_system_env(%{"SENTRY_DSN" => dsn})
-      assert Config.validate!([])[:dsn] == dsn
+
+      with_system_env("SENTRY_DSN", dsn, fn ->
+        assert Config.validate!([])[:dsn] == dsn
+      end)
     end
 
     test "invalid :dsn with query params" do
@@ -36,8 +38,9 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":release from system env" do
-      modify_system_env(%{"SENTRY_RELEASE" => "1.0.0"})
-      assert Config.validate!([])[:release] == "1.0.0"
+      with_system_env("SENTRY_RELEASE", "1.0.0", fn ->
+        assert Config.validate!([])[:release] == "1.0.0"
+      end)
     end
 
     test ":log_level" do
@@ -97,8 +100,9 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":environment_name from system env" do
-      modify_system_env(%{"SENTRY_ENVIRONMENT" => "my_env"})
-      assert Config.validate!([])[:environment_name] == "my_env"
+      with_system_env("SENTRY_ENVIRONMENT", "my_env", fn ->
+        assert Config.validate!([])[:environment_name] == "my_env"
+      end)
     end
 
     test ":sample_rate" do
@@ -180,6 +184,22 @@ defmodule Sentry.ConfigTest do
       assert_raise ArgumentError, ~r/unknown options \[:non_existing\]/, fn ->
         Config.put_config(:non_existing, "value")
       end
+    end
+  end
+
+  defp with_system_env(key, value, fun) when is_function(fun, 0) do
+    original_env = System.fetch_env(key)
+    System.put_env(key, value)
+
+    try do
+      fun.()
+    after
+      case original_env do
+        {:ok, original_value} -> System.put_env(key, original_value)
+        :error -> System.delete_env(key)
+      end
+
+      restart_app!()
     end
   end
 end

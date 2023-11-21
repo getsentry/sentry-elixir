@@ -1,7 +1,8 @@
 defmodule Sentry.LoggerHandlerTest do
   use ExUnit.Case, async: false
 
-  alias Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
+
   alias Sentry.TestGenServer
 
   require Logger
@@ -327,7 +328,7 @@ defmodule Sentry.LoggerHandlerTest do
     pid = self()
     ref = make_ref()
 
-    TestEnvironmentHelper.modify_env(:sentry,
+    modify_app_env(
       before_send: fn event ->
         send(pid, {ref, event})
         false

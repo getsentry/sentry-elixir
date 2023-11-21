@@ -1,14 +1,14 @@
 defmodule Sentry.TransportTest do
   use ExUnit.Case, async: false
 
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   alias Sentry.{Envelope, Event, HackneyClient, Transport}
 
   describe "post_envelope/2" do
     setup do
       bypass = Bypass.open()
-      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
       %{bypass: bypass}
     end
 
@@ -134,7 +134,7 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<invalid JSON>)
       end)
 
-      modify_env(:sentry, json_library: CrashingJSONLibrary)
+      modify_app_env(json_library: CrashingJSONLibrary)
 
       assert {:error, {:request_failure, reason}} =
                Transport.post_envelope(envelope, HackneyClient, _retries = [])
@@ -195,22 +195,22 @@ defmodule Sentry.TransportTest do
 
   describe "get_dsn/0" do
     test "parses correct DSNs" do
-      modify_env(:sentry, dsn: "http://public:secret@localhost:3000/1")
+      modify_app_env(dsn: "http://public:secret@localhost:3000/1")
       assert {"http://localhost:3000/api/1/envelope/", "public", "secret"} = Transport.get_dsn()
     end
 
     test "errors on bad public keys" do
-      modify_env(:sentry, dsn: "https://app.getsentry.com/1")
+      modify_app_env(dsn: "https://app.getsentry.com/1")
       assert {:error, :invalid_dsn} = Transport.get_dsn()
     end
 
     test "errors on non-integer project_id" do
-      modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com/Mitchell")
+      modify_app_env(dsn: "https://public:secret@app.getsentry.com/Mitchell")
       assert {:error, :invalid_dsn} = Transport.get_dsn()
     end
 
     test "errors on no project_id" do
-      modify_env(:sentry, dsn: "https://public:secret@app.getsentry.com")
+      modify_app_env(dsn: "https://public:secret@app.getsentry.com")
       assert {:error, :invalid_dsn} = Transport.get_dsn()
     end
   end

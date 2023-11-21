@@ -1,10 +1,10 @@
 defmodule Sentry.EventTest do
   use ExUnit.Case, async: false
 
+  import Sentry.TestHelpers
+
   alias Sentry.Event
   alias Sentry.Interfaces
-
-  import Sentry.TestEnvironmentHelper
 
   doctest Event, import: true
 
@@ -290,7 +290,7 @@ defmodule Sentry.EventTest do
   end
 
   test "sets :in_app to true when configured" do
-    modify_env(:sentry, in_app_module_allow_list: [Sentry, :random, Sentry.Submodule])
+    modify_app_env(in_app_module_allow_list: [Sentry, :random, Sentry.Submodule])
     exception = RuntimeError.exception("error")
 
     event =

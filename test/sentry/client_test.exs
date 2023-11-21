@@ -2,7 +2,7 @@ defmodule Sentry.ClientTest do
   use ExUnit.Case
 
   import ExUnit.CaptureLog
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   alias Sentry.{Client, Event}
 
@@ -54,7 +54,7 @@ defmodule Sentry.ClientTest do
   describe "send_event/2" do
     setup do
       bypass = Bypass.open()
-      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
       %{bypass: bypass}
     end
 
@@ -85,7 +85,7 @@ defmodule Sentry.ClientTest do
       Bypass.expect(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = TestHelpers.decode_event_from_envelope!(body)
+        event = decode_event_from_envelope!(body)
 
         assert event.extra == %{"key" => "value"}
         assert event.user["id"] == 1
@@ -93,8 +93,7 @@ defmodule Sentry.ClientTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(
-        :sentry,
+      modify_app_env(
         before_send: fn event ->
           metadata = Map.new(Logger.metadata())
           {user_id, rest_metadata} = Map.pop(metadata, :user_id)
@@ -118,7 +117,7 @@ defmodule Sentry.ClientTest do
       Bypass.expect(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = TestHelpers.decode_event_from_envelope!(body)
+        event = decode_event_from_envelope!(body)
 
         assert event.extra == %{"key" => "value"}
         assert event.user["id"] == 1
@@ -128,8 +127,7 @@ defmodule Sentry.ClientTest do
 
       stderr =
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          modify_env(
-            :sentry,
+          modify_app_env(
             before_send_event: fn event ->
               metadata = Map.new(Logger.metadata())
               {user_id, rest_metadata} = Map.pop(metadata, :user_id)
@@ -161,7 +159,7 @@ defmodule Sentry.ClientTest do
         end
       end
 
-      modify_env(:sentry, before_send: {CallbackModuleArithmeticError, :before_send})
+      modify_app_env(before_send: {CallbackModuleArithmeticError, :before_send})
 
       try do
         :rand.uniform() + "1"
@@ -180,7 +178,7 @@ defmodule Sentry.ClientTest do
       ref = make_ref()
       event = Event.create_event(source: :plug)
 
-      modify_env(:sentry,
+      modify_app_env(
         before_send: fn event ->
           send(test_pid, {ref, event})
           event
@@ -201,8 +199,7 @@ defmodule Sentry.ClientTest do
       test_pid = self()
       ref = make_ref()
 
-      modify_env(
-        :sentry,
+      modify_app_env(
         after_send_event: fn event, result -> send(test_pid, {ref, event, result}) end
       )
 
@@ -218,7 +215,7 @@ defmodule Sentry.ClientTest do
         |> Plug.Conn.resp(400, "{}")
       end)
 
-      modify_env(:sentry, log_level: :info)
+      modify_app_env(log_level: :info)
 
       event = Event.create_event(message: "Something went wrong")
 
@@ -240,7 +237,7 @@ defmodule Sentry.ClientTest do
         def decode(term), do: Jason.decode(term)
       end
 
-      modify_env(:sentry, json_library: BadJSONClient)
+      modify_app_env(json_library: BadJSONClient)
 
       event = Event.create_event(message: "Something went wrong")
 
@@ -265,7 +262,7 @@ defmodule Sentry.ClientTest do
       event =
         fn ->
           assert_receive {^ref, body}, 1000
-          TestHelpers.decode_event_from_envelope!(body)
+          decode_event_from_envelope!(body)
         end
         |> Stream.repeatedly()
         |> Stream.reject(&is_nil/1)

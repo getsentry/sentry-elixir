@@ -2,7 +2,7 @@ defmodule Sentry.PlugCaptureTest do
   use ExUnit.Case
   use Plug.Test
 
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
   defmodule PhoenixController do
@@ -56,12 +56,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -75,12 +75,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     catch_throw(
       conn(:get, "/throw_route")
@@ -94,12 +94,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     catch_exit(
       conn(:get, "/exit_route")
@@ -113,7 +113,7 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      event = TestHelpers.decode_event_from_envelope!(body)
+      event = decode_event_from_envelope!(body)
 
       assert event.request["url"] == "http://www.example.com/error_route"
       assert event.request["method"] == "GET"
@@ -122,7 +122,7 @@ defmodule Sentry.PlugCaptureTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -136,12 +136,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect_once(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
       conn(:get, "/error_route")
@@ -165,7 +165,7 @@ defmodule Sentry.PlugCaptureTest do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = TestHelpers.decode_event_from_envelope!(body)
+        event = decode_event_from_envelope!(body)
 
         assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
 
@@ -175,7 +175,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(:sentry,
+      modify_app_env(
         dsn: "http://public:secret@localhost:#{bypass.port}/1",
         "#{__MODULE__.PhoenixEndpoint}": [
           render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
@@ -198,14 +198,14 @@ defmodule Sentry.PlugCaptureTest do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = TestHelpers.decode_event_from_envelope!(body)
+        event = decode_event_from_envelope!(body)
 
         assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
         assert event.message == "Uncaught exit - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(:sentry,
+      modify_app_env(
         dsn: "http://public:secret@localhost:#{bypass.port}/1",
         "#{__MODULE__.PhoenixEndpoint}": [
           render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
@@ -225,14 +225,14 @@ defmodule Sentry.PlugCaptureTest do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = TestHelpers.decode_event_from_envelope!(body)
+        event = decode_event_from_envelope!(body)
 
         assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
         assert event.message == "Uncaught throw - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(:sentry,
+      modify_app_env(
         dsn: "http://public:secret@localhost:#{bypass.port}/1",
         "#{__MODULE__.PhoenixEndpoint}": [
           render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
@@ -269,7 +269,7 @@ defmodule Sentry.PlugCaptureTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
       start_supervised!(PhoenixEndpoint)
 
@@ -280,7 +280,7 @@ defmodule Sentry.PlugCaptureTest do
       end
 
       assert_receive {^ref, sentry_body}
-      event = TestHelpers.decode_event_from_envelope!(sentry_body)
+      event = decode_event_from_envelope!(sentry_body)
 
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
       assert [exception] = event.exception
@@ -295,12 +295,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry,
+    modify_app_env(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       "#{__MODULE__.PhoenixEndpoint}": [
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
@@ -332,12 +332,12 @@ defmodule Sentry.PlugCaptureTest do
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      _event = TestHelpers.decode_event_from_envelope!(body)
+      _event = decode_event_from_envelope!(body)
 
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     conn = conn(:get, "/error_route")
 
@@ -358,12 +358,12 @@ defmodule Sentry.PlugCaptureTest do
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      event = TestHelpers.decode_event_from_envelope!(body)
+      event = decode_event_from_envelope!(body)
       assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry,
+    modify_app_env(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       "#{__MODULE__.PhoenixEndpoint}": [
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]

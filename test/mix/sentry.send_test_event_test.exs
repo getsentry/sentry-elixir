@@ -2,10 +2,10 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
   use ExUnit.Case
 
   import ExUnit.CaptureIO
-  import Sentry.TestEnvironmentHelper
+  import Sentry.TestHelpers
 
   test "prints if :dsn is not set" do
-    modify_env(:sentry, dsn: nil)
+    modify_app_env(dsn: nil)
 
     output =
       capture_io(fn ->
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry, dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    modify_app_env(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     output =
       capture_io(fn ->
@@ -62,7 +62,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 500, ~s<{"id": "340"}>)
     end)
 
-    modify_env(:sentry,
+    modify_app_env(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       request_retries: []
     )
