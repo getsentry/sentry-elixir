@@ -17,6 +17,7 @@ defmodule Sentry.EventTest do
   end
 
   test "parses error exception" do
+    put_test_config(enable_source_code_context: false)
     event = event_generated_by_exception()
 
     assert event.platform == :elixir
@@ -39,47 +40,14 @@ defmodule Sentry.EventTest do
     assert [
              %Interfaces.Stacktrace.Frame{
                context_line: nil,
-               filename: "lib/ex_unit/runner.ex",
-               function: _,
+               filename: nil,
+               function: "Sentry.Event.not_a_function/3",
                in_app: false,
-               lineno: _,
-               module: ExUnit.Runner,
+               lineno: nil,
+               module: Sentry.Event,
                post_context: [],
                pre_context: [],
-               vars: %{}
-             },
-             %Interfaces.Stacktrace.Frame{
-               context_line: nil,
-               filename: "timer.erl",
-               function: ":timer.tc" <> _arity,
-               in_app: false,
-               lineno: _,
-               module: :timer,
-               post_context: [],
-               pre_context: [],
-               vars: %{}
-             },
-             %Interfaces.Stacktrace.Frame{
-               context_line: nil,
-               filename: "lib/ex_unit/runner.ex",
-               function: _,
-               in_app: false,
-               lineno: _,
-               module: ExUnit.Runner,
-               post_context: [],
-               pre_context: [],
-               vars: %{}
-             },
-             %Interfaces.Stacktrace.Frame{
-               context_line: nil,
-               filename: "test/event_test.exs",
-               function: "Sentry.EventTest.\"test parses error exception\"/1",
-               in_app: false,
-               lineno: _,
-               module: Sentry.EventTest,
-               post_context: [],
-               pre_context: [],
-               vars: %{}
+               vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}
              },
              %Interfaces.Stacktrace.Frame{
                context_line: nil,
@@ -91,19 +59,9 @@ defmodule Sentry.EventTest do
                post_context: [],
                pre_context: [],
                vars: %{}
-             },
-             %Interfaces.Stacktrace.Frame{
-               context_line: nil,
-               filename: nil,
-               function: "Sentry.Event.not_a_function/3",
-               in_app: false,
-               lineno: nil,
-               module: Sentry.Event,
-               post_context: [],
-               pre_context: [],
-               vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}
              }
-           ] = stacktrace.frames
+             | _rest
+           ] = Enum.reverse(stacktrace.frames)
 
     assert event.tags == %{}
     assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
