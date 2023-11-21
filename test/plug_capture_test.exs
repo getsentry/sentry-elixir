@@ -1,5 +1,5 @@
 defmodule Sentry.PlugCaptureTest do
-  use ExUnit.Case
+  use Sentry.Case
   use Plug.Test
 
   import Sentry.TestHelpers

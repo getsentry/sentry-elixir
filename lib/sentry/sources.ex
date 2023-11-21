@@ -11,13 +11,14 @@ defmodule Sentry.Sources do
 
   @source_code_map_key {:sentry, :source_code_map}
 
-  @spec load_source_code_map_if_present() :: :ok
+  @spec load_source_code_map_if_present() :: :loaded | {:error, term()}
   def load_source_code_map_if_present do
     path = Path.relative_to_cwd(path_of_packaged_source_code())
 
     with {:ok, contents} <- File.read(path),
          {:ok, source_map} <- decode_source_code_map(contents) do
       :persistent_term.put(@source_code_map_key, source_map)
+      {:loaded, source_map}
     else
       {:error, :binary_to_term} ->
         IO.warn("""
@@ -25,17 +26,19 @@ defmodule Sentry.Sources do
         contents.
         """)
 
+        {:error, :decoding_error}
+
       {:error, :enoent} ->
-        :ok
+        {:error, :enoent}
 
       {:error, reason} ->
         IO.warn("""
         Sentry found a source code map file at #{path}, but it was unable to read it.
         The reason was: #{:file.format_error(reason)}
         """)
-    end
 
-    :ok
+        {:error, reason}
+    end
   end
 
   @spec path_of_packaged_source_code() :: Path.t()
@@ -65,8 +68,9 @@ defmodule Sentry.Sources do
     :persistent_term.get(@source_code_map_key, nil)
   end
 
-  @spec load_files([Path.t()]) :: {:ok, source_map()} | {:error, message :: String.t()}
-  def load_files(root_paths \\ Config.root_source_code_paths()) when is_list(root_paths) do
+  @spec load_files([Path.t()] | nil) :: {:ok, source_map()} | {:error, message :: String.t()}
+  def load_files(root_paths \\ nil) do
+    root_paths = root_paths || Config.root_source_code_paths()
     path_pattern = Config.source_code_path_pattern()
     exclude_patterns = Config.source_code_exclude_patterns()
 

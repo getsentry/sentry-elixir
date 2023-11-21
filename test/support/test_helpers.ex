@@ -11,15 +11,19 @@ defmodule Sentry.TestHelpers do
 
   @spec put_test_config(keyword()) :: :ok
   def put_test_config(config) when is_list(config) do
+    all_original_config = all_config()
+
     original_config =
-      for {key, _val} <- config do
+      for {key, val} <- config do
         renamed_key =
           case key do
             :before_send_event -> :before_send
             other -> other
           end
 
-        {renamed_key, :persistent_term.get({:sentry_config, renamed_key}, :__not_set__)}
+        current_val = :persistent_term.get({:sentry_config, renamed_key}, :__not_set__)
+        :persistent_term.put({:sentry_config, renamed_key}, val)
+        {renamed_key, current_val}
       end
 
     ExUnit.Callbacks.on_exit(fn ->
@@ -27,9 +31,28 @@ defmodule Sentry.TestHelpers do
         {key, :__not_set__} -> :persistent_term.erase({:sentry_config, key})
         {key, original_val} -> :persistent_term.put({:sentry_config, key}, original_val)
       end)
-    end)
 
-    :ok = Enum.each(config, fn {key, val} -> Sentry.put_config(key, val) end)
+      all_reverted_config = all_config()
+
+      try do
+        assert all_original_config == all_reverted_config
+      rescue
+        exception in [ExUnit.AssertionError] ->
+          diff_info =
+            ExUnit.Formatter.format_assertion_diff(exception, 4, :infinity, fn _, val -> val end)
+
+          flunk("""
+          All config should be reverted to the original state, but it wasn't! This happened while
+          reverting config after setting this:
+
+            #{inspect(config)}
+
+          Left: #{diff_info[:left]}
+
+          Right: #{diff_info[:right]}
+          """)
+      end
+    end)
   end
 
   @spec set_mix_shell(module()) :: :ok
@@ -38,5 +61,10 @@ defmodule Sentry.TestHelpers do
     ExUnit.Callbacks.on_exit(fn -> Mix.shell(mix_shell) end)
     Mix.shell(shell)
     :ok
+  end
+
+  @spec all_config() :: keyword()
+  def all_config do
+    Enum.sort(for {{:sentry_config, key}, value} <- :persistent_term.get(), do: {key, value})
   end
 end

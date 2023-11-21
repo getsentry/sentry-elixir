@@ -1,5 +1,5 @@
 defmodule Sentry.ConfigTest do
-  use ExUnit.Case, async: false
+  use Sentry.Case, async: false
 
   alias Sentry.Config
 
@@ -166,11 +166,14 @@ defmodule Sentry.ConfigTest do
 
   describe "put_config/2" do
     test "updates the configuration" do
-      dsn = "https://public:secret@app.getsentry.com/1"
-      config = Config.validate!(dsn: dsn)
-      Config.persist(config)
+      dsn_before = :persistent_term.get({:sentry_config, :dsn}, :__not_set__)
 
-      assert Config.dsn() == dsn
+      on_exit(fn ->
+        case dsn_before do
+          :__not_set__ -> :persistent_term.erase({:sentry_config, :dsn})
+          other -> :persistent_term.put({:sentry_config, :dsn}, other)
+        end
+      end)
 
       new_dsn = "https://public:secret@app.getsentry.com/2"
       assert :ok = Config.put_config(:dsn, new_dsn)
@@ -179,7 +182,7 @@ defmodule Sentry.ConfigTest do
     end
 
     test "validates the given key" do
-      assert_raise ArgumentError, ~r/unknown options \[:non_existing\]/, fn ->
+      assert_raise ArgumentError, ~r/unknown option :non_existing/, fn ->
         Config.put_config(:non_existing, "value")
       end
     end

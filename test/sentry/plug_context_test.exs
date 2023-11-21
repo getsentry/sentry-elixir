@@ -1,5 +1,5 @@
 defmodule Sentry.PlugContextTest do
-  use ExUnit.Case, async: true
+  use Sentry.Case, async: true
   use Plug.Test
 
   setup do

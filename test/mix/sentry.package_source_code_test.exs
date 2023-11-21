@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
-  use ExUnit.Case, async: false
+  use Sentry.Case, async: false
 
   import Sentry.TestHelpers
 

@@ -1,6 +1,6 @@
 defmodule Sentry.DedupeTest do
   # This is not async because it tests a singleton (the dedupe GenServer).
-  use ExUnit.Case, async: false
+  use Sentry.Case, async: false
 
   alias Sentry.Dedupe
   alias Sentry.Event

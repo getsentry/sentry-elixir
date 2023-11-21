@@ -57,7 +57,8 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]]
+      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]],
+      aliases: [aliases()]
     ]
   end
 
@@ -106,5 +107,9 @@ defmodule Sentry.Mixfile do
         "GitHub" => @source_url
       }
     ]
+  end
+
+  defp aliases do
+    [test: ["sentry.package_source_code", "test"]]
   end
 end

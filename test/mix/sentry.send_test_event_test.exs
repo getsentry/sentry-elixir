@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Sentry.SendTestEventTest do
-  use ExUnit.Case
+  use Sentry.Case
 
   import ExUnit.CaptureIO
   import Sentry.TestHelpers

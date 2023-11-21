@@ -1,5 +1,5 @@
 defmodule Sentry.ClientTest do
-  use ExUnit.Case
+  use Sentry.Case
 
   import ExUnit.CaptureLog
   import Sentry.TestHelpers
@@ -112,43 +112,6 @@ defmodule Sentry.ClientTest do
       assert {:ok, _} = Client.send_event(event, result: :sync)
     end
 
-    # TODO: Remove in v11.0.0, :before_send_event has been deprecated in v10.0.0.
-    test "still supports :before_send_event callback", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
-        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        event = decode_event_from_envelope!(body)
-
-        assert event.extra == %{"key" => "value"}
-        assert event.user["id"] == 1
-
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          put_test_config(
-            before_send_event: fn event ->
-              metadata = Map.new(Logger.metadata())
-              {user_id, rest_metadata} = Map.pop(metadata, :user_id)
-
-              %Event{
-                event
-                | extra: Map.merge(event.extra, rest_metadata),
-                  user: Map.put(event.user, :id, user_id)
-              }
-            end
-          )
-
-          event = Event.create_event([])
-          Logger.metadata(key: "value", user_id: 1)
-
-          assert {:ok, _} = Client.send_event(event, result: :sync)
-        end)
-
-      assert stderr =~ ":before_send_event option is deprecated. Use :before_send instead."
-    end
-
     test "if :before_send callback returns falsey, the event is not sent" do
       defmodule CallbackModuleArithmeticError do
         def before_send(event) do
@@ -238,7 +201,6 @@ defmodule Sentry.ClientTest do
       end
 
       put_test_config(json_library: BadJSONClient)
-
       event = Event.create_event(message: "Something went wrong")
 
       assert capture_log(fn ->

@@ -1,5 +1,5 @@
 defmodule Sentry.SourcesTest do
-  use ExUnit.Case, async: true
+  use Sentry.Case, async: true
 
   describe "load_files/0" do
     test "loads files" do

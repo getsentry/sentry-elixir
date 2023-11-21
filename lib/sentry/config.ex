@@ -1,9 +1,6 @@
 defmodule Sentry.Config do
   @moduledoc false
 
-  @default_exclude_patterns [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"]
-  @private_env_keys [:sender_pool_size]
-
   basic_opts_schema = [
     dsn: [
       type: {:or, [:string, nil]},
@@ -232,7 +229,7 @@ defmodule Sentry.Config do
       type:
         {:list,
          {:custom, __MODULE__, :__validate_struct__, [:source_code_exclude_patterns, Regex]}},
-      default: @default_exclude_patterns,
+      default: [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"],
       type_doc: "list of `t:Regex.t/0`",
       doc: """
       A list of regular expressions used to determine which files to
@@ -309,7 +306,6 @@ defmodule Sentry.Config do
   def validate!(config) when is_list(config) do
     config_opts =
       config
-      |> Keyword.drop(@private_env_keys)
       |> Keyword.take(@valid_keys)
       |> fill_in_from_env(:dsn, "SENTRY_DSN")
       |> fill_in_from_env(:release, "SENTRY_RELEASE")
@@ -325,7 +321,8 @@ defmodule Sentry.Config do
 
       {:error, error} ->
         raise ArgumentError, """
-        invalid configuration for the :sentry application, so we cannot start it. The error was:
+        invalid configuration for the :sentry application, so we cannot start or update
+        its configuration. The error was:
 
             #{Exception.message(error)}
 
@@ -336,11 +333,9 @@ defmodule Sentry.Config do
 
   @spec persist(keyword()) :: :ok
   def persist(config) when is_list(config) do
-    for {key, value} <- config do
+    Enum.each(config, fn {key, value} ->
       :persistent_term.put({:sentry_config, key}, value)
-    end
-
-    :ok
+    end)
   end
 
   @spec docs() :: String.t()
@@ -369,10 +364,6 @@ defmodule Sentry.Config do
     #{NimbleOptions.docs(@source_code_context_opts_schema)}
     """
   end
-
-  # Also exposed as a function to be used in docs in the Sentry module.
-  @spec default_source_code_exclude_patterns() :: [Regex.t(), ...]
-  def default_source_code_exclude_patterns, do: @default_exclude_patterns
 
   @spec dsn() :: String.t() | nil
   def dsn, do: get(:dsn)
@@ -460,27 +451,20 @@ defmodule Sentry.Config do
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
-    case NimbleOptions.validate([{key, value}], @opts_schema) do
-      {:ok, options} ->
-        renamed_key =
-          case key do
-            :before_send_event -> :before_send
-            other -> other
-          end
-
-        options
-        |> handle_deprecated_before_send()
-        |> Keyword.take([renamed_key])
-        |> persist()
-
-      {:error, error} ->
-        raise ArgumentError, """
-        invalid configuration to update. The error was:
-
-            #{Exception.message(error)}
-
-        """
+    unless key in @valid_keys do
+      raise ArgumentError, "unknown option #{inspect(key)}"
     end
+
+    renamed_key =
+      case key do
+        :before_send_event -> :before_send
+        other -> other
+      end
+
+    [{key, value}]
+    |> validate!()
+    |> Keyword.take([renamed_key])
+    |> persist()
   end
 
   ## Helpers

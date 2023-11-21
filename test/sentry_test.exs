@@ -1,5 +1,5 @@
 defmodule SentryTest do
-  use ExUnit.Case
+  use Sentry.Case
   use Plug.Test
 
   import ExUnit.CaptureLog
@@ -14,7 +14,7 @@ defmodule SentryTest do
 
   setup do
     bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", dedup_events: false)
     %{bypass: bypass}
   end
 
@@ -47,15 +47,14 @@ defmodule SentryTest do
              Sentry.capture_message("RuntimeError: error", event_source: :plug, result: :sync)
   end
 
+  @tag :capture_log
   test "errors when taking too long to receive response", %{bypass: bypass} do
     Bypass.expect(bypass, fn _conn -> Process.sleep(:infinity) end)
 
     put_test_config(hackney_opts: [recv_timeout: 50])
 
-    capture_log(fn ->
-      assert {:error, {:request_failure, :timeout}} =
-               Sentry.capture_message("error", request_retries: [])
-    end)
+    assert {:error, {:request_failure, :timeout}} =
+             Sentry.capture_message("error", request_retries: [], result: :sync)
 
     Bypass.pass(bypass)
   end
@@ -81,40 +80,50 @@ defmodule SentryTest do
   end
 
   test "reports source code context", %{bypass: bypass} do
-    put_test_config(enable_source_code_context: true, root_source_code_paths: [File.cwd!()])
+    parent_pid = self()
+    ref = make_ref()
+
+    put_test_config(
+      enable_source_code_context: true,
+      root_source_code_paths: [File.cwd!()],
+      source_code_path_pattern: "{lib,test}/*.{ex,exs}"
+    )
+
     set_mix_shell(Mix.Shell.Quiet)
 
-    Mix.Task.rerun("sentry.package_source_code", ["--debug"])
+    assert :ok = Mix.Task.rerun("sentry.package_source_code")
 
-    :ok = Sentry.Sources.load_source_code_map_if_present()
-
-    correct_context = %{
-      "context_line" => "    raise RuntimeError, \"Error\"",
-      "post_context" => ["  end", "", "  get \"/exit_route\" do"],
-      "pre_context" => ["", "  get \"/error_route\" do", "    _ = conn"]
-    }
+    assert {:loaded, _source_map} = Sentry.Sources.load_source_code_map_if_present()
 
     Bypass.expect(bypass, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       event = decode_event_from_envelope!(body)
-
-      frames = Enum.reverse(List.first(event.exception)["stacktrace"]["frames"])
-
-      assert ^correct_context =
-               Enum.at(frames, 0)
-               |> Map.take(["context_line", "post_context", "pre_context"])
-
-      assert body =~ "RuntimeError"
-      assert body =~ "Example"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
+      send(parent_pid, {ref, event})
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
-    assert_raise(Plug.Conn.WrapperError, "** (RuntimeError) Error", fn ->
-      conn(:get, "/error_route")
-      |> Sentry.ExamplePlugApplication.call([])
-    end)
+    {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+
+    assert {:ok, "340"} =
+             Sentry.capture_exception(%RuntimeError{message: "oops"},
+               stacktrace: stacktrace,
+               result: :sync
+             )
+
+    assert_receive {^ref, event}
+
+    [exception] = event.exception
+    assert exception["type"] == "RuntimeError"
+    assert exception["value"] == "oops"
+
+    assert [%{"function" => "Process.info/2"}, interesting_frame | _rest] =
+             Enum.reverse(exception["stacktrace"]["frames"])
+
+    assert interesting_frame["context_line"] =~ "Process.info(self(), :current_stacktrace)"
+    assert Enum.at(interesting_frame["pre_context"], 0) =~ "Plug.Conn.resp(conn"
+    assert Enum.at(interesting_frame["pre_context"], 1) =~ "end)"
+    assert Enum.at(interesting_frame["post_context"], 0) == ""
+    assert Enum.at(interesting_frame["post_context"], 1) =~ "assert {:ok, "
   end
 end

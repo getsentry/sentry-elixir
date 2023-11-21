@@ -25,7 +25,7 @@ defmodule Sentry.Application do
         [Sentry.Transport.SenderPool]
 
     cache_loaded_applications()
-    Sources.load_source_code_map_if_present()
+    _ = Sources.load_source_code_map_if_present()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end
