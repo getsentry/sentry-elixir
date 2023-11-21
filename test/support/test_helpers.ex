@@ -32,26 +32,7 @@ defmodule Sentry.TestHelpers do
         {key, original_val} -> :persistent_term.put({:sentry_config, key}, original_val)
       end)
 
-      all_reverted_config = all_config()
-
-      try do
-        assert all_original_config == all_reverted_config
-      rescue
-        exception in [ExUnit.AssertionError] ->
-          diff_info =
-            ExUnit.Formatter.format_assertion_diff(exception, 4, :infinity, fn _, val -> val end)
-
-          flunk("""
-          All config should be reverted to the original state, but it wasn't! This happened while
-          reverting config after setting this:
-
-            #{inspect(config)}
-
-          Left: #{diff_info[:left]}
-
-          Right: #{diff_info[:right]}
-          """)
-      end
+      assert all_original_config == all_config()
     end)
   end
 
