@@ -234,9 +234,11 @@ defmodule Sentry.EventTest do
     end
 
     test "fills in the message interface when passing the :message option" do
+      put_test_config(environment_name: "my_env")
+
       assert %Event{
                breadcrumbs: [],
-               environment: "test",
+               environment: "my_env",
                exception: [],
                extra: %{},
                level: :error,
