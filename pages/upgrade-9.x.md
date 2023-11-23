@@ -128,7 +128,7 @@ you can now replace it with something like:
 {:ok, _} = Task.Supervisor.start_link(name: SentryAsyncSupervisor)
 
 {:ok, sentry_task} =
-  Task.Supervisor.async_nolink(fn ->
+  Task.Supervisor.async_nolink(SentryAsyncSupervisor, fn ->
     Sentry.capture_exception(my_exception, result: :async)
   end)
 
