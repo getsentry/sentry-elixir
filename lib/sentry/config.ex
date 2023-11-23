@@ -400,15 +400,6 @@ defmodule Sentry.Config do
   @spec enable_source_code_context?() :: boolean()
   def enable_source_code_context?, do: fetch!(:enable_source_code_context)
 
-  @spec root_source_code_paths() :: [Path.t()]
-  def root_source_code_paths, do: fetch!(:root_source_code_paths)
-
-  @spec source_code_path_pattern() :: String.t()
-  def source_code_path_pattern, do: fetch!(:source_code_path_pattern)
-
-  @spec source_code_exclude_patterns() :: [Regex.t()]
-  def source_code_exclude_patterns, do: fetch!(:source_code_exclude_patterns)
-
   @spec context_lines() :: pos_integer()
   def context_lines, do: fetch!(:context_lines)
 
