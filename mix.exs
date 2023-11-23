@@ -15,8 +15,8 @@ defmodule Sentry.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :extra_return],
-        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
-        plt_core_path: "priv/plts",
+        plt_file: {:no_warn, "plts/dialyzer.plt"},
+        plt_core_path: "plts",
         plt_add_deps: :app_tree,
         plt_add_apps: [:mix, :ex_unit]
       ],
