@@ -1,7 +1,7 @@
 defmodule Sentry.SourcesTest do
   use Sentry.Case, async: true
 
-  describe "load_files/0" do
+  describe "load_files/1" do
     test "loads files" do
       paths = [
         File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_a",
@@ -24,7 +24,11 @@ defmodule Sentry.SourcesTest do
                   4 => "  end",
                   5 => "end"
                 }
-              }} = Sentry.Sources.load_files(paths)
+              }} =
+               Sentry.Sources.load_files(
+                 root_source_code_paths: paths,
+                 source_code_exclude_patterns: []
+               )
     end
 
     test "raises error when two files have the same relative path" do
@@ -33,7 +37,11 @@ defmodule Sentry.SourcesTest do
         File.cwd!() <> "/test/fixtures/example-umbrella-app-with-conflict/apps/app_b"
       ]
 
-      assert {:error, message} = Sentry.Sources.load_files(paths)
+      assert {:error, message} =
+               Sentry.Sources.load_files(
+                 root_source_code_paths: paths,
+                 source_code_exclude_patterns: []
+               )
 
       assert message == """
              Found two source files in different source root paths with the same relative path:

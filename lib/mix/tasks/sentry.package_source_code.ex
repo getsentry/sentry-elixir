@@ -56,9 +56,12 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   def run(args) do
     {opts, _args} = OptionParser.parse!(args, strict: @switches)
 
+    # We can read the config here because this task depends on the `app.config` task.
+    config = Application.get_all_env(:sentry)
+
     {elapsed, source_map} =
       :timer.tc(fn ->
-        case Sources.load_files() do
+        case Sources.load_files(config) do
           {:ok, source_map} -> source_map
           {:error, message} -> Mix.raise(message)
         end

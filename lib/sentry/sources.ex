@@ -68,13 +68,15 @@ defmodule Sentry.Sources do
     :persistent_term.get(@source_code_map_key, nil)
   end
 
-  @spec load_files([Path.t()] | nil) :: {:ok, source_map()} | {:error, message :: String.t()}
-  def load_files(root_paths \\ nil) do
-    root_paths = root_paths || Config.root_source_code_paths()
-    path_pattern = Config.source_code_path_pattern()
-    exclude_patterns = Config.source_code_exclude_patterns()
+  @spec load_files(keyword()) :: {:ok, source_map()} | {:error, message :: String.t()}
+  def load_files(config \\ []) when is_list(config) do
+    config = Sentry.Config.validate!(config)
 
-    root_paths
+    path_pattern = Keyword.fetch!(config, :source_code_path_pattern)
+    exclude_patterns = Keyword.fetch!(config, :source_code_exclude_patterns)
+
+    config
+    |> Keyword.fetch!(:root_source_code_paths)
     |> Enum.reduce(%{}, &load_files_for_root_path(&1, &2, path_pattern, exclude_patterns))
     |> Map.new(fn {path, %{lines: lines}} -> {path, lines} end)
   catch
