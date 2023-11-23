@@ -118,7 +118,15 @@ defmodule Sentry.ConfigTest do
       assert Config.validate!([])[:json_library] == Jason
 
       assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
-        Config.validate!(json_library: URI)
+        Config.validate!(json_library: Atom)
+      end
+
+      assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
+        Config.validate!(json_library: nil)
+      end
+
+      assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
+        Config.validate!(json_library: "not a module")
       end
     end
 

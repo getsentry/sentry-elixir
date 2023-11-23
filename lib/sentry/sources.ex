@@ -11,9 +11,10 @@ defmodule Sentry.Sources do
 
   @source_code_map_key {:sentry, :source_code_map}
 
-  @spec load_source_code_map_if_present() :: {:loaded, source_map()} | {:error, term()}
-  def load_source_code_map_if_present do
-    path = Path.relative_to_cwd(path_of_packaged_source_code())
+  # Default argument is here for testing.
+  @spec load_source_code_map_if_present(Path.t()) :: {:loaded, source_map()} | {:error, term()}
+  def load_source_code_map_if_present(path \\ path_of_packaged_source_code()) do
+    path = Path.relative_to_cwd(path)
 
     with {:ok, contents} <- File.read(path),
          {:ok, source_map} <- decode_source_code_map(contents) do
