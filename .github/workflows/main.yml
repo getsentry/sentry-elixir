@@ -88,7 +88,7 @@ jobs:
       if: matrix.dialyzer
       id: plt-cache
       with:
-        path: priv/plts
+        path: plts
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
         restore-keys: |
@@ -97,7 +97,7 @@ jobs:
     - name: Create PLTs
       if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.dialyzer
       run: |
-        mkdir -p priv/plts
+        mkdir -p plts
         mix dialyzer --plt
 
     - name: Run dialyzer
