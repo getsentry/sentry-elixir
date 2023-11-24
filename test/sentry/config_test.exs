@@ -5,15 +5,16 @@ defmodule Sentry.ConfigTest do
 
   describe "validate!/0" do
     test ":dsn from option" do
-      dsn = "https://public:secret@app.getsentry.com/1"
-      assert Config.validate!(dsn: dsn)[:dsn] == dsn
+      assert Config.validate!(dsn: "https://public:secret@app.getsentry.com/1")[:dsn] ==
+               {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
+
+      assert Config.validate!(dsn: nil)[:dsn] == nil
     end
 
     test ":dsn from system environment" do
-      dsn = "https://public:secret@app.getsentry.com/1"
-
-      with_system_env("SENTRY_DSN", dsn, fn ->
-        assert Config.validate!([])[:dsn] == dsn
+      with_system_env("SENTRY_DSN", "https://public:secret@app.getsentry.com/1", fn ->
+        assert Config.validate!([])[:dsn] ==
+                 {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
       end)
     end
 
@@ -26,8 +27,26 @@ defmodule Sentry.ConfigTest do
     end
 
     test "invalid :dsn" do
+      # Not a string.
       assert_raise ArgumentError, ~r/invalid value for :dsn option/, fn ->
         Config.validate!(dsn: :not_a_string)
+      end
+
+      # Project ID is missing.
+      assert_raise ArgumentError, ~r/missing project ID at the end of the DSN URI/, fn ->
+        Config.validate!(dsn: "https://public:secret@app.getsentry.com")
+      end
+
+      # Project ID is not an integer.
+      assert_raise ArgumentError, ~r/DSN path to end with an integer project ID/, fn ->
+        Config.validate!(dsn: "https://public:secret@app.getsentry.com/not-an-int")
+      end
+
+      # Userinfo is missing.
+      for dsn <- ["https://app.getsentry.com/1", "https://@app.getsentry.com/1"] do
+        assert_raise ArgumentError, ~r/missing user info in the DSN URI/, fn ->
+          Config.validate!(dsn: dsn)
+        end
       end
     end
 
@@ -186,7 +205,8 @@ defmodule Sentry.ConfigTest do
       new_dsn = "https://public:secret@app.getsentry.com/2"
       assert :ok = Config.put_config(:dsn, new_dsn)
 
-      assert Config.dsn() == new_dsn
+      assert Config.dsn() ==
+               {"https://app.getsentry.com/api/2/envelope/", "public", "secret"}
     end
 
     test "validates the given key" do

@@ -332,7 +332,8 @@ defmodule Sentry.LoggerHandlerTest do
       before_send: fn event ->
         send(pid, {ref, event})
         false
-      end
+      end,
+      dsn: "http://public:secret@localhost:9392/1"
     )
 
     %{sender_ref: ref}

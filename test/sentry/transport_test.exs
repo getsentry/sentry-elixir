@@ -192,26 +192,4 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
   end
-
-  describe "get_dsn/0" do
-    test "parses correct DSNs" do
-      put_test_config(dsn: "http://public:secret@localhost:3000/1")
-      assert {"http://localhost:3000/api/1/envelope/", "public", "secret"} = Transport.get_dsn()
-    end
-
-    test "errors on bad public keys" do
-      put_test_config(dsn: "https://app.getsentry.com/1")
-      assert {:error, :invalid_dsn} = Transport.get_dsn()
-    end
-
-    test "errors on non-integer project_id" do
-      put_test_config(dsn: "https://public:secret@app.getsentry.com/Mitchell")
-      assert {:error, :invalid_dsn} = Transport.get_dsn()
-    end
-
-    test "errors on no project_id" do
-      put_test_config(dsn: "https://public:secret@app.getsentry.com")
-      assert {:error, :invalid_dsn} = Transport.get_dsn()
-    end
-  end
 end
