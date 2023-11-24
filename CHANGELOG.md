@@ -1,5 +1,12 @@
 # Changelog
 
+## 10.0.1
+
+### Various fixes & improvements
+
+- Fix reading of config in "mix sentry.package_source_code" (#653)
+- Don't ship Dialyzer PLTs with releases (#654)
+
 ## 10.0.0
 
 - `:report_deps` now reports all loaded applications at the time the `:sentry` application starts. This is not a compile-time configuration option anymore.
