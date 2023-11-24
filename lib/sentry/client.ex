@@ -224,9 +224,6 @@ defmodule Sentry.Client do
   defp maybe_log_send_result(send_result, %Event{}) do
     message =
       case send_result do
-        {:error, :invalid_dsn} ->
-          "Cannot send Sentry event because of invalid DSN"
-
         {:error, {:invalid_json, error}} ->
           "Unable to encode JSON Sentry error - #{inspect(error)}"
 

@@ -54,9 +54,6 @@ defmodule Sentry.Transport.Sender do
     else
       message =
         case send_result do
-          {:error, :invalid_dsn} ->
-            "Cannot send Sentry event because of invalid DSN"
-
           {:error, {:invalid_json, error}} ->
             "Unable to encode JSON Sentry error - #{inspect(error)}"
 
