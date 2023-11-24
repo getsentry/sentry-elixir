@@ -318,22 +318,23 @@ defmodule Sentry do
   > use cases, use `capture_exception/2` or `capture_message/2`.
   """
   @spec send_event(Event.t(), keyword()) :: send_result
-  def send_event(event, opts \\ [])
+  def send_event(event, opts \\ []) do
+    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    included_envs = Config.included_environments()
 
-  def send_event(%Event{message: nil, exception: []}, _opts) do
-    Logger.log(Config.log_level(), "Sentry: unable to parse exception")
+    cond do
+      is_nil(event.message) and event.exception == [] ->
+        Logger.log(Config.log_level(), "Sentry: unable to parse exception")
+        :ignored
 
-    :ignored
-  end
+      !Config.dsn() ->
+        :ignored
 
-  def send_event(%Event{} = event, opts) do
-    included_environments = Config.included_environments()
-    environment_name = to_string(Config.environment_name())
+      included_envs == :all or to_string(Config.environment_name()) in included_envs ->
+        Sentry.Client.send_event(event, opts)
 
-    if included_environments == :all or environment_name in included_environments do
-      Sentry.Client.send_event(event, opts)
-    else
-      :ignored
+      true ->
+        :ignored
     end
   end
 

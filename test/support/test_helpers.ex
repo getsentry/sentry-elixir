@@ -22,7 +22,7 @@ defmodule Sentry.TestHelpers do
           end
 
         current_val = :persistent_term.get({:sentry_config, renamed_key}, :__not_set__)
-        :persistent_term.put({:sentry_config, renamed_key}, val)
+        Sentry.put_config(renamed_key, val)
         {renamed_key, current_val}
       end
 

@@ -20,12 +20,13 @@ defmodule Sentry.Transport do
           {:ok, envelope_id :: String.t()} | {:error, term()}
   def post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
-    with {:json, {:ok, body}} <- {:json, Envelope.to_binary(envelope)},
-         {:ok, endpoint, headers} <- get_endpoint_and_headers() do
-      post_envelope_with_retries(client, endpoint, headers, body, retries)
-    else
-      {:json, {:error, reason}} -> {:error, {:invalid_json, reason}}
-      {:error, _reason} = error -> error
+    case Envelope.to_binary(envelope) do
+      {:ok, body} ->
+        {endpoint, headers} = get_endpoint_and_headers()
+        post_envelope_with_retries(client, endpoint, headers, body, retries)
+
+      {:error, reason} ->
+        {:error, {:invalid_json, reason}}
     end
   end
 
@@ -64,43 +65,8 @@ defmodule Sentry.Transport do
   end
 
   defp get_endpoint_and_headers do
-    case get_dsn() do
-      {endpoint, public_key, secret_key} ->
-        {:ok, endpoint, authorization_headers(public_key, secret_key)}
+    {endpoint, public_key, secret_key} = Config.dsn()
 
-      {:error, :invalid_dsn} ->
-        {:error, :invalid_dsn}
-    end
-  end
-
-  # Made public for testing.
-  @spec get_dsn() :: {String.t(), String.t(), String.t()} | {:error, :invalid_dsn}
-  def get_dsn do
-    with dsn when is_binary(dsn) <- Config.dsn(),
-         %URI{userinfo: userinfo, host: host, port: port, path: path, scheme: protocol}
-         when is_binary(path) and is_binary(userinfo) <- URI.parse(dsn),
-         [public_key, secret_key] <- keys_from_userinfo(userinfo),
-         uri_path <- String.split(path, "/"),
-         {binary_project_id, uri_path} <- List.pop_at(uri_path, -1),
-         base_path <- Enum.join(uri_path, "/"),
-         {project_id, ""} <- Integer.parse(binary_project_id),
-         endpoint <- "#{protocol}://#{host}:#{port}#{base_path}/api/#{project_id}/envelope/" do
-      {endpoint, public_key, secret_key}
-    else
-      _ ->
-        {:error, :invalid_dsn}
-    end
-  end
-
-  defp keys_from_userinfo(userinfo) do
-    case String.split(userinfo, ":", parts: 2) do
-      [public, secret] -> [public, secret]
-      [public] -> [public, nil]
-      _ -> :error
-    end
-  end
-
-  defp authorization_headers(public_key, secret_key) do
     auth_query =
       [
         sentry_version: @sentry_version,
@@ -112,9 +78,11 @@ defmodule Sentry.Transport do
       |> Enum.reject(fn {_, value} -> is_nil(value) end)
       |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
 
-    [
+    auth_headers = [
       {"User-Agent", @sentry_client},
       {"X-Sentry-Auth", "Sentry " <> auth_query}
     ]
+
+    {endpoint, auth_headers}
   end
 end

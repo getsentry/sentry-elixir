@@ -78,4 +78,10 @@ defmodule SentryTest do
 
     assert log =~ "Sentry: unable to parse exception"
   end
+
+  test "does not send events if :dsn is not configured or nil" do
+    put_test_config(dsn: nil)
+    event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
+    assert :ignored = Sentry.send_event(event)
+  end
 end

@@ -52,7 +52,7 @@ defmodule Sentry.ExamplePlugApplication do
           """
           <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
           <script>
-          Sentry.init({ dsn: '#{Sentry.Config.dsn()}' });
+          Sentry.init({ dsn: '#{inspect(Sentry.Config.dsn())}' });
           Sentry.showReportDialog(#{opts})
           </script>
           """
