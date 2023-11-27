@@ -76,7 +76,47 @@ defmodule SentryTest do
         assert Sentry.send_event(Sentry.Event.create_event([])) == :ignored
       end)
 
-    assert log =~ "Sentry: unable to parse exception"
+    assert log =~ "Cannot report event without message or exception: %Sentry.Event{"
+  end
+
+  test "doesn't incur into infinite logging loops because we prevent that", %{bypass: bypass} do
+    put_test_config(dedup_events: true)
+    message_to_report = "Hello #{System.unique_integer([:positive])}"
+
+    Bypass.expect(bypass, fn conn ->
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    :ok =
+      :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+        config: %{capture_log_messages: true, level: :debug}
+      })
+
+    on_exit(fn ->
+      _ = :logger.remove_handler(:sentry_handler)
+    end)
+
+    # First one is reported correctly as it has no duplicates
+    assert {:ok, "340"} = Sentry.capture_message(message_to_report)
+
+    log =
+      capture_log(fn ->
+        # Then, we log the same message, which triggers the SDK to log that the message wasn't sent
+        # because it's a duplicate.
+        assert :excluded = Sentry.capture_message(message_to_report)
+
+        # Then we log the same message again, which again triggers the SDK to log that the message
+        # wasn't sent. But this time, *that* log (the one about the duplicate event) is also a
+        # duplicate. So, we can test that it doesn't result in an infinite logging loop.
+        assert :excluded = Sentry.capture_message(message_to_report)
+      end)
+
+    logged_count =
+      ~r/Event dropped due to being a duplicate/
+      |> Regex.scan(log)
+      |> length()
+
+    assert logged_count == 2
   end
 
   test "does not send events if :dsn is not configured or nil" do

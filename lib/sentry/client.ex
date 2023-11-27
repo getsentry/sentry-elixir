@@ -5,7 +5,7 @@ defmodule Sentry.Client do
   # and sampling.
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
-  alias Sentry.{Config, Dedupe, Envelope, Event, Interfaces, Transport}
+  alias Sentry.{Config, Dedupe, Envelope, Event, Interfaces, LoggerUtils, Transport}
 
   require Logger
 
@@ -72,7 +72,10 @@ defmodule Sentry.Client do
           :ok
 
         :existing ->
-          log("Event dropped due to being a duplicate of a previously-captured event.")
+          LoggerUtils.log(
+            "Event dropped due to being a duplicate of a previously-captured event."
+          )
+
           :excluded
       end
     else
@@ -241,10 +244,6 @@ defmodule Sentry.Client do
           nil
       end
 
-    if message, do: log(fn -> ["Failed to send Sentry event. ", message] end)
-  end
-
-  defp log(message) do
-    Logger.log(Config.log_level(), message, domain: [:sentry])
+    if message, do: LoggerUtils.log(fn -> ["Failed to send Sentry event. ", message] end)
   end
 end

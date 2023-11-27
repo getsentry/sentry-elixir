@@ -1,7 +1,14 @@
 defmodule Sentry.LoggerUtils do
   @moduledoc false
 
-  # Utilities that are shared between Sentry.LoggerHandler and Sentry.LoggerBackend.
+  # Utilities that are shared between Sentry.LoggerHandler and Sentry.LoggerBackend, plus
+  # functions that wrap Elixir's Logger and that make sure we use the right options for Logger
+  # calls. For example, if we (the Sentry SDK) log without using `domain: [:sentry]`, then we can
+  # run into loops in which Sentry reports messages that the SDK itself logs.
+
+  alias Sentry.Config
+
+  require Logger
 
   @spec build_sentry_options(Logger.level(), keyword() | nil, map(), [atom()] | :all) ::
           keyword()
@@ -19,9 +26,10 @@ defmodule Sentry.LoggerUtils do
     |> Map.to_list()
   end
 
+  # Always excludes the :sentry domain, to avoid infinite logging loops.
   @spec excluded_domain?([atom()], [atom()]) :: boolean()
   def excluded_domain?(logged_domains, excluded_domains) do
-    Enum.any?(logged_domains, &(&1 in excluded_domains))
+    Enum.any?(logged_domains, &(&1 == :sentry or &1 in excluded_domains))
   end
 
   defp elixir_logger_level_to_sentry_level(level) do
@@ -75,5 +83,11 @@ defmodule Sentry.LoggerUtils do
 
   defp attempt_to_convert_iodata(other) do
     other
+  end
+
+  @spec log(iodata() | (-> iodata()), keyword()) :: :ok
+  def log(message_or_fun, meta \\ []) when is_list(meta) do
+    meta = Keyword.merge(meta, domain: [:sentry])
+    Logger.log(Config.log_level(), message_or_fun, meta)
   end
 end

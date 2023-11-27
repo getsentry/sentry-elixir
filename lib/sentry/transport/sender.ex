@@ -3,7 +3,7 @@ defmodule Sentry.Transport.Sender do
 
   use GenServer
 
-  alias Sentry.{Config, Envelope, Event, Transport}
+  alias Sentry.{Envelope, Event, LoggerUtils, Transport}
 
   require Logger
 
@@ -72,8 +72,7 @@ defmodule Sentry.Transport.Sender do
         end
 
       if message do
-        level = Config.log_level()
-        Logger.log(level, fn -> ["Failed to send Sentry event. ", message] end, domain: [:sentry])
+        LoggerUtils.log(fn -> ["Failed to send Sentry event. ", message] end)
       end
     end
   end
