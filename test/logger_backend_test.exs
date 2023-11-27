@@ -305,6 +305,7 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert event.message == "Error"
   end
+
   test "doesn't log events with :sentry as a domain" do
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
     ref = register_before_send()
