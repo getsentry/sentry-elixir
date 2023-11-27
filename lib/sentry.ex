@@ -171,7 +171,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{Config, Event}
+  alias Sentry.{Config, Event, LoggerUtils}
 
   require Logger
 
@@ -324,7 +324,7 @@ defmodule Sentry do
 
     cond do
       is_nil(event.message) and event.exception == [] ->
-        Logger.log(Config.log_level(), "Sentry: unable to parse exception")
+        LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
         :ignored
 
       !Config.dsn() ->

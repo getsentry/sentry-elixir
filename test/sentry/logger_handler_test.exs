@@ -143,6 +143,12 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message == "no domain"
     end
+
+    @tag handler_config: %{capture_log_messages: true}
+    test "ignores log messages that are logged by Sentry itself", %{sender_ref: ref} do
+      Logger.error("Sentry had an error", domain: [:sentry])
+      refute_receive {^ref, _event}
+    end
   end
 
   describe "with a crashing GenServer" do
