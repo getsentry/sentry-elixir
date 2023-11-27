@@ -1,5 +1,13 @@
 # Changelog
 
+## 10.0.2
+
+### Various fixes & improvements
+
+- Fix infinite logging loop (#657) by @whatyouhide
+- Remove reference to "before_send_event" in README (f1650502) by @whatyouhide
+- Don't report events if DSN is not configured (#655) by @whatyouhide
+
 ## 10.0.1
 
 ### Various fixes & improvements
