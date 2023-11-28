@@ -33,6 +33,16 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   mix release
   ```
 
+  > #### Runtime Configuration {: .tip}
+  >
+  > If you use `config/runtime.exs` for runtime configuration of your application and
+  > release, *and* you also configure the source-context-related options for the `:sentry`
+  > application in that file (such as `:root_source_code_paths`), you'll need to call the
+  > `mix app.config` task before calling this Mix task. `mix app.config` loads the
+  > `config/runtime.exs` configuration. Generally, we recommend configuring all the
+  > source-context-related options in compile-time config files (like `config/config.exs`
+  > or `config/prod.exs`).
+
   ## Options
 
     * `--debug` - print more information about collecting and encoding source code
@@ -50,13 +60,11 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   @bytes_in_gb 1024 * 1024 * 1024
 
   @switches [debug: :boolean]
-  @requirements ["app.config"]
 
   @impl true
   def run(args) do
     {opts, _args} = OptionParser.parse!(args, strict: @switches)
 
-    # We can read the config here because this task depends on the `app.config` task.
     config = Application.get_all_env(:sentry)
 
     {elapsed, source_map} =
@@ -80,10 +88,8 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
     File.write!(output_path, contents)
 
     Mix.shell().info([
-      "Wrote ",
-      :cyan,
-      format_bytes(byte_size(contents)),
-      :reset,
+      "Wrote #{map_size(source_map)} files in ",
+      [:cyan, format_bytes(byte_size(contents)), :reset],
       " to: #{Path.relative_to_cwd(output_path)}"
     ])
   end
