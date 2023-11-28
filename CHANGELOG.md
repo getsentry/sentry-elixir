@@ -17,6 +17,8 @@
 
 ## 10.0.0
 
+[9.x -> 10.0 Upgrade Guide](https://hexdocs.pm/sentry/upgrade-10-x.html)
+
 - `:report_deps` now reports all loaded applications at the time the `:sentry` application starts. This is not a compile-time configuration option anymore.
 - Add the `mix sentry.package_source_code` Mix task. See the upgrade guide for more information.
 - Add `~r"/test/"` to the default source code exclude patterns (see the `:source_code_exclude_patterns` option).
@@ -33,6 +35,8 @@
 - Apply `:sample_rate` *after* event callbacks, rather than *before* (ab5c7485) by @whatyouhide
 
 ## 9.0.0
+
+[8.x -> 9.0 Upgrade Guide](https://hexdocs.pm/sentry/upgrade-9-x.html)
 
 ### Breaking changes
 
