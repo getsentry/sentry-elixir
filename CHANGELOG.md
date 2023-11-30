@@ -1,5 +1,12 @@
 # Changelog
 
+## 10.0.3
+
+### Various fixes & improvements
+
+- No "app.config" in "mix sentry.package_source_code" (#661) by @whatyouhide
+- Add upgrade guide links to the changelog (#659) by @axelson
+
 ## 10.0.2
 
 ### Various fixes & improvements
