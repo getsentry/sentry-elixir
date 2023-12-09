@@ -210,6 +210,49 @@ defmodule Sentry.EventTest do
              } = Event.create_event(message: "Test message")
     end
 
+    test "fills in the message and threads interfaces when passing the :message option with :stacktrace" do
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+      put_test_config(environment_name: "my_env")
+
+      assert %Event{
+               breadcrumbs: [],
+               environment: "my_env",
+               exception: [
+                 %Interfaces.Exception{
+                   type: "message",
+                   value: "Test message",
+                   stacktrace: exception_stacktrace
+                 }
+               ],
+               extra: %{},
+               level: :error,
+               message: "Test message",
+               platform: :elixir,
+               release: nil,
+               request: %{},
+               tags: %{},
+               user: %{},
+               contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}},
+               threads: [%Interfaces.Thread{id: thread_id, stacktrace: thread_stacktrace}]
+             } = Event.create_event(message: "Test message", stacktrace: stacktrace)
+
+      assert exception_stacktrace == thread_stacktrace
+
+      assert is_binary(thread_id) and byte_size(thread_id) > 0
+
+      assert [
+               %Interfaces.Stacktrace.Frame{
+                 context_line: nil,
+                 in_app: false,
+                 lineno: _,
+                 post_context: [],
+                 pre_context: [],
+                 vars: %{}
+               }
+               | _rest
+             ] = thread_stacktrace.frames
+    end
+
     test "fills in private (:__...__) fields" do
       exception = %RuntimeError{message: "foo"}
 

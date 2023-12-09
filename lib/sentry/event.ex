@@ -67,6 +67,7 @@ defmodule Sentry.Event do
           message: String.t() | nil,
           request: Interfaces.Request.t() | nil,
           sdk: Interfaces.SDK.t() | nil,
+          threads: [Interfaces.Thread.t()] | nil,
           user: Interfaces.user() | nil,
 
           # Non-payload fields.
@@ -113,6 +114,7 @@ defmodule Sentry.Event do
     server_name: nil,
     tags: %{},
     transaction: nil,
+    threads: nil,
     user: %{},
 
     # "Culprit" is not documented anymore and we should move to transactions at some point.
@@ -255,7 +257,7 @@ defmodule Sentry.Event do
     stacktrace = Keyword.get(opts, :stacktrace)
     source = Keyword.get(opts, :event_source)
 
-    %__MODULE__{
+    event = %__MODULE__{
       breadcrumbs: breadcrumbs,
       contexts: generate_contexts(),
       culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
@@ -277,6 +279,18 @@ defmodule Sentry.Event do
       timestamp: timestamp,
       user: user
     }
+
+    # If we have a message *and* a stacktrace, but no exception, we need to store the stacktrace
+    # information within a "thread" interface. This is how the Python SDK also does it. An issue
+    # was opened in the sentry-elixir repo about this, but this is also a Sentry issue (if there
+    # is an exception of type "message" with a stacktrace *and* a "message" attribute, it should
+    # still show properly). This issue is now tracked in Sentry itself:
+    # https://github.com/getsentry/sentry/issues/61239
+    if message && stacktrace && is_nil(exception) do
+      add_thread_with_stacktrace(event, stacktrace)
+    else
+      event
+    end
   end
 
   defp coerce_exception(_exception = nil, _stacktrace = nil, _message) do
@@ -326,6 +340,15 @@ defmodule Sentry.Event do
         raise ArgumentError, "unknown field for the request interface: #{inspect(key)}"
       end
     end)
+  end
+
+  defp add_thread_with_stacktrace(%__MODULE__{} = event, stacktrace) when is_list(stacktrace) do
+    thread = %Interfaces.Thread{
+      id: UUID.uuid4_hex(),
+      stacktrace: %Interfaces.Stacktrace{frames: stacktrace_to_frames(stacktrace)}
+    }
+
+    %__MODULE__{event | threads: [thread]}
   end
 
   @doc """
