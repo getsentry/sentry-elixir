@@ -37,12 +37,13 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     TestGenServer.run_async(pid, fn _state -> throw("I am throwing") end)
     assert_receive {^ref, event}
-    assert [exception] = event.exception
-    assert exception.value =~ ~s<GenServer #{inspect(pid)} terminating\n>
-    assert exception.value =~ ~s<** (stop) bad return value: "I am throwing"\n>
-    assert exception.value =~ ~s<Last message: {:"$gen_cast",>
-    assert exception.value =~ ~s<State: []>
-    assert exception.stacktrace.frames == []
+    assert [] = event.exception
+    assert [thread] = event.threads
+    assert event.message =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert event.message =~ ~s<** (stop) bad return value: "I am throwing"\n>
+    assert event.message =~ ~s<Last message: {:"$gen_cast",>
+    assert event.message =~ ~s<State: []>
+    assert thread.stacktrace.frames == []
   end
 
   test "abnormal GenServer exit is reported" do
@@ -51,12 +52,12 @@ defmodule Sentry.LoggerBackendTest do
     pid = start_supervised!(TestGenServer)
     TestGenServer.run_async(pid, fn state -> {:stop, :bad_exit, state} end)
     assert_receive {^ref, event}
-    assert [exception] = event.exception
-    assert exception.type == "message"
-    assert exception.value =~ ~s<GenServer #{inspect(pid)} terminating\n>
-    assert exception.value =~ ~s<** (stop) :bad_exit\n>
-    assert exception.value =~ ~s<Last message: {:"$gen_cast",>
-    assert exception.value =~ ~s<State: []>
+    assert [] = event.exception
+    assert [_thread] = event.threads
+    assert event.message =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert event.message =~ ~s<** (stop) :bad_exit\n>
+    assert event.message =~ ~s<Last message: {:"$gen_cast",>
+    assert event.message =~ ~s<State: []>
   end
 
   test "bad function call causing GenServer crash is reported" do
@@ -96,16 +97,15 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert [exception] = event.exception
+    assert [] = event.exception
+    assert [thread] = event.threads
 
-    assert exception.type == "message"
-
-    assert exception.value =~
+    assert event.message =~
              "Task #{inspect(task_pid)} started from #{inspect(self())} terminating\n"
 
-    assert exception.value =~ "** (stop) exited in: GenServer.call("
-    assert exception.value =~ "** (EXIT) time out"
-    assert length(exception.stacktrace.frames) > 0
+    assert event.message =~ "** (stop) exited in: GenServer.call("
+    assert event.message =~ "** (EXIT) time out"
+    assert length(thread.stacktrace.frames) > 0
   end
 
   test "captures errors from spawn/0 in Plug app" do

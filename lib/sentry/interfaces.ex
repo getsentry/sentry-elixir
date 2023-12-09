@@ -190,4 +190,38 @@ defmodule Sentry.Interfaces do
 
     defstruct [:type, :category, :message, :data, :level, :timestamp]
   end
+
+  defmodule Thread do
+    @moduledoc """
+    The struct for the **thread** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/threads>.
+    """
+
+    @moduledoc since: "10.1.0"
+
+    @typedoc since: "10.1.0"
+    @type t() :: %__MODULE__{
+            id: term(),
+            crashed: boolean() | nil,
+            current: boolean() | nil,
+            main: boolean() | nil,
+            name: String.t() | nil,
+            state: term(),
+            held_locks: [term()],
+            stacktrace: Sentry.Interfaces.Stacktrace.t() | nil
+          }
+
+    @enforce_keys [:id]
+    defstruct [
+      :id,
+      :crashed,
+      :current,
+      :main,
+      :name,
+      :state,
+      :held_locks,
+      :stacktrace
+    ]
+  end
 end

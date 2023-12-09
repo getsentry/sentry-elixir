@@ -175,7 +175,8 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.message =~ "** (stop) :bad_exit"
 
       if System.otp_release() >= "26" do
-        assert hd(event.exception).type == "message"
+        assert [] = event.exception
+        assert [_thread] = event.threads
       end
     end
 
@@ -273,13 +274,12 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, event}
 
-      assert [exception] = event.exception
+      assert [] = event.exception
+      assert [thread] = event.threads
 
-      assert exception.type == "message"
-
-      assert exception.value =~ "** (stop) exited in: GenServer.call("
-      assert exception.value =~ "** (EXIT) time out"
-      assert length(exception.stacktrace.frames) > 0
+      assert event.message =~ "** (stop) exited in: GenServer.call("
+      assert event.message =~ "** (EXIT) time out"
+      assert length(thread.stacktrace.frames) > 0
     end
 
     test "reports crashes on c:GenServer.init/1", %{sender_ref: ref} do

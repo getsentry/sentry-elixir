@@ -154,10 +154,19 @@ defmodule Sentry.Client do
     |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:exception, fn list -> Enum.map(list, &render_exception/1) end)
+    |> update_if_present(:threads, fn list -> Enum.map(list, &render_thread/1) end)
   end
 
   defp render_exception(%Interfaces.Exception{} = exception) do
     exception
+    |> Map.from_struct()
+    |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
+      %{frames: Enum.map(frames, &Map.from_struct/1)}
+    end)
+  end
+
+  defp render_thread(%Interfaces.Thread{} = thread) do
+    thread
     |> Map.from_struct()
     |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
       %{frames: Enum.map(frames, &Map.from_struct/1)}
