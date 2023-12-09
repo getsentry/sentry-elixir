@@ -293,21 +293,11 @@ defmodule Sentry.Event do
     end
   end
 
-  defp coerce_exception(_exception = nil, _stacktrace = nil, _message) do
+  # If we have a message with a stacktrace, but no exceptions, for now we store the stacktrace in
+  # the "threads" interface and we don't fill in the "exception" interface altogether. This might
+  # be eventually fixed in Sentry itself: https://github.com/getsentry/sentry/issues/61239
+  defp coerce_exception(_exception = nil, _stacktrace_or_nil, message) when is_binary(message) do
     nil
-  end
-
-  defp coerce_exception(_exception = nil, stacktrace_or_nil, message) when is_binary(message) do
-    stacktrace =
-      if is_list(stacktrace_or_nil) do
-        %Interfaces.Stacktrace{frames: stacktrace_to_frames(stacktrace_or_nil)}
-      end
-
-    %Interfaces.Exception{
-      type: "message",
-      value: message,
-      stacktrace: stacktrace
-    }
   end
 
   defp coerce_exception(exception, stacktrace_or_nil, _message) when is_exception(exception) do

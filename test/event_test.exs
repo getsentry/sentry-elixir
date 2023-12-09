@@ -217,13 +217,7 @@ defmodule Sentry.EventTest do
       assert %Event{
                breadcrumbs: [],
                environment: "my_env",
-               exception: [
-                 %Interfaces.Exception{
-                   type: "message",
-                   value: "Test message",
-                   stacktrace: exception_stacktrace
-                 }
-               ],
+               exception: [],
                extra: %{},
                level: :error,
                message: "Test message",
@@ -235,8 +229,6 @@ defmodule Sentry.EventTest do
                contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}},
                threads: [%Interfaces.Thread{id: thread_id, stacktrace: thread_stacktrace}]
              } = Event.create_event(message: "Test message", stacktrace: stacktrace)
-
-      assert exception_stacktrace == thread_stacktrace
 
       assert is_binary(thread_id) and byte_size(thread_id) > 0
 
