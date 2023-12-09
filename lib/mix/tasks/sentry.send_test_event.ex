@@ -14,12 +14,23 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   ## Options
 
     * `--no-compile` - does not compile, even if files require compilation.
+    * `--type` - `exception` or `message`. Defaults to `exception`. *Available since v10.1.0.*.
+    * `--no-stacktrace` - does not include a stacktrace in the reported event. *Available since
+      v10.1.0.*.
 
   """
 
+  @switches [
+    compile: :boolean,
+    stacktrace: :boolean,
+    type: :string
+  ]
+
   @impl true
   def run(args) when is_list(args) do
-    unless "--no-compile" in args do
+    {opts, args} = OptionParser.parse!(args, strict: @switches)
+
+    if Keyword.get(opts, :compile, true) do
       Mix.Task.run("compile", args)
     end
 
@@ -34,7 +45,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     print_environment_info()
 
     if Config.dsn() do
-      send_event()
+      send_event(opts)
     else
       Mix.shell().info([
         :yellow,
@@ -57,13 +68,31 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     Mix.shell().info("hackney_opts: #{inspect(Config.hackney_opts())}\n")
   end
 
-  defp send_event do
+  defp send_event(opts) do
+    stacktrace_opts =
+      if Keyword.get(opts, :stacktrace, true) do
+        {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+        [stacktrace: stacktrace]
+      else
+        []
+      end
+
     Mix.shell().info("Sending test event...")
 
-    exception = %RuntimeError{message: "Testing sending Sentry event"}
-    {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+    result =
+      case Keyword.get(opts, :type, "exception") do
+        "exception" ->
+          exception = %RuntimeError{message: "Testing sending Sentry event"}
+          Sentry.capture_exception(exception, [result: :sync] ++ stacktrace_opts)
 
-    case Sentry.capture_exception(exception, result: :sync, stacktrace: stacktrace) do
+        "message" ->
+          Sentry.capture_message(
+            "Testing sending Sentry event",
+            [result: :sync] ++ stacktrace_opts
+          )
+      end
+
+    case result do
       {:ok, id} ->
         Mix.shell().info([:green, :bright, "Test event sent", :reset, "\nEvent ID: #{id}"])
 
