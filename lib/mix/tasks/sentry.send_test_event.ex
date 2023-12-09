@@ -14,7 +14,9 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   ## Options
 
     * `--no-compile` - does not compile, even if files require compilation.
-    * `--type` - `exception` or `message`. Defaults to `exception`.
+    * `--type` - `exception` or `message`. Defaults to `exception`. *Available since v10.1.0.*.
+    * `--no-stacktrace` - does not include a stacktrace in the reported event. *Available since
+      v10.1.0.*.
 
   """
 
