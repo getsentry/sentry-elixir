@@ -238,6 +238,14 @@ defmodule Sentry.Event do
       The source of the event. This fills in the `:source` field of the
       returned struct. This is not present by default.
       """
+    ],
+    interpolation_parameters: [
+      type: {:list, :string},
+      doc: """
+      The parameters to use for message interpolation. This is only used if the
+      `:message` option is present. This is not present by default. See
+      `Sentry.capture_message/2`. *Available since v10.1.0*.
+      """
     ]
   ]
 
