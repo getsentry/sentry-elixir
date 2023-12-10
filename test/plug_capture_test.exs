@@ -47,10 +47,10 @@ defmodule Sentry.PlugCaptureTest do
 
         event = decode_event_from_envelope!(body)
 
-        assert event.request["url"] == "http://www.example.com/error_route"
-        assert event.request["method"] == "GET"
-        assert event.request["query_string"] == ""
-        assert event.request["data"] == %{}
+        assert event["request"]["url"] == "http://www.example.com/error_route"
+        assert event["request"]["method"] == "GET"
+        assert event["request"]["query_string"] == ""
+        assert event["request"]["data"] == %{}
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -63,9 +63,7 @@ defmodule Sentry.PlugCaptureTest do
     test "sends throws to Sentry", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-
         _event = decode_event_from_envelope!(body)
-
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -75,9 +73,7 @@ defmodule Sentry.PlugCaptureTest do
     test "sends exits to Sentry", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-
         _event = decode_event_from_envelope!(body)
-
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -94,9 +90,7 @@ defmodule Sentry.PlugCaptureTest do
     test "can render feedback form", %{bypass: bypass} do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-
         _event = decode_event_from_envelope!(body)
-
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -135,10 +129,10 @@ defmodule Sentry.PlugCaptureTest do
 
         event = decode_event_from_envelope!(body)
 
-        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.error/2"
+        assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.error/2"
 
-        assert List.first(event.exception)["type"] == "RuntimeError"
-        assert List.first(event.exception)["value"] == "PhoenixError"
+        assert List.first(event["exception"])["type"] == "RuntimeError"
+        assert List.first(event["exception"])["value"] == "PhoenixError"
 
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
@@ -155,8 +149,8 @@ defmodule Sentry.PlugCaptureTest do
 
         event = decode_event_from_envelope!(body)
 
-        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
-        assert event.message == "Uncaught exit - :test"
+        assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
+        assert event["message"] == "Uncaught exit - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -169,8 +163,8 @@ defmodule Sentry.PlugCaptureTest do
 
         event = decode_event_from_envelope!(body)
 
-        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
-        assert event.message == "Uncaught throw - :test"
+        assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
+        assert event["message"] == "Uncaught throw - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -203,8 +197,8 @@ defmodule Sentry.PlugCaptureTest do
       assert_receive {^ref, sentry_body}
       event = decode_event_from_envelope!(sentry_body)
 
-      assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
-      assert [exception] = event.exception
+      assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+      assert [exception] = event["exception"]
       assert exception["type"] == "Phoenix.ActionClauseError"
       assert exception["value"] =~ ~s(params: %{"password" => "*********"})
     end
@@ -235,7 +229,7 @@ defmodule Sentry.PlugCaptureTest do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         event = decode_event_from_envelope!(body)
-        assert event.culprit == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
+        assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -250,4 +244,9 @@ defmodule Sentry.PlugCaptureTest do
   defp call_plug_app(conn), do: Plug.run(conn, [{Sentry.ExamplePlugApplication, []}])
 
   defp call_phoenix_endpoint(conn), do: Plug.run(conn, [{PhoenixEndpoint, []}])
+
+  defp decode_event_from_envelope!(envelope) do
+    assert [{%{"type" => "event"}, event}] = decode_envelope!(envelope)
+    event
+  end
 end
