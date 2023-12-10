@@ -45,8 +45,8 @@ defmodule Sentry.TestHelpers do
 
   @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
   def decode_envelope!(binary) do
-    assert [id_line | rest] = String.split(binary, "\n")
-    assert {:ok, %{"event_id" => _}} = Config.json_library().decode(id_line)
+    [id_line | rest] = String.split(binary, "\n")
+    {:ok, %{"event_id" => _}} = Config.json_library().decode(id_line)
     decode_envelope_items(rest)
   end
 
@@ -55,8 +55,8 @@ defmodule Sentry.TestHelpers do
     |> Enum.chunk_every(2)
     |> Enum.flat_map(fn
       [header, item] ->
-        assert {:ok, header} = Config.json_library().decode(header)
-        assert {:ok, item} = Config.json_library().decode(item)
+        {:ok, header} = Config.json_library().decode(header)
+        {:ok, item} = Config.json_library().decode(item)
         [{header, item}]
 
       [""] ->
