@@ -150,7 +150,7 @@ defmodule Sentry.PlugCaptureTest do
         event = decode_event_from_envelope!(body)
 
         assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.exit/2"
-        assert event["message"] == "Uncaught exit - :test"
+        assert event["message"]["formatted"] == "Uncaught exit - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -164,7 +164,7 @@ defmodule Sentry.PlugCaptureTest do
         event = decode_event_from_envelope!(body)
 
         assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.throw/2"
-        assert event["message"] == "Uncaught throw - :test"
+        assert event["message"]["formatted"] == "Uncaught throw - :test"
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 

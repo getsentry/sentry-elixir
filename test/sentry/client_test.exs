@@ -20,7 +20,7 @@ defmodule Sentry.ClientTest do
     test "truncates the message to a max length" do
       max_length = 8_192
       event = Event.create_event(message: String.duplicate("a", max_length + 1))
-      assert Client.render_event(event).message == String.duplicate("a", max_length)
+      assert Client.render_event(event).message.formatted == String.duplicate("a", max_length)
     end
 
     test "safely inspects terms that cannot be converted to JSON" do
@@ -232,7 +232,11 @@ defmodule Sentry.ClientTest do
         |> Stream.take(10)
         |> Enum.at(0)
 
-      assert event["message"] == "Something went wrong"
+      assert event["message"] == %{
+               "formatted" => "Something went wrong",
+               "message" => nil,
+               "params" => nil
+             }
     end
 
     test "dedupes events", %{bypass: bypass} do

@@ -191,7 +191,7 @@ defmodule Sentry.EventTest do
       end
     end
 
-    test "fills in the message interface when passing the :message option" do
+    test "fills in the message interface when passing the :message option without formatting params" do
       put_test_config(environment_name: "my_env")
 
       assert %Event{
@@ -200,7 +200,7 @@ defmodule Sentry.EventTest do
                exception: [],
                extra: %{},
                level: :error,
-               message: "Test message",
+               message: %Interfaces.Message{} = message,
                platform: :elixir,
                release: nil,
                request: %{},
@@ -208,6 +208,37 @@ defmodule Sentry.EventTest do
                user: %{},
                contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
              } = Event.create_event(message: "Test message")
+
+      assert message == %Interfaces.Message{formatted: "Test message"}
+    end
+
+    test "fills in the message interface when passing the :message option with formatting params" do
+      put_test_config(environment_name: "my_env")
+
+      assert %Event{
+               breadcrumbs: [],
+               environment: "my_env",
+               exception: [],
+               extra: %{},
+               level: :error,
+               message: %Interfaces.Message{} = message,
+               platform: :elixir,
+               release: nil,
+               request: %{},
+               tags: %{},
+               user: %{},
+               contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
+             } =
+               Event.create_event(
+                 message: "Interpolated string like %s",
+                 interpolation_parameters: ["this"]
+               )
+
+      assert message == %Interfaces.Message{
+               formatted: "Interpolated string like this",
+               params: ["this"],
+               message: "Interpolated string like %s"
+             }
     end
 
     test "fills in the message and threads interfaces when passing the :message option with :stacktrace" do
@@ -220,7 +251,7 @@ defmodule Sentry.EventTest do
                exception: [],
                extra: %{},
                level: :error,
-               message: "Test message",
+               message: message,
                platform: :elixir,
                release: nil,
                request: %{},
@@ -229,6 +260,12 @@ defmodule Sentry.EventTest do
                contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}},
                threads: [%Interfaces.Thread{id: thread_id, stacktrace: thread_stacktrace}]
              } = Event.create_event(message: "Test message", stacktrace: stacktrace)
+
+      assert message == %Sentry.Interfaces.Message{
+               message: nil,
+               params: nil,
+               formatted: "Test message"
+             }
 
       assert is_binary(thread_id) and byte_size(thread_id) > 0
 
@@ -367,5 +404,24 @@ defmodule Sentry.EventTest do
              event.modules
              |> Map.keys()
              |> Enum.sort()
+  end
+
+  describe "interpolate/2" do
+    test "works with simple strings" do
+      assert Event.interpolate("Hello %s!", ["world"]) == "Hello world!"
+    end
+
+    test "ignores extra bindings" do
+      assert Event.interpolate("Hello %s", ["world", "extra"]) ==
+               "Hello world"
+    end
+
+    test "works with multiple bindings" do
+      assert Event.interpolate("Hello %s, %s!", ["world", "sup"]) == "Hello world, sup!"
+    end
+
+    test "ignores unknown bindings" do
+      assert Event.interpolate("Hello %s, %s", ["world"]) == "Hello world, %s"
+    end
   end
 end

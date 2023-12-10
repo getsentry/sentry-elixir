@@ -93,6 +93,26 @@ defmodule Sentry.Interfaces do
     defstruct [:name, :version]
   end
 
+  defmodule Message do
+    @moduledoc """
+    The struct for the **message** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/message>.
+    """
+
+    @moduledoc since: "10.1.0"
+
+    @typedoc since: "10.1.0"
+    @type t() :: %__MODULE__{
+            message: String.t(),
+            formatted: String.t(),
+            params: [term()]
+          }
+
+    @enforce_keys [:formatted]
+    defstruct [:message, :params, :formatted]
+  end
+
   defmodule Exception do
     @moduledoc """
     The struct for the **exception** interface.

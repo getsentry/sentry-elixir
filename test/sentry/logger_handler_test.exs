@@ -107,7 +107,7 @@ defmodule Sentry.LoggerHandlerTest do
       Logger.info("Testing info")
 
       assert_receive {^ref, event}
-      assert event.message == "Testing error"
+      assert event.message.formatted == "Testing error"
 
       refute_receive {^ref, _event}, 100
     end
@@ -119,7 +119,7 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, event}
 
-      assert event.message == "Testing warning"
+      assert event.message.formatted == "Testing warning"
       assert event.level == :warning
 
       refute_receive {^ref, _event}, 100
@@ -132,7 +132,7 @@ defmodule Sentry.LoggerHandlerTest do
       Logger.error("Error", callers: [dead_pid, nil])
 
       assert_receive {^ref, event}
-      assert event.message == "Error"
+      assert event.message.formatted == "Error"
     end
 
     @tag handler_config: %{capture_log_messages: true, excluded_domains: [:test_domain]}
@@ -141,7 +141,7 @@ defmodule Sentry.LoggerHandlerTest do
       Logger.error("test_domain", domain: [:test_domain])
 
       assert_receive {^ref, event}
-      assert event.message == "no domain"
+      assert event.message.formatted == "no domain"
     end
 
     @tag handler_config: %{capture_log_messages: true}
@@ -162,7 +162,7 @@ defmodule Sentry.LoggerHandlerTest do
       end)
 
       assert_receive {^ref, event}
-      assert event.message =~ "** (stop) bad return value: :testing_throw"
+      assert event.message.formatted =~ "** (stop) bad return value: :testing_throw"
     end
 
     test "abnormal GenServer exit is reported", %{sender_ref: ref, test_genserver: test_genserver} do
@@ -172,7 +172,7 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, event}
 
-      assert event.message =~ "** (stop) :bad_exit"
+      assert event.message.formatted =~ "** (stop) :bad_exit"
 
       if System.otp_release() >= "26" do
         assert [] = event.exception
@@ -277,8 +277,8 @@ defmodule Sentry.LoggerHandlerTest do
       assert [] = event.exception
       assert [thread] = event.threads
 
-      assert event.message =~ "** (stop) exited in: GenServer.call("
-      assert event.message =~ "** (EXIT) time out"
+      assert event.message.formatted =~ "** (stop) exited in: GenServer.call("
+      assert event.message.formatted =~ "** (EXIT) time out"
       assert length(thread.stacktrace.frames) > 0
     end
 

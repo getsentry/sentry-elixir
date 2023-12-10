@@ -214,9 +214,12 @@ defmodule Sentry.Client do
 
     event
     |> Event.remove_non_payload_keys()
-    |> update_if_present(:message, &String.slice(&1, 0, @max_message_length))
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
     |> update_if_present(:sdk, &Map.from_struct/1)
+    |> update_if_present(:message, fn message ->
+      message = update_in(message.formatted, &String.slice(&1, 0, @max_message_length))
+      Map.from_struct(message)
+    end)
     |> update_if_present(:request, &(&1 |> Map.from_struct() |> remove_nils()))
     |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
