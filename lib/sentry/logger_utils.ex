@@ -34,14 +34,14 @@ defmodule Sentry.LoggerUtils do
 
   defp elixir_logger_level_to_sentry_level(level) do
     case level do
-      :emergency -> "fatal"
-      :alert -> "fatal"
-      :critical -> "fatal"
-      :error -> "error"
-      :warning -> "warning"
-      :notice -> "info"
-      :info -> "info"
-      :debug -> "debug"
+      :emergency -> :fatal
+      :alert -> :fatal
+      :critical -> :fatal
+      :error -> :error
+      :warning -> :warning
+      :notice -> :info
+      :info -> :info
+      :debug -> :debug
     end
   end
 
