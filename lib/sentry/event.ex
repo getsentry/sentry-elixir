@@ -8,7 +8,7 @@ defmodule Sentry.Event do
   See <https://develop.sentry.dev/sdk/event-payloads>.
   """
 
-  alias Sentry.{Config, Context, Interfaces, Sources, UUID}
+  alias Sentry.{Config, Interfaces, Sources, UUID}
 
   @sdk %Interfaces.SDK{
     name: "sentry-elixir",
@@ -147,7 +147,13 @@ defmodule Sentry.Event do
       """
     ],
     stacktrace: [
-      type: {:list, :any},
+      type:
+        {:list,
+         {:or,
+          [
+            {:tuple, [:atom, :atom, :any, :keyword_list]},
+            {:tuple, [:any, :any, :keyword_list]}
+          ]}},
       type_doc: "`t:Exception.stacktrace/0`",
       doc: """
       The exception's stacktrace. This can also be used with messages (`:message`). Not
@@ -275,18 +281,7 @@ defmodule Sentry.Event do
 
   """
   @spec create_event([option]) :: t()
-        when option:
-               {:user, Interfaces.user()}
-               | {:request, map()}
-               | {:extra, Context.extra()}
-               | {:breadcrumbs, Context.breadcrumb()}
-               | {:tags, Context.tags()}
-               | {:level, level()}
-               | {:fingerprint, [String.t()]}
-               | {:message, String.t()}
-               | {:event_source, atom()}
-               | {:exception, Exception.t()}
-               | {:stacktrace, Exception.stacktrace()}
+        when option: unquote(NimbleOptions.option_typespec(@create_event_opts_schema))
   def create_event(opts) when is_list(opts) do
     opts = NimbleOptions.validate!(opts, @create_event_opts_schema)
 
