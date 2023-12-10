@@ -381,13 +381,13 @@ defmodule Sentry.Event do
     {iodata, _params} =
       Enum.reduce(parts, {"", params}, fn
         "%s", {acc, [param | rest_params]} ->
-          {[acc | to_string(param)], rest_params}
+          {[acc, to_string(param)], rest_params}
 
         "%s", {acc, []} ->
-          {[acc | "%s"], []}
+          {[acc, "%s"], []}
 
         part, {acc, params} ->
-          {[acc | part], params}
+          {[acc, part], params}
       end)
 
     IO.iodata_to_binary(iodata)
