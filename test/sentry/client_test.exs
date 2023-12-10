@@ -139,7 +139,7 @@ defmodule Sentry.ClientTest do
     test "calls the :before_send callback before using the sample rate and sets the session" do
       test_pid = self()
       ref = make_ref()
-      event = Event.create_event(source: :plug)
+      event = Event.create_event(event_source: :plug)
 
       put_test_config(
         before_send: fn event ->

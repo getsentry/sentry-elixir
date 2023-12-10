@@ -326,7 +326,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.log(:warning, "warn")
 
     assert_receive {^ref, event}
-    assert event.level == "warning"
+    assert event.level == :warning
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end

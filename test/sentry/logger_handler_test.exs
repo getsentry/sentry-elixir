@@ -120,7 +120,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
 
       assert event.message == "Testing warning"
-      assert event.level == "warning"
+      assert event.level == :warning
 
       refute_receive {^ref, _event}, 100
     end

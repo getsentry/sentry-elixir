@@ -171,7 +171,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{Config, Event, LoggerUtils}
+  alias Sentry.{Client, Config, Event, LoggerUtils}
 
   require Logger
 
@@ -227,13 +227,14 @@ defmodule Sentry do
   def capture_exception(exception, opts \\ []) do
     filter_module = Config.filter()
     event_source = Keyword.get(opts, :event_source)
+    {send_opts, create_event_opts} = Client.split_send_event_opts(opts)
 
     if filter_module.exclude_exception?(exception, event_source) do
       :excluded
     else
       exception
-      |> Event.transform_exception(opts)
-      |> send_event(opts)
+      |> Event.transform_exception(create_event_opts)
+      |> send_event(send_opts)
     end
   end
 
@@ -263,10 +264,13 @@ defmodule Sentry do
   """
   @spec capture_message(String.t(), keyword()) :: send_result
   def capture_message(message, opts \\ []) when is_binary(message) do
-    opts
-    |> Keyword.put(:message, message)
-    |> Event.create_event()
-    |> send_event(opts)
+    {send_opts, create_event_opts} =
+      opts
+      |> Keyword.put(:message, message)
+      |> Client.split_send_event_opts()
+
+    event = Event.create_event(create_event_opts)
+    send_event(event, send_opts)
   end
 
   @doc """
@@ -278,30 +282,7 @@ defmodule Sentry do
 
   ## Options
 
-  The supported options are:
-
-    * `:result` - Allows specifying how the result should be returned. The possible values are:
-
-      * `:sync` - Sentry will make an API call synchronously (including retries) and will
-        return `{:ok, event_id}` if successful.
-
-      * `:none` - Sentry will send the event in the background, in a *fire-and-forget*
-        fashion. The function will return `{:ok, ""}` regardless of whether the API
-        call ends up being successful or not.
-
-      * `:async` - **Not supported anymore**, see the information below.
-
-    * `:sample_rate` - same as the global `:sample_rate` configuration, but applied only to
-      this call. See the module documentation. *Available since v10.0.0*.
-
-    * `:before_send` - same as the global `:before_send` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-
-    * `:after_send_event` - same as the global `:after_send_event` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-
-    * `:client` - same as the global `:client` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
+  #{NimbleOptions.docs(Client.send_events_opts_schema())}
 
   > #### Async Send {: .error}
   >
@@ -331,7 +312,7 @@ defmodule Sentry do
         :ignored
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
-        Sentry.Client.send_event(event, opts)
+        Client.send_event(event, opts)
 
       true ->
         :ignored

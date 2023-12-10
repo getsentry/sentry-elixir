@@ -135,6 +135,114 @@ defmodule Sentry.Event do
     |> Map.drop([:original_exception, :source])
   end
 
+  create_event_opts_schema = [
+    exception: [
+      type: {:custom, __MODULE__, :__validate_exception__, [:exception]},
+      type_doc: "`t:Exception.t/0`",
+      doc: """
+      This is the exception that gets reported in the
+      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
+      `:original_exception` field of `t:t/0`. This option is **required** unless the
+      `:message` option is present. Not present by default.
+      """
+    ],
+    stacktrace: [
+      type: {:list, :any},
+      type_doc: "`t:Exception.stacktrace/0`",
+      doc: """
+      The exception's stacktrace. This can also be used with messages (`:message`). Not
+      present by default.
+      """
+    ],
+    message: [
+      type: :string,
+      doc: """
+      A message to report. The string can contain interpolation markers (`%s`). In that
+      case, you can pass the `:interpolation_parameters` option as well to fill
+      in those parameters. See `Sentry.capture_message/2` for more information on
+      message interpolation. Not present by default.
+      """
+    ],
+    extra: [
+      type: {:map, {:or, [:atom, :string]}, :any},
+      type_doc: "`t:Sentry.Context.extra/0`",
+      default: %{},
+      doc: """
+      Map of extra context, which gets merged with the current context
+      (see `Sentry.Context.set_extra_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context.
+      """
+    ],
+    user: [
+      type: :map,
+      type_doc: "`t:Sentry.Context.user_context/0`",
+      default: %{},
+      doc: """
+      Map of user context, which gets merged with the current context
+      (see `Sentry.Context.set_user_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context.
+      """
+    ],
+    tags: [
+      type: {:map, {:or, [:atom, :string]}, :any},
+      type_doc: "`t:Sentry.Context.tags/0`",
+      default: %{},
+      doc: """
+      Map of tags context, which gets merged with the current context (see
+      `Sentry.Context.set_tags_context/1`) and with the `:tags` option in the global
+      Sentry configuration. If fields collide, the ones in the map passed through
+      this option have precedence over the ones in the context, which have precedence
+      over the ones in the configuration.
+      """
+    ],
+    request: [
+      type: :map,
+      type_doc: "`t:Sentry.Context.request_context/0`",
+      default: %{},
+      doc: """
+      Map of request context, which gets merged with the current context
+      (see `Sentry.Context.set_request_context/1`). If fields collide, the ones
+      in the map passed through this option have precedence over the ones in
+      the context.
+      """
+    ],
+    breadcrumbs: [
+      type: {:list, {:or, [:keyword_list, :map]}},
+      type_doc: "list of `t:keyword/0` or `t:Sentry.Context.breadcrumb/0`",
+      default: [],
+      doc: """
+      List of breadcrumbs. This list gets **prepended** to the list
+      in the context (see `Sentry.Context.add_breadcrumb/1`).
+      """
+    ],
+    level: [
+      type: {:in, [:fatal, :error, :warning, :info, :debug]},
+      type_doc: "`t:level/0`",
+      default: :error,
+      doc: """
+      The level of the event.
+      """
+    ],
+    fingerprint: [
+      type: {:list, :string},
+      default: ["{{ default }}"],
+      doc: """
+      List of the fingerprint for grouping this event.
+      """
+    ],
+    event_source: [
+      type: :atom,
+      doc: """
+      The source of the event. This fills in the `:source` field of the
+      returned struct. This is not present by default.
+      """
+    ]
+  ]
+
+  @create_event_opts_schema NimbleOptions.new!(create_event_opts_schema)
+
   @doc """
   Creates an event struct out of collected context and options.
 
@@ -149,47 +257,7 @@ defmodule Sentry.Event do
 
   ## Options
 
-    * `:exception` - an `t:Exception.t/0`. This is the exception that gets reported in the
-      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
-      `:original_exception` field of `t:t/0`. This option is **required** unless the
-      `:message` option is present. This is not present by default.
-
-    * `:stacktrace` - a stacktrace, as in `t:Exception.stacktrace/0`. This is not present
-      by default.
-
-    * `:message` - a message (`t:String.t/0`). This is not present by default.
-
-    * `:extra` - map of extra context, which gets merged with the current context
-      (see `Sentry.Context.set_extra_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context. Defaults to `%{}`.
-
-    * `:user` - map of user context, which gets merged with the current context
-      (see `Sentry.Context.set_user_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context. Defaults to `%{}`.
-
-    * `:tags` - map of tags context, which gets merged with the current context (see
-      `Sentry.Context.set_tags_context/1`) and with the `:tags` option in the global
-      Sentry configuration. If fields collide, the ones in the map passed through
-      this option have precedence over the ones in the context, which have precedence
-      over the ones in the configuration. Defaults to `%{}`.
-
-    * `:request` - map of request context, which gets merged with the current context
-      (see `Sentry.Context.set_request_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context. Defaults to `%{}`.
-
-    * `:breadcrumbs` - list of breadcrumbs. This list gets **prepended** to the list
-      in the context (see `Sentry.Context.add_breadcrumb/1`). Defaults to `[]`.
-
-    * `:level` - error level (see `t:t/0`). Defaults to `:error`.
-
-    * `:fingerprint` - list of the fingerprint for grouping this event (a list
-      of `t:String.t/0`). Defaults to `["{{ default }}"]`.
-
-    * `:event_source` - the source of the event. This fills in the `:source` field of the
-      returned struct. This is not present by default.
+  #{NimbleOptions.docs(@create_event_opts_schema)}
 
   ## Examples
 
@@ -220,6 +288,8 @@ defmodule Sentry.Event do
                | {:exception, Exception.t()}
                | {:stacktrace, Exception.stacktrace()}
   def create_event(opts) when is_list(opts) do
+    opts = NimbleOptions.validate!(opts, @create_event_opts_schema)
+
     timestamp =
       DateTime.utc_now()
       |> DateTime.truncate(:microsecond)
@@ -234,20 +304,18 @@ defmodule Sentry.Event do
       request: request_context
     } = Sentry.Context.get_all()
 
-    level = Keyword.get(opts, :level, :error)
-    fingerprint = Keyword.get(opts, :fingerprint, ["{{ default }}"])
-
-    extra = Map.merge(extra_context, Keyword.get(opts, :extra, %{}))
-    user = Map.merge(user_context, Keyword.get(opts, :user, %{}))
-    request = Map.merge(request_context, Keyword.get(opts, :request, %{}))
+    extra = Map.merge(extra_context, Keyword.fetch!(opts, :extra))
+    user = Map.merge(user_context, Keyword.fetch!(opts, :user))
+    request = Map.merge(request_context, Keyword.fetch!(opts, :request))
 
     tags =
       Config.tags()
       |> Map.merge(tags_context)
-      |> Map.merge(Keyword.get(opts, :tags, %{}))
+      |> Map.merge(Keyword.fetch!(opts, :tags))
 
     breadcrumbs =
-      Keyword.get(opts, :breadcrumbs, [])
+      opts
+      |> Keyword.fetch!(:breadcrumbs)
       |> Kernel.++(breadcrumbs_context)
       |> Enum.take(-1 * Config.max_breadcrumbs())
       |> Enum.map(&struct(Interfaces.Breadcrumb, &1))
@@ -265,8 +333,8 @@ defmodule Sentry.Event do
       event_id: UUID.uuid4_hex(),
       exception: List.wrap(coerce_exception(exception, stacktrace, message)),
       extra: extra,
-      fingerprint: fingerprint,
-      level: level,
+      fingerprint: Keyword.fetch!(opts, :fingerprint),
+      level: Keyword.fetch!(opts, :level),
       message: message,
       modules: :persistent_term.get({:sentry, :loaded_applications}),
       original_exception: exception,
@@ -490,5 +558,14 @@ defmodule Sentry.Event do
       event.level,
       event.fingerprint
     ])
+  end
+
+  @doc false
+  def __validate_exception__(term, key) do
+    if is_exception(term) do
+      {:ok, term}
+    else
+      {:error, "expected #{inspect(key)} to be an exception, got: #{inspect(term)}"}
+    end
   end
 end
