@@ -85,10 +85,10 @@ defmodule Sentry.ClientTest do
       Bypass.expect(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        event = decode_event_from_envelope!(body)
+        assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
 
-        assert event.extra == %{"key" => "value"}
-        assert event.user["id"] == 1
+        assert event["extra"] == %{"key" => "value"}
+        assert event["user"]["id"] == 1
 
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
@@ -224,15 +224,15 @@ defmodule Sentry.ClientTest do
       event =
         fn ->
           assert_receive {^ref, body}, 1000
-          decode_event_from_envelope!(body)
+          assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
+          event
         end
         |> Stream.repeatedly()
         |> Stream.reject(&is_nil/1)
         |> Stream.take(10)
         |> Enum.at(0)
 
-      assert %Event{} = event
-      assert event.message == "Something went wrong"
+      assert event["message"] == "Something went wrong"
     end
 
     test "dedupes events", %{bypass: bypass} do

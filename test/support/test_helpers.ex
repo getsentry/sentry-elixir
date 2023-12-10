@@ -1,13 +1,7 @@
 defmodule Sentry.TestHelpers do
   import ExUnit.Assertions
 
-  alias Sentry.Envelope
-
-  @spec decode_event_from_envelope!(binary()) :: Sentry.Event.t()
-  def decode_event_from_envelope!(body) when is_binary(body) do
-    {:ok, %Envelope{items: items}} = Envelope.from_binary(body)
-    Enum.find(items, &is_struct(&1, Sentry.Event))
-  end
+  alias Sentry.Config
 
   @spec put_test_config(keyword()) :: :ok
   def put_test_config(config) when is_list(config) do
@@ -47,5 +41,26 @@ defmodule Sentry.TestHelpers do
   @spec all_config() :: keyword()
   def all_config do
     Enum.sort(for {{:sentry_config, key}, value} <- :persistent_term.get(), do: {key, value})
+  end
+
+  @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
+  def decode_envelope!(binary) do
+    [id_line | rest] = String.split(binary, "\n")
+    {:ok, %{"event_id" => _}} = Config.json_library().decode(id_line)
+    decode_envelope_items(rest)
+  end
+
+  defp decode_envelope_items(items) do
+    items
+    |> Enum.chunk_every(2)
+    |> Enum.flat_map(fn
+      [header, item] ->
+        {:ok, header} = Config.json_library().decode(header)
+        {:ok, item} = Config.json_library().decode(item)
+        [{header, item}]
+
+      [""] ->
+        []
+    end)
   end
 end
