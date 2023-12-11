@@ -5,11 +5,17 @@ defmodule Sentry.Attachment do
   You can send attachments over to Sentry alongside an event. See:
   <https://develop.sentry.dev/sdk/envelopes/#attachment>.
 
+  To add attachments, use `Sentry.Context.add_attachment/1`.
+
   *Available since v10.1.0*.
   """
 
   @moduledoc since: "10.1.0"
 
+  @typedoc """
+  The type for the attachment struct.
+  """
+  @typedoc since: "10.1.0"
   @type t() :: %__MODULE__{
           filename: String.t(),
           data: binary(),

@@ -435,7 +435,35 @@ defmodule Sentry.Context do
   end
 
   @doc """
-  TODO
+  Adds an **attachment** to the current context.
+
+  Attachments stored in the context will be sent alongside each event that is
+  reported *within that context* (that is, within the process that the context
+  was set in).
+
+  Currently, there is no limit to how many attachments you can add to the context
+  through this function, even though there might be limits on the Sentry server side.
+  To clear attachments, use `clear_attachments/0`.
+
+  ## Examples
+
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "foo.txt", data: "foo"})
+      :ok
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "bar.txt", data: "bar"})
+      :ok
+      iex> Sentry.Context.get_all()
+      %{
+        attachments: [
+          %Sentry.Attachment{filename: "bar.txt", data: "bar"},
+          %Sentry.Attachment{filename: "foo.txt", data: "foo"}
+        ],
+        breadcrumbs: [],
+        extra: %{},
+        request: %{},
+        tags: %{},
+        user: %{}
+      }
+
   """
   @doc since: "10.1.0"
   @spec add_attachment(Attachment.t()) :: :ok
@@ -443,6 +471,28 @@ defmodule Sentry.Context do
     new_context =
       Map.update(get_sentry_context(), @attachments_key, [attachment], &(&1 ++ [attachment]))
 
+    :logger.update_process_metadata(%{@logger_metadata_key => new_context})
+  end
+
+  @doc """
+  Clears all attachments from the current context.
+
+  See `add_attachment/1`.
+
+  ## Examples
+
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "foo.txt", data: "foo"})
+      :ok
+      iex> Sentry.Context.clear_attachments()
+      :ok
+      iex> Sentry.Context.get_all().attachments
+      []
+
+  """
+  @doc since: "10.1.0"
+  @spec clear_attachments() :: :ok
+  def clear_attachments do
+    new_context = Map.delete(get_sentry_context(), @attachments_key)
     :logger.update_process_metadata(%{@logger_metadata_key => new_context})
   end
 
