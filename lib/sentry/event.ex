@@ -8,7 +8,7 @@ defmodule Sentry.Event do
   See <https://develop.sentry.dev/sdk/event-payloads>.
   """
 
-  alias Sentry.{Config, Interfaces, Sources, UUID}
+  alias Sentry.{Attachment, Config, Interfaces, Sources, UUID}
 
   @sdk %Interfaces.SDK{
     name: "sentry-elixir",
@@ -72,7 +72,8 @@ defmodule Sentry.Event do
 
           # Non-payload fields.
           source: atom(),
-          original_exception: Exception.t() | nil
+          original_exception: Exception.t() | nil,
+          attachments: [Attachment.t()]
         }
 
   @doc """
@@ -122,6 +123,7 @@ defmodule Sentry.Event do
     culprit: nil,
 
     # Non-payload "private" fields.
+    attachments: [],
     source: nil,
     original_exception: nil
   ]
@@ -132,7 +134,7 @@ defmodule Sentry.Event do
   def remove_non_payload_keys(%__MODULE__{} = event) do
     event
     |> Map.from_struct()
-    |> Map.drop([:original_exception, :source])
+    |> Map.drop([:original_exception, :source, :attachments])
   end
 
   create_event_opts_schema = [
@@ -296,7 +298,8 @@ defmodule Sentry.Event do
       tags: tags_context,
       extra: extra_context,
       breadcrumbs: breadcrumbs_context,
-      request: request_context
+      request: request_context,
+      attachments: attachments_context
     } = Sentry.Context.get_all()
 
     extra = Map.merge(extra_context, Keyword.fetch!(opts, :extra))
@@ -321,6 +324,7 @@ defmodule Sentry.Event do
     source = Keyword.get(opts, :event_source)
 
     event = %__MODULE__{
+      attachments: attachments_context,
       breadcrumbs: breadcrumbs,
       contexts: generate_contexts(),
       culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),

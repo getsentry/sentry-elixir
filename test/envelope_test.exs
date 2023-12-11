@@ -5,32 +5,12 @@ defmodule Sentry.EnvelopeTest do
 
   alias Sentry.{Attachment, Envelope, Event}
 
-  describe "new/1" do
-    test "raises if there are no items" do
-      assert_raise FunctionClauseError, fn ->
-        Envelope.new([])
-      end
-    end
-
-    test "raises if there are no events" do
-      assert_raise ArgumentError, "cannot construct an envelope without an event", fn ->
-        Envelope.new([%Attachment{filename: "example.txt", data: "example"}])
-      end
-    end
-
-    test "raises if there are multiple events" do
-      assert_raise ArgumentError, "cannot construct an envelope with multiple events", fn ->
-        Envelope.new([Event.create_event([]), Event.create_event([])])
-      end
-    end
-  end
-
   describe "to_binary/1" do
     test "encodes an envelope" do
       put_test_config(environment_name: "test")
       event = Event.create_event([])
 
-      envelope = Envelope.new([event])
+      envelope = Envelope.from_event(event)
 
       assert {:ok, encoded} = Envelope.to_binary(envelope)
 
@@ -49,7 +29,7 @@ defmodule Sentry.EnvelopeTest do
     end
 
     test "works without an event ID" do
-      envelope = Envelope.new([Event.create_event([])])
+      envelope = Envelope.from_event(Event.create_event([]))
       envelope = %Envelope{envelope | event_id: nil}
 
       assert {:ok, encoded} = Envelope.to_binary(envelope)
@@ -60,19 +40,21 @@ defmodule Sentry.EnvelopeTest do
     end
 
     test "works with attachments" do
-      envelope =
-        Envelope.new([
-          %Attachment{data: <<1, 2, 3>>, filename: "example.dat"},
-          %Attachment{data: "Hello!", filename: "example.txt", content_type: "text/plain"},
-          %Attachment{data: "{}", filename: "example.json", content_type: "application/json"},
-          %Attachment{data: "...", filename: "dump", attachment_type: "event.minidump"},
-          Event.create_event([])
-        ])
+      attachments = [
+        %Attachment{data: <<1, 2, 3>>, filename: "example.dat"},
+        %Attachment{data: "Hello!", filename: "example.txt", content_type: "text/plain"},
+        %Attachment{data: "{}", filename: "example.json", content_type: "application/json"},
+        %Attachment{data: "...", filename: "dump", attachment_type: "event.minidump"}
+      ]
 
-      assert {:ok, encoded} = Envelope.to_binary(envelope)
+      event = %Event{Event.create_event([]) | attachments: attachments}
+
+      assert {:ok, encoded} = event |> Envelope.from_event() |> Envelope.to_binary()
 
       assert [
                id_line,
+               _event_header,
+               _event_data,
                attachment1_header,
                <<1, 2, 3>>,
                attachment2_header,
@@ -80,9 +62,7 @@ defmodule Sentry.EnvelopeTest do
                attachment3_header,
                "{}",
                attachment4_header,
-               "...",
-               _event_header,
-               _event_data
+               "..."
              ] = String.split(encoded, "\n", trim: true)
 
       assert %{"event_id" => _} = Jason.decode!(id_line)

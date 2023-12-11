@@ -13,10 +13,7 @@ defmodule Sentry.TransportTest do
     end
 
     test "sends a POST request with the right headers and payload", %{bypass: bypass} do
-      envelope =
-        Envelope.new([
-          Event.create_event(message: "Hello 1")
-        ])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello 1"))
 
       Bypass.expect_once(bypass, fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
@@ -40,7 +37,7 @@ defmodule Sentry.TransportTest do
     end
 
     test "returns the HTTP client's error if the HTTP client returns one", %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       Bypass.down(bypass)
 
@@ -49,7 +46,7 @@ defmodule Sentry.TransportTest do
     end
 
     test "returns an error if the response from Sentry is not 200", %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         conn
@@ -63,7 +60,7 @@ defmodule Sentry.TransportTest do
 
     test "returns an error if the HTTP client raises an error when making the request",
          %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       defmodule RaisingHTTPClient do
         def post(_endpoint, _headers, _body) do
@@ -83,7 +80,7 @@ defmodule Sentry.TransportTest do
 
     test "returns an error if the HTTP client EXITs when making the request",
          %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       defmodule ExitingHTTPClient do
         def post(_endpoint, _headers, _body) do
@@ -102,7 +99,7 @@ defmodule Sentry.TransportTest do
 
     test "returns an error if the HTTP client throws when making the request",
          %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       defmodule ThrowingHTTPClient do
         def post(_endpoint, _headers, _body) do
@@ -121,7 +118,7 @@ defmodule Sentry.TransportTest do
 
     test "returns an error if the JSON library crashes when decoding the response",
          %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       defmodule CrashingJSONLibrary do
         defdelegate encode(term), to: Jason
@@ -148,7 +145,7 @@ defmodule Sentry.TransportTest do
 
     test "returns an error if the response from Sentry is not valid JSON, and retries",
          %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
       test_pid = self()
       ref = make_ref()
 
@@ -165,7 +162,7 @@ defmodule Sentry.TransportTest do
     end
 
     test "supports a list of retries", %{bypass: bypass} do
-      envelope = Envelope.new([Event.create_event(message: "Hello")])
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
       test_pid = self()
       ref = make_ref()
       counter = :counters.new(1, [])

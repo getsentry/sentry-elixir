@@ -13,26 +13,13 @@ defmodule Sentry.Envelope do
   defstruct [:event_id, :items]
 
   @doc """
-  Creates a new envelope containing the given event.
-
-  Restrictions:
-
-    * Envelopes can only have a single element of type "event"
-    * Envelopes can have as many elements of type "attachment" as you want
-
+  Creates a new envelope containing the given event and all of its attachments.
   """
-  @spec new([Event.t() | Attachment.t(), ...]) :: t()
-  def new(items) when is_list(items) and items != [] do
-    %Event{event_id: event_id} =
-      case Enum.filter(items, &is_struct(&1, Event)) do
-        [event] -> event
-        [] -> raise ArgumentError, "cannot construct an envelope without an event"
-        _other -> raise ArgumentError, "cannot construct an envelope with multiple events"
-      end
-
+  @spec from_event(Event.t()) :: t()
+  def from_event(%Event{event_id: event_id} = event) do
     %__MODULE__{
       event_id: event_id,
-      items: items
+      items: [event] ++ event.attachments
     }
   end
 

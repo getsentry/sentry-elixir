@@ -38,8 +38,8 @@ defmodule Sentry.Transport.Sender do
 
   @impl GenServer
   def handle_cast({:send, client, %Event{} = event}, %__MODULE__{} = state) do
-    [event]
-    |> Envelope.new()
+    event
+    |> Envelope.from_event()
     |> Transport.post_envelope(client)
     |> maybe_log_send_result([event])
 
