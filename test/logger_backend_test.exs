@@ -39,10 +39,10 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert [] = event.exception
     assert [thread] = event.threads
-    assert event.message =~ ~s<GenServer #{inspect(pid)} terminating\n>
-    assert event.message =~ ~s<** (stop) bad return value: "I am throwing"\n>
-    assert event.message =~ ~s<Last message: {:"$gen_cast",>
-    assert event.message =~ ~s<State: []>
+    assert event.message.formatted =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert event.message.formatted =~ ~s<** (stop) bad return value: "I am throwing"\n>
+    assert event.message.formatted =~ ~s<Last message: {:"$gen_cast",>
+    assert event.message.formatted =~ ~s<State: []>
     assert thread.stacktrace.frames == []
   end
 
@@ -54,10 +54,10 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert [] = event.exception
     assert [_thread] = event.threads
-    assert event.message =~ ~s<GenServer #{inspect(pid)} terminating\n>
-    assert event.message =~ ~s<** (stop) :bad_exit\n>
-    assert event.message =~ ~s<Last message: {:"$gen_cast",>
-    assert event.message =~ ~s<State: []>
+    assert event.message.formatted =~ ~s<GenServer #{inspect(pid)} terminating\n>
+    assert event.message.formatted =~ ~s<** (stop) :bad_exit\n>
+    assert event.message.formatted =~ ~s<Last message: {:"$gen_cast",>
+    assert event.message.formatted =~ ~s<State: []>
   end
 
   test "bad function call causing GenServer crash is reported" do
@@ -100,11 +100,11 @@ defmodule Sentry.LoggerBackendTest do
     assert [] = event.exception
     assert [thread] = event.threads
 
-    assert event.message =~
+    assert event.message.formatted =~
              "Task #{inspect(task_pid)} started from #{inspect(self())} terminating\n"
 
-    assert event.message =~ "** (stop) exited in: GenServer.call("
-    assert event.message =~ "** (EXIT) time out"
+    assert event.message.formatted =~ "** (stop) exited in: GenServer.call("
+    assert event.message.formatted =~ "** (EXIT) time out"
     assert length(thread.stacktrace.frames) > 0
   end
 
@@ -147,7 +147,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.error("test_domain", domain: [:test_domain])
 
     assert_receive {^ref, event}
-    assert event.message == "no domain"
+    assert event.message.formatted == "no domain"
   end
 
   test "includes Logger metadata for keys configured to be included" do
@@ -233,7 +233,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.error("Testing")
 
     assert_receive {^ref, event}
-    assert event.message == "Testing"
+    assert event.message.formatted == "Testing"
   after
     Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
   end
@@ -251,7 +251,7 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert event.message == "Testing"
+    assert event.message.formatted == "Testing"
     assert event.user.user_id == 3
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
@@ -269,7 +269,7 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert event.message == "Error"
+    assert event.message.formatted == "Error"
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
@@ -303,7 +303,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.error("Error", callers: [dead_pid, nil])
 
     assert_receive {^ref, event}
-    assert event.message == "Error"
+    assert event.message.formatted == "Error"
   end
 
   test "doesn't log events with :sentry as a domain" do

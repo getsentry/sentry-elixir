@@ -261,6 +261,25 @@ defmodule Sentry do
   Reports a message to Sentry.
 
   `opts` argument is passed as the second argument to `send_event/2`.
+
+  ## Interpolation (since v10.1.0)
+
+  The `message` argument supports interpolation. You can pass a string with formatting
+  markers as `%s`, ant then pass in the `:interpolation_parameters` option as a list
+  of positional parameters to interpolate. For example:
+
+      Sentry.capture_message("Error with user %s", interpolation_parameters: ["John"])
+
+  This way, Sentry will group the messages based on the non-interpolated string, but it
+  will show the interpolated string in the UI.
+
+  > #### Missing or Extra Parameters {: .neutral}
+  >
+  > If the message string has more `%s` markers than parameters, the extra `%s` markers
+  > are included as is and the SDK doesn't raise any error. If you pass in more interpolation
+  > parameters than `%s` markers, the extra parameters are ignored as well. This is because
+  > the SDK doesn't want to be the cause of even more errors in your application when what
+  > you're trying to do is report an error in the first place.
   """
   @spec capture_message(String.t(), keyword()) :: send_result
   def capture_message(message, opts \\ []) when is_binary(message) do

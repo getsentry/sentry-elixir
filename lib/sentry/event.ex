@@ -64,7 +64,7 @@ defmodule Sentry.Event do
           breadcrumbs: [Interfaces.Breadcrumb.t()],
           contexts: Interfaces.context(),
           exception: [Interfaces.Exception.t()],
-          message: String.t() | nil,
+          message: Interfaces.Message.t() | nil,
           request: Interfaces.Request.t() | nil,
           sdk: Interfaces.SDK.t() | nil,
           threads: [Interfaces.Thread.t()] | nil,
@@ -238,6 +238,14 @@ defmodule Sentry.Event do
       The source of the event. This fills in the `:source` field of the
       returned struct. This is not present by default.
       """
+    ],
+    interpolation_parameters: [
+      type: {:list, :string},
+      doc: """
+      The parameters to use for message interpolation. This is only used if the
+      `:message` option is present. This is not present by default. See
+      `Sentry.capture_message/2`. *Available since v10.1.0*.
+      """
     ]
   ]
 
@@ -335,7 +343,7 @@ defmodule Sentry.Event do
       extra: extra,
       fingerprint: Keyword.fetch!(opts, :fingerprint),
       level: Keyword.fetch!(opts, :level),
-      message: message,
+      message: message && build_message_interface(message, opts),
       modules: :persistent_term.get({:sentry, :loaded_applications}),
       original_exception: exception,
       release: Config.release(),
@@ -359,6 +367,38 @@ defmodule Sentry.Event do
     else
       event
     end
+  end
+
+  defp build_message_interface(raw_message, opts) do
+    if params = Keyword.get(opts, :interpolation_parameters) do
+      %Interfaces.Message{
+        formatted: interpolate(raw_message, params),
+        message: raw_message,
+        params: params
+      }
+    else
+      %Interfaces.Message{formatted: raw_message}
+    end
+  end
+
+  # Made public for testing.
+  @doc false
+  def interpolate(message, params) do
+    parts = Regex.split(~r{%s}, message, include_captures: true, trim: true)
+
+    {iodata, _params} =
+      Enum.reduce(parts, {"", params}, fn
+        "%s", {acc, [param | rest_params]} ->
+          {[acc, to_string(param)], rest_params}
+
+        "%s", {acc, []} ->
+          {[acc, "%s"], []}
+
+        part, {acc, params} ->
+          {[acc, part], params}
+      end)
+
+    IO.iodata_to_binary(iodata)
   end
 
   # If we have a message with a stacktrace, but no exceptions, for now we store the stacktrace in
