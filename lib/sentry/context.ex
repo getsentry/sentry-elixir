@@ -38,7 +38,7 @@ defmodule Sentry.Context do
 
   """
 
-  alias Sentry.Interfaces
+  alias Sentry.{Attachment, Interfaces}
 
   @typedoc """
   User context.
@@ -149,6 +149,7 @@ defmodule Sentry.Context do
   @extra_key :extra
   @request_key :request
   @breadcrumbs_key :breadcrumbs
+  @attachments_key :attachments
 
   @doc """
   Retrieves all currently-set context on the current process.
@@ -163,7 +164,8 @@ defmodule Sentry.Context do
         tags: %{message_id: 456},
         extra: %{},
         request: %{},
-        breadcrumbs: []
+        breadcrumbs: [],
+        attachments: []
       }
 
   """
@@ -172,7 +174,8 @@ defmodule Sentry.Context do
           request: request_context(),
           tags: tags(),
           extra: extra(),
-          breadcrumbs: list()
+          breadcrumbs: list(),
+          attachments: list(Attachment.t())
         }
   def get_all do
     context = get_sentry_context()
@@ -182,7 +185,8 @@ defmodule Sentry.Context do
       tags: Map.get(context, @tags_key, %{}),
       extra: Map.get(context, @extra_key, %{}),
       request: Map.get(context, @request_key, %{}),
-      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse() |> Enum.to_list()
+      breadcrumbs: Map.get(context, @breadcrumbs_key, []) |> Enum.reverse() |> Enum.to_list(),
+      attachments: Map.get(context, @attachments_key, []) |> Enum.reverse() |> Enum.to_list()
     }
   end
 
@@ -206,7 +210,8 @@ defmodule Sentry.Context do
         tags: %{},
         extra: %{detail: "bad_error", id: 123, message: "Oh no"},
         request: %{},
-        breadcrumbs: []
+        breadcrumbs: [],
+        attachments: []
       }
 
   """
@@ -241,7 +246,8 @@ defmodule Sentry.Context do
         tags: %{},
         extra: %{},
         request: %{},
-        breadcrumbs: []
+        breadcrumbs: [],
+        attachments: []
       }
 
   """
@@ -264,6 +270,7 @@ defmodule Sentry.Context do
       :ok
       iex> Sentry.Context.get_all()
       %{
+          attachments: [],
           breadcrumbs: [],
           extra: %{},
           request: %{},
@@ -303,6 +310,7 @@ defmodule Sentry.Context do
       :ok
       iex> Sentry.Context.get_all()
       %{
+          attachments: [],
           breadcrumbs: [],
           extra: %{},
           request: %{method: "GET", headers: %{"accept" => "application/json"}, url: "example.com"},
@@ -326,7 +334,7 @@ defmodule Sentry.Context do
       iex> Sentry.Context.clear_all()
       :ok
       iex> Sentry.Context.get_all()
-      %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}}
+      %{breadcrumbs: [], extra: %{}, request: %{}, tags: %{}, user: %{}, attachments: []}
 
   """
   @spec clear_all() :: :ok
@@ -374,6 +382,7 @@ defmodule Sentry.Context do
       }
       iex> Sentry.Context.get_all()
       %{
+        attachments: [],
         breadcrumbs: [
           %{:message => "first_event", "timestamp" => 1562007480},
           %{:message => "second_event", :type => "auth", "timestamp" => 1562007505},
@@ -426,16 +435,78 @@ defmodule Sentry.Context do
   end
 
   @doc """
+  Adds an **attachment** to the current context.
+
+  Attachments stored in the context will be sent alongside each event that is
+  reported *within that context* (that is, within the process that the context
+  was set in).
+
+  Currently, there is no limit to how many attachments you can add to the context
+  through this function, even though there might be limits on the Sentry server side.
+  To clear attachments, use `clear_attachments/0`.
+
+  ## Examples
+
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "foo.txt", data: "foo"})
+      :ok
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "bar.txt", data: "bar"})
+      :ok
+      iex> Sentry.Context.get_all()
+      %{
+        attachments: [
+          %Sentry.Attachment{filename: "bar.txt", data: "bar"},
+          %Sentry.Attachment{filename: "foo.txt", data: "foo"}
+        ],
+        breadcrumbs: [],
+        extra: %{},
+        request: %{},
+        tags: %{},
+        user: %{}
+      }
+
+  """
+  @doc since: "10.1.0"
+  @spec add_attachment(Attachment.t()) :: :ok
+  def add_attachment(%Attachment{} = attachment) do
+    new_context =
+      Map.update(get_sentry_context(), @attachments_key, [attachment], &(&1 ++ [attachment]))
+
+    :logger.update_process_metadata(%{@logger_metadata_key => new_context})
+  end
+
+  @doc """
+  Clears all attachments from the current context.
+
+  See `add_attachment/1`.
+
+  ## Examples
+
+      iex> Sentry.Context.add_attachment(%Sentry.Attachment{filename: "foo.txt", data: "foo"})
+      :ok
+      iex> Sentry.Context.clear_attachments()
+      :ok
+      iex> Sentry.Context.get_all().attachments
+      []
+
+  """
+  @doc since: "10.1.0"
+  @spec clear_attachments() :: :ok
+  def clear_attachments do
+    new_context = Map.delete(get_sentry_context(), @attachments_key)
+    :logger.update_process_metadata(%{@logger_metadata_key => new_context})
+  end
+
+  @doc """
   Returns the keys used to store context in the current process' logger metadata.
 
   ## Example
 
       iex> Sentry.Context.context_keys()
-      [:breadcrumbs, :tags, :user, :extra, :request]
+      [:breadcrumbs, :tags, :user, :extra, :request, :attachments]
 
   """
   @spec context_keys() :: [atom(), ...]
   def context_keys do
-    [@breadcrumbs_key, @tags_key, @user_key, @extra_key, @request_key]
+    [@breadcrumbs_key, @tags_key, @user_key, @extra_key, @request_key, @attachments_key]
   end
 end

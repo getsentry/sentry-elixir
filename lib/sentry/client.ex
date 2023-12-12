@@ -197,7 +197,10 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :sync, client, request_retries) do
-    send_result = [event] |> Envelope.new() |> Transport.post_envelope(client, request_retries)
+    send_result =
+      event
+      |> Envelope.from_event()
+      |> Transport.post_envelope(client, request_retries)
 
     _ = maybe_log_send_result(send_result, event)
     send_result
