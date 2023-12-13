@@ -1,5 +1,14 @@
 # Changelog
 
+## 10.1.0
+
+### Various fixes & improvements
+
+- Add `Sentry.Interfaces.Thread` to fix stacktraces in messages.
+- Add the `--type` and `--no-stacktrace` flags to `mix sentry.send_test_message`.
+- Add support for interpolating messages (with `%s`) placeholders. See `Sentry.capture_message/2`.
+- Add support for attachments; see `Sentry.Attachment` and `Sentry.Context.add_attachment/1`.
+
 ## 10.0.3
 
 ### Various fixes & improvements
