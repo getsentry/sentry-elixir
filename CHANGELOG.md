@@ -1,5 +1,17 @@
 # Changelog
 
+## 10.1.0
+
+### Various fixes & improvements
+
+- Add support for attachments (#673) by @whatyouhide
+- Add support for interpolating messages (#670) by @whatyouhide
+- Move envelope decoding to test helpers (#672) by @whatyouhide
+- Improve option validation in functions (#671) by @whatyouhide
+- Clean up the README (de0bbb10) by @whatyouhide
+- Improve "mix sentry.send_test_event" (#669) by @whatyouhide
+- Add threads interface and fix messages with stacktraces (#668) by @whatyouhide
+
 ## 10.0.3
 
 ### Various fixes & improvements
