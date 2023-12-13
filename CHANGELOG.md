@@ -4,13 +4,10 @@
 
 ### Various fixes & improvements
 
-- Add support for attachments (#673) by @whatyouhide
-- Add support for interpolating messages (#670) by @whatyouhide
-- Move envelope decoding to test helpers (#672) by @whatyouhide
-- Improve option validation in functions (#671) by @whatyouhide
-- Clean up the README (de0bbb10) by @whatyouhide
-- Improve "mix sentry.send_test_event" (#669) by @whatyouhide
-- Add threads interface and fix messages with stacktraces (#668) by @whatyouhide
+- Add `Sentry.Interfaces.Thread` to fix stacktraces in messages.
+- Add the `--type` and `--no-stacktrace` flags to `mix sentry.send_test_message`.
+- Add support for interpolating messages (with `%s`) placeholders. See `Sentry.capture_message/2`.
+- Add support for attachments; see `Sentry.Attachment` and `Sentry.Context.add_attachment/1`.
 
 ## 10.0.3
 
