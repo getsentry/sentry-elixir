@@ -236,7 +236,7 @@ defmodule Sentry.EventTest do
 
       assert message == %Interfaces.Message{
                formatted: "Interpolated string like this and 123 and ''",
-               params: ["this"],
+               params: ["this", 123, nil],
                message: "Interpolated string like %s and %s and '%s'"
              }
     end
