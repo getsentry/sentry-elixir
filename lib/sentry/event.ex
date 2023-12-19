@@ -248,7 +248,7 @@ defmodule Sentry.Event do
       """
     ],
     interpolation_parameters: [
-      type: {:list, :string},
+      type: {:list, :any},
       doc: """
       The parameters to use for message interpolation. This is only used if the
       `:message` option is present. This is not present by default. See
