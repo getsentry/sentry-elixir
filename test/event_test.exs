@@ -230,14 +230,14 @@ defmodule Sentry.EventTest do
                contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
              } =
                Event.create_event(
-                 message: "Interpolated string like %s",
-                 interpolation_parameters: ["this"]
+                 message: "Interpolated string like %s and %s and '%s'",
+                 interpolation_parameters: ["this", 123, nil]
                )
 
       assert message == %Interfaces.Message{
-               formatted: "Interpolated string like this",
-               params: ["this"],
-               message: "Interpolated string like %s"
+               formatted: "Interpolated string like this and 123 and ''",
+               params: ["this", 123, nil],
+               message: "Interpolated string like %s and %s and '%s'"
              }
     end
 
