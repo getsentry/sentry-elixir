@@ -346,7 +346,7 @@ defmodule Sentry.Event do
       modules: :persistent_term.get({:sentry, :loaded_applications}),
       original_exception: exception,
       release: Config.release(),
-      request: coerce_request(request),
+      request: struct(%Interfaces.Request{}, request),
       sdk: @sdk,
       server_name: Config.server_name() || to_string(:net_adm.localhost()),
       source: source,
@@ -425,18 +425,6 @@ defmodule Sentry.Event do
       raise ArgumentError,
             "cannot provide a :stacktrace option without an exception or a message, got: #{inspect(stacktrace)}"
     end
-  end
-
-  @request_fields %Interfaces.Request{} |> Map.from_struct() |> Map.keys() |> MapSet.new()
-
-  defp coerce_request(request) do
-    Enum.reduce(request, %Interfaces.Request{}, fn {key, value}, acc ->
-      if key in @request_fields do
-        Map.replace!(acc, key, value)
-      else
-        raise ArgumentError, "unknown field for the request interface: #{inspect(key)}"
-      end
-    end)
   end
 
   defp add_thread_with_stacktrace(%__MODULE__{} = event, stacktrace) when is_list(stacktrace) do
