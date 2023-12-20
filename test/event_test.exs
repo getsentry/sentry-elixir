@@ -292,10 +292,9 @@ defmodule Sentry.EventTest do
       assert event.original_exception == exception
     end
 
-    test "raises if the :request option contains non-request fields" do
-      assert_raise ArgumentError, ~r/unknown field for the request interface: :bad_key/, fn ->
-        Event.create_event(request: %{method: "GET", bad_key: :indeed})
-      end
+    test "ignores unknown fields in :request" do
+      assert %Event{} = event = Event.create_event(request: %{method: "GET", bad_key: :indeed})
+      assert event.request == %Interfaces.Request{method: "GET"}
     end
   end
 
