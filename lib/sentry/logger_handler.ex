@@ -171,7 +171,8 @@ defmodule Sentry.LoggerHandler do
     case Map.new(report) do
       %{report: %{reason: {exception, stacktrace}}}
       when is_exception(exception) and is_list(stacktrace) ->
-        Sentry.capture_exception(exception, Keyword.put(sentry_opts, :stacktrace, stacktrace))
+        sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
+        Sentry.capture_exception(exception, sentry_opts)
 
       %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
         sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
@@ -219,7 +220,8 @@ defmodule Sentry.LoggerHandler do
          %__MODULE__{}
        )
        when is_exception(exception) and is_list(stacktrace) do
-    Sentry.capture_exception(exception, Keyword.put(sentry_opts, :stacktrace, stacktrace))
+    sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
+    Sentry.capture_exception(exception, sentry_opts)
   end
 
   defp log_from_crash_reason({reason, stacktrace}, string_message, sentry_opts, %__MODULE__{})

@@ -113,6 +113,28 @@ defmodule Sentry.Interfaces do
     defstruct [:message, :params, :formatted]
   end
 
+  defmodule Exception.Mechanism do
+    @moduledoc """
+    The struct for the **exception mechanism** to be used within exceptions.
+
+    See `Sentry.Interfaces.Exception`.
+    """
+
+    @moduledoc since: "10.2.0"
+
+    @typedoc since: "10.2.0"
+    @type t() :: %__MODULE__{
+            type: String.t(),
+            handled: boolean() | nil,
+            data: map() | nil,
+            synthetic: boolean() | nil,
+            help_link: String.t() | nil,
+            meta: map() | nil
+          }
+
+    defstruct [:handled, :data, :synthetic, :help_link, :meta, type: "generic"]
+  end
+
   defmodule Exception do
     @moduledoc """
     The struct for the **exception** interface.
@@ -127,11 +149,12 @@ defmodule Sentry.Interfaces do
             type: String.t(),
             value: String.t(),
             module: String.t() | nil,
-            stacktrace: Sentry.Interfaces.Stacktrace.t() | nil
+            stacktrace: Sentry.Interfaces.Stacktrace.t() | nil,
+            mechanism: Sentry.Interfaces.Exception.Mechanism.t() | nil
           }
 
     @enforce_keys [:type, :value]
-    defstruct [:type, :value, :module, :stacktrace]
+    defstruct [:type, :value, :module, :stacktrace, :mechanism]
   end
 
   defmodule Stacktrace.Frame do

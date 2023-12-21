@@ -254,6 +254,13 @@ defmodule Sentry.Event do
       `:message` option is present. This is not present by default. See
       `Sentry.capture_message/2`. *Available since v10.1.0*.
       """
+    ],
+
+    ## Internal options
+    handled: [
+      type: :boolean,
+      default: true,
+      doc: false
     ]
   ]
 
@@ -330,6 +337,7 @@ defmodule Sentry.Event do
     exception = Keyword.get(opts, :exception)
     stacktrace = Keyword.get(opts, :stacktrace)
     source = Keyword.get(opts, :event_source)
+    handled? = Keyword.fetch!(opts, :handled)
 
     event = %__MODULE__{
       attachments: attachments_context,
@@ -338,7 +346,7 @@ defmodule Sentry.Event do
       culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
       environment: Config.environment_name(),
       event_id: UUID.uuid4_hex(),
-      exception: List.wrap(coerce_exception(exception, stacktrace, message)),
+      exception: List.wrap(coerce_exception(exception, stacktrace, message, handled?)),
       extra: extra,
       fingerprint: Keyword.fetch!(opts, :fingerprint),
       level: Keyword.fetch!(opts, :level),
@@ -403,11 +411,13 @@ defmodule Sentry.Event do
   # If we have a message with a stacktrace, but no exceptions, for now we store the stacktrace in
   # the "threads" interface and we don't fill in the "exception" interface altogether. This might
   # be eventually fixed in Sentry itself: https://github.com/getsentry/sentry/issues/61239
-  defp coerce_exception(_exception = nil, _stacktrace_or_nil, message) when is_binary(message) do
+  defp coerce_exception(_exception = nil, _stacktrace_or_nil, message, _handled?)
+       when is_binary(message) do
     nil
   end
 
-  defp coerce_exception(exception, stacktrace_or_nil, _message) when is_exception(exception) do
+  defp coerce_exception(exception, stacktrace_or_nil, _message, handled?)
+       when is_exception(exception) do
     stacktrace =
       if is_list(stacktrace_or_nil) do
         %Interfaces.Stacktrace{frames: stacktrace_to_frames(stacktrace_or_nil)}
@@ -416,11 +426,12 @@ defmodule Sentry.Event do
     %Interfaces.Exception{
       type: inspect(exception.__struct__),
       value: Exception.message(exception),
-      stacktrace: stacktrace
+      stacktrace: stacktrace,
+      mechanism: %Interfaces.Exception.Mechanism{handled: handled?}
     }
   end
 
-  defp coerce_exception(_exception = nil, stacktrace, _message = nil) do
+  defp coerce_exception(_exception = nil, stacktrace, _message = nil, _handled?) do
     unless is_nil(stacktrace) do
       raise ArgumentError,
             "cannot provide a :stacktrace option without an exception or a message, got: #{inspect(stacktrace)}"

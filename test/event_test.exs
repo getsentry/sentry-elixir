@@ -180,7 +180,22 @@ defmodule Sentry.EventTest do
       assert event.exception == [
                %Interfaces.Exception{
                  type: "RuntimeError",
-                 value: "foo"
+                 value: "foo",
+                 mechanism: %Interfaces.Exception.Mechanism{handled: true}
+               }
+             ]
+    end
+
+    test "fills in the exception interface with the :handled option" do
+      assert %Event{} =
+               event =
+               Event.create_event(exception: %RuntimeError{message: "foo"}, handled: false)
+
+      assert event.exception == [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo",
+                 mechanism: %Interfaces.Exception.Mechanism{handled: false}
                }
              ]
     end

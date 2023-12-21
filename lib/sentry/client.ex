@@ -234,6 +234,7 @@ defmodule Sentry.Client do
   defp render_exception(%Interfaces.Exception{} = exception) do
     exception
     |> Map.from_struct()
+    |> update_if_present(:mechanism, &Map.from_struct/1)
     |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
       %{frames: Enum.map(frames, &Map.from_struct/1)}
     end)
