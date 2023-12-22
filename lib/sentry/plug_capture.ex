@@ -72,7 +72,7 @@ defmodule Sentry.PlugCapture do
 
   defmacro __using__(opts) do
     quote do
-      opts = unquote(Macro.escape(opts))
+      opts = unquote(opts)
       default_scrubber = {unquote(__MODULE__), :default_scrubber, []}
 
       scrubber =
