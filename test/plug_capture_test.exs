@@ -34,6 +34,22 @@ defmodule Sentry.PlugCaptureTest do
     plug PhoenixRouter
   end
 
+  defmodule Scrubber do
+    def scrub_conn(conn) do
+      conn
+    end
+  end
+
+  defmodule PhoenixEndpointWithScrubber do
+    use Sentry.PlugCapture, scrubber: {Scrubber, :scrub_conn, []}
+    use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: Jason
+    plug Sentry.PlugContext
+    plug PhoenixRouter
+  end
+
   setup do
     bypass = Bypass.open()
     put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
@@ -237,6 +253,33 @@ defmodule Sentry.PlugCaptureTest do
         conn(:get, "/assigns_route")
         |> Plug.Conn.put_req_header("throw", "throw")
         |> call_phoenix_endpoint()
+      end
+    end
+
+    test "modifies conn with custom scrubber", %{bypass: bypass} do
+      Application.put_env(:sentry, PhoenixEndpointWithScrubber,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithScrubber)
+      Process.link(pid)
+
+      Bypass.expect(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        event = decode_event_from_envelope!(body)
+
+        assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.error/2"
+
+        assert List.first(event["exception"])["type"] == "RuntimeError"
+        assert List.first(event["exception"])["value"] == "PhoenixError"
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert_raise RuntimeError, "PhoenixError", fn ->
+        conn(:get, "/error_route")
+        |> Plug.run([{PhoenixEndpointWithScrubber, []}])
       end
     end
   end
