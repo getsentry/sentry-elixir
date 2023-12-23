@@ -137,7 +137,13 @@ defmodule Sentry.PlugCapture do
         exception
       end
 
-    _ = Sentry.capture_exception(exception, stacktrace: stacktrace, event_source: :plug)
+    _ =
+      Sentry.capture_exception(exception,
+        stacktrace: stacktrace,
+        event_source: :plug,
+        handled: false
+      )
+
     :ok
   end
 

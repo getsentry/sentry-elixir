@@ -138,7 +138,8 @@ defmodule Sentry.LoggerBackend do
       # If the crash reason is an exception, we want to report the exception itself
       # for better event reporting.
       {exception, stacktrace} when is_exception(exception) and is_list(stacktrace) ->
-        Sentry.capture_exception(exception, Keyword.put(opts, :stacktrace, stacktrace))
+        opts = Keyword.merge(opts, stacktrace: stacktrace, handled: false)
+        Sentry.capture_exception(exception, opts)
 
       # If the crash reason is a {reason, stacktrace} tuple, then we can report
       # the originally-logged message (as a message) and include the stacktrace in
