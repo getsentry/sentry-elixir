@@ -64,6 +64,11 @@ defmodule Sentry.Client do
     request_retries: [
       type: {:list, :integer},
       doc: false
+    ],
+    dsn: [
+      type: :string,
+      required: true,
+      doc: false
     ]
   ]
 
@@ -85,6 +90,7 @@ defmodule Sentry.Client do
   def send_event(%Event{} = event, opts) when is_list(opts) do
     opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
 
+    dsn = Keyword.fetch!(:dsn)
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
     before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
@@ -101,7 +107,7 @@ defmodule Sentry.Client do
       with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
            :ok <- sample_event(sample_rate),
            :ok <- maybe_dedupe(event) do
-        send_result = encode_and_send(event, result_type, client, request_retries)
+        send_result = encode_and_send(event, dsn, result_type, client, request_retries)
         _ignored = maybe_call_after_send(event, send_result, after_send_event)
         send_result
       end
@@ -189,24 +195,32 @@ defmodule Sentry.Client do
     end
   end
 
-  defp encode_and_send(_event, _result_type = :async, _client, _request_retries) do
+  defp encode_and_send(_event, _dsn, _result_type = :async, _client, _request_retries) do
     raise ArgumentError, """
     the :async result type is not supported anymore. Instead, you can spawn a task yourself that \
     then calls Sentry.send_event/2 with result: :sync. The effect is exactly the same.
     """
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :sync, client, request_retries) do
+  defp encode_and_send(%Event{} = event, dsn, _result_type = :sync, client, request_retries) do
+    NimbleOwnership.get_and_update(:TODO, callers(), :events, fn
+      nil ->
+        {:error, :not_collecting}
+
+      %{metadata: %{collected_events: events} = metadata} ->
+        {:update_metadata, :ok, %{metadata | collected_events: [event | events]}}
+    end)
+
     send_result =
       event
       |> Envelope.from_event()
-      |> Transport.post_envelope(client, request_retries)
+      |> Transport.post_envelope(client, dsn, request_retries)
 
     _ = maybe_log_send_result(send_result, event)
     send_result
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
+  defp encode_and_send(%Event{} = event, _dsn, _result_type = :none, client, _request_retries) do
     :ok = Transport.Sender.send_async(client, event)
     {:ok, ""}
   end

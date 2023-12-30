@@ -322,12 +322,26 @@ defmodule Sentry do
     # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
+    dsn =
+      case NimbleOwnership.get_and_update(
+             :TODO,
+             [self()] ++ Process.get(:"$callers", []),
+             :dsn,
+             fn
+               nil -> {:error, :no_dsn}
+               %{metadata: %{dsn: dsn} = meta} -> {:update_metadata, {:ok, dsn}, meta}
+             end
+           ) do
+        {:ok, dsn} -> dsn
+        {:error, :no_dsn} -> Config.dsn()
+      end
+
     cond do
       is_nil(event.message) and event.exception == [] ->
         LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
         :ignored
 
-      !Config.dsn() ->
+      !dsn ->
         :ignored
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->

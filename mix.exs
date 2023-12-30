@@ -80,6 +80,7 @@ defmodule Sentry.Mixfile do
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
+      {:nimble_ownership, github: "dashbitco/nimble_ownership", branch: "al/rework-api"},
 
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
