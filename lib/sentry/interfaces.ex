@@ -289,7 +289,7 @@ defmodule Sentry.Interfaces do
             tags: map(),
             trace_id: String.t() | nil,
             op: String.t(),
-            contexts: Interfaces.contexts(),
+            contexts: Interfaces.context(),
             spans: [t()],
             status: String.t(),
             data: map(),
