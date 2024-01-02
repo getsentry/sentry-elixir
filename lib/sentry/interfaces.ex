@@ -277,8 +277,6 @@ defmodule Sentry.Interfaces do
 
     @moduledoc since: "11.0.0"
 
-    alias Sentry.Interfaces
-
     @typedoc since: "11.0.0"
     @type t() :: %__MODULE__{
             start_timestamp: String.t() | number(),
@@ -289,11 +287,9 @@ defmodule Sentry.Interfaces do
             tags: map(),
             trace_id: String.t() | nil,
             op: String.t(),
-            contexts: Interfaces.context(),
             spans: [t()],
             status: String.t(),
             data: map(),
-            fingerprint: [String.t()],
             origin: String.t(),
             measurements: %{
               optional(String.t()) => %{required(:value) => term(), optional(:unit) => String.t()}
@@ -315,13 +311,11 @@ defmodule Sentry.Interfaces do
       :span_id,
       :start_timestamp,
       :timestamp,
-      :contexts,
       :spans,
       :measurements,
       :transaction_info,
       :status,
       :data,
-      :fingerprint,
       :origin
     ]
   end
