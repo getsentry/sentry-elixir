@@ -45,7 +45,8 @@ defmodule Sentry.Mixfile do
         groups_for_modules: [
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
-          Interfaces: [~r/^Sentry\.Interfaces/]
+          Interfaces: [~r/^Sentry\.Interfaces/],
+          Testing: [Sentry.Test]
         ],
         source_ref: "#{@version}",
         source_url: @source_url,

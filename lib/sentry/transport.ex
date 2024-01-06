@@ -16,13 +16,13 @@ defmodule Sentry.Transport do
   end
 
   # The "retries" parameter is there for better testing.
-  @spec post_envelope(Envelope.t(), module(), String.t(), [non_neg_integer()]) ::
+  @spec post_envelope(Envelope.t(), module(), [non_neg_integer()]) ::
           {:ok, envelope_id :: String.t()} | {:error, term()}
-  def post_envelope(%Envelope{} = envelope, client, dsn, retries \\ @default_retries)
-      when is_atom(client) and is_binary(dsn) and is_list(retries) do
+  def post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
+      when is_atom(client) and is_list(retries) do
     case Envelope.to_binary(envelope) do
       {:ok, body} ->
-        {endpoint, headers} = get_endpoint_and_headers(dsn)
+        {endpoint, headers} = get_endpoint_and_headers()
         post_envelope_with_retries(client, endpoint, headers, body, retries)
 
       {:error, reason} ->
@@ -64,7 +64,9 @@ defmodule Sentry.Transport do
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
   end
 
-  defp get_endpoint_and_headers({endpoint, public_key, secret_key}) do
+  defp get_endpoint_and_headers do
+    {endpoint, public_key, secret_key} = Config.dsn()
+
     auth_query =
       [
         sentry_version: @sentry_version,
