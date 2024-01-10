@@ -502,6 +502,13 @@ defmodule Sentry.Config do
   @compile {:inline, fetch!: 1}
   defp fetch!(key) do
     :persistent_term.get({:sentry_config, key})
+  rescue
+    ArgumentError ->
+      raise """
+      the Sentry configuration seems to be not available (while trying to fetch \
+      #{inspect(key)}). This is likely because the :sentry application has not been started yet. \
+      Make sure that you start the :sentry application before using any of its functions.
+      """
   end
 
   @compile {:inline, fetch!: 1}
