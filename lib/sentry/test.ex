@@ -59,36 +59,25 @@ defmodule Sentry.Test do
   @server __MODULE__.OwnershipServer
   @key :events
 
-  @doc false
-  @spec child_spec(keyword()) :: Supervisor.child_spec()
-  def child_spec([] = _opts) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, [[]]},
-      type: :worker
-    }
-  end
-
-  @doc false
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link([] = _opts) do
-    case NimbleOwnership.start_link(name: @server) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
   # Used internally when reporting an event, *before* reporting the actual event.
   @doc false
   @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Event{} = event) do
-    if Application.get_env(:sentry, :tests, false) do
+    if Sentry.Config.test_mode?() do
       case NimbleOwnership.fetch_owner(@server, callers(), @key) do
         {:ok, owner_pid} ->
-          NimbleOwnership.get_and_update(@server, owner_pid, @key, fn events ->
-            {:collected, (events || []) ++ [event]}
-          end)
+          result =
+            NimbleOwnership.get_and_update(@server, owner_pid, @key, fn events ->
+              {:collected, (events || []) ++ [event]}
+            end)
+
+          case result do
+            {:ok, :collected} ->
+              :collected
+
+            {:error, error} ->
+              raise ArgumentError, "cannot collect Sentry reports: #{Exception.message(error)}"
+          end
 
         :error ->
           :not_collecting
@@ -117,10 +106,17 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
+    # Make sure the ownership server is started (this is idempotent).
+    ensure_ownership_server_started()
+
     case NimbleOwnership.fetch_owner(@server, callers(), @key) do
       # No-op
-      {:ok, owner_pid} when owner_pid == self() ->
+      {tag, owner_pid} when tag in [:ok, :shared_owner] and owner_pid == self() ->
         :ok
+
+      {:shared_owner, _pid} ->
+        raise ArgumentError,
+              "Sentry.Test is in global mode and is already collecting reported events"
 
       {:ok, another_pid} ->
         raise ArgumentError, "already collecting reported events from #{inspect(another_pid)}"
@@ -129,9 +125,12 @@ defmodule Sentry.Test do
         :ok
     end
 
-    NimbleOwnership.get_and_update(@server, self(), @key, fn events ->
-      {:ok, events || []}
-    end)
+    {:ok, _} =
+      NimbleOwnership.get_and_update(@server, self(), @key, fn events ->
+        {:ignored, events || []}
+      end)
+
+    :ok
   end
 
   @doc """
@@ -185,20 +184,36 @@ defmodule Sentry.Test do
   def pop_sentry_reports do
     result =
       NimbleOwnership.get_and_update(@server, self(), @key, fn
-        nil -> {{:error, :not_collecting}, []}
-        events when is_list(events) -> {{:ok, events}, []}
+        nil -> {:not_collecting, []}
+        events when is_list(events) -> {events, []}
       end)
 
     case result do
-      {:error, :not_collecting} ->
+      {:ok, :not_collecting} ->
         raise ArgumentError, "not collecting reported events from #{inspect(self())}"
 
       {:ok, events} ->
         events
+
+      {:error, error} when is_exception(error) ->
+        raise ArgumentError, "cannot pop Sentry reports: #{Exception.message(error)}"
     end
   end
 
   ## Helpers
+
+  defp ensure_ownership_server_started do
+    case NimbleOwnership.start_link(name: @server) do
+      {:ok, pid} ->
+        pid
+
+      {:error, {:already_started, pid}} ->
+        pid
+
+      {:error, reason} ->
+        raise "could not start required processes for Sentry.Test: #{inspect(reason)}"
+    end
+  end
 
   defp callers do
     [self()] ++ Process.get(:"$callers", [])

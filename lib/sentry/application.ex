@@ -27,13 +27,6 @@ defmodule Sentry.Application do
     cache_loaded_applications()
     _ = Sources.load_source_code_map_if_present()
 
-    children =
-      if Application.get_env(:sentry, :tests, false) do
-        [Sentry.Test] ++ children
-      else
-        children
-      end
-
     Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
   end
 
