@@ -79,7 +79,7 @@ defmodule Sentry.Test do
               raise ArgumentError, "cannot collect Sentry reports: #{Exception.message(error)}"
           end
 
-        :error ->
+        {:error, _reason} ->
           :not_collecting
       end
     else
@@ -121,7 +121,7 @@ defmodule Sentry.Test do
       {:ok, another_pid} ->
         raise ArgumentError, "already collecting reported events from #{inspect(another_pid)}"
 
-      :error ->
+      {:error, _reason} ->
         :ok
     end
 
