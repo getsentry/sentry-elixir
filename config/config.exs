@@ -10,7 +10,8 @@ if config_env() == :test do
     hackney_opts: [recv_timeout: 50, pool: :sentry_pool],
     send_result: :sync,
     send_max_attempts: 1,
-    dedup_events: false
+    dedup_events: false,
+    test_mode: true
 
   config :logger, backends: []
 end

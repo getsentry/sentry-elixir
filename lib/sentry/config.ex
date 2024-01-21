@@ -138,6 +138,15 @@ defmodule Sentry.Config do
       log a message instead. Events are deduplicated by comparing their message, exception,
       stacktrace, and fingerprint. *Available since v10.0.0*.
       """
+    ],
+    test_mode: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable *test mode*. When test mode is enabled, the SDK will check whether
+      there is a process **collecting events** and avoid sending those events if that's the
+      case. This is useful for testing. See `Sentry.Test`.
+      """
     ]
   ]
 
@@ -438,6 +447,9 @@ defmodule Sentry.Config do
 
   @spec dedup_events?() :: boolean()
   def dedup_events?, do: fetch!(:dedup_events)
+
+  @spec test_mode?() :: boolean()
+  def test_mode?, do: fetch!(:test_mode)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

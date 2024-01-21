@@ -197,18 +197,30 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :sync, client, request_retries) do
-    send_result =
-      event
-      |> Envelope.from_event()
-      |> Transport.post_envelope(client, request_retries)
+    case Sentry.Test.maybe_collect(event) do
+      :collected ->
+        {:ok, ""}
 
-    _ = maybe_log_send_result(send_result, event)
-    send_result
+      :not_collecting ->
+        send_result =
+          event
+          |> Envelope.from_event()
+          |> Transport.post_envelope(client, request_retries)
+
+        _ = maybe_log_send_result(send_result, event)
+        send_result
+    end
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
-    :ok = Transport.Sender.send_async(client, event)
-    {:ok, ""}
+    case Sentry.Test.maybe_collect(event) do
+      :collected ->
+        {:ok, ""}
+
+      :not_collecting ->
+        :ok = Transport.Sender.send_async(client, event)
+        {:ok, ""}
+    end
   end
 
   @spec render_event(Event.t()) :: map()

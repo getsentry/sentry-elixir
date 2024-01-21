@@ -45,7 +45,8 @@ defmodule Sentry.Mixfile do
         groups_for_modules: [
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
-          Interfaces: [~r/^Sentry\.Interfaces/]
+          Interfaces: [~r/^Sentry\.Interfaces/],
+          Testing: [Sentry.Test]
         ],
         source_ref: "#{@version}",
         source_url: @source_url,
@@ -80,6 +81,7 @@ defmodule Sentry.Mixfile do
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
+      {:nimble_ownership, "~> 0.2.0"},
 
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
