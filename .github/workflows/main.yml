@@ -21,13 +21,13 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.15'
-            otp: '26.0'
+          - elixir: '1.16'
+            otp: '26.2'
             lint: true
             dialyzer: true
 
           # One version before the last supported one.
-          - elixir: '1.14.5'
+          - elixir: '1.15'
             otp: '25.3'
 
           # Oldest supported Elixir/Erlang pair.
@@ -36,7 +36,7 @@ jobs:
 
     steps:
     - name: Check out this repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Elixir and Erlang
       uses: erlef/setup-beam@v1
@@ -47,7 +47,7 @@ jobs:
     # We need to manually restore and then save, so that we can save the "_build" directory
     # *without* the Elixir compiled code in it.
     - name: Restore Mix dependencies cache
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       id: mix-deps-cache
       with:
         path: |
@@ -60,10 +60,10 @@ jobs:
 
     - name: Install and compile Mix dependencies
       if: steps.mix-deps-cache.outputs.cache-hit != 'true'
-      run: mix do deps.get, deps.compile
+      run: mix do deps.get --check-lock, deps.compile
 
     - name: Save Mix dependencies cache
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       if: steps.mix-deps-cache.outputs.cache-hit != 'true'
       with:
         path: |
@@ -84,7 +84,7 @@ jobs:
       run: mix test
 
     - name: Retrieve PLT Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       if: matrix.dialyzer
       id: plt-cache
       with:
