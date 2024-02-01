@@ -18,6 +18,10 @@ defmodule Sentry.PlugContextTest do
     conn.cookies |> Map.new() |> Map.take(["not-secret"])
   end
 
+  def url_scrubber(conn) do
+    conn |> Plug.Conn.request_url() |> String.replace(~r/secret-token\/\w+/, "secret-token/****")
+  end
+
   def remote_address_reader(conn) do
     case get_req_header(conn, "cf-connecting-ip") do
       [remote_ip | _] -> remote_ip
@@ -103,6 +107,13 @@ defmodule Sentry.PlugContextTest do
     |> call(cookie_scrubber: {__MODULE__, :cookie_scrubber})
 
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
+  end
+
+  test "allows configuring url scrubber" do
+    conn = conn(:get, "/secret-token/secret")
+    call(conn, url_scrubber: {__MODULE__, :url_scrubber})
+
+    assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
   test "allows configuring request id header", %{conn: conn} do
