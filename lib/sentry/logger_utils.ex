@@ -26,6 +26,17 @@ defmodule Sentry.LoggerUtils do
     |> Map.to_list()
   end
 
+  @spec ignored_exception?(map(), [atom()]) :: boolean()
+  def ignored_exception?(log_meta, ignored_exceptions) do
+    case log_meta do
+      %{crash_reason: {%exception{}, _}} ->
+        exception in ignored_exceptions
+
+      _ ->
+        false
+    end
+  end
+
   # Always excludes the :sentry domain, to avoid infinite logging loops.
   @spec excluded_domain?([atom()], [atom()]) :: boolean()
   def excluded_domain?(logged_domains, excluded_domains) do

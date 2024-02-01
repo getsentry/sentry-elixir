@@ -58,6 +58,27 @@ defmodule Sentry.LoggerHandlerTest do
     assert exception.value == "Unique Error"
   end
 
+  # Just cause I want to avoid the warning
+  defp collatz(1), do: 1
+  defp collatz(n) when rem(n, 2) == 0, do: collatz(div(n, 2))
+  defp collatz(n), do: collatz(3 * n + 1)
+
+  @tag handler_config: %{ignored_exceptions: [ArithmeticError]}
+  test "ignores exception messages with specified exceptions", %{sender_ref: ref} do
+    zero = collatz(:rand.uniform(1024)) - 1
+    Task.start(fn -> 1 / zero end)
+    Task.start(fn -> raise "This error is raised second, but received first" end)
+    Task.start(fn -> 1 / zero end)
+
+    assert_receive {^ref, event}
+    assert [exception] = event.exception
+    assert exception.type == "RuntimeError"
+    assert exception.value == "This error is raised second, but received first"
+
+    # We receive only one exception
+    refute_receive {^ref, _}
+  end
+
   test "retrieves context from :callers", %{sender_ref: ref} do
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
     Sentry.Context.set_user_context(%{user_id: 3})

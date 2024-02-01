@@ -80,6 +80,11 @@ defmodule Sentry.LoggerHandler do
       the configured list will not be sent. Defaults to `[:cowboy]` to avoid
       double-reporting events from `Sentry.PlugCapture`.
 
+    * `:ignored_exceptions` (list of `t:module/0` of Elixir exceptions) - any messages
+      with a crash reason containing exception from configured list will not be sent.
+      Defaults to `[]`. For example, you can set it to `[DBConnection.ConnectionError]`
+      to ignore `db_connection` timeouts
+
     * `:metadata` (list of `t:atom/0`, or `:all`) - use this to include
       non-Sentry logger metadata in reports. If it's a list of keys, metadata in
       those keys will be added in the `:extra` context (see
@@ -105,12 +110,14 @@ defmodule Sentry.LoggerHandler do
   # The config for this logger handler.
   defstruct level: :error,
             excluded_domains: [:cowboy],
+            ignored_exceptions: [],
             metadata: [],
             capture_log_messages: false
 
   @valid_config_keys [
     :excluded_domains,
     :capture_log_messages,
+    :ignored_exceptions,
     :metadata,
     :level
   ]
@@ -142,6 +149,9 @@ defmodule Sentry.LoggerHandler do
         :ok
 
       LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.excluded_domains) ->
+        :ok
+
+      LoggerUtils.ignored_exception?(log_meta, config.ignored_exceptions) ->
         :ok
 
       true ->
