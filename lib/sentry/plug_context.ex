@@ -44,7 +44,7 @@ defmodule Sentry.PlugContext do
 
   You can also pass it in as a `{module, fun}`, like so:
 
-      plug Sentry.PlugContext, body_scrubber: {MyModule, :scrub_params}
+      plug Sentry.PlugContext, body_scrubber: {MySentryScrubber, :scrub_params}
 
   > #### Large Files {: .tip}
   >
@@ -57,7 +57,7 @@ defmodule Sentry.PlugContext do
   configured similarly to body params, through the `:header_scrubber` configuration
   option:
 
-      defmodule MyHeaderScrubber do
+      defmodule MySentryScrubber do
         def scrub_headers(conn) do
           # In this example, we do not want to include Content-Type or User-Agent
           # in reported headers, so we drop them.
@@ -70,11 +70,11 @@ defmodule Sentry.PlugContext do
 
   Then, pass it into `Sentry.PlugContext`:
 
-      plug Sentry.PlugContext, header_scrubber: &MyHeaderScrubber.scrub_headers/1
+      plug Sentry.PlugContext, header_scrubber: &MySentryScrubber.scrub_headers/1
 
   It can also be passed in as a `{module, fun}` like so:
 
-      plug Sentry.PlugContext, header_scrubber: {MyModule, :scrub_headers}
+      plug Sentry.PlugContext, header_scrubber: {MySentryScrubber, :scrub_headers}
 
   ### Scrubbing Cookies
 
@@ -84,7 +84,31 @@ defmodule Sentry.PlugContext do
 
   For example:
 
-      plug Sentry.PlugContext, cookie_scrubber: &MyCookieScrubber.scrub_cookies/1
+      plug Sentry.PlugContext, cookie_scrubber: &MySentryScrubber.scrub_cookies/1
+
+  ### Scrubbing URLs
+
+  *Available since v10.2.0.*
+
+  If any of your URLs contain sensitive tokens or other data, you should scrub them
+  to remove the sensitive data. This can be configured similarly to body params,
+  through the `:url_scrubber` configuration option. It should return a string:
+
+      defmodule MySentryScrubber do
+        def scrub_url(conn) do
+          conn
+          |> Plug.Conn.request_url()
+          |> String.replace(~r/secret-token\/\w+/, "secret-token/****")
+        end
+      end
+
+  Then pass it into `Sentry.PlugContext`:
+
+      plug Sentry.PlugContext, url_scrubber: &MySentryScrubber.scrub_url/1
+
+  You can also pass it in as a `{module, fun}`, like so:
+
+      plug Sentry.PlugContext, url_scrubber: {MySentryScrubber, :scrub_url}
 
   ## Including Request Identifiers
 
@@ -141,6 +165,7 @@ defmodule Sentry.PlugContext do
     body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
     header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
     cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
+    url_scrubber = Keyword.get(opts, :url_scrubber, {__MODULE__, :default_url_scrubber})
 
     remote_address_reader =
       Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
@@ -152,14 +177,14 @@ defmodule Sentry.PlugContext do
       |> Plug.Conn.fetch_query_params()
 
     %{
-      url: Plug.Conn.request_url(conn),
+      url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
       method: conn.method,
-      data: apply_fun_with_conn(conn, body_scrubber),
+      data: apply_fun_with_conn(conn, body_scrubber, %{}),
       query_string: conn.query_string,
-      cookies: apply_fun_with_conn(conn, cookie_scrubber),
-      headers: apply_fun_with_conn(conn, header_scrubber),
+      cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
+      headers: apply_fun_with_conn(conn, header_scrubber, %{}),
       env: %{
-        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader),
+        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader, %{}),
         "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
@@ -191,9 +216,9 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  defp apply_fun_with_conn(_conn, _function = nil), do: %{}
-  defp apply_fun_with_conn(conn, {module, fun}), do: apply(module, fun, [conn])
-  defp apply_fun_with_conn(conn, fun) when is_function(fun, 1), do: fun.(conn)
+  defp apply_fun_with_conn(_conn, _function = nil, default), do: default
+  defp apply_fun_with_conn(conn, {module, fun}, _default), do: apply(module, fun, [conn])
+  defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
   Scrubs **all** cookies off of the request.
@@ -201,6 +226,14 @@ defmodule Sentry.PlugContext do
   @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
   def default_cookie_scrubber(_conn) do
     %{}
+  end
+
+  @doc """
+  Returns the request URL without modifying it.
+  """
+  @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
+  def default_url_scrubber(conn) do
+    Plug.Conn.request_url(conn)
   end
 
   @doc """
