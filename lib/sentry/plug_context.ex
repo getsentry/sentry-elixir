@@ -88,6 +88,8 @@ defmodule Sentry.PlugContext do
 
   ### Scrubbing URLs
 
+  *Available since v10.2.0.*
+
   If any of your URLs contain sensitive tokens or other data, you should scrub them
   to remove the sensitive data. This can be configured similarly to body params,
   through the `:url_scrubber` configuration option. It should return a string:
@@ -175,14 +177,14 @@ defmodule Sentry.PlugContext do
       |> Plug.Conn.fetch_query_params()
 
     %{
-      url: apply_fun_with_conn(conn, url_scrubber),
+      url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
       method: conn.method,
-      data: apply_fun_with_conn(conn, body_scrubber),
+      data: apply_fun_with_conn(conn, body_scrubber, %{}),
       query_string: conn.query_string,
-      cookies: apply_fun_with_conn(conn, cookie_scrubber),
-      headers: apply_fun_with_conn(conn, header_scrubber),
+      cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
+      headers: apply_fun_with_conn(conn, header_scrubber, %{}),
       env: %{
-        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader),
+        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader, %{}),
         "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
@@ -214,9 +216,9 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  defp apply_fun_with_conn(_conn, _function = nil), do: %{}
-  defp apply_fun_with_conn(conn, {module, fun}), do: apply(module, fun, [conn])
-  defp apply_fun_with_conn(conn, fun) when is_function(fun, 1), do: fun.(conn)
+  defp apply_fun_with_conn(_conn, _function = nil, default), do: default
+  defp apply_fun_with_conn(conn, {module, fun}, _default), do: apply(module, fun, [conn])
+  defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
   Scrubs **all** cookies off of the request.

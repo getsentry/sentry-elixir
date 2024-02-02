@@ -109,7 +109,7 @@ defmodule Sentry.PlugContextTest do
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
   end
 
-  test "allows configuring url scrubber" do
+  test "allows configuring URL scrubber" do
     conn = conn(:get, "/secret-token/secret")
     call(conn, url_scrubber: {__MODULE__, :url_scrubber})
 
