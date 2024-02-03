@@ -10,6 +10,7 @@ defmodule Sentry.Sources do
         }
 
   @source_code_map_key {:sentry, :source_code_map}
+  @compression_level if Mix.env() == :test, do: 0, else: 9
 
   # Default argument is here for testing.
   @spec load_source_code_map_if_present(Path.t()) :: {:loaded, source_map()} | {:error, term()}
@@ -51,7 +52,7 @@ defmodule Sentry.Sources do
   def encode_source_code_map(%{} = source_map) do
     # This term contains no atoms, so that it can be decoded with binary_to_term(bin, [:safe]).
     term_to_encode = %{"version" => 1, "files_map" => source_map}
-    :erlang.term_to_binary(term_to_encode, compressed: 9)
+    :erlang.term_to_binary(term_to_encode, compressed: @compression_level)
   end
 
   defp decode_source_code_map(binary) when is_binary(binary) do

@@ -32,6 +32,16 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
   end
 
   test "supports the --debug option" do
+    # Use a path pattern that doesn't match any files, to make this test as fast as
+    # possible.
+    old_root_source_code_paths = Application.get_env(:sentry, :root_source_code_paths)
+
+    on_exit(fn ->
+      Application.put_env(:sentry, :root_source_code_paths, old_root_source_code_paths)
+    end)
+
+    Application.put_env(:sentry, :root_source_code_paths, [])
+
     assert :ok = Mix.Task.rerun("sentry.package_source_code", ["--debug"])
 
     assert {:messages,
