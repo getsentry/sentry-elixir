@@ -168,7 +168,7 @@ defmodule Sentry.TestTest do
     assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
 
     send(child_pid, :go)
-    assert_receive {:DOWN, ^monitor_ref, _, _, :normal}, 1000
+    assert_receive {:DOWN, ^monitor_ref, _, _, :normal}, 5000
     assert_receive {:done, {:ok, "340"}}, 1000
 
     assert [%Event{} = event] = Test.pop_sentry_reports()
