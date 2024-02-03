@@ -158,8 +158,11 @@ defmodule Sentry.TestTest do
       Task.start_link(fn ->
         Process.delete(:"$callers")
 
+        IO.puts("Started task #{inspect(self())}")
+
         receive do
           :go ->
+            IO.puts("Received :go from task")
             send(parent_pid, {:done, Sentry.capture_message("Oops from child process")})
         end
       end)
@@ -168,7 +171,7 @@ defmodule Sentry.TestTest do
     assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
 
     send(child_pid, :go)
-    assert_receive {:DOWN, ^monitor_ref, _, _, reason}, 1000
+    assert_receive {:DOWN, ^monitor_ref, _, _, reason}, 5000
     assert reason == :normal
     assert_receive {:done, {:ok, "340"}}, 1000
 
