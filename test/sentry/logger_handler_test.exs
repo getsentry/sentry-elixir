@@ -91,12 +91,8 @@ defmodule Sentry.LoggerHandlerTest do
     @tag handler_config: %{excluded_domains: []}
     test "sends two errors when a Plug process crashes if cowboy domain is not excluded",
          %{sender_ref: ref} do
-      {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
-
       :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
       assert_receive {^ref, _event}, 1000
-    after
-      :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
     end
   end
 
@@ -109,7 +105,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message.formatted == "Testing error"
 
-      refute_receive {^ref, _event}, 100
+      refute_received {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: true, level: :warning}
@@ -122,7 +118,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.message.formatted == "Testing warning"
       assert event.level == :warning
 
-      refute_receive {^ref, _event}, 100
+      refute_received {^ref, _event}
     end
 
     @tag handler_config: %{capture_log_messages: true}
@@ -147,7 +143,7 @@ defmodule Sentry.LoggerHandlerTest do
     @tag handler_config: %{capture_log_messages: true}
     test "ignores log messages that are logged by Sentry itself", %{sender_ref: ref} do
       Logger.error("Sentry had an error", domain: [:sentry])
-      refute_receive {^ref, _event}
+      refute_received {^ref, _event}
     end
   end
 

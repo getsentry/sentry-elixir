@@ -5,8 +5,6 @@ defmodule Sentry.DedupeTest do
   alias Sentry.Dedupe
   alias Sentry.Event
 
-  @ttl_millisec 25
-
   describe "insert/1" do
     test "works correctly" do
       event = %Event{
@@ -25,8 +23,8 @@ defmodule Sentry.DedupeTest do
       # Now, we trigger a sweep after waiting for the TTL interval.
       # To ensure the :sweep message is processed, we use the trick
       # of asking the GenServer for its state (which is a sync call).
-      Process.sleep(@ttl_millisec * 2)
-      send(Dedupe, {:sweep, @ttl_millisec})
+      Process.sleep(5)
+      send(Dedupe, {:sweep, 0})
       _ = :sys.get_state(Dedupe)
 
       # Now, it's :new again.

@@ -126,12 +126,9 @@ defmodule Sentry.LoggerBackendTest do
 
     ref = register_before_send()
 
-    {:ok, _plug_pid} = Plug.Cowboy.http(Sentry.ExamplePlugApplication, [], port: 8003)
-
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
     assert_receive {^ref, _event}, 1000
   after
-    :ok = Plug.Cowboy.shutdown(Sentry.ExamplePlugApplication.HTTP)
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
   end
 
@@ -312,7 +309,7 @@ defmodule Sentry.LoggerBackendTest do
 
     Logger.error("Error", domain: [:sentry])
 
-    refute_receive {^ref, _event}
+    refute_received {^ref, _event}
   end
 
   test "sets event level to Logger message level" do
