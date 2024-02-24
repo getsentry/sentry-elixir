@@ -61,15 +61,6 @@ defmodule Sentry.Config do
       The name of the server running the application. Not used by default.
       """
     ],
-    source_code_map_path: [
-      type: {:custom, __MODULE__, :__validate_path__, []},
-      default: nil,
-      type_doc: "`t:Path.t/0` or `nil`",
-      doc: """
-      The path to the map file when mix task `sentry.package_source_code` was invoked with
-      `--output path/to/file.map`
-      """
-    ],
     sample_rate: [
       type: {:custom, __MODULE__, :__validate_sample_rate__, []},
       default: 1.0,
@@ -252,6 +243,15 @@ defmodule Sentry.Config do
       doc: """
       A list of regular expressions used to determine which files to
       exclude from source code context.
+      """
+    ],
+    source_code_map_path: [
+      type: :string,
+      type_doc: "`t:Path.t/0`",
+      doc: """
+      The path to the source code map file. See
+      [`mix sentry.package_source_code`](`Mix.Tasks.Sentry.PackageSourceCode`).
+      Defaults to a private path inside Sentry's `priv` directory. *Available since v10.2.0*.
       """
     ],
     context_lines: [

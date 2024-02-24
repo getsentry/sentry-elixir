@@ -43,34 +43,18 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   > source-context-related options in compile-time config files (like `config/config.exs`
   > or `config/prod.exs`).
 
-  > #### Building with Nix {: .tip}
-  >
-  > If you build your application using nixpkgs' `mixRelease`,
-  > `mix sentry.package_source_code` will fail, because Sentry's source is read-only.
-  >
-  > To fix this, you can use the `--output` option to write the map file to a writable location,
-  > then copy it to Sentry's `priv` in the final OTP release.
-  >
-  > Example:
-  >
-  > ```nix
-  > mixRelease {
-  >   preBuild = ''
-  >     mix sentry.package_source_code --output sentry.map
-  >   '';
-  >
-  >   postInstall = ''
-  >     sentryPrivDir="$(find $out/lib -maxdepth 1 -name "sentry-*")/priv"
-  >     mkdir "$sentryPrivDir"
-  >     cp -a sentry.map "$sentryPrivDir"
-  >   '';
-  > }
-  > ```
-
   ## Options
 
     * `--debug` - print more information about collecting and encoding source code
-    * `--output path` - write file to the given path. Example: `path/to/sentry.map`
+    * `--output PATH` - write source map file to the given `PATH`. If you don't specify
+      this option, the file will be written to the default path, which is inside the `priv`
+      directory of the `:sentry` application. If you use this option, remember to also
+      **configure the `:source_code_map_path` option**, otherwise Sentry will try to
+      *read* the file from the default location. See `Sentry` for more information.
+      This option can be useful when the source
+      `priv` directory is read-only, such as with [NixOS](https://github.com/NixOS/nixpkgs)
+      and similar tools.
+      *Available since v10.2.0*.
 
   """
 

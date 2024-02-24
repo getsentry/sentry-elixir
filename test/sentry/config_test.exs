@@ -50,20 +50,11 @@ defmodule Sentry.ConfigTest do
       end
     end
 
-    @tag :tmp_dir
-    test ":source_code_map_path from option", %{tmp_dir: tmp_dir} do
-      source_code_map_path = Path.join([tmp_dir, "test.map"])
+    test ":source_code_map_path from option" do
+      assert Config.validate!()[:source_code_map_path] == nil
 
-      assert Config.validate!(source_code_map_path: nil)[:source_code_map_path] == nil
-
-      assert_raise ArgumentError, ~r/path does not exist/, fn ->
-        assert Config.validate!(source_code_map_path: source_code_map_path)
-      end
-
-      File.touch!(source_code_map_path)
-
-      assert Config.validate!(source_code_map_path: source_code_map_path)[:source_code_map_path] ==
-               source_code_map_path
+      assert Config.validate!(source_code_map_path: "test.map")[:source_code_map_path] ==
+               "test.map"
     end
 
     test ":release from option" do
