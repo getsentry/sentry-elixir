@@ -61,6 +61,15 @@ defmodule Sentry.Config do
       The name of the server running the application. Not used by default.
       """
     ],
+    source_code_map_path: [
+      type: {:custom, __MODULE__, :__validate_path__, []},
+      default: nil,
+      type_doc: "`t:Path.t/0` or `nil`",
+      doc: """
+      The path to the map file when mix task `sentry.package_source_code` was invoked with
+      `--output path/to/file.map`
+      """
+    ],
     sample_rate: [
       type: {:custom, __MODULE__, :__validate_sample_rate__, []},
       default: 1.0,
@@ -399,6 +408,9 @@ defmodule Sentry.Config do
   @spec server_name() :: String.t() | nil
   def server_name, do: get(:server_name)
 
+  @spec source_code_map_path() :: Path.t() | nil
+  def source_code_map_path, do: get(:source_code_map_path)
+
   @spec filter() :: module()
   def filter, do: fetch!(:filter)
 
@@ -526,6 +538,16 @@ defmodule Sentry.Config do
   @compile {:inline, fetch!: 1}
   defp get(key) do
     :persistent_term.get({:sentry_config, key}, nil)
+  end
+
+  def __validate_path__(nil), do: {:ok, nil}
+
+  def __validate_path__(path) when is_binary(path) do
+    if File.exists?(path) do
+      {:ok, path}
+    else
+      {:error, "path does not exist"}
+    end
   end
 
   def __validate_sample_rate__(float) do

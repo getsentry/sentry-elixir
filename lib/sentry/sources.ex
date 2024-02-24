@@ -14,7 +14,9 @@ defmodule Sentry.Sources do
 
   # Default argument is here for testing.
   @spec load_source_code_map_if_present(Path.t()) :: {:loaded, source_map()} | {:error, term()}
-  def load_source_code_map_if_present(path \\ path_of_packaged_source_code()) do
+  def load_source_code_map_if_present(
+        path \\ Config.source_code_map_path() || path_of_packaged_source_code()
+      ) do
     path = Path.relative_to_cwd(path)
 
     with {:ok, contents} <- File.read(path),

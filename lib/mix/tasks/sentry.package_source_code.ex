@@ -43,9 +43,34 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   > source-context-related options in compile-time config files (like `config/config.exs`
   > or `config/prod.exs`).
 
+  > #### Building with Nix {: .tip}
+  >
+  > If you build your application using nixpkgs' `mixRelease`,
+  > `mix sentry.package_source_code` will fail, because Sentry's source is read-only.
+  >
+  > To fix this, you can use the `--output` option to write the map file to a writable location,
+  > then copy it to Sentry's `priv` in the final OTP release.
+  >
+  > Example:
+  >
+  > ```nix
+  > mixRelease {
+  >   preBuild = ''
+  >     mix sentry.package_source_code --output sentry.map
+  >   '';
+  >
+  >   postInstall = ''
+  >     sentryPrivDir="$(find $out/lib -maxdepth 1 -name "sentry-*")/priv"
+  >     mkdir "$sentryPrivDir"
+  >     cp -a sentry.map "$sentryPrivDir"
+  >   '';
+  > }
+  > ```
+
   ## Options
 
     * `--debug` - print more information about collecting and encoding source code
+    * `--output path` - write file to the given path. Example: `path/to/sentry.map`
 
   """
 
@@ -59,7 +84,10 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   @bytes_in_mb 1024 * 1024
   @bytes_in_gb 1024 * 1024 * 1024
 
-  @switches [debug: :boolean]
+  @switches [
+    debug: :boolean,
+    output: :string
+  ]
 
   @impl true
   def run(args) do
@@ -83,7 +111,7 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
     {elapsed, contents} = :timer.tc(fn -> Sources.encode_source_code_map(source_map) end)
     log_debug(opts, "Encoded source code map in #{format_time(elapsed)}")
 
-    output_path = Sources.path_of_packaged_source_code()
+    output_path = Keyword.get_lazy(opts, :output, &Sources.path_of_packaged_source_code/0)
     File.mkdir_p!(Path.dirname(output_path))
     File.write!(output_path, contents)
 

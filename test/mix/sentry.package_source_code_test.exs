@@ -20,15 +20,24 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
 
     assert :ok = Mix.Task.rerun("sentry.package_source_code")
 
-    assert_receive {:mix_shell, :info, ["Wrote " <> _ = message]}
-    assert message =~ expected_path
+    validate_map_file!(expected_path)
+  end
 
-    assert {:ok, contents} = File.read(expected_path)
+  @tag :tmp_dir
+  test "packages source code into custom path", %{tmp_dir: tmp_dir} do
+    put_test_config(
+      root_source_code_paths: [File.cwd!()],
+      enable_source_code_context: true
+    )
 
-    assert %{"version" => 1, "files_map" => source_map} =
-             :erlang.binary_to_term(contents, [:safe])
+    expected_path =
+      [tmp_dir, "sentry.map"]
+      |> Path.join()
+      |> Path.relative_to_cwd()
 
-    assert Map.has_key?(source_map, "lib/mix/tasks/sentry.package_source_code.ex")
+    assert :ok = Mix.Task.rerun("sentry.package_source_code", ["--output", expected_path])
+
+    validate_map_file!(expected_path)
   end
 
   test "supports the --debug option" do
@@ -50,5 +59,17 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
               {:mix_shell, :info, ["Encoded source code map" <> _]},
               {:mix_shell, :info, ["Wrote " <> _]}
             ]} = Process.info(self(), :messages)
+  end
+
+  defp validate_map_file!(path) do
+    assert_receive {:mix_shell, :info, ["Wrote " <> _ = message]}
+    assert message =~ path
+
+    assert {:ok, contents} = File.read(path)
+
+    assert %{"version" => 1, "files_map" => source_map} =
+             :erlang.binary_to_term(contents, [:safe])
+
+    assert Map.has_key?(source_map, "lib/mix/tasks/sentry.package_source_code.ex")
   end
 end
