@@ -87,7 +87,6 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.8", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
-      {:plug_cowboy, "~> 2.3", optional: true},
 
       # Dev and test dependencies
       {:bypass, "~> 2.0", only: [:test]},
