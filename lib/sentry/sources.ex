@@ -13,7 +13,8 @@ defmodule Sentry.Sources do
   @compression_level if Mix.env() == :test, do: 0, else: 9
 
   # Default argument is here for testing.
-  @spec load_source_code_map_if_present(Path.t()) :: {:loaded, source_map()} | {:error, term()}
+  @spec load_source_code_map_if_present(Path.t() | nil) ::
+          {:loaded, source_map()} | {:error, term()}
   def load_source_code_map_if_present(path_for_tests \\ nil) do
     path = path_for_tests || Config.source_code_map_path() || path_of_packaged_source_code()
     path = Path.relative_to_cwd(path)
