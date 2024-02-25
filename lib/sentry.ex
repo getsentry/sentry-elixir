@@ -171,7 +171,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{Client, Config, Event, LoggerUtils}
+  alias Sentry.{CheckIn, Client, Config, Event, LoggerUtils}
 
   require Logger
 
@@ -335,6 +335,64 @@ defmodule Sentry do
 
       true ->
         :ignored
+    end
+  end
+
+  @doc """
+  Captures a check-in built with the given `options`.
+
+  Check-ins are used to report the status of a monitor to Sentry. This is used
+  to track the health and progress of **cron jobs**. This function is somewhat
+  low level, and mostly useful when you want to report the status of a cron
+  but you are not using any common library to manage your cron jobs.
+
+  This function performs a *synchronous* HTTP request to Sentry. If the request
+  performs successfully, it returns `{:ok, check_in_id}` where `check_in_id` is
+  the ID of the check-in that was sent to Sentry. You can use this ID to send
+  updates about the same check-in. If the request fails, it returns
+  `{:error, reason}`.
+
+  > #### Setting the DSN {: .warning}
+  >
+  > If the `:dsn` configuration is not set, this function won't report the check-in
+  > to Sentry and will instead return `:ignored`. This behaviour is consistent with
+  > the rest of the SDK (such as `capture_exception/2`).
+
+  ## Options
+
+  This functions supports all the options mentioned in `Sentry.CheckIn.new/1`.
+
+  ## Examples
+
+  Say you have a GenServer which periodically sends a message to itself to execute some
+  job. You could monitor the health of this GenServer by reporting a check-in to Sentry.
+
+  For example:
+
+      @impl GenServer
+      def handle_info(:execute_periodic_job, state) do
+        # Report that the job started.
+        {:ok, check_in_id} = Sentry.capture_check_in(status: :in_progress, monitor_slug: "genserver-job")
+
+        :ok = do_job(state)
+
+        # Report that the job ended successfully.
+        Sentry.capture_check_in(check_in_id: check_in_id, status: :ok, monitor_slug: "genserver-job")
+
+        {:noreply, state}
+      end
+
+  """
+  @doc since: "10.2.0"
+  @spec capture_check_in(keyword()) ::
+          {:ok, check_in_id :: String.t()} | :ignored | {:error, term()}
+  def capture_check_in(options) when is_list(options) do
+    if Config.dsn() do
+      options
+      |> CheckIn.new()
+      |> Client.send_check_in(options)
+    else
+      :ignored
     end
   end
 

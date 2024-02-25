@@ -124,4 +124,75 @@ defmodule SentryTest do
     event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
     assert :ignored = Sentry.send_event(event)
   end
+
+  describe "send_check_in/1" do
+    test "posts a check-in with all the explicit arguments", %{bypass: bypass} do
+      put_test_config(environment_name: "test", release: "1.3.2")
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, check_in_body}] = decode_envelope!(body)
+
+        assert headers["type"] == "check_in"
+        assert Map.has_key?(headers, "length")
+
+        assert check_in_body["status"] == "in_progress"
+        assert check_in_body["monitor_slug"] == "my-slug"
+        assert check_in_body["duration"] == 123.2
+        assert check_in_body["release"] == "1.3.2"
+        assert check_in_body["environment"] == "test"
+
+        assert check_in_body["monitor_config"] == %{
+                 "schedule" => %{"type" => "crontab", "value" => "0 * * * *"},
+                 "checkin_margin" => 5,
+                 "max_runtime" => 30,
+                 "failure_issue_threshold" => 2,
+                 "recovery_threshold" => 2,
+                 "timezone" => "America/Los_Angeles"
+               }
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+      end)
+
+      assert {:ok, "1923"} =
+               Sentry.capture_check_in(
+                 status: :in_progress,
+                 monitor_slug: "my-slug",
+                 duration: 123.2,
+                 monitor_config: [
+                   schedule: [
+                     type: :crontab,
+                     value: "0 * * * *"
+                   ],
+                   checkin_margin: 5,
+                   max_runtime: 30,
+                   failure_issue_threshold: 2,
+                   recovery_threshold: 2,
+                   timezone: "America/Los_Angeles"
+                 ]
+               )
+    end
+
+    test "posts a check-in with default arguments", %{bypass: bypass} do
+      put_test_config(environment_name: "test", release: "1.3.2")
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, check_in_body}] = decode_envelope!(body)
+
+        assert headers["type"] == "check_in"
+        assert Map.has_key?(headers, "length")
+
+        assert check_in_body["status"] == "ok"
+        assert check_in_body["monitor_slug"] == "default-slug"
+        assert Map.fetch!(check_in_body, "duration") == nil
+        assert Map.fetch!(check_in_body, "release") == "1.3.2"
+        assert Map.fetch!(check_in_body, "environment") == "test"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+      end)
+
+      assert {:ok, "1923"} = Sentry.capture_check_in(status: :ok, monitor_slug: "default-slug")
+    end
+  end
 end

@@ -2,11 +2,11 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, Config, Event, UUID}
+  alias Sentry.{Attachment, CheckIn, Config, Event, UUID}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
-          items: [Event.t() | Attachment.t(), ...]
+          items: [Event.t() | Attachment.t() | CheckIn.t(), ...]
         }
 
   @enforce_keys [:event_id, :items]
@@ -20,6 +20,17 @@ defmodule Sentry.Envelope do
     %__MODULE__{
       event_id: event_id,
       items: [event] ++ event.attachments
+    }
+  end
+
+  @doc """
+  Creates a new envelope containing the given check-in.
+  """
+  @spec from_check_in(CheckIn.t()) :: t()
+  def from_check_in(%CheckIn{} = check_in) do
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: [check_in]
     }
   end
 
@@ -69,5 +80,16 @@ defmodule Sentry.Envelope do
     {:ok, header_iodata} = json_library.encode(header)
 
     [header_iodata, ?\n, attachment.data, ?\n]
+  end
+
+  defp item_to_binary(json_library, %CheckIn{} = check_in) do
+    case check_in |> CheckIn.to_map() |> json_library.encode() do
+      {:ok, encoded_check_in} ->
+        header = ~s({"type": "check_in", "length": #{byte_size(encoded_check_in)}})
+        [header, ?\n, encoded_check_in, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
   end
 end

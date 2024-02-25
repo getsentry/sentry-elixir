@@ -3,7 +3,7 @@ defmodule Sentry.EnvelopeTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Attachment, Envelope, Event}
+  alias Sentry.{Attachment, CheckIn, Envelope, Event}
 
   describe "to_binary/1" do
     test "encodes an envelope" do
@@ -93,6 +93,25 @@ defmodule Sentry.EnvelopeTest do
                "filename" => "dump",
                "attachment_type" => "event.minidump"
              }
+    end
+
+    test "works with check-ins" do
+      put_test_config(environment_name: "test")
+      check_in_id = Sentry.UUID.uuid4_hex()
+      check_in = %CheckIn{check_in_id: check_in_id, monitor_slug: "test", status: :ok}
+
+      envelope = Envelope.from_check_in(check_in)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+      assert %{"event_id" => _} = Jason.decode!(id_line)
+      assert %{"type" => "check_in", "length" => _} = Jason.decode!(header_line)
+
+      assert {:ok, decoded_check_in} = Jason.decode(event_line)
+      assert decoded_check_in["check_in_id"] == check_in_id
+      assert decoded_check_in["monitor_slug"] == "test"
+      assert decoded_check_in["status"] == "ok"
     end
   end
 end
