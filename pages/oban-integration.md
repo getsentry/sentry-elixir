@@ -2,7 +2,7 @@
 
 The Sentry SDK supports integrating with [Oban](https://github.com/sorentwo/oban), one of the most widely-used job-scheduling libraries in the Elixir ecosystem.
 
-The Oban integration requires the Oban library to be a dependency.
+The Oban integration is available since *v10.2.0* of the Sentry SDK, and it requires the Oban library to be a dependency.
 
 ## Cron Support
 
