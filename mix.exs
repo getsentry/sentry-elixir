@@ -95,10 +95,18 @@ defmodule Sentry.Mixfile do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
-      {:oban, "~> 2.15", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
       {:phoenix_html, "~> 2.0", only: [:test]}
-    ]
+    ] ++ maybe_oban_optional_dependency()
+  end
+
+  # TODO: Remove this once we drop support for Elixir 1.13.
+  defp maybe_oban_optional_dependency do
+    if Version.match?(System.version(), "~> 1.13") do
+      [{:oban, "~> 2.15", only: [:test]}]
+    else
+      []
+    end
   end
 
   defp package do
