@@ -5,7 +5,7 @@ defmodule Sentry.Client do
   # and sampling.
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
-  alias Sentry.{Config, Dedupe, Envelope, Event, Interfaces, LoggerUtils, Transport}
+  alias Sentry.{CheckIn, Config, Dedupe, Envelope, Event, Interfaces, LoggerUtils, Transport}
 
   require Logger
 
@@ -76,6 +76,26 @@ defmodule Sentry.Client do
   @spec split_send_event_opts(keyword()) :: {keyword(), keyword()}
   def split_send_event_opts(options) when is_list(options) do
     Keyword.split(options, @send_event_opts_keys)
+  end
+
+  @spec send_check_in(CheckIn.t(), keyword()) ::
+          {:ok, check_in_id :: String.t()} | {:error, term()}
+  def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
+    client = Keyword.get_lazy(opts, :client, &Config.client/0)
+
+    # This is a "private" option, only really used in testing.
+    request_retries =
+      Keyword.get_lazy(opts, :request_retries, fn ->
+        Application.get_env(:sentry, :request_retries, Transport.default_retries())
+      end)
+
+    send_result =
+      check_in
+      |> Envelope.from_check_in()
+      |> Transport.post_envelope(client, request_retries)
+
+    _ = maybe_log_send_result(send_result, check_in)
+    send_result
   end
 
   # This is what executes the "Event Pipeline".
@@ -320,7 +340,7 @@ defmodule Sentry.Client do
     :ok
   end
 
-  defp maybe_log_send_result(send_result, %Event{}) do
+  defp maybe_log_send_result(send_result, _other) do
     message =
       case send_result do
         {:error, {:invalid_json, error}} ->
