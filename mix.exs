@@ -37,7 +37,7 @@ defmodule Sentry.Mixfile do
           "pages/upgrade-10.x.md"
         ],
         groups_for_extras: [
-          "Integrations": [
+          Integrations: [
             "pages/setup-with-plug-and-phoenix.md",
             "pages/oban-integration.md"
           ],
