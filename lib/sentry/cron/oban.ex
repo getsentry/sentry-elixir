@@ -9,55 +9,81 @@ defmodule Sentry.Cron.Oban do
 
   @spec attach_telemetry_handler() :: :ok
   def attach_telemetry_handler do
-    _ = :telemetry.attach_many(__MODULE__, @events, &__MODULE__.handle_event/4, %{})
+    _ = :telemetry.attach_many(__MODULE__, @events, &__MODULE__.handle_event/4, :no_config)
     :ok
   end
 
-  @spec handle_event([atom()], term(), term(), term()) :: term()
-  def handle_event(event, measurements, metadata, config)
+  @spec handle_event([atom()], term(), term(), :no_config) :: :ok
+  def handle_event([:oban, :job, event], measurements, metadata, _config)
+      when event in [:start, :stop, :exception] do
+    if is_struct(metadata.job, Oban.Job) and metadata.job.meta["cron"] == true and
+         not is_nil(metadata.job.meta["cron_expr"]) do
+      handle_event(event, measurements, metadata)
+    end
 
-  def handle_event([:oban, :job, :start], _measurements, metadata, _config) do
-    Sentry.capture_check_in(
-      check_in_id: job_id(metadata.job),
-      status: :in_progress,
-      monitor_slug: job_to_monitor_slug(metadata.job)
-    )
+    :ok
   end
 
-  def handle_event([:oban, :job, :stop], measurements, metadata, _config) do
-    status =
-      case metadata.state do
-        :success -> :ok
-        :failure -> :error
-        :cancelled -> :ok
-        :discard -> :ok
-        :snoozed -> :ok
-      end
+  ## Helpers
 
-    Sentry.capture_check_in(
-      check_in_id: job_id(metadata.job),
-      status: status,
-      monitor_slug: job_to_monitor_slug(metadata.job),
-      duration: duration_in_seconds(measurements)
-    )
+  defp handle_event(:start, _measurements, metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
+      opts
+      |> Keyword.merge(status: :in_progress)
+      |> Sentry.capture_check_in()
+    end
   end
 
-  def handle_event([:oban, :job, :exception], measurements, metadata, _config) do
-    Sentry.capture_check_in(
-      check_in_id: job_id(metadata.job),
-      status: :error,
-      monitor_slug: job_to_monitor_slug(metadata.job),
-      duration: duration_in_seconds(measurements)
-    )
+  defp handle_event(:stop, measurements, metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
+      status =
+        case metadata.state do
+          :success -> :ok
+          :failure -> :error
+          :cancelled -> :ok
+          :discard -> :ok
+          :snoozed -> :ok
+        end
+
+      opts
+      |> Keyword.merge(status: status, duration: duration_in_seconds(measurements))
+      |> Sentry.capture_check_in()
+    end
   end
 
-  defp job_id(job) when is_struct(job, Oban.Job) do
-    "oban-#{job.id}"
+  defp handle_event(:exception, measurements, metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
+      opts
+      |> Keyword.merge(status: :error, duration: duration_in_seconds(measurements))
+      |> Sentry.capture_check_in()
+    end
   end
 
-  defp job_to_monitor_slug(job) when is_struct(job, Oban.Job) do
-    # This is already a binary.
-    job.worker
+  defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
+    if schedule_opts = schedule_opts(job) do
+      [
+        check_in_id: "oban-#{job.id}",
+        # This is already a binary.
+        monitor_slug: job.worker,
+        monitor_config: [schedule: schedule_opts]
+      ]
+    else
+      nil
+    end
+  end
+
+  defp schedule_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do
+    case meta["cron_expr"] do
+      "@hourly" -> [type: :interval, value: 1, unit: :hour]
+      "@daily" -> [type: :interval, value: 1, unit: :day]
+      "@weekly" -> [type: :interval, value: 1, unit: :week]
+      "@monthly" -> [type: :interval, value: 1, unit: :month]
+      "@yearly" -> [type: :interval, value: 1, unit: :year]
+      "@annually" -> [type: :interval, value: 1, unit: :year]
+      "@reboot" -> nil
+      cron_expr when is_binary(cron_expr) -> [type: :crontab, value: cron_expr]
+      _other -> nil
+    end
   end
 
   defp duration_in_seconds(%{duration: duration} = _measurements) do

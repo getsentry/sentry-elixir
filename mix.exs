@@ -103,7 +103,8 @@ defmodule Sentry.Mixfile do
   # TODO: Remove this once we drop support for Elixir 1.13.
   defp maybe_oban_optional_dependency do
     if Version.match?(System.version(), "~> 1.13") do
-      [{:oban, "~> 2.15", only: [:test]}]
+      # [{:oban, "~> 2.15", only: [:test]}]
+      [{:oban, github: "sorentwo/oban", ref: "d9d8480", only: [:test]}]
     else
       []
     end
