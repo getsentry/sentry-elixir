@@ -14,13 +14,21 @@ defmodule Sentry.Cron.Oban do
   end
 
   @spec handle_event([atom()], term(), term(), :no_config) :: :ok
-  def handle_event([:oban, :job, event], measurements, metadata, _config)
-      when event in [:start, :stop, :exception] do
-    if is_struct(metadata.job, Oban.Job) and metadata.job.meta["cron"] == true and
-         not is_nil(metadata.job.meta["cron_expr"]) do
-      handle_event(event, measurements, metadata)
-    end
+  def handle_event(event, measurements, metadata, _config)
 
+  def handle_event(
+        [:oban, :job, event],
+        measurements,
+        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} = metadata,
+        _config
+      )
+      when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
+    _ = handle_event(event, measurements, metadata)
+    :ok
+  end
+
+  def handle_event([:oban, :job, event], _measurements, _metadata, _config)
+      when event in [:start, :stop, :exception] do
     :ok
   end
 
