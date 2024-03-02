@@ -27,6 +27,32 @@ defmodule Sentry.Config do
           ]
         ]
       ]
+    ],
+    quantum: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Quantum](https://github.com/quantum-elixir/quantum-core) integration.
+      *Available since v10.2.0*.
+      """,
+      keys: [
+        cron: [
+          doc: """
+          Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
+          for Quantum.
+          """,
+          type: :keyword_list,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to enable the Quantum integration. When enabled, the Sentry SDK will
+              capture check-ins for Quantum jobs. *Available since v10.2.0*.
+              """
+            ]
+          ]
+        ]
+      ]
     ]
   ]
 

@@ -51,5 +51,9 @@ defmodule Sentry.Application do
     if config[:oban][:cron][:enabled] do
       Sentry.Cron.Oban.attach_telemetry_handler()
     end
+
+    if config[:quantum][:cron][:enabled] do
+      Sentry.Cron.Quantum.attach_telemetry_handler()
+    end
   end
 end
