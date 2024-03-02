@@ -27,7 +27,11 @@ defmodule Sentry.Application do
     cache_loaded_applications()
     _ = Sources.load_source_code_map_if_present()
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor)
+    with {:ok, pid} <-
+           Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
+      start_integrations(config)
+      {:ok, pid}
+    end
   end
 
   defp cache_loaded_applications do
@@ -41,5 +45,11 @@ defmodule Sentry.Application do
       end
 
     :persistent_term.put({:sentry, :loaded_applications}, apps_with_vsns)
+  end
+
+  defp start_integrations(config) do
+    if config[:oban][:cron][:enabled] do
+      Sentry.Cron.Oban.attach_telemetry_handler()
+    end
   end
 end

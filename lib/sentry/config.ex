@@ -1,6 +1,35 @@
 defmodule Sentry.Config do
   @moduledoc false
 
+  integrations_schema = [
+    oban: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Oban](https://github.com/sorentwo/oban) integration. *Available
+      since v10.2.0*.
+      """,
+      keys: [
+        cron: [
+          doc: """
+          Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
+          for Oban.
+          """,
+          type: :keyword_list,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to enable the Oban integration. When enabled, the Sentry SDK will
+              capture check-ins for Oban jobs. *Available since v10.2.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+
   basic_opts_schema = [
     dsn: [
       type: {:or, [nil, {:custom, __MODULE__, :__validate_string_dsn__, []}]},
@@ -147,6 +176,15 @@ defmodule Sentry.Config do
       there is a process **collecting events** and avoid sending those events if that's the
       case. This is useful for testing. See `Sentry.Test`.
       """
+    ],
+    integrations: [
+      type: :keyword_list,
+      doc: """
+      Configuration for integrations with third-party libraries. Every integration has its own
+      option and corresponding configuration options.
+      """,
+      default: [],
+      keys: integrations_schema
     ]
   ]
 

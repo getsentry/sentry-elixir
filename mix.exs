@@ -31,16 +31,17 @@ defmodule Sentry.Mixfile do
           "README.md",
           "CHANGELOG.md",
           "pages/setup-with-plug-and-phoenix.md",
+          "pages/oban-integration.md",
           "pages/upgrade-8.x.md",
           "pages/upgrade-9.x.md",
           "pages/upgrade-10.x.md"
         ],
         groups_for_extras: [
-          "Upgrade Guides": [
-            "pages/upgrade-8.x.md",
-            "pages/upgrade-9.x.md",
-            "pages/upgrade-10.x.md"
-          ]
+          Integrations: [
+            "pages/setup-with-plug-and-phoenix.md",
+            "pages/oban-integration.md"
+          ],
+          "Upgrade Guides": [~r{^pages/upgrade}]
         ],
         groups_for_modules: [
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
@@ -58,7 +59,7 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn]],
+      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, :telemetry]],
       aliases: [aliases()]
     ]
   end
@@ -87,6 +88,7 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.8", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:plug, "~> 1.6", optional: true},
+      {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
 
       # Dev and test dependencies
       {:bypass, "~> 2.0", only: [:test]},
@@ -95,7 +97,16 @@ defmodule Sentry.Mixfile do
       {:excoveralls, "~> 0.17.1", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
       {:phoenix_html, "~> 2.0", only: [:test]}
-    ]
+    ] ++ maybe_oban_optional_dependency()
+  end
+
+  # TODO: Remove this once we drop support for Elixir 1.13.
+  defp maybe_oban_optional_dependency do
+    if Version.match?(System.version(), "~> 1.13") do
+      [{:oban, "~> 2.17 and >= 2.17.6", only: [:test]}]
+    else
+      []
+    end
   end
 
   defp package do
