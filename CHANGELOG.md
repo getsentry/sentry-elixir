@@ -1,5 +1,29 @@
 # Changelog
 
+## 10.2.0-rc.1
+
+### Various fixes & improvements
+
+- Add Cron support for Quantum jobs (#699) by @whatyouhide
+- Add cron integration for Oban (#698) by @whatyouhide
+- Introduce manual check-ins for crons (#697) by @whatyouhide
+- Fix Dialyzer error (47e2d65d) by @whatyouhide
+- Clean up --output flag for "mix sentry.package_source_code" (711236f4) by @whatyouhide
+- Allow --output argument in "mix sentry.package_source_code" (#691) by @razielgn
+- Don't list optional dependency on plug_cowboy (1ac4b930) by @whatyouhide
+- Speed up tests by ~450% (#690) by @whatyouhide
+- Remove Sentry.Interfaces.Span (#689) by @whatyouhide
+- Fix a couple of flaky tests in CI (#688) by @whatyouhide
+- Add url_scrubber for redacting URLs (#687) by @paulstatezny
+- Update stuff in CI (#684) by @whatyouhide
+- Introduce Sentry.Test (#681) by @whatyouhide
+- Improve error message on unavailable config (05c4c226) by @whatyouhide
+- Add Sentry.Interfaces.Span (#679) by @whatyouhide
+- Fix crash with custom scrubber in Sentry.PlugContext (#678) by @paulstatezny
+- Add exception mechanism set handled/unhandled (#677) by @whatyouhide
+- Ignores unknown request fields (#676) by @whatyouhide
+- Accept anything that is "stringable" when interpolating (#675) by @whatyouhide
+
 ## 10.1.0
 
 ### Various fixes & improvements
