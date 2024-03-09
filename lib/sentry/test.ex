@@ -64,6 +64,8 @@ defmodule Sentry.Test do
   @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Event{} = event) do
     if Sentry.Config.test_mode?() do
+      ensure_ownership_server_started()
+
       case NimbleOwnership.fetch_owner(@server, callers(), @key) do
         {:ok, owner_pid} ->
           result =
@@ -102,24 +104,77 @@ defmodule Sentry.Test do
 
       setup :start_collecting_sentry_reports
 
+  For a more flexible way to start collecting events, see `start_collecting/1`.
   """
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
+    start_collecting()
+  end
+
+  @doc """
+  Starts collecting events.
+
+  This function starts collecting events reported from the given (*owner*) process. If you want to
+  allow other processes to report events, you need to *allow* them to report events back
+  to the owner process. See `allow/2` for more information on allowances. If the owner
+  process is already *allowed by another process*, this function raises an error.
+
+  ## Options
+
+    * `:owner` - the PID of the owner process that will collect the events. Defaults to `self/0`.
+
+    * `:cleanup` - a boolean that controls whether collected resources around the owner process
+      should be cleaned up when the owner process exits. Defaults to `true`. If `false`, you'll
+      need to manually call `cleanup/1` to clean up the resources.
+
+  ## Examples
+
+  The `:cleanup` option can be used to implement expectation-based tests, akin to something
+  like [`Mox.expect/4`](https://hexdocs.pm/mox/1.1.0/Mox.html#expect/4).
+
+      test "implementing an expectation-based test workflow" do
+        test_pid = self()
+
+        Test.start_collecting(owner: test_pid, cleanup: false)
+
+        on_exit(fn ->
+          assert [%Event{} = event] = Test.pop_sentry_reports(test_pid)
+          assert event.message.formatted == "Oops"
+          assert :ok = Test.cleanup(test_pid)
+        end)
+
+        assert {:ok, ""} = Sentry.capture_message("Oops")
+      end
+
+  """
+  @doc since: "10.2.0"
+  @spec start_collecting(keyword()) :: :ok
+  def start_collecting(options \\ []) when is_list(options) do
+    owner_pid = Keyword.get(options, :owner, self())
+    cleanup? = Keyword.get(options, :cleanup, true)
+
+    callers =
+      if owner_pid == self() do
+        callers()
+      else
+        [owner_pid]
+      end
+
     # Make sure the ownership server is started (this is idempotent).
     ensure_ownership_server_started()
 
-    case NimbleOwnership.fetch_owner(@server, callers(), @key) do
+    case NimbleOwnership.fetch_owner(@server, callers, @key) do
       # No-op
-      {tag, owner_pid} when tag in [:ok, :shared_owner] and owner_pid == self() ->
+      {tag, ^owner_pid} when tag in [:ok, :shared_owner] ->
         :ok
 
-      {:shared_owner, _pid} ->
+      {:shared_owner, _other_pid} ->
         raise ArgumentError,
               "Sentry.Test is in global mode and is already collecting reported events"
 
-      {:ok, another_pid} ->
-        raise ArgumentError, "already collecting reported events from #{inspect(another_pid)}"
+      {:ok, other_pid} ->
+        raise ArgumentError, "already collecting reported events from #{inspect(other_pid)}"
 
       :error ->
         :ok
@@ -130,7 +185,23 @@ defmodule Sentry.Test do
         {:ignored, events || []}
       end)
 
+    if not cleanup? do
+      :ok = NimbleOwnership.set_owner_to_manual_cleanup(@server, owner_pid)
+    end
+
     :ok
+  end
+
+  @doc """
+  Cleans up test resources associated with `owner_pid`.
+
+  See the `:cleanup` option in `start_collecting/1` and the corresponding
+  example for more information.
+  """
+  @doc since: "10.2.0"
+  @spec cleanup(pid()) :: :ok
+  def cleanup(owner_pid) when is_pid(owner_pid) do
+    :ok = NimbleOwnership.cleanup_owner(@server, owner_pid)
   end
 
   @doc """
@@ -180,17 +251,22 @@ defmodule Sentry.Test do
 
   """
   @doc since: "10.2.0"
-  @spec pop_sentry_reports() :: [Sentry.Event.t()]
-  def pop_sentry_reports do
+  @spec pop_sentry_reports(pid()) :: [Sentry.Event.t()]
+  def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
     result =
-      NimbleOwnership.get_and_update(@server, self(), @key, fn
-        nil -> {:not_collecting, []}
-        events when is_list(events) -> {events, []}
-      end)
+      try do
+        NimbleOwnership.get_and_update(@server, owner_pid, @key, fn
+          nil -> {:not_collecting, []}
+          events when is_list(events) -> {events, []}
+        end)
+      catch
+        :exit, {:noproc, _} ->
+          raise ArgumentError, "not collecting reported events from #{inspect(owner_pid)}"
+      end
 
     case result do
       {:ok, :not_collecting} ->
-        raise ArgumentError, "not collecting reported events from #{inspect(self())}"
+        raise ArgumentError, "not collecting reported events from #{inspect(owner_pid)}"
 
       {:ok, events} ->
         events
@@ -203,7 +279,7 @@ defmodule Sentry.Test do
   ## Helpers
 
   defp ensure_ownership_server_started do
-    case NimbleOwnership.start_link(name: @server) do
+    case Supervisor.start_child(Sentry.Supervisor, NimbleOwnership.child_spec(name: @server)) do
       {:ok, pid} ->
         pid
 
