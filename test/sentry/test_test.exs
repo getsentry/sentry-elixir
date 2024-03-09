@@ -1,5 +1,5 @@
 defmodule Sentry.TestTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import Sentry.TestHelpers
 
@@ -173,5 +173,19 @@ defmodule Sentry.TestTest do
 
     assert [%Event{} = event] = Test.pop_sentry_reports()
     assert event.message.formatted == "Oops from parent process"
+  end
+
+  test "implementing an expectation-based test workflow" do
+    test_pid = self()
+
+    Test.start_collecting(owner: test_pid, cleanup: false)
+
+    on_exit(fn ->
+      assert [%Event{} = event] = Test.pop_sentry_reports(test_pid)
+      assert event.message.formatted == "Oops"
+      assert :ok = Test.cleanup(test_pid)
+    end)
+
+    assert {:ok, ""} = Sentry.capture_message("Oops")
   end
 end
