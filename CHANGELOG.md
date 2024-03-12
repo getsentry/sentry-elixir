@@ -1,5 +1,13 @@
 # Changelog
 
+## 10.2.0-rc.2
+
+### Various fixes & improvements
+
+- Support RCs in bump-version.sh script (42cc5d6f) by @whatyouhide
+- Improve behavior of :test_mode/:dsn (7f8442ee) by @whatyouhide
+- Bump nimble_ownership dep to make testing better (#700) by @whatyouhide
+
 ## 10.2.0-rc.1
 
 ### Various fixes & improvements
