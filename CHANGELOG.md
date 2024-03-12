@@ -1,5 +1,9 @@
 # Changelog
 
+## 10.2.0
+
+- No documented changes.
+
 ## 10.2.0-rc.2
 
 ### Various fixes & improvements
