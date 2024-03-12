@@ -119,10 +119,16 @@ defmodule SentryTest do
     assert logged_count == 2
   end
 
-  test "does not send events if :dsn is not configured or nil" do
-    put_test_config(dsn: nil)
+  test "does not send events if :dsn is not configured or nil (if not in test mode)" do
+    put_test_config(dsn: nil, test_mode: false)
     event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
     assert :ignored = Sentry.send_event(event)
+  end
+
+  test "if in test mode, swallows events if the :dsn is nil" do
+    put_test_config(dsn: nil, test_mode: true)
+    event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
+    assert {:ok, ""} = Sentry.send_event(event)
   end
 
   describe "send_check_in/1" do

@@ -5,11 +5,31 @@ defmodule Sentry.Test do
   ## Usage
 
   This module is based on **collecting** reported events and then retrieving
-  them to perform assertions. You can start collecting events from a process
+  them to perform assertions. The functionality here is only available if the
+  `:test_mode` configuration option is set to `true`—see
+  [`Sentry`'s configuration section](sentry.html#module-configuration).
+  You can start collecting events from a process
   by calling `start_collecting_sentry_reports/0`. Then, you can use Sentry
   as normal and report events (through functions such as `Sentry.capture_message/1`
   or `Sentry.capture_exception/1`). Finally, you can retrieve the collected events
   by calling `pop_sentry_reports/0`.
+
+  > #### Test Mode and DSN {: .info}
+  >
+  > If `:test_mode` is `true`, the `:dsn` option behaves differently. When `:dsn` is
+  > not set or `nil` and you're collecting events, you'll still be able to collect
+  > events—even if under normal circumstances a missing `:dsn` means events don't get
+  > reported. If `:dsn` is `nil` and you're not collecting events, the event is simply
+  > ignored. See the table below for a summary for this behavior.
+
+  | `:test_mode` | `:dsn` | Collecting events? | Behavior                                               |
+  |--------------|--------|--------------------|--------------------------------------------------------|
+  | `true`       | `nil`  | yes                | Event is collected                                     |
+  | `true`       | `nil`  | no                 | Event is ignored (silently)                            |
+  | `true`       | set    | yes                | Event is collected                                     |
+  | `true`       | set    | no                 | Makes HTTP request to configured DSN (could be Bypass) |
+  | `false`      | `nil`  | irrelevant         | Ignores event                                          |
+  | `false`      | set    | irrelevant         | Makes HTTP request to configured DSN (could be Bypass) |
 
   ## Examples
 
@@ -64,6 +84,7 @@ defmodule Sentry.Test do
   @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Event{} = event) do
     if Sentry.Config.test_mode?() do
+      dsn_set? = not is_nil(Sentry.Config.dsn())
       ensure_ownership_server_started()
 
       case NimbleOwnership.fetch_owner(@server, callers(), @key) do
@@ -81,8 +102,13 @@ defmodule Sentry.Test do
               raise ArgumentError, "cannot collect Sentry reports: #{Exception.message(error)}"
           end
 
-        :error ->
+        :error when dsn_set? ->
           :not_collecting
+
+        # If the :dsn option is not set and we didn't capture the event, it's alright,
+        # we can just swallow it.
+        :error ->
+          :collected
       end
     else
       :not_collecting

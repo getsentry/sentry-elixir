@@ -327,6 +327,10 @@ defmodule Sentry do
         LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
         :ignored
 
+      # If we're in test mode, let's send the event down the pipeline anyway.
+      Config.test_mode?() ->
+        Client.send_event(event, opts)
+
       !Config.dsn() ->
         :ignored
 

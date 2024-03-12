@@ -64,6 +64,8 @@ defmodule Sentry.Config do
       doc: """
       The DSN for your Sentry project. If this is not set, Sentry will not be enabled.
       If the `SENTRY_DSN` environment variable is set, it will be used as the default value.
+      If `:test_mode` is `true`, the `:dsn` option is sometimes ignored; see `Sentry.Test`
+      for more information.
       """
     ],
     environment_name: [
@@ -200,7 +202,8 @@ defmodule Sentry.Config do
       doc: """
       Whether to enable *test mode*. When test mode is enabled, the SDK will check whether
       there is a process **collecting events** and avoid sending those events if that's the
-      case. This is useful for testing. See `Sentry.Test`.
+      case. This is useful for testing—see `Sentry.Test`. `:test_mode` works in tandem
+      with `:dsn`; this is described in detail in `Sentry.Test`.
       """
     ],
     integrations: [
