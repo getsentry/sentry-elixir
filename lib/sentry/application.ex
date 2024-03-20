@@ -29,7 +29,7 @@ defmodule Sentry.Application do
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
-      start_integrations(config)
+      start_integrations(Keyword.fetch!(config, :integrations))
       {:ok, pid}
     end
   end
