@@ -1,5 +1,13 @@
 # Changelog
 
+## 10.2.1
+
+### Various fixes & improvements
+
+- Fix automatic start integrations (#704) by @vshev4enko
+- Fix wrong CLI argument in CI (#701) by @vshev4enko
+- Update changelog (d6da0fbe) by @whatyouhide
+
 ## 10.2.0
 
 ### New features
