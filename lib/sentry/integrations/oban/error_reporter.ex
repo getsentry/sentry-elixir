@@ -6,12 +6,13 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
   @spec attach() :: :ok
   def attach do
-    :telemetry.attach(
-      __MODULE__,
-      [:oban, :job, :exception],
-      &__MODULE__.handle_event/4,
-      :no_config
-    )
+    _ =
+      :telemetry.attach(
+        __MODULE__,
+        [:oban, :job, :exception],
+        &__MODULE__.handle_event/4,
+        :no_config
+      )
 
     :ok
   end
@@ -19,7 +20,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   @spec handle_event(
           [atom(), ...],
           term(),
-          %{required(:job) => Oban.Job.t(), optional(term()) => term()},
+          %{required(:job) => struct(), optional(term()) => term()},
           :no_config
         ) :: :ok
   def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
@@ -32,16 +33,17 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         _ -> stacktrace
       end
 
-    Sentry.capture_exception(exception,
-      stacktrace: stacktrace,
-      tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-      fingerprint: [
-        inspect(exception.__struct__),
-        inspect(job.worker),
-        Exception.message(exception)
-      ],
-      extra: Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker])
-    )
+    _ =
+      Sentry.capture_exception(exception,
+        stacktrace: stacktrace,
+        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+        fingerprint: [
+          inspect(exception.__struct__),
+          inspect(job.worker),
+          Exception.message(exception)
+        ],
+        extra: Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker])
+      )
 
     :ok
   end
