@@ -8,6 +8,23 @@ The Oban integration is available since *v10.2.0* of the Sentry SDK, and it requ
   1. Oban version 2.17.6 or greater.
   1. Elixir 1.13 or later, since that is required by Oban itself.
 
+## Automatic Error Capturing
+
+*Available since 10.3.0*.
+
+You can enable automatic capturing of errors that happen in Oban jobs. This includes jobs that return `{:error, reason}`, raise an exception, exit, and so on.
+
+To enable support:
+
+```elixir
+config :sentry,
+  integrations: [
+    oban: [
+      capture_errors: true
+    ]
+  ]
+```
+
 ## Cron Support
 
 To enable support for monitoring Oban jobs via [Sentry Cron](https://docs.sentry.io/product/crons/), make sure the following `:oban` configuration is in your Sentry configuration:
