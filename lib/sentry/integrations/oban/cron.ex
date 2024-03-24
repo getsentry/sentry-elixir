@@ -1,10 +1,10 @@
-defmodule Sentry.Cron.Quantum do
+defmodule Sentry.Integrations.Oban.Cron do
   @moduledoc false
 
   @events [
-    [:quantum, :job, :start],
-    [:quantum, :job, :stop],
-    [:quantum, :job, :exception]
+    [:oban, :job, :start],
+    [:oban, :job, :stop],
+    [:oban, :job, :exception]
   ]
 
   @spec attach_telemetry_handler() :: :ok
@@ -17,17 +17,17 @@ defmodule Sentry.Cron.Quantum do
   def handle_event(event, measurements, metadata, _config)
 
   def handle_event(
-        [:quantum, :job, event],
+        [:oban, :job, event],
         measurements,
-        %{job: %mod{schedule: schedule}} = metadata,
+        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} = metadata,
         _config
       )
-      when event in [:start, :stop, :exception] and mod == Quantum.Job and not is_nil(schedule) do
+      when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
     _ = handle_event(event, measurements, metadata)
     :ok
   end
 
-  def handle_event([:quantum, :job, event], _measurements, _metadata, _config)
+  def handle_event([:oban, :job, event], _measurements, _metadata, _config)
       when event in [:start, :stop, :exception] do
     :ok
   end
@@ -35,7 +35,7 @@ defmodule Sentry.Cron.Quantum do
   ## Helpers
 
   defp handle_event(:start, _measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
       opts
       |> Keyword.merge(status: :in_progress)
       |> Sentry.capture_check_in()
@@ -43,29 +43,36 @@ defmodule Sentry.Cron.Quantum do
   end
 
   defp handle_event(:stop, measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
+      status =
+        case metadata.state do
+          :success -> :ok
+          :failure -> :error
+          :cancelled -> :ok
+          :discard -> :ok
+          :snoozed -> :ok
+        end
+
       opts
-      |> Keyword.merge(status: :ok, duration: duration_in_seconds(measurements))
+      |> Keyword.merge(status: status, duration: duration_in_seconds(measurements))
       |> Sentry.capture_check_in()
     end
   end
 
   defp handle_event(:exception, measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = job_to_check_in_opts(metadata.job) do
       opts
       |> Keyword.merge(status: :error, duration: duration_in_seconds(measurements))
       |> Sentry.capture_check_in()
     end
   end
 
-  defp check_in_opts(%{job: job} = metadata) when is_struct(job, Quantum.Job) do
+  defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
     if schedule_opts = schedule_opts(job) do
-      id = metadata.telemetry_span_context |> :erlang.phash2() |> Integer.to_string()
-
       [
-        check_in_id: "quantum-#{id}",
+        check_in_id: "oban-#{job.id}",
         # This is already a binary.
-        monitor_slug: "quantum-#{inspect(job.name)}",
+        monitor_slug: job.worker,
         monitor_config: [schedule: schedule_opts]
       ]
     else
@@ -73,8 +80,8 @@ defmodule Sentry.Cron.Quantum do
     end
   end
 
-  defp schedule_opts(job) when is_struct(job, Quantum.Job) do
-    case apply(Crontab.CronExpression.Composer, :compose, [job.schedule]) do
+  defp schedule_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do
+    case meta["cron_expr"] do
       "@hourly" -> [type: :interval, value: 1, unit: :hour]
       "@daily" -> [type: :interval, value: 1, unit: :day]
       "@weekly" -> [type: :interval, value: 1, unit: :week]

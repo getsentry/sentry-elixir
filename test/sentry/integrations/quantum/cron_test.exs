@@ -1,6 +1,6 @@
 # TODO: Quantum requires Elixir 1.12+, remove this once we depend on that too.
 if Version.match?(System.version(), "~> 1.12") do
-  defmodule Sentry.Cron.QuantumTest do
+  defmodule Sentry.Integrations.Quantum.CronTest do
     use Sentry.Case, async: false
 
     import Sentry.TestHelpers
@@ -10,7 +10,7 @@ if Version.match?(System.version(), "~> 1.12") do
     end
 
     setup_all do
-      Sentry.Cron.Quantum.attach_telemetry_handler()
+      Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
     end
 
     setup do

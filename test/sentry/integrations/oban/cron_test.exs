@@ -1,12 +1,12 @@
 # TODO: Oban requires Elixir 1.13+, remove this once we depend on that too.
 if Version.match?(System.version(), "~> 1.13") do
-  defmodule Sentry.Cron.ObanTest do
+  defmodule Sentry.Integrations.Oban.CronTest do
     use Sentry.Case, async: false
 
     import Sentry.TestHelpers
 
     setup_all do
-      Sentry.Cron.Oban.attach_telemetry_handler()
+      Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
     end
 
     setup do

@@ -49,7 +49,7 @@ defmodule Sentry.Application do
 
   defp start_integrations(config) do
     if config[:oban][:cron][:enabled] do
-      Sentry.Cron.Oban.attach_telemetry_handler()
+      Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
     end
 
     if config[:oban][:capture_errors] do
