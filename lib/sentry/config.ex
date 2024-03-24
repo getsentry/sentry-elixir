@@ -9,6 +9,15 @@ defmodule Sentry.Config do
       since v10.2.0*.
       """,
       keys: [
+        capture_errors: [
+          type: :boolean,
+          default: false,
+          doc: """
+          Whether to capture errors from Oban jobs. When enabled, the Sentry SDK will capture
+          errors that happen in Oban jobs, including when errors return `{:error, reason}`
+          tuples. *Available since 10.3.0*.
+          """
+        ],
         cron: [
           doc: """
           Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
