@@ -1,5 +1,13 @@
 # Changelog
 
+## 10.3.0
+
+### Various fixes & improvements
+
+- Fix compilation warning (83a727a3) by @whatyouhide
+- Move some integrations-related modules around (8eeca145) by @whatyouhide
+- Add integrated support for capturing Oban errors (#705) by @whatyouhide
+
 ## 10.2.1
 
 ### Various fixes & improvements
