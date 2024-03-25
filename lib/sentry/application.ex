@@ -57,7 +57,7 @@ defmodule Sentry.Application do
     end
 
     if config[:quantum][:cron][:enabled] do
-      Sentry.Cron.Quantum.attach_telemetry_handler()
+      Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
     end
   end
 end
