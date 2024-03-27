@@ -34,6 +34,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
       Mix.Task.run("compile", args)
     end
 
+    Mix.Task.run("loadconfig")
+
     case Application.ensure_all_started(:sentry) do
       {:ok, _apps} ->
         :ok
