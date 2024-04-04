@@ -20,8 +20,13 @@ defmodule Sentry.Transport do
       when is_atom(client) and is_list(retries) do
     case Envelope.to_binary(envelope) do
       {:ok, body} ->
-        {endpoint, headers} = {Config.envelope_endpoint(), Config.auth_headers()}
-        post_envelope_with_retries(client, endpoint, headers, body, retries)
+        post_envelope_with_retries(
+          client,
+          Config.envelope_endpoint(),
+          Config.auth_headers(),
+          body,
+          retries
+        )
 
       {:error, reason} ->
         {:error, {:invalid_json, reason}}

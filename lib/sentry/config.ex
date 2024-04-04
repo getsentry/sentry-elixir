@@ -62,6 +62,14 @@ defmodule Sentry.Config do
           ]
         ]
       ]
+    ],
+    opentelemetry: [
+      type: :boolean,
+      doc: """
+      A boolean switch that sets up [OpenTelemetry](https://opentelemetry.io/docs/languages/erlang/)
+      automatically to instrument your application and export the spans to Sentry.
+      *Available since vTODO*.
+      """
     ]
   ]
 
@@ -464,37 +472,45 @@ defmodule Sentry.Config do
   @spec dsn() :: nil | {String.t(), String.t(), String.t()}
   def dsn, do: get(:dsn)
 
-  @spec envelope_endpoint() :: String.t()
+  @spec envelope_endpoint() :: nil | String.t()
   def envelope_endpoint do
-    {base_uri, _, _} = dsn()
-    base_uri <> "envelope/"
+    case dsn() do
+      {base_uri, _, _} -> base_uri <> "envelope/"
+      _ -> nil
+    end
   end
 
-  @spec spans_endpoint() :: String.t()
+  @spec spans_endpoint() :: nil | String.t()
   def spans_endpoint do
-    {base_uri, _, _} = dsn()
-    base_uri <> "spans/"
+    case dsn() do
+      {base_uri, _, _} -> base_uri <> "spans/"
+      _ -> nil
+    end
   end
 
-  @spec auth_headers() :: [{String.t(), String.t()}]
+  @spec auth_headers() :: nil | [{String.t(), String.t()}]
   def auth_headers do
-    {_, public_key, secret_key} = dsn()
+    case dsn() do
+      {_, public_key, secret_key} ->
+        auth_query =
+          [
+            sentry_version: @sentry_version,
+            sentry_client: @sentry_client,
+            sentry_timestamp: System.system_time(:second),
+            sentry_key: public_key,
+            sentry_secret: secret_key
+          ]
+          |> Enum.reject(fn {_, value} -> is_nil(value) end)
+          |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
 
-    auth_query =
-      [
-        sentry_version: @sentry_version,
-        sentry_client: @sentry_client,
-        sentry_timestamp: System.system_time(:second),
-        sentry_key: public_key,
-        sentry_secret: secret_key
-      ]
-      |> Enum.reject(fn {_, value} -> is_nil(value) end)
-      |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
+        [
+          {"User-Agent", @sentry_client},
+          {"X-Sentry-Auth", "Sentry " <> auth_query}
+        ]
 
-    [
-      {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", "Sentry " <> auth_query}
-    ]
+      _ ->
+        nil
+    end
   end
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated
