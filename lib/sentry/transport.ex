@@ -7,8 +7,6 @@ defmodule Sentry.Transport do
   alias Sentry.Envelope
 
   @default_retries [1000, 2000, 4000, 8000]
-  @sentry_version 5
-  @sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}"
 
   @spec default_retries() :: [pos_integer(), ...]
   def default_retries do
@@ -22,7 +20,7 @@ defmodule Sentry.Transport do
       when is_atom(client) and is_list(retries) do
     case Envelope.to_binary(envelope) do
       {:ok, body} ->
-        {endpoint, headers} = get_endpoint_and_headers()
+        {endpoint, headers} = {Config.envelope_endpoint(), Config.auth_headers()}
         post_envelope_with_retries(client, endpoint, headers, body, retries)
 
       {:error, reason} ->
@@ -62,27 +60,5 @@ defmodule Sentry.Transport do
     end
   catch
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
-  end
-
-  defp get_endpoint_and_headers do
-    {endpoint, public_key, secret_key} = Config.dsn()
-
-    auth_query =
-      [
-        sentry_version: @sentry_version,
-        sentry_client: @sentry_client,
-        sentry_timestamp: System.system_time(:second),
-        sentry_key: public_key,
-        sentry_secret: secret_key
-      ]
-      |> Enum.reject(fn {_, value} -> is_nil(value) end)
-      |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
-
-    auth_headers = [
-      {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", "Sentry " <> auth_query}
-    ]
-
-    {endpoint, auth_headers}
   end
 end

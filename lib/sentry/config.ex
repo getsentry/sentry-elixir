@@ -389,6 +389,9 @@ defmodule Sentry.Config do
   @opts_schema NimbleOptions.new!(@raw_opts_schema)
   @valid_keys Keyword.keys(@raw_opts_schema)
 
+  @sentry_version 5
+  @sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}"
+
   @spec validate!() :: keyword()
   def validate! do
     :sentry
@@ -460,6 +463,39 @@ defmodule Sentry.Config do
 
   @spec dsn() :: nil | {String.t(), String.t(), String.t()}
   def dsn, do: get(:dsn)
+
+  @spec envelope_endpoint() :: String.t()
+  def envelope_endpoint do
+    {base_uri, _, _} = dsn()
+    base_uri <> "envelope/"
+  end
+
+  @spec spans_endpoint() :: String.t()
+  def spans_endpoint do
+    {base_uri, _, _} = dsn()
+    base_uri <> "spans/"
+  end
+
+  @spec auth_headers() :: [{String.t(), String.t()}]
+  def auth_headers do
+    {_, public_key, secret_key} = dsn()
+
+    auth_query =
+      [
+        sentry_version: @sentry_version,
+        sentry_client: @sentry_client,
+        sentry_timestamp: System.system_time(:second),
+        sentry_key: public_key,
+        sentry_secret: secret_key
+      ]
+      |> Enum.reject(fn {_, value} -> is_nil(value) end)
+      |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
+
+    [
+      {"User-Agent", @sentry_client},
+      {"X-Sentry-Auth", "Sentry " <> auth_query}
+    ]
+  end
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated
   # in v10.0.0.
@@ -710,10 +746,10 @@ defmodule Sentry.Config do
       end
 
     with {:ok, {base_path, project_id}} <- pop_project_id(uri.path) do
-      new_path = Enum.join([base_path, "api", project_id, "envelope"], "/") <> "/"
-      endpoint_uri = URI.merge(%URI{uri | userinfo: nil}, new_path)
+      new_path = Enum.join([base_path, "api", project_id], "/") <> "/"
+      base_uri = URI.merge(%URI{uri | userinfo: nil}, new_path)
 
-      {:ok, {URI.to_string(endpoint_uri), public_key, secret_key}}
+      {:ok, {URI.to_string(base_uri), public_key, secret_key}}
     end
   catch
     message -> {:error, message}

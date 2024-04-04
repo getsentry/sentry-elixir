@@ -6,7 +6,7 @@ defmodule Sentry.ConfigTest do
   describe "validate!/0" do
     test ":dsn from option" do
       assert Config.validate!(dsn: "https://public:secret@app.getsentry.com/1")[:dsn] ==
-               {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
+               {"https://app.getsentry.com/api/1/", "public", "secret"}
 
       assert Config.validate!(dsn: nil)[:dsn] == nil
     end
@@ -14,7 +14,7 @@ defmodule Sentry.ConfigTest do
     test ":dsn from system environment" do
       with_system_env("SENTRY_DSN", "https://public:secret@app.getsentry.com/1", fn ->
         assert Config.validate!([])[:dsn] ==
-                 {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
+                 {"https://app.getsentry.com/api/1/", "public", "secret"}
       end)
     end
 
@@ -213,7 +213,7 @@ defmodule Sentry.ConfigTest do
       assert :ok = Config.put_config(:dsn, new_dsn)
 
       assert Config.dsn() ==
-               {"https://app.getsentry.com/api/2/envelope/", "public", "secret"}
+               {"https://app.getsentry.com/api/2/", "public", "secret"}
     end
 
     test "validates the given key" do
