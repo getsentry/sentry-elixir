@@ -143,13 +143,19 @@ defmodule Sentry.Context do
   @typedoc since: "9.0.0"
   @type extra() :: %{optional(atom()) => term()}
 
-  @logger_metadata_key :sentry
+  @logger_metadata_key :__sentry__
   @user_key :user
   @tags_key :tags
   @extra_key :extra
   @request_key :request
   @breadcrumbs_key :breadcrumbs
   @attachments_key :attachments
+
+  @doc false
+  @spec __logger_metadata_key__() :: unquote(@logger_metadata_key)
+  def __logger_metadata_key__ do
+    @logger_metadata_key
+  end
 
   @doc """
   Retrieves all currently-set context on the current process.
