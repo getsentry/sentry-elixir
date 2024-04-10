@@ -266,6 +266,10 @@ defmodule Sentry.Event do
 
   @create_event_opts_schema NimbleOptions.new!(create_event_opts_schema)
 
+  @doc false
+  @spec create_event_opts_schema() :: NimbleOptions.t()
+  def create_event_opts_schema, do: @create_event_opts_schema
+
   @doc """
   Creates an event struct out of collected context and options.
 
