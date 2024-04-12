@@ -323,7 +323,11 @@ defmodule Sentry.Client do
   end
 
   defp sanitize_non_jsonable_value(value, json_library) do
-    case json_library.encode(value) do
+    try do
+      json_library.encode(value)
+    catch
+      _type, _reason -> {:changed, inspect(value)}
+    else
       {:ok, _encoded} -> :unchanged
       {:error, _reason} -> {:changed, inspect(value)}
     end

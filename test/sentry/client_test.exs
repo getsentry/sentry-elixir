@@ -30,7 +30,11 @@ defmodule Sentry.ClientTest do
             valid: "yes",
             self: self(),
             keyword: [key: "value"],
-            nested: %{self: self()}
+            nested: %{self: self()},
+            bool: true,
+            null: nil,
+            int: 2,
+            map: %{bool: false}
           },
           user: %{id: "valid-ID", email: {"user", "@example.com"}},
           tags: %{valid: "yes", tokens: MapSet.new([1])}
@@ -42,12 +46,35 @@ defmodule Sentry.ClientTest do
       assert rendered.extra.self == inspect(self())
       assert rendered.extra.keyword == [~s({:key, "value"})]
       assert rendered.extra.nested.self == inspect(self())
+      assert rendered.extra.bool == true
+      assert rendered.extra.null == nil
+      assert rendered.extra.int == 2
+      assert rendered.extra.map.bool == false
 
       assert rendered.user.id == "valid-ID"
       assert rendered.user.email == ~s({"user", "@example.com"})
 
       assert rendered.tags.valid == "yes"
       assert rendered.tags.tokens == inspect(MapSet.new([1]))
+    end
+
+    test "works if the JSON library crashes" do
+      defmodule RaisingJSONClient do
+        def encode(:crash), do: raise("Oops")
+        def encode(term), do: Jason.encode(term)
+
+        def decode(term), do: Jason.decode(term)
+      end
+
+      put_test_config(json_library: RaisingJSONClient)
+
+      event = Event.create_event(message: "Something went wrong", extra: %{crasher: :crash})
+
+      assert %{} = rendered = Client.render_event(event)
+      assert rendered.extra.crasher == ":crash"
+    after
+      :code.delete(RaisingJSONClient)
+      :code.purge(RaisingJSONClient)
     end
   end
 
