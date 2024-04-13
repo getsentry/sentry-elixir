@@ -152,6 +152,18 @@ defmodule Sentry.LoggerHandlerTest do
       %{test_genserver: start_supervised!(TestGenServer, restart: :temporary)}
     end
 
+    test "a GenServer raising an error is reported",
+         %{sender_ref: ref, test_genserver: test_genserver} do
+      run_and_catch_exit(test_genserver, fn -> Keyword.fetch!([], :foo) end)
+
+      assert_receive {^ref, event}
+      assert %KeyError{} = event.original_exception
+      assert [exception] = event.exception
+      assert exception.type == "KeyError"
+      assert exception.value == "key :foo not found in: []"
+      assert Enum.find(exception.stacktrace.frames, &(&1.function =~ "Keyword.fetch!/2"))
+    end
+
     test "a GenServer throw is reported", %{sender_ref: ref, test_genserver: test_genserver} do
       run_and_catch_exit(test_genserver, fn ->
         throw(:testing_throw)
