@@ -48,6 +48,8 @@ defmodule Sentry.Mixfile do
         groups_for_modules: [
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
+          "Data Structures": [Sentry.Attachment, Sentry.CheckIn],
+          HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
           Interfaces: [~r/^Sentry\.Interfaces/],
           Testing: [Sentry.Test]
         ],
