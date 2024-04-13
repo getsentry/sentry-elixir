@@ -46,9 +46,11 @@ defmodule Sentry.LoggerUtils do
   end
 
   defp get_sentry_options_from_callers([caller | rest]) when is_pid(caller) do
+    logger_metadata_key = Sentry.Context.__logger_metadata_key__()
+
     with {:current_node, true} <- {:current_node, node(caller) == Node.self()},
          {:dictionary, [_ | _] = dictionary} <- :erlang.process_info(caller, :dictionary),
-         %{sentry: sentry} <- dictionary[:"$logger_metadata$"] do
+         %{^logger_metadata_key => sentry} <- dictionary[:"$logger_metadata$"] do
       sentry
     else
       _ -> get_sentry_options_from_callers(rest)

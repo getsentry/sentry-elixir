@@ -55,6 +55,7 @@ defmodule Sentry.LoggerBackend do
 
   @behaviour :gen_event
 
+  alias Sentry.Context
   alias Sentry.LoggerUtils
 
   ## State
@@ -122,17 +123,21 @@ defmodule Sentry.LoggerBackend do
   ## Helpers
 
   defp log(level, msg, meta, state) do
+    sentry_context_from_meta = meta[:sentry]
+    sentry_context_from_sentry = meta[Context.__logger_metadata_key__()]
+
+    sentry_context =
+      if sentry_context_from_meta || sentry_context_from_sentry do
+        Map.merge(sentry_context_from_meta || %{}, sentry_context_from_sentry || %{})
+      else
+        nil
+      end
+
     # Logger backends run in their own process, that's why we read the context from meta[:sentry].
     # The context in the Logger backend process is not the same as the one in the process
     # that did the logging. This behavior is different than the one in Sentry.LoggerHandler,
     # since Logger handlers run in the caller process.
-    opts =
-      LoggerUtils.build_sentry_options(
-        level,
-        _sentry_context = meta[:sentry],
-        Map.new(meta),
-        state.metadata
-      )
+    opts = LoggerUtils.build_sentry_options(level, sentry_context, Map.new(meta), state.metadata)
 
     case meta[:crash_reason] do
       # If the crash reason is an exception, we want to report the exception itself

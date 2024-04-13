@@ -150,7 +150,14 @@ defmodule Sentry.LoggerHandler do
         # If we take meta[:sentry] here, we would duplicate all the stuff. This
         # behavior is different than the one in Sentry.LoggerBackend because the Logger
         # backend runs in its own process.
-        sentry_opts = LoggerUtils.build_sentry_options(log_level, nil, log_meta, config.metadata)
+        sentry_opts =
+          LoggerUtils.build_sentry_options(
+            log_level,
+            log_meta[:sentry],
+            log_meta,
+            config.metadata
+          )
+
         log_unfiltered(log_event, sentry_opts, config)
     end
   end
