@@ -32,6 +32,7 @@ defmodule Sentry.Mixfile do
           "CHANGELOG.md",
           "pages/setup-with-plug-and-phoenix.md",
           "pages/oban-integration.md",
+          "pages/quantum-integration.md",
           "pages/upgrade-8.x.md",
           "pages/upgrade-9.x.md",
           "pages/upgrade-10.x.md"
@@ -39,7 +40,8 @@ defmodule Sentry.Mixfile do
         groups_for_extras: [
           Integrations: [
             "pages/setup-with-plug-and-phoenix.md",
-            "pages/oban-integration.md"
+            "pages/oban-integration.md",
+            "pages/quantum-integration.md"
           ],
           "Upgrade Guides": [~r{^pages/upgrade}]
         ],
