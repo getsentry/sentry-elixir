@@ -169,8 +169,7 @@ defmodule Sentry.LoggerHandler do
          sentry_opts,
          %__MODULE__{} = config
        ) do
-    message = :unicode.characters_to_binary(unicode_chardata)
-    log_from_crash_reason(log_event.meta[:crash_reason], message, sentry_opts, config)
+    log_from_crash_reason(log_event.meta[:crash_reason], unicode_chardata, sentry_opts, config)
   end
 
   # "report" here is of type logger:report/0, which is a map or keyword list.
@@ -222,7 +221,7 @@ defmodule Sentry.LoggerHandler do
 
   defp log_from_crash_reason(
          {exception, stacktrace},
-         _string_message,
+         _chardata_message,
          sentry_opts,
          %__MODULE__{}
        )
@@ -231,23 +230,61 @@ defmodule Sentry.LoggerHandler do
     Sentry.capture_exception(exception, sentry_opts)
   end
 
-  defp log_from_crash_reason({reason, stacktrace}, string_message, sentry_opts, %__MODULE__{})
+  defp log_from_crash_reason({reason, stacktrace}, chardata_message, sentry_opts, %__MODULE__{})
        when is_list(stacktrace) do
     sentry_opts =
       sentry_opts
       |> Keyword.put(:stacktrace, stacktrace)
       |> Keyword.update!(:extra, &Map.put(&1, :crash_reason, inspect(reason)))
+      |> Keyword.update!(:extra, &Map.merge(extra_info_from_message(chardata_message), &1))
 
-    Sentry.capture_message(string_message, sentry_opts)
+    case reason do
+      {type, {GenServer, :call, [_pid, call, _timeout]}} = reason
+      when type in [:noproc, :timeout] ->
+        sentry_opts =
+          Keyword.put_new(sentry_opts, :fingerprint, [
+            Atom.to_string(type),
+            "genserver_call",
+            inspect(call)
+          ])
+
+        Sentry.capture_message(Exception.format_exit(reason), sentry_opts)
+
+      _other ->
+        string_message = :unicode.characters_to_binary(chardata_message)
+        Sentry.capture_message(string_message, sentry_opts)
+    end
   end
 
-  defp log_from_crash_reason(_other_reason, string_message, sentry_opts, %__MODULE__{
+  defp log_from_crash_reason(_other_reason, chardata_message, sentry_opts, %__MODULE__{
          capture_log_messages: true
        }) do
+    string_message = :unicode.characters_to_binary(chardata_message)
     Sentry.capture_message(string_message, sentry_opts)
   end
 
   defp log_from_crash_reason(_other_reason, _string_message, _sentry_opts, _config) do
     :ok
+  end
+
+  defp extra_info_from_message([
+         [
+           "GenServer ",
+           _pid,
+           " terminating",
+           _reason,
+           "\nLast message",
+           _from,
+           ": ",
+           last_message
+         ],
+         "\nState: ",
+         state | _rest
+       ]) do
+    %{genserver_state: state, last_message: last_message}
+  end
+
+  defp extra_info_from_message(_message) do
+    %{}
   end
 end

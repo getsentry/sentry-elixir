@@ -13,7 +13,11 @@ defmodule Sentry.LoggerUtils do
   @spec build_sentry_options(Logger.level(), keyword() | nil, map(), [atom()] | :all) ::
           keyword()
   def build_sentry_options(level, sentry_context, meta, allowed_meta) do
-    default_extra = %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level}
+    default_extra =
+      Map.merge(
+        %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level},
+        Map.take(meta, [:domain])
+      )
 
     (sentry_context || get_sentry_options_from_callers(meta[:callers]) || %{})
     |> Map.new()

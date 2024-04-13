@@ -185,7 +185,61 @@ defmodule Sentry.LoggerHandlerTest do
       if System.otp_release() >= "26" do
         assert [] = event.exception
         assert [_thread] = event.threads
+        assert event.extra.genserver_state == ":no_state"
+        assert event.extra.last_message =~ "{:run, #Function"
       end
+    end
+
+    test "an exit while calling another GenServer is reported nicely",
+         %{sender_ref: ref, test_genserver: test_genserver} do
+      # Get a PID and make sure it's done before using it.
+      {pid, monitor_ref} = spawn_monitor(fn -> :ok end)
+      assert_receive {:DOWN, ^monitor_ref, _, _, _}
+
+      run_and_catch_exit(test_genserver, fn ->
+        GenServer.call(pid, :ping)
+      end)
+
+      assert_receive {^ref, event}
+
+      assert event.exception == []
+      assert event.extra.domain == [:otp]
+      assert event.extra.logger_level == :error
+      assert event.extra.logger_metadata == %{}
+      assert event.extra.crash_reason =~ "{:noproc, {GenServer, :call"
+      assert event.fingerprint == ["noproc", "genserver_call", ":ping"]
+
+      assert event.message.formatted == """
+             exited in: GenServer.call(#{inspect(pid)}, :ping, 5000)
+                 ** (EXIT) no process: the process is not alive or there's no process currently \
+             associated with the given name, possibly because its application isn't started\
+             """
+
+      assert [%{stacktrace: stacktrace}] = event.threads
+      assert Enum.find(stacktrace.frames, &(&1.function == "GenServer.call/3"))
+    end
+
+    test "a timeout while calling another GenServer is reported nicely",
+         %{sender_ref: ref, test_genserver: test_genserver} do
+      {:ok, agent} = Agent.start_link(fn -> nil end)
+
+      run_and_catch_exit(test_genserver, fn ->
+        Agent.get(agent, & &1, 0)
+      end)
+
+      assert_receive {^ref, event}
+
+      assert event.exception == []
+      assert event.extra.domain == [:otp]
+      assert event.extra.logger_level == :error
+      assert event.extra.logger_metadata == %{}
+      assert event.extra.crash_reason =~ "{:timeout, {GenServer, :call"
+      assert ["timeout", "genserver_call", "{:get" <> _] = event.fingerprint
+
+      assert event.message.formatted =~ "exited in: GenServer.call(#{inspect(agent)}, {:get, "
+
+      assert [%{stacktrace: stacktrace}] = event.threads
+      assert Enum.find(stacktrace.frames, &(&1.function == "GenServer.call/3"))
     end
 
     @tag handler_config: %{metadata: [:string, :number, :map, :list, :chardata]}
@@ -285,7 +339,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert [] = event.exception
       assert [thread] = event.threads
 
-      assert event.message.formatted =~ "** (stop) exited in: GenServer.call("
+      assert event.message.formatted =~ "exited in: GenServer.call("
       assert event.message.formatted =~ "** (EXIT) time out"
       assert length(thread.stacktrace.frames) > 0
     end
