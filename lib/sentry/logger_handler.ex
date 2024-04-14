@@ -1,4 +1,76 @@
 defmodule Sentry.LoggerHandler do
+  rate_limiting_options_schema = [
+    max_events: [
+      type: :non_neg_integer,
+      required: true,
+      doc: "The maximum number of events to send to Sentry in the `:interval` period."
+    ],
+    interval: [
+      type: :non_neg_integer,
+      required: true,
+      doc: "The interval (in *milliseconds*) to send `:max_events` events."
+    ]
+  ]
+
+  options_schema = [
+    level: [
+      type:
+        {:in,
+         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
+      default: :error,
+      type_doc: "`t:Logger.level/0`",
+      doc: """
+      The minimum [`Logger`
+      level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
+      """
+    ],
+    excluded_domains: [
+      type: {:list, :atom},
+      default: [:cowboy],
+      type_doc: "list of `t:atom/0`",
+      doc: """
+      Any messages with a domain in the configured list will not be sent. The default is so as
+      to avoid double-reporting events from `Sentry.PlugCapture`.
+      """
+    ],
+    metadata: [
+      type: {:or, [{:list, :atom}, {:in, [:all]}]},
+      default: [],
+      type_doc: "list of `t:atom/0`, or `:all`",
+      doc: """
+      Use this to include non-Sentry logger metadata in reports. If it's a list of keys, metadata
+      in those keys will be added in the `:extra` context (see
+      `Sentry.Context.set_extra_context/1`) under the `:logger_metadata` key.
+      If set to `:all`, all metadata will be included.
+      """
+    ],
+    capture_log_messages: [
+      type: :boolean,
+      default: false,
+      doc: """
+      When `true`, this module will report all logged messages to Sentry (provided they're not
+      filtered by `:excluded_domains` and `:level`). The default of `false` means that the
+      handler will only send **crash reports**, which are messages with metadata that has the
+      shape of an exit reason and a stacktrace.
+      """
+    ],
+    rate_limiting: [
+      type: {:or, [{:in, [nil]}, {:non_empty_keyword_list, rate_limiting_options_schema}]},
+      doc: """
+      *since v10.4.0* - If present, enables rate
+      limiting of reported messages. This can help avoid "spamming" Sentry with
+      repeated log messages. To disable rate limiting, set this to `nil` or don't
+      pass it altogether.
+
+      #{NimbleOptions.docs(rate_limiting_options_schema)}
+      """,
+      type_doc: "`t:keyword/0` or `nil`",
+      default: nil
+    ]
+  ]
+
+  @options_schema NimbleOptions.new!(options_schema)
+
   @moduledoc """
   `:logger` handler to report logged events to Sentry.
 
@@ -78,37 +150,7 @@ defmodule Sentry.LoggerHandler do
 
   This handler supports the following configuration options:
 
-    * `:excluded_domains` (list of `t:atom/0`) - any messages with a domain in
-      the configured list will not be sent. Defaults to `[:cowboy]` to avoid
-      double-reporting events from `Sentry.PlugCapture`.
-
-    * `:metadata` (list of `t:atom/0`, or `:all`) - use this to include
-      non-Sentry logger metadata in reports. If it's a list of keys, metadata in
-      those keys will be added in the `:extra` context (see
-      `Sentry.Context.set_extra_context/1`) under the `:logger_metadata` key.
-      If set to `:all`, all metadata will be included. Defaults to `[]`.
-
-    * `:level` (`t:Logger.level/0`) - the minimum [`Logger`
-      level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
-      Defaults to `:error`.
-
-    * `:capture_log_messages` (`t:boolean/0`) - when `true`, this module will
-      report all logged messages to Sentry (provided they're not filtered by
-      `:excluded_domains` and `:level`). Defaults to `false`, which will only
-      send **crash reports**, which are messages with metadata that has the
-      shape of an exit reason and a stacktrace.
-
-    * `:rate_limiting` (`t:keyword/0`, since *v10.4.0*) - if present, enables rate
-      limiting of reported messages. This can help avoid "spamming" Sentry with
-      repeated log messages. To disable rate limiting, set this to `nil` or don't
-      pass it altogether (which is the default). If this option is present, these
-      nested options are **required**:
-
-      * `:max_events` (`t:non_neg_integer/0`) - the maximum number of events
-        to send to Sentry in the `:interval` period.
-
-      * `:interval` (`t:non_neg_integer/0`) - the interval (in *milliseconds*)
-        to send `:max_events` events.
+  #{NimbleOptions.docs(@options_schema)}
 
   """
 
@@ -118,19 +160,7 @@ defmodule Sentry.LoggerHandler do
   alias Sentry.LoggerHandler.RateLimiter
 
   # The config for this logger handler.
-  defstruct level: :error,
-            excluded_domains: [:cowboy],
-            metadata: [],
-            capture_log_messages: false,
-            rate_limiting: nil
-
-  @valid_config_keys [
-    :excluded_domains,
-    :capture_log_messages,
-    :metadata,
-    :level,
-    :rate_limiting
-  ]
+  defstruct [:level, :excluded_domains, :metadata, :capture_log_messages, :rate_limiting]
 
   ## Logger handler callbacks
 
@@ -138,8 +168,10 @@ defmodule Sentry.LoggerHandler do
   @doc false
   @spec adding_handler(:logger.handler_config()) :: {:ok, :logger.handler_config()}
   def adding_handler(config) do
-    config = Map.put_new(config, :config, %__MODULE__{})
-    config = update_in(config.config, &cast_config(__MODULE__, &1))
+    # The :config key may not be here.
+    sentry_config = Map.get(config, :config, %{})
+
+    config = Map.put(config, :config, cast_config(%__MODULE__{}, sentry_config))
 
     if rate_limiting_config = config.config.rate_limiting do
       _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
@@ -154,33 +186,42 @@ defmodule Sentry.LoggerHandler do
   @spec changing_config(:update, :logger.handler_config(), :logger.handler_config()) ::
           {:ok, :logger.handler_config()}
   def changing_config(:update, old_config, new_config) do
+    new_sentry_config =
+      if is_struct(new_config.config, __MODULE__) do
+        Map.from_struct(new_config.config)
+      else
+        new_config.config
+      end
+
+    updated_config = update_in(old_config.config, &cast_config(&1, new_sentry_config))
+
     _ignored =
       cond do
-        new_config.config.rate_limiting == old_config.config.rate_limiting ->
+        updated_config.config.rate_limiting == old_config.config.rate_limiting ->
           :ok
 
         # Turn off rate limiting.
-        old_config.config.rate_limiting && is_nil(new_config.config.rate_limiting) ->
-          :ok = RateLimiter.terminate_and_delete(new_config.id)
+        old_config.config.rate_limiting && is_nil(updated_config.config.rate_limiting) ->
+          :ok = RateLimiter.terminate_and_delete(updated_config.id)
 
         # Turn on rate limiting.
-        is_nil(old_config.config.rate_limiting) && new_config.config.rate_limiting ->
+        is_nil(old_config.config.rate_limiting) && updated_config.config.rate_limiting ->
           RateLimiter.start_under_sentry_supervisor(
-            new_config.id,
-            new_config.config.rate_limiting
+            updated_config.id,
+            updated_config.config.rate_limiting
           )
 
         # The config changed, so restart the rate limiter with the new config.
         true ->
-          :ok = RateLimiter.terminate_and_delete(new_config.id)
+          :ok = RateLimiter.terminate_and_delete(updated_config.id)
 
           RateLimiter.start_under_sentry_supervisor(
-            new_config.id,
-            new_config.config.rate_limiting
+            updated_config.id,
+            updated_config.config.rate_limiting
           )
       end
 
-    {:ok, update_in(old_config.config, &cast_config(&1, new_config.config))}
+    {:ok, updated_config}
   end
 
   # Callback for :logger handlers
@@ -276,9 +317,13 @@ defmodule Sentry.LoggerHandler do
 
   ## Helpers
 
-  defp cast_config(existing_config, new_config) do
-    config_attrs = Map.take(new_config, @valid_config_keys)
-    struct!(existing_config, config_attrs)
+  defp cast_config(%__MODULE__{} = existing_config, %{} = new_config) do
+    validated_config =
+      new_config
+      |> Map.to_list()
+      |> NimbleOptions.validate!(@options_schema)
+
+    struct!(existing_config, validated_config)
   end
 
   defp log_from_crash_reason(
