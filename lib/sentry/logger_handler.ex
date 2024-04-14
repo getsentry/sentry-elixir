@@ -98,10 +98,10 @@ defmodule Sentry.LoggerHandler do
       send **crash reports**, which are messages with metadata that has the
       shape of an exit reason and a stacktrace.
 
-    * `:rate_limiting` (`t:keyword/0`) - if present, enables rate limiting
-      of reported messages. This can help avoid "spamming" Sentry with repeated
-      log messages. To disable rate limiting, set this to `nil` or don't pass
-      it altogether (which is the default). If this option is present, these
+    * `:rate_limiting` (`t:keyword/0`, since *v10.4.0*) - if present, enables rate
+      limiting of reported messages. This can help avoid "spamming" Sentry with
+      repeated log messages. To disable rate limiting, set this to `nil` or don't
+      pass it altogether (which is the default). If this option is present, these
       nested options are **required**:
 
       * `:max_events` (`t:non_neg_integer/0`) - the maximum number of events
