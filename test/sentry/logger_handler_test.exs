@@ -508,6 +508,22 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
+  describe "options validation" do
+    test "happens when adding the handler", context do
+      config = %{
+        capture_log_messages: :not_a_boolean
+      }
+
+      assert {:error,
+              {:handler_not_added,
+               {:callback_crashed,
+                {:error, %NimbleOptions.ValidationError{} = error, _stacktrace}}}} =
+               :logger.add_handler(context.test, Sentry.LoggerHandler, %{config: config})
+
+      assert Exception.message(error) =~ "invalid value for :capture_log_messages option"
+    end
+  end
+
   defp register_before_send(_context) do
     pid = self()
     ref = make_ref()
