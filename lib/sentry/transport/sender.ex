@@ -19,8 +19,7 @@ defmodule Sentry.Transport.Sender do
 
   @spec send_async(module(), Event.t()) :: :ok
   def send_async(client, %Event{} = event) when is_atom(client) do
-    pool_size = Application.fetch_env!(:sentry, :sender_pool_size)
-    random_index = Enum.random(1..pool_size)
+    random_index = Enum.random(1..Transport.SenderPool.pool_size())
 
     GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, client, event})
   end
