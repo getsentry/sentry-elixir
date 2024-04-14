@@ -4,7 +4,9 @@ defmodule Sentry.LoggerHandler do
 
   This module is similar to `Sentry.LoggerBackend`, but it implements a
   [`:logger` handler](https://erlang.org/doc/man/logger_chapter.html#handlers) rather
-  than an Elixir's `Logger` backend.
+  than an Elixir's `Logger` backend. It provides additional functionality compared to
+  the `Logger` backend, such as rate-limiting of reported messages, better fingerprinting,
+  and better handling of crashes.
 
   *This module is available since v9.0.0 of this library*.
 
@@ -96,23 +98,38 @@ defmodule Sentry.LoggerHandler do
       send **crash reports**, which are messages with metadata that has the
       shape of an exit reason and a stacktrace.
 
+    * `:rate_limiting` (`t:keyword/0`, since *v10.4.0*) - if present, enables rate
+      limiting of reported messages. This can help avoid "spamming" Sentry with
+      repeated log messages. To disable rate limiting, set this to `nil` or don't
+      pass it altogether (which is the default). If this option is present, these
+      nested options are **required**:
+
+      * `:max_events` (`t:non_neg_integer/0`) - the maximum number of events
+        to send to Sentry in the `:interval` period.
+
+      * `:interval` (`t:non_neg_integer/0`) - the interval (in *milliseconds*)
+        to send `:max_events` events.
+
   """
 
   @moduledoc since: "9.0.0"
 
   alias Sentry.LoggerUtils
+  alias Sentry.LoggerHandler.RateLimiter
 
   # The config for this logger handler.
   defstruct level: :error,
             excluded_domains: [:cowboy],
             metadata: [],
-            capture_log_messages: false
+            capture_log_messages: false,
+            rate_limiting: nil
 
   @valid_config_keys [
     :excluded_domains,
     :capture_log_messages,
     :metadata,
-    :level
+    :level,
+    :rate_limiting
   ]
 
   ## Logger handler callbacks
@@ -122,7 +139,14 @@ defmodule Sentry.LoggerHandler do
   @spec adding_handler(:logger.handler_config()) :: {:ok, :logger.handler_config()}
   def adding_handler(config) do
     config = Map.put_new(config, :config, %__MODULE__{})
-    {:ok, update_in(config.config, &cast_config(__MODULE__, &1))}
+    config = update_in(config.config, &cast_config(__MODULE__, &1))
+
+    if rate_limiting_config = config.config.rate_limiting do
+      _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
+      {:ok, config}
+    else
+      {:ok, config}
+    end
   end
 
   # Callback for :logger handlers
@@ -130,18 +154,56 @@ defmodule Sentry.LoggerHandler do
   @spec changing_config(:update, :logger.handler_config(), :logger.handler_config()) ::
           {:ok, :logger.handler_config()}
   def changing_config(:update, old_config, new_config) do
+    _ignored =
+      cond do
+        new_config.config.rate_limiting == old_config.config.rate_limiting ->
+          :ok
+
+        # Turn off rate limiting.
+        old_config.config.rate_limiting && is_nil(new_config.config.rate_limiting) ->
+          :ok = RateLimiter.terminate_and_delete(new_config.id)
+
+        # Turn on rate limiting.
+        is_nil(old_config.config.rate_limiting) && new_config.config.rate_limiting ->
+          RateLimiter.start_under_sentry_supervisor(
+            new_config.id,
+            new_config.config.rate_limiting
+          )
+
+        # The config changed, so restart the rate limiter with the new config.
+        true ->
+          :ok = RateLimiter.terminate_and_delete(new_config.id)
+
+          RateLimiter.start_under_sentry_supervisor(
+            new_config.id,
+            new_config.config.rate_limiting
+          )
+      end
+
     {:ok, update_in(old_config.config, &cast_config(&1, new_config.config))}
   end
 
   # Callback for :logger handlers
   @doc false
+  def removing_handler(%{id: id}) do
+    :ok = RateLimiter.terminate_and_delete(id)
+  end
+
+  # Callback for :logger handlers
+  @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
-  def log(%{level: log_level, meta: log_meta} = log_event, %{config: %__MODULE__{} = config}) do
+  def log(%{level: log_level, meta: log_meta} = log_event, %{
+        config: %__MODULE__{} = config,
+        id: handler_id
+      }) do
     cond do
       Logger.compare_levels(log_level, config.level) == :lt ->
         :ok
 
       LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.excluded_domains) ->
+        :ok
+
+      config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
         :ok
 
       true ->

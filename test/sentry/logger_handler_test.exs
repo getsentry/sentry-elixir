@@ -392,6 +392,122 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
+  describe "rate limiting" do
+    @tag handler_config: %{
+           rate_limiting: [max_events: 2, interval: 150],
+           capture_log_messages: true
+         }
+    test "limits logged messages", %{sender_ref: ref} do
+      Logger.error("First")
+      assert_receive {^ref, %{message: %{formatted: "First"}}}
+
+      Logger.error("Second")
+      assert_receive {^ref, %{message: %{formatted: "Second"}}}
+
+      Logger.error("Third")
+      refute_receive {^ref, _event}, 100
+
+      Process.sleep(150)
+      Logger.error("Fourth")
+      assert_receive {^ref, %{message: %{formatted: "Fourth"}}}
+    end
+
+    @tag handler_config: %{capture_log_messages: true}
+    test "without rate limiting, doens't rate limit", %{sender_ref: ref} do
+      for index <- 1..10 do
+        message = "Message #{index}"
+        Logger.error(message)
+        assert_receive {^ref, %{message: %{formatted: ^message}}}
+      end
+    end
+
+    @tag handler_config: %{
+           rate_limiting: [max_events: 2, interval: 150],
+           capture_log_messages: true
+         }
+    test "works with changing config to disable rate limiting", %{sender_ref: ref} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+      :ok =
+        :logger.update_handler_config(@handler_name, :config, put_in(config.rate_limiting, nil))
+
+      for index <- 1..10 do
+        message = "Message #{index}"
+        Logger.error(message)
+        assert_receive {^ref, %{message: %{formatted: ^message}}}
+      end
+    end
+
+    @tag handler_config: %{capture_log_messages: true}
+    test "works with changing config to enable rate limiting", %{sender_ref: ref} do
+      for index <- 1..10 do
+        message = "Message #{index}"
+        Logger.error(message)
+        assert_receive {^ref, %{message: %{formatted: ^message}}}
+      end
+
+      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+      :ok =
+        :logger.update_handler_config(
+          @handler_name,
+          :config,
+          put_in(config.rate_limiting, max_events: 1, interval: 100)
+        )
+
+      Logger.error("RL1")
+      assert_receive {^ref, %{message: %{formatted: "RL1"}}}
+
+      Logger.error("RL2")
+      refute_receive {^ref, _event}, 100
+    end
+
+    @tag handler_config: %{
+           rate_limiting: [max_events: 2, interval: 100],
+           capture_log_messages: true
+         }
+    test "works with changing config to update rate limiting", %{sender_ref: ref} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+      :ok =
+        :logger.update_handler_config(
+          @handler_name,
+          :config,
+          put_in(config.rate_limiting, max_events: 1, interval: 100)
+        )
+
+      Logger.error("RL1")
+      assert_receive {^ref, %{message: %{formatted: "RL1"}}}
+
+      Logger.error("RL2")
+      refute_receive {^ref, _event}, 100
+    end
+
+    @tag handler_config: %{
+           rate_limiting: [max_events: 2, interval: 100],
+           capture_log_messages: true
+         }
+    test "works with changing config but without changing rate limiting", %{sender_ref: ref} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+      :ok =
+        :logger.update_handler_config(
+          @handler_name,
+          :config,
+          put_in(config.rate_limiting, max_events: 2, interval: 100)
+        )
+
+      Logger.error("RL1")
+      assert_receive {^ref, %{message: %{formatted: "RL1"}}}
+
+      Logger.error("RL2")
+      assert_receive {^ref, %{message: %{formatted: "RL2"}}}
+
+      Logger.error("RL3")
+      refute_receive {^ref, _event}, 100
+    end
+  end
+
   defp register_before_send(_context) do
     pid = self()
     ref = make_ref()
