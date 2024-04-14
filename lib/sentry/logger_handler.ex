@@ -142,7 +142,7 @@ defmodule Sentry.LoggerHandler do
     config = update_in(config.config, &cast_config(__MODULE__, &1))
 
     if rate_limiting_config = config.config.rate_limiting do
-      :ok = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
+      _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
     end
 
     {:ok, config}
@@ -153,32 +153,31 @@ defmodule Sentry.LoggerHandler do
   @spec changing_config(:update, :logger.handler_config(), :logger.handler_config()) ::
           {:ok, :logger.handler_config()}
   def changing_config(:update, old_config, new_config) do
-    cond do
-      new_config.config.rate_limiting == old_config.config.rate_limiting ->
-        :ok
+    _ignored =
+      cond do
+        new_config.config.rate_limiting == old_config.config.rate_limiting ->
+          :ok
 
-      # Turn off rate limiting.
-      old_config.config.rate_limiting && is_nil(new_config.config.rate_limiting) ->
-        :ok = RateLimiter.terminate_and_delete(new_config.id)
+        # Turn off rate limiting.
+        old_config.config.rate_limiting && is_nil(new_config.config.rate_limiting) ->
+          :ok = RateLimiter.terminate_and_delete(new_config.id)
 
-      # Turn on rate limiting.
-      is_nil(old_config.config.rate_limiting) && new_config.config.rate_limiting ->
-        :ok =
+        # Turn on rate limiting.
+        is_nil(old_config.config.rate_limiting) && new_config.config.rate_limiting ->
           RateLimiter.start_under_sentry_supervisor(
             new_config.id,
             new_config.config.rate_limiting
           )
 
-      # The config changed, so restart the rate limiter with the new config.
-      true ->
-        :ok = RateLimiter.terminate_and_delete(new_config.id)
+        # The config changed, so restart the rate limiter with the new config.
+        true ->
+          :ok = RateLimiter.terminate_and_delete(new_config.id)
 
-        :ok =
           RateLimiter.start_under_sentry_supervisor(
             new_config.id,
             new_config.config.rate_limiting
           )
-    end
+      end
 
     {:ok, update_in(old_config.config, &cast_config(&1, new_config.config))}
   end

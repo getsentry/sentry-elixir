@@ -56,7 +56,7 @@ defmodule Sentry.LoggerHandler.RateLimiter do
   def init({id, max_events, interval}) do
     atomics_ref = :atomics.new(_size = 1, signed: false)
     :persistent_term.put(persistent_term_key(id), {atomics_ref, max_events})
-    :timer.send_interval(interval, :tick)
+    _ = :timer.send_interval(interval, :tick)
     {:ok, id}
   end
 
