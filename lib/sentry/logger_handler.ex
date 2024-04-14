@@ -4,7 +4,9 @@ defmodule Sentry.LoggerHandler do
 
   This module is similar to `Sentry.LoggerBackend`, but it implements a
   [`:logger` handler](https://erlang.org/doc/man/logger_chapter.html#handlers) rather
-  than an Elixir's `Logger` backend.
+  than an Elixir's `Logger` backend. It provides additional functionality compared to
+  the `Logger` backend, such as rate-limiting of reported messages, better fingerprinting,
+  and better handling of crashes.
 
   *This module is available since v9.0.0 of this library*.
 
