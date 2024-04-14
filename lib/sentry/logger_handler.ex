@@ -143,9 +143,10 @@ defmodule Sentry.LoggerHandler do
 
     if rate_limiting_config = config.config.rate_limiting do
       _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
+      {:ok, config}
+    else
+      {:ok, config}
     end
-
-    {:ok, config}
   end
 
   # Callback for :logger handlers
