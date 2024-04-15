@@ -152,6 +152,31 @@ defmodule Sentry.LoggerHandler do
 
   #{NimbleOptions.docs(@options_schema)}
 
+  ## Examples
+
+  To log all messages with level `:error` and above to Sentry, set `:capture_log_messages`
+  to `true`:
+
+      config :my_app, :logger, [
+        {:handler, :my_sentry_handler, Sentry.LoggerHandler, %{
+          config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+        }}
+      ]
+
+  Now, logs like this will be reported as messages to Sentry:
+
+      Logger.error("Something went wrong")
+
+  If you want to customize options for the reported message, use the `:sentry` metadata
+  key in the `Logger` call. For example, to add a tag to the Sentry event:
+
+      Logger.error("Something went wrong", sentry: [tags: %{my_tag: "my_value"}])
+
+  Sentry context (in `:sentry`) is also read from the logger metadata, so you can configure
+  it for a whole process (with `Logger.metadata/1`). Last but not least, context is also read
+  from the ancestor chain of the process (`:"$callers"`), so if you set `:sentry` context
+  in a process and then spawn something like a task or a GenServer from that process,
+  the context will be included in the reported messages.
   """
 
   @moduledoc since: "9.0.0"
