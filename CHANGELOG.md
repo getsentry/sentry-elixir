@@ -1,5 +1,16 @@
 # Changelog
 
+## 10.4.0
+
+### Various fixes & improvements
+
+- Add rate-limiting to `Sentry.LoggerHandler`.
+- Improve reporting of process crashes in `Sentry.LoggerHandler`.
+- Fix loading configuration in `mix sentry.send_test_event`.
+- Fix JSON libraries that raise errors when encoding.
+- Allow `Sentry.LoggerBackend` and `Sentry.LoggerHandler` to use Sentry metadata.
+- Validate configuration passed to `Sentry.LoggerHandler`.
+
 ## 10.3.0
 
 ### Various fixes & improvements
