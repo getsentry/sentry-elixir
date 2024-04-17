@@ -64,7 +64,7 @@ if Version.match?(System.version(), "~> 1.13") do
 
         assert check_in_body["check_in_id"] == "oban-123"
         assert check_in_body["status"] == "in_progress"
-        assert check_in_body["monitor_slug"] == "Sentry.MyWorker"
+        assert check_in_body["monitor_slug"] == "sentry-my-worker"
         assert check_in_body["duration"] == nil
         assert check_in_body["environment"] == "test"
 
@@ -120,7 +120,7 @@ if Version.match?(System.version(), "~> 1.13") do
 
           assert check_in_body["check_in_id"] == "oban-942"
           assert check_in_body["status"] == unquote(expected_status)
-          assert check_in_body["monitor_slug"] == "Sentry.MyWorker"
+          assert check_in_body["monitor_slug"] == "sentry-my-worker"
           assert check_in_body["duration"] == 12.099
           assert check_in_body["environment"] == "test"
 
@@ -164,7 +164,7 @@ if Version.match?(System.version(), "~> 1.13") do
 
         assert check_in_body["check_in_id"] == "oban-942"
         assert check_in_body["status"] == "error"
-        assert check_in_body["monitor_slug"] == "Sentry.MyWorker"
+        assert check_in_body["monitor_slug"] == "sentry-my-worker"
         assert check_in_body["duration"] == 12.099
         assert check_in_body["environment"] == "test"
 

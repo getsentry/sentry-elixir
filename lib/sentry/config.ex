@@ -5,7 +5,8 @@ defmodule Sentry.Config do
     oban: [
       type: :keyword_list,
       doc: """
-      Configuration for the [Oban](https://github.com/sorentwo/oban) integration. *Available
+      Configuration for the [Oban](https://github.com/sorentwo/oban) integration. The Oban
+      integration requires at minumum Oban Pro v0.14 or Oban v.2.17.6. *Available
       since v10.2.0*.
       """,
       keys: [

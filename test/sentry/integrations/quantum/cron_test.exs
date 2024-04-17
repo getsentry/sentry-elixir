@@ -59,7 +59,7 @@ if Version.match?(System.version(), "~> 1.12") do
 
         assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
         assert check_in_body["status"] == "in_progress"
-        assert check_in_body["monitor_slug"] == "quantum-:test_job"
+        assert check_in_body["monitor_slug"] == "quantum-test-job"
         assert check_in_body["duration"] == nil
         assert check_in_body["environment"] == "test"
 
@@ -99,7 +99,7 @@ if Version.match?(System.version(), "~> 1.12") do
 
         assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
         assert check_in_body["status"] == "error"
-        assert check_in_body["monitor_slug"] == "quantum-:test_job"
+        assert check_in_body["monitor_slug"] == "quantum-test-job"
         assert check_in_body["duration"] == 12.099
         assert check_in_body["environment"] == "test"
 
@@ -141,7 +141,7 @@ if Version.match?(System.version(), "~> 1.12") do
 
         assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
         assert check_in_body["status"] == "ok"
-        assert check_in_body["monitor_slug"] == "quantum-:test_job"
+        assert check_in_body["monitor_slug"] == "quantum-test-job"
         assert check_in_body["duration"] == 12.099
         assert check_in_body["environment"] == "test"
 
@@ -169,6 +169,39 @@ if Version.match?(System.version(), "~> 1.12") do
       })
 
       assert_receive {^ref, :done}, 1000
+    end
+
+    for {job_name, expected_slug} <- [
+          {:some_job, "quantum-some-job"},
+          {MyApp.MyJob, "quantum-my-app-my-job"}
+        ] do
+      test "works for a job named #{inspect(job_name)}", %{bypass: bypass} do
+        test_pid = self()
+        ref = make_ref()
+
+        Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+          {:ok, body, conn} = Plug.Conn.read_body(conn)
+          assert [{_headers, check_in_body}] = decode_envelope!(body)
+
+          assert check_in_body["monitor_slug"] == unquote(expected_slug)
+          send(test_pid, {ref, :done})
+
+          Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+        end)
+
+        duration = System.convert_time_unit(12_099, :millisecond, :native)
+
+        :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
+          job:
+            Scheduler.new_job(
+              name: unquote(job_name),
+              schedule: Crontab.CronExpression.Parser.parse!("@daily")
+            ),
+          telemetry_span_context: ref
+        })
+
+        assert_receive {^ref, :done}, 1000
+      end
     end
   end
 end

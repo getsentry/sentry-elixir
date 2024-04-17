@@ -65,7 +65,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
       [
         check_in_id: "quantum-#{id}",
         # This is already a binary.
-        monitor_slug: "quantum-#{inspect(job.name)}",
+        monitor_slug: "quantum-#{slugify(job.name)}",
         monitor_config: [schedule: schedule_opts]
       ]
     else
@@ -91,5 +91,18 @@ defmodule Sentry.Integrations.Quantum.Cron do
     duration
     |> System.convert_time_unit(:native, :millisecond)
     |> Kernel./(1000)
+  end
+
+  defp slugify(job_name) when is_atom(job_name) do
+    case Atom.to_string(job_name) do
+      "Elixir." <> module -> module |> Macro.underscore() |> slugify()
+      other -> slugify(other)
+    end
+  end
+
+  defp slugify(job_name) when is_binary(job_name) do
+    job_name
+    |> String.downcase()
+    |> String.replace(["_", "#", "<", ">", ".", " ", "/"], "-")
   end
 end
