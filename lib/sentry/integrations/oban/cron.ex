@@ -104,7 +104,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   defp slugify(worker_name) do
     worker_name
     |> String.split(".")
-    |> Enum.map(&(&1 |> Macro.underscore() |> String.replace("_", "-")))
-    |> Enum.join("-")
+    |> Enum.map_join("-", &(&1 |> Macro.underscore() |> String.replace("_", "-")))
+    |> String.slice(0, 50)
   end
 end
