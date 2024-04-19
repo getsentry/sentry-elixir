@@ -72,7 +72,7 @@ defmodule Sentry.Integrations.Oban.Cron do
       [
         check_in_id: "oban-#{job.id}",
         # This is already a binary.
-        monitor_slug: job.worker,
+        monitor_slug: slugify(job.worker),
         monitor_config: [schedule: schedule_opts]
       ]
     else
@@ -98,5 +98,13 @@ defmodule Sentry.Integrations.Oban.Cron do
     duration
     |> System.convert_time_unit(:native, :millisecond)
     |> Kernel./(1000)
+  end
+
+  # MyApp.SomeWorker -> "my-app-some-worker"
+  defp slugify(worker_name) do
+    worker_name
+    |> String.split(".")
+    |> Enum.map_join("-", &(&1 |> Macro.underscore() |> String.replace("_", "-")))
+    |> String.slice(0, 50)
   end
 end
