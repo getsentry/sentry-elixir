@@ -104,5 +104,6 @@ defmodule Sentry.Integrations.Quantum.Cron do
     job_name
     |> String.downcase()
     |> String.replace(["_", "#", "<", ">", ".", " ", "/"], "-")
+    |> String.slice(0, 50)
   end
 end
