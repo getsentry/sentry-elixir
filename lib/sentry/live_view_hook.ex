@@ -3,6 +3,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     @moduledoc """
     A module that provides a `Phoenix.LiveView` hook to add Sentry context and breadcrumbs.
 
+    *Available since v10.5.0.*
+
     This module sets context and breadcrumbs for the live view process through
     `Sentry.Context`. It sets things like:
 
@@ -38,6 +40,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     You can also set this in your `MyAppWeb` module, so that all LiveViews that
     `use MyAppWeb, :live_view` will have this hook.
     """
+
+    @moduledoc since: "10.5.0"
 
     import Phoenix.LiveView, only: [attach_hook: 4, get_connect_info: 2]
 
