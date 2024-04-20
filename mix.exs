@@ -46,7 +46,7 @@ defmodule Sentry.Mixfile do
           "Upgrade Guides": [~r{^pages/upgrade}]
         ],
         groups_for_modules: [
-          "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
+          "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn],
           HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
@@ -99,11 +99,11 @@ defmodule Sentry.Mixfile do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
-      {:phoenix, "~> 1.5", only: [:test]},
-      {:phoenix_html, "~> 4.0", only: [:test]}
+      # Required by Phoenix.LiveView's testing
+      {:floki, ">= 0.30.0", only: :test}
     ] ++
       maybe_oban_optional_dependency() ++
-      maybe_quantum_optional_dependency() ++ maybe_phoenix_live_view_optional_dependency()
+      maybe_quantum_optional_dependency() ++ maybe_phoenix_optional_dependencies()
   end
 
   # TODO: Remove this once we drop support for Elixir < 1.13.
@@ -125,9 +125,12 @@ defmodule Sentry.Mixfile do
   end
 
   # TODO: Remove this once we drop support for Elixir < 1.13.
-  defp maybe_phoenix_live_view_optional_dependency do
+  defp maybe_phoenix_optional_dependencies do
     if Version.match?(System.version(), "~> 1.13") do
-      [{:phoenix_live_view, "~> 0.20", only: [:test]}]
+      [
+        {:phoenix, "~> 1.6", optional: true},
+        {:phoenix_live_view, "~> 0.20", optional: true}
+      ]
     else
       []
     end

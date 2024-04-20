@@ -24,6 +24,20 @@ If you are using Phoenix:
 +  plug Sentry.PlugContext
 ```
 
+If you're also using [Phoenix LiveView](https://github.com/phoenixframework/phoenix_live_view), consider also setting up your LiveViews to use the `Sentry.LiveViewHook` hook:
+
+```elixir
+defmodule MyAppWeb do
+  def live_view do
+    quote do
+      use Phoenix.LiveView
+
+      on_mount Sentry.LiveViewHook
+    end
+  end
+end
+```
+
 ### Capturing User Feedback
 
 If you would like to capture user feedback as described [here](https://docs.sentry.io/platforms/elixir/enriching-events/user-feedback/), the `Sentry.get_last_event_id_and_source/0` function can be used to see if Sentry has sent an event within the current Plug process (and get the source of that event). `:plug` will be the source for events coming from `Sentry.PlugCapture`. The options described in the Sentry documentation linked above can be encoded into the response as well.
