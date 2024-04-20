@@ -58,7 +58,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ## Helpers
 
-    defp on_mount(_options, params, %Phoenix.LiveView.Socket{} = socket) do
+    defp on_mount(params, %Phoenix.LiveView.Socket{} = socket) do
       Context.set_extra_context(%{socket_id: socket.id})
       Context.set_request_context(%{url: socket.host_uri})
 
