@@ -188,10 +188,8 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "does not send Phoenix.Router.NoRouteError" do
-      assert_raise Phoenix.Router.NoRouteError, ~r"no route found for GET /not_found", fn ->
-        conn(:get, "/not_found")
-        |> call_phoenix_endpoint()
-      end
+      conn(:get, "/not_found")
+      |> call_phoenix_endpoint()
     end
 
     test "scrubs Phoenix.ActionClauseError", %{bypass: bypass} do

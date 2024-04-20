@@ -100,8 +100,10 @@ defmodule Sentry.Mixfile do
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
       {:phoenix, "~> 1.5", only: [:test]},
-      {:phoenix_html, "~> 2.0", only: [:test]}
-    ] ++ maybe_oban_optional_dependency() ++ maybe_quantum_optional_dependency()
+      {:phoenix_html, "~> 4.0", only: [:test]}
+    ] ++
+      maybe_oban_optional_dependency() ++
+      maybe_quantum_optional_dependency() ++ maybe_phoenix_live_view_optional_dependency()
   end
 
   # TODO: Remove this once we drop support for Elixir < 1.13.
@@ -117,6 +119,15 @@ defmodule Sentry.Mixfile do
   defp maybe_quantum_optional_dependency do
     if Version.match?(System.version(), "~> 1.12") do
       [{:quantum, "~> 3.0", only: [:test]}]
+    else
+      []
+    end
+  end
+
+  # TODO: Remove this once we drop support for Elixir < 1.13.
+  defp maybe_phoenix_live_view_optional_dependency do
+    if Version.match?(System.version(), "~> 1.13") do
+      [{:phoenix_live_view, "~> 0.20", only: [:test]}]
     else
       []
     end
