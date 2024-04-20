@@ -1,4 +1,4 @@
-# TODO: Oban requires Elixir 1.13+, remove this once we depend on that too.
+# TODO: LV requires Elixir 1.13+, remove this once we depend on that too.
 if Version.match?(System.version(), "~> 1.13") do
   defmodule SentryTest.ErrorView do
     def render(template, assigns) do
