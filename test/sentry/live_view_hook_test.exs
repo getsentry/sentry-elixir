@@ -1,16 +1,9 @@
-defmodule SentryTest.ErrorView do
-  def render(template, assigns) do
-    dbg()
-    "OK"
-  end
-end
-
 defmodule SentryTest.Live do
   use Phoenix.LiveView
 
   on_mount Sentry.LiveViewHook
 
-  def render(assigns) do
+  def render(_assigns) do
     ~H"""
     <h1>Testing Sentry hooks</h1>
     """
