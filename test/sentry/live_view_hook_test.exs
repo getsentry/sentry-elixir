@@ -75,7 +75,7 @@ defmodule Sentry.LiveViewHookTest do
 
     assert "phx-" <> _ = context1.extra.socket_id
     assert context1.request.url == "http://www.example.com/hook_test"
-    assert context1.request.user_agent == "sentry-testing 1.0"
+    assert context1.extra.user_agent == "sentry-testing 1.0"
 
     assert [
              %{category: "web.live_view.params"} = params_breadcrumb,

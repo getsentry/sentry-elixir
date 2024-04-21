@@ -73,7 +73,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       end
 
       if user_agent = get_connect_info(socket, :user_agent) do
-        Context.set_request_context(%{user_agent: user_agent})
+        Context.set_extra_context(%{user_agent: user_agent})
       end
 
       # :peer_data returns t:Plug.Conn.Adapter.peer_data/0.
