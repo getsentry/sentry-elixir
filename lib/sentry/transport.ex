@@ -68,8 +68,9 @@ defmodule Sentry.Transport do
              {delay_ms, ""} <- Integer.parse(timeout) do
           {:retry_after, delay_ms * 1000}
         else
-          # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
-          {:retry_after, 60_000}
+          _ ->
+            # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
+            {:retry_after, 60_000}
         end
 
       {:error, reason} ->
