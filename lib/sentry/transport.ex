@@ -35,6 +35,12 @@ defmodule Sentry.Transport do
       {:ok, id} ->
         {:ok, id}
 
+      # If Sentry gives us a Retry-After header, we listen to that instead of our
+      # own retry.
+      {:retry_after, delay_ms} when retries_left != [] ->
+        Process.sleep(delay_ms)
+        post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
+
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
@@ -56,6 +62,15 @@ defmodule Sentry.Transport do
             :proplists.get_value("x-sentry-error", headers, nil) || ""
 
         {:error, "Received #{status} from Sentry server: #{error_header}"}
+
+      {:ok, 429, headers, _body} ->
+        with timeout when is_binary(timeout) <- :proplists.get_value("Retry-After", headers, nil),
+             {delay_ms, ""} <- Integer.parse(timeout) do
+          {:retry_after, delay_ms * 1000}
+        else
+          # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
+          {:retry_after, 60_000}
+        end
 
       {:error, reason} ->
         {:error, reason}
