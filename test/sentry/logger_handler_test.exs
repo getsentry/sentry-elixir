@@ -180,14 +180,18 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, event}
 
-      assert event.message.formatted =~ "** (stop) :bad_exit"
+      assert event.message.message == "GenServer %s terminating: ** (stop) :bad_exit"
+      assert event.message.params == [inspect(test_genserver)]
 
       if System.otp_release() >= "26" do
         assert [] = event.exception
         assert [thread] = event.threads
         assert thread.stacktrace == nil
         assert event.extra.genserver_state == ":no_state"
-        assert event.extra.last_message =~ "{:run, #Function"
+        assert event.extra.last_message =~ ~r/^\{:run, .*/
+        assert event.extra.pid_which_sent_last_message == inspect(self())
+        assert event.extra.genserver_state == ":no_state"
+        assert event.extra.crash_reason == ":bad_exit"
       end
     end
 
