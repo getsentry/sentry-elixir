@@ -367,8 +367,8 @@ defmodule Sentry.LoggerHandler do
     sentry_opts =
       sentry_opts
       |> Keyword.put(:stacktrace, stacktrace)
-      |> Keyword.update!(:extra, &Map.put(&1, :crash_reason, inspect(reason)))
-      |> Keyword.update!(:extra, &Map.merge(extra_info_from_message(chardata_message), &1))
+      |> add_extra_to_sentry_opts(%{crash_reason: inspect(reason)})
+      |> add_extra_to_sentry_opts(extra_info_from_message(chardata_message))
 
     case reason do
       {type, {GenServer, :call, [_pid, call, _timeout]}} = reason
@@ -383,8 +383,7 @@ defmodule Sentry.LoggerHandler do
         Sentry.capture_message(Exception.format_exit(reason), sentry_opts)
 
       _other ->
-        string_message = :unicode.characters_to_binary(chardata_message)
-        Sentry.capture_message(string_message, sentry_opts)
+        try_to_parse_message_or_just_report_it(chardata_message, sentry_opts)
     end
   end
 
@@ -418,5 +417,78 @@ defmodule Sentry.LoggerHandler do
 
   defp extra_info_from_message(_message) do
     %{}
+  end
+
+  # We do this because messages from Erlang's gen_* behaviours are often full of interesting
+  # and useful data. For example, GenServer messages contain the PID, the reason, the last
+  # message, and a treasure trove of stuff. If we cannot parse the message, such is life
+  # and we just report it as is.
+
+  defp try_to_parse_message_or_just_report_it(
+         [
+           [
+             "GenServer ",
+             inspected_pid,
+             " terminating",
+             chardata_reason,
+             "\nLast message",
+             [" (from ", inspected_sender_pid, ")"],
+             ": ",
+             inspected_last_message
+           ],
+           "\nState: ",
+           inspected_state | _
+         ],
+         sentry_opts
+       ) do
+    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
+
+    sentry_opts =
+      sentry_opts
+      |> Keyword.put(:interpolation_parameters, [inspected_pid])
+      |> add_extra_to_sentry_opts(%{
+        pid_which_sent_last_message: inspected_sender_pid,
+        last_message: inspected_last_message,
+        genserver_state: inspected_state
+      })
+
+    Sentry.capture_message("GenServer %s terminating: #{string_reason}", sentry_opts)
+  end
+
+  defp try_to_parse_message_or_just_report_it(
+         [
+           [
+             "GenServer ",
+             inspected_pid,
+             " terminating",
+             chardata_reason,
+             "\nLast message: ",
+             inspected_last_message
+           ],
+           "\nState: ",
+           inspected_state | _
+         ],
+         sentry_opts
+       ) do
+    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
+
+    sentry_opts =
+      sentry_opts
+      |> Keyword.put(:interpolation_parameters, [inspected_pid])
+      |> add_extra_to_sentry_opts(%{
+        last_message: inspected_last_message,
+        genserver_state: inspected_state
+      })
+
+    Sentry.capture_message("GenServer %s terminating: #{string_reason}", sentry_opts)
+  end
+
+  defp try_to_parse_message_or_just_report_it(chardata_message, sentry_opts) do
+    string_message = :unicode.characters_to_binary(chardata_message)
+    Sentry.capture_message(string_message, sentry_opts)
+  end
+
+  defp add_extra_to_sentry_opts(sentry_opts, new_extra) do
+    Keyword.update(sentry_opts, :extra, %{}, &Map.merge(new_extra, &1))
   end
 end
