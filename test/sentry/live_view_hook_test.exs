@@ -3,7 +3,7 @@ defmodule SentryTest.Live do
 
   on_mount Sentry.LiveViewHook
 
-  def render(_assigns) do
+  def render(assigns) do
     ~H"""
     <h1>Testing Sentry hooks</h1>
     """
