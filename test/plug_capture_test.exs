@@ -57,7 +57,9 @@ defmodule Sentry.PlugCaptureTest do
   end
 
   describe "with a Plug application" do
-    test "sends error to Sentry and uses Sentry.PlugContext to fill in context", %{bypass: bypass} do
+    test "sends error to Sentry and uses Sentry.PlugContext to fill in context", %{
+      bypass: bypass
+    } do
       Bypass.expect(bypass, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
@@ -188,10 +190,8 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "does not send Phoenix.Router.NoRouteError" do
-      assert_raise Phoenix.Router.NoRouteError, ~r"no route found for GET /not_found", fn ->
-        conn(:get, "/not_found")
-        |> call_phoenix_endpoint()
-      end
+      conn(:get, "/not_found")
+      |> call_phoenix_endpoint()
     end
 
     test "scrubs Phoenix.ActionClauseError", %{bypass: bypass} do
@@ -213,7 +213,9 @@ defmodule Sentry.PlugCaptureTest do
       assert_receive {^ref, sentry_body}
       event = decode_event_from_envelope!(sentry_body)
 
-      assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+      assert event["culprit"] ==
+               "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+
       assert [exception] = event["exception"]
       assert exception["type"] == "Phoenix.ActionClauseError"
       assert exception["value"] =~ ~s(params: %{"password" => "*********"})

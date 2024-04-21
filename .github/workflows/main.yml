@@ -31,8 +31,8 @@ jobs:
             otp: '25.3'
 
           # Oldest supported Elixir/Erlang pair.
-          - elixir: '1.11.4'
-            otp: '21.3'
+          - elixir: '1.13.4-otp-22'
+            otp: '22.3.4'
 
     steps:
     - name: Check out this repository

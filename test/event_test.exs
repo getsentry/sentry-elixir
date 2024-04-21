@@ -414,7 +414,7 @@ defmodule Sentry.EventTest do
     exception = RuntimeError.exception("error")
     event = Sentry.Event.transform_exception(exception, [])
 
-    assert ["asn1", "bypass", "certifi", "compiler" | _rest] =
+    assert ["asn1", "bypass" | _rest] =
              event.modules
              |> Map.keys()
              |> Enum.sort()

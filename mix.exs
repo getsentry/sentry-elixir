@@ -46,7 +46,7 @@ defmodule Sentry.Mixfile do
           "Upgrade Guides": [~r{^pages/upgrade}]
         ],
         groups_for_modules: [
-          "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext],
+          "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn],
           HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
@@ -91,6 +91,8 @@ defmodule Sentry.Mixfile do
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
       {:jason, "~> 1.1", optional: true},
+      {:phoenix, "~> 1.6", optional: true},
+      {:phoenix_live_view, "~> 0.20", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
 
@@ -99,27 +101,11 @@ defmodule Sentry.Mixfile do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
-      {:phoenix, "~> 1.5", only: [:test]},
-      {:phoenix_html, "~> 2.0", only: [:test]}
-    ] ++ maybe_oban_optional_dependency() ++ maybe_quantum_optional_dependency()
-  end
-
-  # TODO: Remove this once we drop support for Elixir < 1.13.
-  defp maybe_oban_optional_dependency do
-    if Version.match?(System.version(), "~> 1.13") do
-      [{:oban, "~> 2.17 and >= 2.17.6", only: [:test]}]
-    else
-      []
-    end
-  end
-
-  # TODO: Remove this once we drop support for Elixir < 1.12.
-  defp maybe_quantum_optional_dependency do
-    if Version.match?(System.version(), "~> 1.12") do
-      [{:quantum, "~> 3.0", only: [:test]}]
-    else
-      []
-    end
+      # Required by Phoenix.LiveView's testing
+      {:floki, ">= 0.30.0", only: :test},
+      {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
+      {:quantum, "~> 3.0", only: [:test]}
+    ]
   end
 
   defp package do
