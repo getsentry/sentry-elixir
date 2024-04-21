@@ -43,7 +43,7 @@ defmodule Sentry.LoggerBackendTest do
     assert event.message.formatted =~ ~s<** (stop) bad return value: "I am throwing"\n>
     assert event.message.formatted =~ ~s<Last message: {:"$gen_cast",>
     assert event.message.formatted =~ ~s<State: []>
-    assert thread.stacktrace.frames == []
+    assert thread.stacktrace == nil
   end
 
   test "abnormal GenServer exit is reported" do

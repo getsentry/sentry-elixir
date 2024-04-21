@@ -418,15 +418,10 @@ defmodule Sentry.Event do
 
   defp coerce_exception(exception, stacktrace_or_nil, _message, handled?)
        when is_exception(exception) do
-    stacktrace =
-      if is_list(stacktrace_or_nil) do
-        %Interfaces.Stacktrace{frames: stacktrace_to_frames(stacktrace_or_nil)}
-      end
-
     %Interfaces.Exception{
       type: inspect(exception.__struct__),
       value: Exception.message(exception),
-      stacktrace: stacktrace,
+      stacktrace: coerce_stacktrace(stacktrace_or_nil),
       mechanism: %Interfaces.Exception.Mechanism{handled: handled?}
     }
   end
@@ -441,7 +436,7 @@ defmodule Sentry.Event do
   defp add_thread_with_stacktrace(%__MODULE__{} = event, stacktrace) when is_list(stacktrace) do
     thread = %Interfaces.Thread{
       id: UUID.uuid4_hex(),
-      stacktrace: %Interfaces.Stacktrace{frames: stacktrace_to_frames(stacktrace)}
+      stacktrace: coerce_stacktrace(stacktrace)
     }
 
     %__MODULE__{event | threads: [thread]}
@@ -462,6 +457,17 @@ defmodule Sentry.Event do
     opts
     |> Keyword.put(:exception, exception)
     |> create_event()
+  end
+
+  defp coerce_stacktrace(nil) do
+    nil
+  end
+
+  defp coerce_stacktrace(stacktrace) when is_list(stacktrace) do
+    case stacktrace_to_frames(stacktrace) do
+      [] -> nil
+      frames -> %Interfaces.Stacktrace{frames: frames}
+    end
   end
 
   defp stacktrace_to_frames(stacktrace) when is_list(stacktrace) do
