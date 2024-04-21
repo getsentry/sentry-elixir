@@ -41,6 +41,9 @@ defmodule Sentry.Transport do
         Process.sleep(delay_ms)
         post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
 
+      {:retry_after, _delay_ms} ->
+        {:error, "Sentry server asked us to retry too many times"}
+
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
@@ -56,22 +59,26 @@ defmodule Sentry.Transport do
          {:ok, json} <- Config.json_library().decode(body) do
       {:ok, Map.get(json, "id")}
     else
+      {:ok, 429, headers, _body} ->
+        delay_ms =
+          with timeout when is_binary(timeout) <-
+                 :proplists.get_value("Retry-After", headers, nil),
+               {delay_s, ""} <- Integer.parse(timeout) do
+            delay_s * 1000
+          else
+            _ ->
+              # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
+              60_000
+          end
+
+        {:retry_after, delay_ms}
+
       {:ok, status, headers, _body} ->
         error_header =
           :proplists.get_value("X-Sentry-Error", headers, nil) ||
             :proplists.get_value("x-sentry-error", headers, nil) || ""
 
         {:error, "Received #{status} from Sentry server: #{error_header}"}
-
-      {:ok, 429, headers, _body} ->
-        with timeout when is_binary(timeout) <- :proplists.get_value("Retry-After", headers, nil),
-             {delay_ms, ""} <- Integer.parse(timeout) do
-          {:retry_after, delay_ms * 1000}
-        else
-          _ ->
-            # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
-            {:retry_after, 60_000}
-        end
 
       {:error, reason} ->
         {:error, reason}
