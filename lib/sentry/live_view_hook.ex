@@ -31,7 +31,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     You can do the same at the router level:
 
-        live_session :default, on_mounbt: Sentry.LiveViewHook do
+        live_session :default, on_mount: Sentry.LiveViewHook do
           scope "..." do
             # ...
           end
