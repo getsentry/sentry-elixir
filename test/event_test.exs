@@ -297,6 +297,12 @@ defmodule Sentry.EventTest do
              ] = thread_stacktrace.frames
     end
 
+    test "fills in the :release field from the config" do
+      put_test_config(release: "3c9d0f1e7a89876258828fbb480fd5cdfb0467fa")
+      assert %Event{} = event = Event.create_event([])
+      assert event.release == "3c9d0f1e7a89876258828fbb480fd5cdfb0467fa"
+    end
+
     test "fills in private (:__...__) fields" do
       exception = %RuntimeError{message: "foo"}
 

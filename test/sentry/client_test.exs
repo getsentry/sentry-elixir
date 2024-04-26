@@ -17,6 +17,13 @@ defmodule Sentry.ClientTest do
              } = Client.render_event(event)
     end
 
+    test "renders :release field" do
+      put_test_config(release: "1.9.123")
+      event = Event.create_event([])
+
+      assert %{release: "1.9.123"} = Client.render_event(event)
+    end
+
     test "truncates the message to a max length" do
       max_length = 8_192
       event = Event.create_event(message: String.duplicate("a", max_length + 1))
