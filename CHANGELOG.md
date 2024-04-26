@@ -1,5 +1,17 @@
 # Changelog
 
+## 10.5.0
+
+### Various fixes & improvements
+
+- Improve resilience of looking at Retry-After (ab7fbb96) by @whatyouhide
+- Fix compilation error (cf93d226) by @whatyouhide
+- Honor Retry-After responses from Sentry (5bad4b56) by @whatyouhide
+- Improve "GenServer terminating" reports (#723) by @whatyouhide
+- Don't report empty stacktraces (bed583f5) by @whatyouhide
+- Add LiveView hook (#722) by @whatyouhide
+- FIx monitor slug in Oban + Quantum integrations (#721) by @whatyouhide
+
 ## 10.4.0
 
 ### Various fixes & improvements
