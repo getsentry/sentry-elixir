@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
-
+    fail-fast: false
     runs-on: ubuntu-20.04
     strategy:
       matrix:
