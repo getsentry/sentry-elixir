@@ -3,14 +3,19 @@ defmodule Sentry.ExamplePlugApplication do
   use Sentry.PlugCapture
   use Plug.ErrorHandler
 
+  import ExUnit.Assertions
+
   plug Plug.Parsers, parsers: [:multipart, :urlencoded]
   plug Sentry.PlugContext
   plug :match
   plug :dispatch
 
-  get "/error_route" do
-    _ = conn
-    raise RuntimeError, "Error"
+  @spec child_spec(keyword()) :: Supervisor.child_spec()
+  def child_spec([]) do
+    Supervisor.child_spec(
+      {Plug.Cowboy, scheme: :http, plug: __MODULE__, options: [port: 8003]},
+      []
+    )
   end
 
   get "/exit_route" do
@@ -23,16 +28,9 @@ defmodule Sentry.ExamplePlugApplication do
     throw(:test)
   end
 
-  post "/error_route" do
-    _ = conn
-    raise RuntimeError, "Error"
-  end
-
   get "/spawn_error_route" do
-    spawn(fn ->
-      raise "Error"
-    end)
-
+    {_pid, ref} = spawn_monitor(fn -> raise "Error" end)
+    assert_receive {:DOWN, ^ref, _, _, _}
     send_resp(conn, 200, "")
   end
 

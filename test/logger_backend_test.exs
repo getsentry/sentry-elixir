@@ -134,6 +134,8 @@ defmodule Sentry.LoggerBackendTest do
 
     ref = register_before_send()
 
+    start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
+
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
     assert_receive {^ref, _event}, 1000
   after
