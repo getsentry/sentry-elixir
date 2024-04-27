@@ -372,7 +372,7 @@ defmodule Sentry.LoggerBackendTest do
   defp assert_formatted_message_matches(event, string) do
     assert %Sentry.Event{} = event
 
-    assert Map.get(event.message, :formatted, "") =~ "Error", """
+    assert Map.get(event.message, :formatted, "") =~ string, """
     Expected the event to have a filled-in message containing the word "Error", but
     instead the whole event was:
 
