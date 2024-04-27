@@ -134,6 +134,8 @@ defmodule Sentry.LoggerBackendTest do
 
     ref = register_before_send()
 
+    start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
+
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
     assert_receive {^ref, _event}, 1000
   after
@@ -273,8 +275,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.debug("Debug")
 
     assert_receive {^ref, event}
-
-    assert event.message.formatted =~ "Error"
+    assert_formatted_message_matches(event, "Error")
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
@@ -308,7 +309,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.error("Error", callers: [dead_pid, nil])
 
     assert_receive {^ref, event}
-    assert event.message.formatted =~ "Error"
+    assert_formatted_message_matches(event, "Error")
   end
 
   test "doesn't log events with :sentry as a domain" do
@@ -366,5 +367,16 @@ defmodule Sentry.LoggerBackendTest do
 
   defp test_genserver_invalid_fun(pid) do
     TestGenServer.run_async(pid, fn _state -> apply(NaiveDateTime, :from_erl, [{}, {}, {}]) end)
+  end
+
+  defp assert_formatted_message_matches(event, string) do
+    assert %Sentry.Event{} = event
+
+    assert Map.get(event.message, :formatted, "") =~ string, """
+    Expected the event to have a filled-in message containing the word "Error", but
+    instead the whole event was:
+
+    #{inspect(event, pretty: true, limit: :infinity)}
+    """
   end
 end

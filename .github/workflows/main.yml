@@ -14,9 +14,9 @@ env:
 jobs:
   test:
     name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
-
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
