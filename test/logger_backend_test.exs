@@ -276,7 +276,12 @@ defmodule Sentry.LoggerBackendTest do
 
     assert_receive {^ref, event}
 
-    assert event.message.formatted =~ "Error"
+    assert Map.get(event.message, :formatted, "") =~ "Error", """
+    Expected the event to have a filled-in message containing the word "Error", but
+    instead the whole event was:
+
+    #{inspect(event, pretty: true, limit: :infinity)}
+    """
   after
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
