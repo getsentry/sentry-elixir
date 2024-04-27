@@ -66,26 +66,34 @@ defmodule Sentry.LoggerHandler do
       """,
       type_doc: "`t:keyword/0` or `nil`",
       default: nil
+    ],
+    sync_threshold: [
+      type: :non_neg_integer,
+      default: 100,
+      doc: """
+      *since v10.6.0* - The number of queued events after which this handler switches
+      to *sync mode*. Generally, this handler sends messages to Sentry **asynchronously**,
+      equivalent to using `result: :none` in `Sentry.send_event/2`. However, if the number
+      of queued events exceeds this threshold, the handler will switch to *sync mode*,
+      where it starts using `result: :sync` to block until the event is sent. If you always
+      want to use sync mode, set this option to `0`. This option effectively implements
+      **overload protection**.
+      """
     ]
   ]
 
   @options_schema NimbleOptions.new!(options_schema)
 
   @moduledoc """
-  `:logger` handler to report logged events to Sentry.
-
-  This module is similar to `Sentry.LoggerBackend`, but it implements a
-  [`:logger` handler](https://erlang.org/doc/man/logger_chapter.html#handlers) rather
-  than an Elixir's `Logger` backend. It provides additional functionality compared to
-  the `Logger` backend, such as rate-limiting of reported messages, better fingerprinting,
-  and better handling of crashes.
+  A highly-configurable [`:logger` handler](https://erlang.org/doc/man/logger_chapter.html#handlers)
+  that reports logged messages and crashes to Sentry.
 
   *This module is available since v9.0.0 of this library*.
 
   > #### When to Use the Handler vs the Backend? {: .info}
   >
-  > There is **no functional difference in behavior** between `Sentry.LoggerHandler` and
-  > `Sentry.LoggerBackend` when it comes to reporting to Sentry. The main functional
+  > Sentry's Elixir SDK also ships with `Sentry.LoggerBackend`, an Elixir `Logger`
+  > backend. The backend has similar functionality to this handler. The main functional
   > difference is that `Sentry.LoggerBackend` runs in its own process, while
   > `Sentry.LoggerHandler` runs in the process that logs. The latter is generally
   > preferable.
@@ -94,11 +102,15 @@ defmodule Sentry.LoggerHandler do
   > feature in Erlang/OTP, and `Sentry.LoggerBackend` was created before `:logger`
   > handlers were introduced.
   >
-  > In general, try to use `Sentry.LoggerHandler` if possible. In future Elixir releases,
+  > In general, use `Sentry.LoggerHandler` whenever possible. In future Elixir releases,
   > `Logger` backends may become deprecated and hence `Sentry.LoggerBackend` may be
   > eventually removed.
 
-  ## Crash Reports
+  ## Features
+
+  This logger handler provides the features listed here.
+
+  ### Crash Reports
 
   The reason you'll want to add this handler to your application is so that you can
   report **crashes** in your system to Sentry. Sometimes, you're able to catch exceptions
@@ -110,6 +122,24 @@ defmodule Sentry.LoggerHandler do
   exceptions in those processes to report them to Sentry, then you won't see those
   crash reports in Sentry. That's where this handler comes in. This handler hooks
   into `:logger` and reports nicely-formatted crash reports to Sentry.
+
+  ### Overload Protection
+
+  This handler has built-in *overload protection* via the `:sync_threshold`
+  configuration option. Under normal circumstances, this handler sends events to
+  Sentry asynchronously, without blocking the logging process. However, if the
+  number of queued up events exceeds the `:sync_threshold`, then this handler
+  starts *blocking* the logging process until the event is sent.
+
+  *Overload protection is available since v10.6.0*.
+
+  ### Rate Limiting
+
+  You can configure this handler to rate-limit the number of messages it sends to
+  Sentry. This can help avoid "spamming" Sentry. See the `:rate_limiting` configuration
+  option.
+
+  *Rate limiting is available since v10.5.0*.
 
   ## Usage
 
@@ -183,9 +213,17 @@ defmodule Sentry.LoggerHandler do
 
   alias Sentry.LoggerUtils
   alias Sentry.LoggerHandler.RateLimiter
+  alias Sentry.Transport.SenderPool
 
   # The config for this logger handler.
-  defstruct [:level, :excluded_domains, :metadata, :capture_log_messages, :rate_limiting]
+  defstruct [
+    :level,
+    :excluded_domains,
+    :metadata,
+    :capture_log_messages,
+    :rate_limiting,
+    :sync_threshold
+  ]
 
   ## Logger handler callbacks
 
@@ -301,30 +339,29 @@ defmodule Sentry.LoggerHandler do
   end
 
   # "report" here is of type logger:report/0, which is a map or keyword list.
-  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = _config) do
+  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config) do
     case Map.new(report) do
       %{report: %{reason: {exception, stacktrace}}}
       when is_exception(exception) and is_list(stacktrace) ->
         sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-        Sentry.capture_exception(exception, sentry_opts)
+        capture(:exception, exception, sentry_opts, config)
 
       %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
         sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
-        Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), sentry_opts)
+        capture(:message, "** (stop) " <> Exception.format_exit(reason), sentry_opts, config)
 
       %{report: report_info} ->
-        Sentry.capture_message(inspect(report_info), sentry_opts)
+        capture(:message, inspect(report_info), sentry_opts, config)
 
       %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
         sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
-        Sentry.capture_message("** (stop) " <> Exception.format_exit(reason), sentry_opts)
+        capture(:message, "** (stop) " <> Exception.format_exit(reason), sentry_opts, config)
 
       %{reason: reason} ->
         sentry_opts =
           Keyword.update!(sentry_opts, :extra, &Map.put(&1, :crash_reason, inspect(reason)))
 
-        msg = "** (stop) #{Exception.format_exit(reason)}"
-        Sentry.capture_message(msg, sentry_opts)
+        capture(:message, "** (stop) #{Exception.format_exit(reason)}", sentry_opts, config)
 
       _other ->
         :ok
@@ -355,14 +392,19 @@ defmodule Sentry.LoggerHandler do
          {exception, stacktrace},
          _chardata_message,
          sentry_opts,
-         %__MODULE__{}
+         %__MODULE__{} = config
        )
        when is_exception(exception) and is_list(stacktrace) do
     sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-    Sentry.capture_exception(exception, sentry_opts)
+    capture(:exception, exception, sentry_opts, config)
   end
 
-  defp log_from_crash_reason({reason, stacktrace}, chardata_message, sentry_opts, %__MODULE__{})
+  defp log_from_crash_reason(
+         {reason, stacktrace},
+         chardata_message,
+         sentry_opts,
+         %__MODULE__{} = config
+       )
        when is_list(stacktrace) do
     sentry_opts =
       sentry_opts
@@ -380,18 +422,23 @@ defmodule Sentry.LoggerHandler do
             inspect(call)
           ])
 
-        Sentry.capture_message(Exception.format_exit(reason), sentry_opts)
+        capture(:message, Exception.format_exit(reason), sentry_opts, config)
 
       _other ->
-        try_to_parse_message_or_just_report_it(chardata_message, sentry_opts)
+        try_to_parse_message_or_just_report_it(chardata_message, sentry_opts, config)
     end
   end
 
-  defp log_from_crash_reason(_other_reason, chardata_message, sentry_opts, %__MODULE__{
-         capture_log_messages: true
-       }) do
+  defp log_from_crash_reason(
+         _other_reason,
+         chardata_message,
+         sentry_opts,
+         %__MODULE__{
+           capture_log_messages: true
+         } = config
+       ) do
     string_message = :unicode.characters_to_binary(chardata_message)
-    Sentry.capture_message(string_message, sentry_opts)
+    capture(:message, string_message, sentry_opts, config)
   end
 
   defp log_from_crash_reason(_other_reason, _string_message, _sentry_opts, _config) do
@@ -439,7 +486,8 @@ defmodule Sentry.LoggerHandler do
            "\nState: ",
            inspected_state | _
          ],
-         sentry_opts
+         sentry_opts,
+         config
        ) do
     string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
 
@@ -452,7 +500,7 @@ defmodule Sentry.LoggerHandler do
         genserver_state: inspected_state
       })
 
-    Sentry.capture_message("GenServer %s terminating: #{string_reason}", sentry_opts)
+    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
   end
 
   defp try_to_parse_message_or_just_report_it(
@@ -468,7 +516,8 @@ defmodule Sentry.LoggerHandler do
            "\nState: ",
            inspected_state | _
          ],
-         sentry_opts
+         sentry_opts,
+         config
        ) do
     string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
 
@@ -480,15 +529,30 @@ defmodule Sentry.LoggerHandler do
         genserver_state: inspected_state
       })
 
-    Sentry.capture_message("GenServer %s terminating: #{string_reason}", sentry_opts)
+    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
   end
 
-  defp try_to_parse_message_or_just_report_it(chardata_message, sentry_opts) do
+  defp try_to_parse_message_or_just_report_it(chardata_message, sentry_opts, config) do
     string_message = :unicode.characters_to_binary(chardata_message)
-    Sentry.capture_message(string_message, sentry_opts)
+    capture(:message, string_message, sentry_opts, config)
   end
 
   defp add_extra_to_sentry_opts(sentry_opts, new_extra) do
     Keyword.update(sentry_opts, :extra, %{}, &Map.merge(new_extra, &1))
+  end
+
+  for function <- [:exception, :message] do
+    sentry_fun = :"capture_#{function}"
+
+    defp capture(unquote(function), exception_or_message, sentry_opts, %__MODULE__{} = config) do
+      sentry_opts =
+        if SenderPool.get_queued_events_counter() >= config.sync_threshold do
+          Keyword.put(sentry_opts, :result, :sync)
+        else
+          sentry_opts
+        end
+
+      Sentry.unquote(sentry_fun)(exception_or_message, sentry_opts)
+    end
   end
 end

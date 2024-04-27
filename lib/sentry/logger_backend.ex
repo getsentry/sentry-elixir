@@ -1,7 +1,17 @@
 defmodule Sentry.LoggerBackend do
   @moduledoc """
-  Report Logger events like crashed processes to Sentry. To include in your
-  application, start this backend in your application `start/2` callback:
+  An Elixir `Logger` backend that reports logged messages and crashes to Sentry.
+
+  > #### `:logger` handler {: .warn}
+  >
+  > This module will eventually become **legacy**. Elixir `Logger` backends will
+  > eventually be deprecated in favor of Erlang [`:logger`
+  > handlers](https://erlang.org/doc/man/logger_chapter.html#handlers).
+  >
+  > Sentry already has a `:logger` handler, `Sentry.LoggerHandler`. In new projects
+  > and wherever possible, use `Sentry.LoggerHandler` in favor of this backend.
+
+  To include in your application, start this backend in your application `start/2` callback:
 
       # lib/my_app/application.ex
       def start(_type, _args) do

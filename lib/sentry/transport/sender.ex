@@ -20,7 +20,7 @@ defmodule Sentry.Transport.Sender do
   @spec send_async(module(), Event.t()) :: :ok
   def send_async(client, %Event{} = event) when is_atom(client) do
     random_index = Enum.random(1..Transport.SenderPool.pool_size())
-
+    Transport.SenderPool.increase_queued_events_counter()
     GenServer.cast({:via, Registry, {@registry, random_index}}, {:send, client, event})
   end
 
@@ -41,6 +41,9 @@ defmodule Sentry.Transport.Sender do
     |> Envelope.from_event()
     |> Transport.post_envelope(client)
     |> maybe_log_send_result([event])
+
+    # We sent an event, so we can decrease the number of queued events.
+    Transport.SenderPool.decrease_queued_events_counter()
 
     {:noreply, state}
   end
