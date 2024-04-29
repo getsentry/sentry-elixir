@@ -63,6 +63,14 @@ defmodule Sentry.Config do
           ]
         ]
       ]
+    ],
+    opentelemetry: [
+      type: :boolean,
+      doc: """
+      A boolean switch that sets up [OpenTelemetry](https://opentelemetry.io/docs/languages/erlang/)
+      automatically to instrument your application and export the spans to Sentry.
+      *Available since vTODO*.
+      """
     ]
   ]
 
@@ -390,6 +398,9 @@ defmodule Sentry.Config do
   @opts_schema NimbleOptions.new!(@raw_opts_schema)
   @valid_keys Keyword.keys(@raw_opts_schema)
 
+  @sentry_version 5
+  @sentry_client "sentry-elixir/#{Mix.Project.config()[:version]}"
+
   @spec validate!() :: keyword()
   def validate! do
     :sentry
@@ -461,6 +472,47 @@ defmodule Sentry.Config do
 
   @spec dsn() :: nil | {String.t(), String.t(), String.t()}
   def dsn, do: get(:dsn)
+
+  @spec envelope_endpoint() :: nil | String.t()
+  def envelope_endpoint do
+    case dsn() do
+      {base_uri, _, _} -> base_uri <> "envelope/"
+      _ -> nil
+    end
+  end
+
+  @spec spans_endpoint() :: nil | String.t()
+  def spans_endpoint do
+    case dsn() do
+      {base_uri, _, _} -> base_uri <> "spans/"
+      _ -> nil
+    end
+  end
+
+  @spec auth_headers() :: nil | [{String.t(), String.t()}]
+  def auth_headers do
+    case dsn() do
+      {_, public_key, secret_key} ->
+        auth_query =
+          [
+            sentry_version: @sentry_version,
+            sentry_client: @sentry_client,
+            sentry_timestamp: System.system_time(:second),
+            sentry_key: public_key,
+            sentry_secret: secret_key
+          ]
+          |> Enum.reject(fn {_, value} -> is_nil(value) end)
+          |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
+
+        [
+          {"User-Agent", @sentry_client},
+          {"X-Sentry-Auth", "Sentry " <> auth_query}
+        ]
+
+      _ ->
+        nil
+    end
+  end
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated
   # in v10.0.0.
@@ -711,10 +763,10 @@ defmodule Sentry.Config do
       end
 
     with {:ok, {base_path, project_id}} <- pop_project_id(uri.path) do
-      new_path = Enum.join([base_path, "api", project_id, "envelope"], "/") <> "/"
-      endpoint_uri = URI.merge(%URI{uri | userinfo: nil}, new_path)
+      new_path = Enum.join([base_path, "api", project_id], "/") <> "/"
+      base_uri = URI.merge(%URI{uri | userinfo: nil}, new_path)
 
-      {:ok, {URI.to_string(endpoint_uri), public_key, secret_key}}
+      {:ok, {URI.to_string(base_uri), public_key, secret_key}}
     end
   catch
     message -> {:error, message}

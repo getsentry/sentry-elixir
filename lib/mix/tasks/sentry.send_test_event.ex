@@ -61,8 +61,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     Mix.shell().info("Client configuration:")
 
     if Config.dsn() do
-      {endpoint, public_key, secret_key} = Config.dsn()
-      Mix.shell().info("server: #{endpoint}")
+      {base_uri, public_key, secret_key} = Config.dsn()
+      Mix.shell().info("server: #{base_uri}")
       Mix.shell().info("public_key: #{public_key}")
       Mix.shell().info("secret_key: #{secret_key}")
     end

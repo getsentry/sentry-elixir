@@ -45,7 +45,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
     assert output =~ """
            Client configuration:
-           server: http://localhost:#{bypass.port}/api/1/envelope/
+           server: http://localhost:#{bypass.port}/api/1/
            public_key: public
            secret_key: secret
            current environment_name: "test"
