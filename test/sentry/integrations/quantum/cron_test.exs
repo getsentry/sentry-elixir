@@ -201,4 +201,28 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       assert_receive {^ref, :done}, 1000
     end
   end
+
+  test "works for a job without the name", %{bypass: bypass} do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert [{_headers, check_in_body}] = decode_envelope!(body)
+
+      assert check_in_body["monitor_slug"] == "quantum-generic-job"
+      send(test_pid, {ref, :done})
+
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+    end)
+
+    duration = System.convert_time_unit(12_099, :millisecond, :native)
+
+    :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
+      job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
+      telemetry_span_context: ref
+    })
+
+    assert_receive {^ref, :done}, 1000
+  end
 end

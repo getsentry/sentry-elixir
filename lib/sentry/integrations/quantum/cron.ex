@@ -1,6 +1,8 @@
 defmodule Sentry.Integrations.Quantum.Cron do
   @moduledoc false
 
+  require Logger
+
   @events [
     [:quantum, :job, :start],
     [:quantum, :job, :stop],
@@ -91,6 +93,18 @@ defmodule Sentry.Integrations.Quantum.Cron do
     duration
     |> System.convert_time_unit(:native, :millisecond)
     |> Kernel./(1000)
+  end
+
+  defp slugify(job_name) when is_reference(job_name) do
+    Logger.error(
+      """
+      Sentry cannot report Quantum cron jobs correctly if they don't have a :name set up, and \
+      will just report them as "quantum-generic-job".\
+      """,
+      event_source: :logger
+    )
+
+    "generic-job"
   end
 
   defp slugify(job_name) when is_atom(job_name) do
