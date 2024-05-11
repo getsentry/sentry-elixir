@@ -459,7 +459,7 @@ defmodule Sentry.Config do
     """
   end
 
-  @spec dsn() :: nil | {String.t(), String.t(), String.t()}
+  @spec dsn() :: nil | Sentry.DSN.t()
   def dsn, do: get(:dsn)
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated
