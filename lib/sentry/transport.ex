@@ -88,15 +88,15 @@ defmodule Sentry.Transport do
   end
 
   defp get_endpoint_and_headers do
-    {endpoint, public_key, secret_key} = Config.dsn()
+    %Sentry.DSN{} = dsn = Config.dsn()
 
     auth_query =
       [
         sentry_version: @sentry_version,
         sentry_client: @sentry_client,
         sentry_timestamp: System.system_time(:second),
-        sentry_key: public_key,
-        sentry_secret: secret_key
+        sentry_key: dsn.public_key,
+        sentry_secret: dsn.secret_key
       ]
       |> Enum.reject(fn {_, value} -> is_nil(value) end)
       |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
@@ -106,6 +106,6 @@ defmodule Sentry.Transport do
       {"X-Sentry-Auth", "Sentry " <> auth_query}
     ]
 
-    {endpoint, auth_headers}
+    {dsn.endpoint_uri, auth_headers}
   end
 end

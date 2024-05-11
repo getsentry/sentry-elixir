@@ -201,4 +201,21 @@ defmodule SentryTest do
       assert {:ok, "1923"} = Sentry.capture_check_in(status: :ok, monitor_slug: "default-slug")
     end
   end
+
+  describe "get_dsn/0" do
+    test "returns nil if the :dsn option is not configured" do
+      put_test_config(dsn: nil)
+      assert Sentry.get_dsn() == nil
+    end
+
+    test "returns the DSN if it's configured" do
+      random_string = fn -> 5 |> :crypto.strong_rand_bytes() |> Base.encode16() end
+
+      random_dsn =
+        "https://#{random_string.()}:#{random_string.()}@#{random_string.()}:3000/#{System.unique_integer([:positive])}"
+
+      put_test_config(dsn: random_dsn)
+      assert Sentry.get_dsn() == random_dsn
+    end
+  end
 end
