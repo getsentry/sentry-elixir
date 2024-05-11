@@ -5,16 +5,24 @@ defmodule Sentry.ConfigTest do
 
   describe "validate!/0" do
     test ":dsn from option" do
-      assert Config.validate!(dsn: "https://public:secret@app.getsentry.com/1")[:dsn] ==
-               {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
+      assert %Sentry.DSN{} =
+               dsn = Config.validate!(dsn: "https://public:secret@app.getsentry.com/1")[:dsn]
+
+      assert dsn.endpoint_uri == "https://app.getsentry.com/api/1/envelope/"
+      assert dsn.public_key == "public"
+      assert dsn.secret_key == "secret"
+      assert dsn.original_dsn == "https://public:secret@app.getsentry.com/1"
 
       assert Config.validate!(dsn: nil)[:dsn] == nil
     end
 
     test ":dsn from system environment" do
       with_system_env("SENTRY_DSN", "https://public:secret@app.getsentry.com/1", fn ->
-        assert Config.validate!([])[:dsn] ==
-                 {"https://app.getsentry.com/api/1/envelope/", "public", "secret"}
+        assert %Sentry.DSN{} = dsn = Config.validate!([])[:dsn]
+        assert dsn.endpoint_uri == "https://app.getsentry.com/api/1/envelope/"
+        assert dsn.public_key == "public"
+        assert dsn.secret_key == "secret"
+        assert dsn.original_dsn == "https://public:secret@app.getsentry.com/1"
       end)
     end
 
@@ -212,8 +220,12 @@ defmodule Sentry.ConfigTest do
       new_dsn = "https://public:secret@app.getsentry.com/2"
       assert :ok = Config.put_config(:dsn, new_dsn)
 
-      assert Config.dsn() ==
-               {"https://app.getsentry.com/api/2/envelope/", "public", "secret"}
+      assert %Sentry.DSN{
+               original_dsn: ^new_dsn,
+               endpoint_uri: "https://app.getsentry.com/api/2/envelope/",
+               public_key: "public",
+               secret_key: "secret"
+             } = Config.dsn()
     end
 
     test "validates the given key" do

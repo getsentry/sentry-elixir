@@ -438,4 +438,18 @@ defmodule Sentry do
   @doc since: "10.0.0"
   @spec put_config(atom(), term()) :: :ok
   defdelegate put_config(key, value), to: Config
+
+  @doc """
+  Returns the currently-set Sentry DSN, *if set* (or `nil` otherwise).
+
+  This is useful in situations like capturing user feedback.
+  """
+  @doc since: "10.6.0"
+  @spec get_dsn() :: String.t() | nil
+  def get_dsn do
+    case Config.dsn() do
+      %Sentry.DSN{original_dsn: original_dsn} -> original_dsn
+      nil -> nil
+    end
+  end
 end

@@ -60,11 +60,10 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
   defp print_environment_info do
     Mix.shell().info("Client configuration:")
 
-    if Config.dsn() do
-      {endpoint, public_key, secret_key} = Config.dsn()
-      Mix.shell().info("server: #{endpoint}")
-      Mix.shell().info("public_key: #{public_key}")
-      Mix.shell().info("secret_key: #{secret_key}")
+    if dsn = Config.dsn() do
+      Mix.shell().info("server: #{dsn.endpoint_uri}")
+      Mix.shell().info("public_key: #{dsn.public_key}")
+      Mix.shell().info("secret_key: #{dsn.secret_key}")
     end
 
     Mix.shell().info("current environment_name: #{inspect(to_string(Config.environment_name()))}")
