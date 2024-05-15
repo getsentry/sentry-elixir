@@ -1,5 +1,13 @@
 # Changelog
 
+## 10.6.0
+
+### Various fixes & improvements
+
+- Add overload protection to `:logger` handler (#727).
+- Expose DSN via new `Sentry.get_dsn/0` (#731).
+- Fix a bug with nameless Quantum cron jobs support in the Quantum integration.
+
 ## 10.5.0
 
 ### Various fixes & improvements
