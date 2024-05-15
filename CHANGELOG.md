@@ -1,5 +1,18 @@
 # Changelog
 
+## 10.6.0
+
+### Various fixes & improvements
+
+- Expose DSN via new Sentry.get_dsn/0 (#731) by @whatyouhide
+- Support nameless Quantum cron jobs (4267098b) by @whatyouhide
+- Add overload protection to :logger handler (#727) by @whatyouhide
+- Improve flakiness of tests (#728) by @whatyouhide
+- Harden some flaky tests (ae34e997) by @whatyouhide
+- Update ex_doc (77c059ee) by @whatyouhide
+- Fix a typo in the Sentry.LiveViewHook docs (#726) by @balexand
+- Add a couple of tests (d7d83df3) by @whatyouhide
+
 ## 10.5.0
 
 ### Various fixes & improvements
