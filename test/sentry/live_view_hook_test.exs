@@ -6,6 +6,7 @@ defmodule SentryTest.Live do
   def render(assigns) do
     ~H"""
     <h1>Testing Sentry hooks</h1>
+    <.live_component module={SentryTest.LiveComponent} id="lc" />
     """
   end
 
@@ -19,6 +20,14 @@ defmodule SentryTest.Live do
 
   def handle_info(:test_message, socket) do
     {:noreply, socket}
+  end
+end
+
+defmodule SentryTest.LiveComponent do
+  use Phoenix.LiveComponent
+
+  def render(assigns) do
+    ~H"<p>I'm a LiveComponent</p>"
   end
 end
 
@@ -109,6 +118,12 @@ defmodule Sentry.LiveViewHookTest do
 
     assert info_breadcrumb.category == "web.live_view.info"
     assert info_breadcrumb.message == ~s(:test_message)
+  end
+
+  test "works with live components", %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/hook_test")
+    assert html =~ "<h1>Testing Sentry hooks</h1>"
+    assert html =~ "I&#39;m a LiveComponent"
   end
 
   defp get_sentry_context(view) do
