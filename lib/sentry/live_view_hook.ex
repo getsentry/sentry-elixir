@@ -68,17 +68,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         data: params
       })
 
-      if uri = get_connect_info(socket, :uri) do
+      if uri = get_connect_info_if_root(socket, :uri) do
         Context.set_request_context(%{url: URI.to_string(uri)})
       end
 
-      if user_agent = get_connect_info(socket, :user_agent) do
+      if user_agent = get_connect_info_if_root(socket, :user_agent) do
         Context.set_extra_context(%{user_agent: user_agent})
       end
 
       # :peer_data returns t:Plug.Conn.Adapter.peer_data/0.
       # https://hexdocs.pm/plug/Plug.Conn.Adapter.html#t:peer_data/0
-      if ip_address = socket |> get_connect_info(:peer_data) |> get_safe_ip_address() do
+      if ip_address = socket |> get_connect_info_if_root(:peer_data) |> get_safe_ip_address() do
         Context.set_user_context(%{ip_address: ip_address})
       end
 
@@ -130,6 +130,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       })
 
       {:cont, socket}
+    end
+
+    defp get_connect_info_if_root(socket, key) do
+      case socket.parent_pid do
+        nil -> get_connect_info(socket, key)
+        pid when is_pid(pid) -> nil
+      end
     end
 
     defp maybe_attach_hook_handle_params(socket) do

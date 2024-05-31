@@ -64,9 +64,7 @@ defmodule Sentry.LiveViewHookTest do
   end
 
   test "attaches the right context", %{conn: conn} do
-    conn =
-      conn
-      |> Plug.Conn.put_req_header("user-agent", "sentry-testing 1.0")
+    conn = Plug.Conn.put_req_header(conn, "user-agent", "sentry-testing 1.0")
 
     {:ok, view, html} = live(conn, "/hook_test")
     assert html =~ "<h1>Testing Sentry hooks</h1>"
