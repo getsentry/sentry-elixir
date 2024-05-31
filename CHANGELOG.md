@@ -1,5 +1,11 @@
 # Changelog
 
+## 10.6.1
+
+### Various fixes & improvements
+
+- Only fetch LiveView socket info if root (#734) by @whatyouhide
+
 ## 10.6.0
 
 ### Various fixes & improvements
