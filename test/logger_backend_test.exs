@@ -139,7 +139,7 @@ defmodule Sentry.LoggerBackendTest do
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
     assert_receive {^ref, _event}, 1000
   after
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
+    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
   end
 
   test "ignores log messages with excluded domains" do
