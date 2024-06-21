@@ -11,11 +11,16 @@ defmodule Sentry.ExamplePlugApplication do
   plug :dispatch
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
-  def child_spec([]) do
-    Supervisor.child_spec(
-      {Plug.Cowboy, scheme: :http, plug: __MODULE__, options: [port: 8003]},
-      []
-    )
+  def child_spec(opts \\ []) do
+    case Keyword.get(opts, :server, :cowboy) do
+      :cowboy ->
+        Supervisor.child_spec(
+          {Plug.Cowboy, scheme: :http, plug: __MODULE__, options: [port: 8003]},
+          []
+        )
+      :bandit ->
+        Supervisor.child_spec({Bandit, plug: __MODULE__, port: 8003}, [])
+    end
   end
 
   get "/exit_route" do

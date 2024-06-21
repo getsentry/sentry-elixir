@@ -97,6 +97,8 @@ defmodule Sentry.Mixfile do
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
 
       # Dev and test dependencies
+      {:plug_cowboy, "~> 2.7", only: [:test]},
+      {:bandit, "~> 1.0", only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29.0", only: :dev},
