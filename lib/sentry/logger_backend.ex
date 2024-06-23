@@ -70,7 +70,10 @@ defmodule Sentry.LoggerBackend do
 
   ## State
 
-  defstruct level: :error, metadata: [], excluded_domains: [:cowboy, :bandit], capture_log_messages: false
+  defstruct level: :error,
+            metadata: [],
+            excluded_domains: [:cowboy, :bandit],
+            capture_log_messages: false
 
   ## Callbacks
 
