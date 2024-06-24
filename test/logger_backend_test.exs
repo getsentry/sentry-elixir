@@ -139,7 +139,20 @@ defmodule Sentry.LoggerBackendTest do
     :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
     assert_receive {^ref, _event}, 1000
   after
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy])
+    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
+  end
+
+  test "sends two errors when a Plug process crashes if bandit domain is not excluded" do
+    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
+
+    ref = register_before_send()
+
+    start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
+
+    :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+    assert_receive {^ref, _event}, 1000
+  after
+    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
   end
 
   test "ignores log messages with excluded domains" do

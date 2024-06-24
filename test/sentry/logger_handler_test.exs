@@ -97,6 +97,16 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, _event}, 1000
     end
+
+    @tag handler_config: %{excluded_domains: []}
+    test "sends two errors when a Plug process crashes if bandit domain is not excluded",
+         %{sender_ref: ref} do
+      start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
+
+      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+
+      assert_receive {^ref, _event}, 1000
+    end
   end
 
   describe "with capture_log_messages: true" do
