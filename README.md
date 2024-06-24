@@ -122,7 +122,14 @@ When testing, you will also want to set the `:send_result` type to `:sync`, so t
 
 ## Contributing to the SDK
 
-Please refer to [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Please make sure to read the [CONTRIBUTING.md](CONTRIBUTING.md) before making a pull request.
+
+Thanks to everyone who has contributed to this project so far.
+
+<a href="https://github.com/getsentry/sentry-elixir/graphs/contributors">
+  <img src="https://contributors-img.web.app/image?repo=getsentry/sentry-elixir" />
+</a>
+
 
 ## Getting Help/Support
 
