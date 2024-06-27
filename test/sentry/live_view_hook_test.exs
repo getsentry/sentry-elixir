@@ -31,11 +31,44 @@ defmodule SentryTest.LiveComponent do
   end
 end
 
+defmodule SentryTest.DeadLive do
+  use Phoenix.LiveView
+  on_mount Sentry.LiveViewHook
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>I'm being live_rendered!</div>
+    """
+  end
+end
+
+defmodule SentryTest.ErrorView do
+  def render(template, _), do: Phoenix.Controller.status_message_from_template(template)
+end
+
+defmodule SentryTest.PageController do
+  use Phoenix.Controller
+  use Phoenix.Component
+
+  def page(conn, _params) do
+    assigns = %{conn: conn}
+
+    rendered = ~H"""
+    I'm a controller! <br><%= live_render(@conn, SentryTest.DeadLive, id: "live-render-id") %>
+    """
+
+    content = Phoenix.HTML.Safe.to_iodata(rendered)
+    text(conn, content)
+  end
+end
+
 defmodule SentryTest.Router do
   use Phoenix.Router
   import Phoenix.LiveView.Router
 
   scope "/" do
+    get "/dead_test", SentryTest.PageController, :page
     live "/hook_test", SentryTest.Live
   end
 end
@@ -124,6 +157,15 @@ defmodule Sentry.LiveViewHookTest do
     {:ok, _view, html} = live(conn, "/hook_test")
     assert html =~ "<h1>Testing Sentry hooks</h1>"
     assert html =~ "I&#39;m a LiveComponent"
+  end
+
+  test "does not log an error when a liveview is a child of a non-live phoenix controller/view",
+       %{conn: conn} do
+    conn = get(conn, "/dead_test")
+
+    assert response = text_response(conn, 200)
+    assert response =~ "I'm being live_rendered!"
+    assert Logger.metadata() == []
   end
 
   defp get_sentry_context(view) do

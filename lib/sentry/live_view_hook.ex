@@ -53,8 +53,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     # https://develop.sentry.dev/sdk/event-payloads/request/
 
     @doc false
-    @spec on_mount(:default, map(), map(), struct()) :: {:cont, struct()}
-    def on_mount(:default, params, _session, socket), do: on_mount(params, socket)
+    @spec on_mount(:default, map() | :not_mounted_at_router, map(), struct()) :: {:cont, struct()}
+    def on_mount(:default, %{} = params, _session, socket), do: on_mount(params, socket)
+    def on_mount(:default, :not_mounted_at_router, _session, socket), do: {:cont, socket}
 
     ## Helpers
 
