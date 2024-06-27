@@ -43,10 +43,6 @@ defmodule SentryTest.DeadLive do
   end
 end
 
-defmodule SentryTest.ErrorView do
-  def render(template, _), do: Phoenix.Controller.status_message_from_template(template)
-end
-
 defmodule SentryTest.PageController do
   use Phoenix.Controller
   use Phoenix.Component
