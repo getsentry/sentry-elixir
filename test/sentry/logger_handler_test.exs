@@ -88,6 +88,13 @@ defmodule Sentry.LoggerHandlerTest do
       assert stacktrace_frame.filename == "test/support/example_plug_application.ex"
     end
 
+    test "TODO", %{sender_ref: ref} do
+      start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
+      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      assert_receive {^ref, event}, 1000
+      assert event.original_exception == %RuntimeError{message: "Error"}
+    end
+
     @tag handler_config: %{excluded_domains: []}
     test "sends two errors when a Plug process crashes if cowboy domain is not excluded",
          %{sender_ref: ref} do
@@ -95,7 +102,11 @@ defmodule Sentry.LoggerHandlerTest do
 
       :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
 
-      assert_receive {^ref, _event}, 1000
+      assert_receive {^ref, event}, 1000
+      assert event.original_exception == %RuntimeError{message: "Error"}
+
+      assert_receive {^ref, second_event}, 1000
+      assert second_event.original_exception == %RuntimeError{message: "Error"}
     end
 
     @tag handler_config: %{excluded_domains: []}
@@ -107,6 +118,9 @@ defmodule Sentry.LoggerHandlerTest do
 
       assert_receive {^ref, _event}, 1000
     end
+  end
+
+  describe "with Bandit" do
   end
 
   describe "with capture_log_messages: true" do
