@@ -91,9 +91,8 @@ defmodule Sentry.LoggerHandlerTest do
     test "TODO", %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
       :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
-      assert_receive {^ref,event}, 1000
+      assert_receive {^ref, event}, 1000
       assert event.original_exception == %RuntimeError{message: "Error"}
-
     end
 
     @tag handler_config: %{excluded_domains: []}
