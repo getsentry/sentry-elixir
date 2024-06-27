@@ -462,6 +462,25 @@ defmodule Sentry.LoggerHandler do
     %{genserver_state: state, last_message: last_message}
   end
 
+  # Sometimes there's an extra sneaky [] in there.
+  defp extra_info_from_message([
+         [
+           "GenServer ",
+           _pid,
+           " terminating",
+           _reason,
+           [],
+           "\nLast message",
+           _from,
+           ": ",
+           last_message
+         ],
+         "\nState: ",
+         state | _rest
+       ]) do
+    %{genserver_state: state, last_message: last_message}
+  end
+
   defp extra_info_from_message(_message) do
     %{}
   end
@@ -470,6 +489,39 @@ defmodule Sentry.LoggerHandler do
   # and useful data. For example, GenServer messages contain the PID, the reason, the last
   # message, and a treasure trove of stuff. If we cannot parse the message, such is life
   # and we just report it as is.
+
+  defp try_to_parse_message_or_just_report_it(
+         [
+           [
+             "GenServer ",
+             inspected_pid,
+             " terminating",
+             chardata_reason,
+             _whatever_this_is = [],
+             "\nLast message",
+             [" (from ", inspected_sender_pid, ")"],
+             ": ",
+             inspected_last_message
+           ],
+           "\nState: ",
+           inspected_state | _
+         ],
+         sentry_opts,
+         config
+       ) do
+    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
+
+    sentry_opts =
+      sentry_opts
+      |> Keyword.put(:interpolation_parameters, [inspected_pid])
+      |> add_extra_to_sentry_opts(%{
+        pid_which_sent_last_message: inspected_sender_pid,
+        last_message: inspected_last_message,
+        genserver_state: inspected_state
+      })
+
+    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
+  end
 
   defp try_to_parse_message_or_just_report_it(
          [
