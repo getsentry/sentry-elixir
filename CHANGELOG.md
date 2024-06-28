@@ -1,5 +1,14 @@
 # Changelog
 
+## 10.6.2
+
+### Various fixes & improvements
+
+- Fix on_mount LiveView hook when given :not_mounted_at_router (#742) by @savhappy
+- Strengthen some Logger tests (#743) by @whatyouhide
+- Show contributors on README (#741) by @stephanie-anderson
+- Add :bandit to list of ignored logger domains (#739) by @mtrudel
+
 ## 10.6.1
 
 ### Various fixes & improvements
