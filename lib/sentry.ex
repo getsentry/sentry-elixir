@@ -174,7 +174,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, Config, Event, LoggerUtils}
+  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils}
 
   require Logger
 
@@ -212,10 +212,15 @@ defmodule Sentry do
 
   @type send_result() ::
           {:ok, event_or_envelope_id :: String.t()}
-          | {:error, term()}
+          | {:error, Sentry.error()}
           | :ignored
           | :unsampled
           | :excluded
+
+  @typedoc """
+  An error that is returned from Sentry Client.
+  """
+  @type error :: ClientError.t()
 
   @doc """
   Parses and submits an exception to Sentry.

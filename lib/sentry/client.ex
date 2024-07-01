@@ -7,14 +7,14 @@ defmodule Sentry.Client do
 
   alias Sentry.{
     CheckIn,
+    ClientError,
     Config,
     Dedupe,
     Envelope,
     Event,
     Interfaces,
     LoggerUtils,
-    Transport,
-    ClientError
+    Transport
   }
 
   require Logger
@@ -111,7 +111,10 @@ defmodule Sentry.Client do
   # This is what executes the "Event Pipeline".
   # See: https://develop.sentry.dev/sdk/unified-api/#event-pipeline
   @spec send_event(Event.t(), keyword()) ::
-          {:ok, event_id :: String.t()} | {:error, term()} | :unsampled | :excluded
+          {:ok, event_id :: String.t()}
+          | {:error, Sentry.error()}
+          | :unsampled
+          | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
     opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
 
