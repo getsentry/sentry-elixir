@@ -268,7 +268,7 @@ defmodule Sentry do
   ## Interpolation (since v10.1.0)
 
   The `message` argument supports interpolation. You can pass a string with formatting
-  markers as `%s`, ant then pass in the `:interpolation_parameters` option as a list
+  markers as `%s`, and then pass in the `:interpolation_parameters` option as a list
   of positional parameters to interpolate. For example:
 
       Sentry.capture_message("Error with user %s", interpolation_parameters: ["John"])

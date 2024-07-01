@@ -42,7 +42,7 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
 
       {:retry_after, _delay_ms} ->
-        {:error, "Sentry server asked us to retry too many times"}
+        {:error, :too_many_retries}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
