@@ -3,15 +3,15 @@ defmodule Sentry.ClientErrorTest do
   alias Sentry.ClientError
 
   describe "message/1" do
-    test "With atom - returns message " do
-      assert "Request failure reason: unknown POSIX error: too_many_retries" =
+    test "with atom - returns message" do
+      assert "request failure reason: unknown POSIX error: too_many_retries" =
                ClientError.message(%Sentry.ClientError{
                  reason: {:request_failure, :too_many_retries}
                })
     end
 
-    test "With tuple {:invalid_json, _} - returns message " do
-      assert "Request failure reason: Invalid JSON -> %Jason.DecodeError{position: 0, token: nil, data: \"invalid JSON\"}" =
+    test "with tuple {:invalid_json, _} - returns message" do
+      assert "request failure reason: Invalid JSON -> unexpected byte at position 0: 0x69 (\"i\")" =
                ClientError.message(%Sentry.ClientError{
                  reason:
                    {:invalid_json,
@@ -19,22 +19,22 @@ defmodule Sentry.ClientErrorTest do
                })
     end
 
-    test "With tuple {:request_failure, _} and binary - returns message " do
-      assert "Request failure reason: Received 400 from Sentry server: some error" =
+    test "with tuple {:request_failure, _} and binary - returns message" do
+      assert "request failure reason: Received 400 from Sentry server: some error" =
                ClientError.message(%Sentry.ClientError{
                  reason: {:request_failure, "Received 400 from Sentry server: some error"}
                })
     end
 
-    test "With tuple {:request_failure, _} and atom - returns message " do
-      assert "Request failure reason: connection refused" =
+    test "with tuple {:request_failure, _} and atom - returns message" do
+      assert "request failure reason: connection refused" =
                ClientError.message(%Sentry.ClientError{
                  reason: {:request_failure, :econnrefused}
                })
     end
 
-    test "With tuple {:request_failure, _} and anything else - returns message " do
-      assert "Request failure reason: {:error, %RuntimeError{message: \"I'm a really bad HTTP client\"}}" =
+    test "with tuple {:request_failure, _} and anything else - returns message" do
+      assert "request failure reason: {:error, %RuntimeError{message: \"I'm a really bad HTTP client\"}}" =
                ClientError.message(%Sentry.ClientError{
                  reason:
                    {:request_failure,
@@ -42,11 +42,11 @@ defmodule Sentry.ClientErrorTest do
                })
     end
 
-    test "With Exception- returns message " do
+    test "with Exception- returns message" do
       {kind, data, stacktrace} =
-        {:error, "some data for error", "long stacktrace to show where error originated"}
+        {:error, %RuntimeError{message: "I'm a really bad HTTP client"}, []}
 
-      assert "Request failure reason: Exception: :error with data: \"some data for error\" and stacktrace: \"long stacktrace to show where error originated\"" =
+      assert "request failure reason: Sentry failed to report event due to an unexpected error:\n\n** (RuntimeError) I'm a really bad HTTP client" =
                ClientError.message(%Sentry.ClientError{
                  reason: {kind, data, stacktrace}
                })

@@ -1,9 +1,10 @@
 defmodule Sentry.ClientError do
   @moduledoc """
-  An exception struct that represents an error returned by Sentry.
+  An exception struct that represents an error returned by Sentry when
+  reporting an error or a message.
 
   This struct is designed to manage and handle errors originating from operations
-  in the client application. The `:reason` field signifies the cause of the error
+  in the Sentry client. The `:reason` field signifies the cause of the error
   as an atom or tuple.
 
   To raise instances of this exception, you can use `Kernel.raise/1`. When crafting
@@ -21,17 +22,25 @@ defmodule Sentry.ClientError do
   @typedoc """
   The type for a Sentry error exception.
   """
-  @type t() :: %__MODULE__{reason: term}
+  @type t :: %__MODULE__{reason: reason()}
+
+  @type reason() ::
+          :too_many_retries
+          | {:invalid_json, Exception.t()}
+          | {:request_failure, String.t()}
+          | {:request_failure, atom}
+          | {:request_failure, term()}
+          | {atom(), term(), [term()]}
 
   @doc false
-  @spec new(term) :: t
+  @spec new(reason()) :: t
   def new(reason) do
     %__MODULE__{reason: reason}
   end
 
   @impl true
   def message(%__MODULE__{reason: reason}) do
-    "Request failure reason: #{format(reason)}"
+    "request failure reason: #{format(reason)}"
   end
 
   defp format(:too_many_retries) do
@@ -39,7 +48,7 @@ defmodule Sentry.ClientError do
   end
 
   defp format({:invalid_json, reason}) do
-    "Invalid JSON -> #{inspect(reason)}"
+    "Invalid JSON -> #{Exception.message(reason)}"
   end
 
   defp format({:request_failure, reason}) when is_binary(reason) do
@@ -47,20 +56,21 @@ defmodule Sentry.ClientError do
   end
 
   defp format({:request_failure, reason}) when is_atom(reason) do
-    lookup_reason =
-      case :inet.format_error(reason) do
-        ~c"unknown POSIX error" -> inspect(reason)
-        formatted -> List.to_string(formatted)
-      end
-
-    "#{lookup_reason}"
+    case :inet.format_error(reason) do
+      ~c"unknown POSIX error" -> inspect(reason)
+      formatted -> List.to_string(formatted)
+    end
   end
 
   defp format({:request_failure, reason}) do
-    "#{inspect(reason)}"
+    inspect(reason)
   end
 
   defp format({kind, data, stacktrace}) do
-    "Exception: #{inspect(kind)} with data: #{inspect(data)} and stacktrace: #{inspect(stacktrace)}"
+    """
+    Sentry failed to report event due to an unexpected error:
+
+    #{Exception.format(kind, data, stacktrace)}\
+    """
   end
 end
