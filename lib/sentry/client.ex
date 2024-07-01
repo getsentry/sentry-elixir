@@ -5,7 +5,17 @@ defmodule Sentry.Client do
   # and sampling.
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
-  alias Sentry.{CheckIn, Config, Dedupe, Envelope, Event, Interfaces, LoggerUtils, Transport}
+  alias Sentry.{
+    CheckIn,
+    Config,
+    Dedupe,
+    Envelope,
+    Event,
+    Interfaces,
+    LoggerUtils,
+    Transport,
+    ClientError
+  }
 
   require Logger
 
@@ -139,8 +149,8 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
-      {:error, _reason} ->
-        result
+      {:error, reason} ->
+        {:error, ClientError.new(reason)}
     end
   end
 

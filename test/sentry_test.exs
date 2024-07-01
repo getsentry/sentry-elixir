@@ -53,8 +53,8 @@ defmodule SentryTest do
 
     put_test_config(hackney_opts: [recv_timeout: 50])
 
-    assert {:error, {:request_failure, :timeout}} =
-             Sentry.capture_message("error", request_retries: [], result: :sync)
+    assert {:error, %Sentry.ClientError{reason: {:request_failure, :timeout}}} =
+             Sentry.capture_message("error", request_retries: [], result: :sync) |> IO.inspect()
 
     Bypass.pass(bypass)
   end
