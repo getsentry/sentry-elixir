@@ -21,14 +21,14 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.16'
-            otp: '26.2'
+          - elixir: '1.17'
+            otp: '27.0'
             lint: true
             dialyzer: true
 
           # One version before the last supported one.
-          - elixir: '1.15'
-            otp: '25.3'
+          - elixir: '1.16'
+            otp: '26.2'
 
           # Oldest supported Elixir/Erlang pair.
           - elixir: '1.13.4-otp-22'
