@@ -4,9 +4,9 @@ defmodule Sentry.ClientErrorTest do
 
   describe "message/1" do
     test "with atom - returns message" do
-      assert "request failure reason: unknown POSIX error: too_many_retries" =
+      assert "request failure reason: Sentry responded with status 429 - Too Many Requests" =
                ClientError.message(%Sentry.ClientError{
-                 reason: {:request_failure, :too_many_retries}
+                 reason: :too_many_retries
                })
     end
 
