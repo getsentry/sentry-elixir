@@ -212,15 +212,10 @@ defmodule Sentry do
 
   @type send_result() ::
           {:ok, event_or_envelope_id :: String.t()}
-          | {:error, Sentry.error()}
+          | {:error, ClientError.t()}
           | :ignored
           | :unsampled
           | :excluded
-
-  @typedoc """
-  An error that is returned from Sentry Client.
-  """
-  @type error :: ClientError.t()
 
   @doc """
   Parses and submits an exception to Sentry.

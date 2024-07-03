@@ -112,7 +112,7 @@ defmodule Sentry.Client do
   # See: https://develop.sentry.dev/sdk/unified-api/#event-pipeline
   @spec send_event(Event.t(), keyword()) ::
           {:ok, event_id :: String.t()}
-          | {:error, Sentry.error()}
+          | {:error, ClientError.t()}
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
