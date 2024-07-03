@@ -5,7 +5,17 @@ defmodule Sentry.Client do
   # and sampling.
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
-  alias Sentry.{CheckIn, Config, Dedupe, Envelope, Event, Interfaces, LoggerUtils, Transport}
+  alias Sentry.{
+    CheckIn,
+    ClientError,
+    Config,
+    Dedupe,
+    Envelope,
+    Event,
+    Interfaces,
+    LoggerUtils,
+    Transport
+  }
 
   require Logger
 
@@ -101,7 +111,10 @@ defmodule Sentry.Client do
   # This is what executes the "Event Pipeline".
   # See: https://develop.sentry.dev/sdk/unified-api/#event-pipeline
   @spec send_event(Event.t(), keyword()) ::
-          {:ok, event_id :: String.t()} | {:error, term()} | :unsampled | :excluded
+          {:ok, event_id :: String.t()}
+          | {:error, ClientError.t()}
+          | :unsampled
+          | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
     opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
 
@@ -139,8 +152,8 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
-      {:error, _reason} ->
-        result
+      {:error, reason} ->
+        {:error, ClientError.new(reason)}
     end
   end
 
