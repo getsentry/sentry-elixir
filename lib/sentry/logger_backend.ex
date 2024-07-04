@@ -6,7 +6,7 @@ defmodule Sentry.LoggerBackend do
   >
   > This module will eventually become **legacy**. Elixir `Logger` backends will
   > eventually be deprecated in favor of Erlang [`:logger`
-  > handlers](https://erlang.org/doc/man/logger_chapter.html#handlers).
+  > handlers](https://www.erlang.org/doc/apps/kernel/logger_chapter.html#handlers).
   >
   > Sentry already has a `:logger` handler, `Sentry.LoggerHandler`. In new projects
   > and wherever possible, use `Sentry.LoggerHandler` in favor of this backend.
