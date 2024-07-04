@@ -51,5 +51,16 @@ defmodule Sentry.ClientErrorTest do
                  reason: {kind, data, stacktrace}
                })
     end
+
+    test "with server_error- returns message" do
+      {status, headers, body} =
+        {400, "Rate limiting.", "{}"}
+
+      assert "request failure reason: Sentry failed to report the event due to a server error.\nHTTP Status: 400\nResponse Headers: \"Rate limiting.\"\nResponse Body: \"{}\"\n" =
+               ClientError.message(%Sentry.ClientError{
+                 reason: :server_error,
+                 http_response: {status, headers, body}
+               })
+    end
   end
 end

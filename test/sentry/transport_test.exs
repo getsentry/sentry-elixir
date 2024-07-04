@@ -54,7 +54,7 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(400, ~s<{}>)
       end)
 
-      assert {:error, {:request_failure, "Received 400 from Sentry server: some error"}} =
+      assert {:error, {:server_error, {400, "some error", "{}"}}} =
                Transport.post_envelope(envelope, HackneyClient, _retries = [])
     end
 

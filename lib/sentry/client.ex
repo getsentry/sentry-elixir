@@ -152,6 +152,9 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
+      {:error, {:server_error, http_response}} ->
+        {:error, ClientError.new(:server_error, http_response)}
+
       {:error, reason} ->
         {:error, ClientError.new(reason)}
     end
@@ -372,6 +375,10 @@ defmodule Sentry.Client do
             _other ->
               "Error in HTTP Request to Sentry - #{inspect(last_error)}"
           end
+
+        {:error, {:server_error, http_reponse}} ->
+          {status, headers, _body} = http_reponse
+          "Received #{status} from Sentry server: #{headers}"
 
         {:ok, _} ->
           nil
