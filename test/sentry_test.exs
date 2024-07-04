@@ -51,7 +51,7 @@ defmodule SentryTest do
   test "errors when taking too long to receive response", %{bypass: bypass} do
     Bypass.expect(bypass, fn _conn -> Process.sleep(:infinity) end)
 
-    put_test_config(hackney_opts: [recv_timeout: 50])
+    put_test_config(finch_opts: [recv_timeout: 50])
 
     assert {:error, %Sentry.ClientError{reason: {:request_failure, :timeout}}} =
              Sentry.capture_message("error", request_retries: [], result: :sync)

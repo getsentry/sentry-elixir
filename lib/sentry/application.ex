@@ -24,6 +24,7 @@ defmodule Sentry.Application do
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
 
+    IO.inspect(maybe_http_client_spec)
     cache_loaded_applications()
     _ = Sources.load_source_code_map_if_present()
 
