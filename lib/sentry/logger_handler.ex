@@ -85,7 +85,7 @@ defmodule Sentry.LoggerHandler do
   @options_schema NimbleOptions.new!(options_schema)
 
   @moduledoc """
-  A highly-configurable [`:logger` handler](https://erlang.org/doc/man/logger_chapter.html#handlers)
+  A highly-configurable [`:logger` handler](https://www.erlang.org/doc/apps/kernel/logger_chapter.html#handlers)
   that reports logged messages and crashes to Sentry.
 
   *This module is available since v9.0.0 of this library*.
@@ -144,7 +144,7 @@ defmodule Sentry.LoggerHandler do
   ## Usage
 
   To add this handler to your system, see [the documentation for handlers in
-  Elixir](https://hexdocs.pm/logger/1.15.5/Logger.html#module-erlang-otp-handlers).
+  Elixir](https://hexdocs.pm/logger/Logger.html#module-erlang-otp-handlers).
 
   You can configure this handler in the `:logger` key under your application's configuration,
   potentially alongside other `:logger` handlers:

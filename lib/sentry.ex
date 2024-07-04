@@ -7,7 +7,7 @@ defmodule Sentry do
 
     * Manually — see `capture_exception/2` and `capture_message/2`.
 
-    * Through an [Erlang `:logger`](https://www.erlang.org/doc/man/logger) handler —
+    * Through an [Erlang `:logger`](https://www.erlang.org/doc/apps/kernel/logger.html) handler —
       see `Sentry.LoggerHandler`.
 
     * Through an Elixir `Logger` backend — see `Sentry.LoggerBackend`.

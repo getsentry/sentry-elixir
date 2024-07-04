@@ -47,7 +47,7 @@ mix test
 mix format
 ```
 
-CI will also run [dialyzer](http://erlang.org/doc/man/dialyzer.html) using the [Dialyxir library](https://github.com/jeremyjh/dialyxir) to check the typespecs, but this can be onerous to install and run. It is okay to submit changes without running it. If you want to run it locally, run:
+CI will also run [dialyzer](https://www.erlang.org/doc/apps/dialyzer/dialyzer.html) using the [Dialyxir library](https://github.com/jeremyjh/dialyxir) to check the typespecs, but this can be onerous to install and run. It is okay to submit changes without running it. If you want to run it locally, run:
 
 ```bash
 mix dialyzer
