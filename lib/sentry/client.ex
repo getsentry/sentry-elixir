@@ -152,9 +152,6 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
-      {:error, {:server_error, http_response}} ->
-        {:error, ClientError.new(:server_error, http_response)}
-
       {:error, reason} ->
         {:error, ClientError.new(reason)}
     end

@@ -31,6 +31,8 @@ defmodule Sentry.ClientError do
   @type reason() ::
           :too_many_retries
           | :server_error
+          | {:server_error,
+             {status :: 100..199, headers :: [{String.t(), String.t()}], body :: binary()}}
           | {:invalid_json, Exception.t()}
           | {:request_failure, String.t()}
           | {:request_failure, atom}
@@ -38,12 +40,13 @@ defmodule Sentry.ClientError do
           | {atom(), term(), [term()]}
 
   @doc false
-  @spec new(
-          reason(),
-          nil | {status :: 100..599, headers :: [{String.t(), String.t()}], body :: binary()}
-        ) :: t
-  def new(reason, http_response \\ nil) do
-    %__MODULE__{reason: reason, http_response: http_response}
+  @spec new(reason()) :: t
+  def new({:server_error, http_response}) do
+    %__MODULE__{reason: :server_error, http_response: http_response}
+  end
+
+  def new(reason) do
+    %__MODULE__{reason: reason, http_response: nil}
   end
 
   @impl true
@@ -89,9 +92,9 @@ defmodule Sentry.ClientError do
 
   defp format(:server_error, {status, headers, body}) do
     """
-    Sentry failed to report the event due to a server error.\n\
-    HTTP Status: #{status}\n\
-    Response Headers: #{inspect(headers)}\n\
+    Sentry failed to report the event due to a server error.
+    HTTP Status: #{status}
+    Response Headers: #{inspect(headers)}
     Response Body: #{inspect(body)}
     """
   end

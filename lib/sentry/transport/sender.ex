@@ -69,6 +69,11 @@ defmodule Sentry.Transport.Sender do
                 "Error in HTTP Request to Sentry - #{inspect(last_error)}"
             end
 
+          {:error, {:server_error, http_reponse}} ->
+            {status, headers, _body} = http_reponse
+
+            "Received #{status} from Sentry server: #{headers}"
+
           _ ->
             nil
         end
