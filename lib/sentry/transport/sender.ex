@@ -69,10 +69,18 @@ defmodule Sentry.Transport.Sender do
                 "Error in HTTP Request to Sentry - #{inspect(last_error)}"
             end
 
-          {:error, {:server_error, http_reponse}} ->
+          {:error, http_reponse} ->
             {status, headers, _body} = http_reponse
 
-            "Received #{status} from Sentry server: #{headers}"
+            error_header =
+              :proplists.get_value("X-Sentry-Error", headers, nil) ||
+                :proplists.get_value("x-sentry-error", headers, nil) || ""
+
+            if error_header != "" do
+              "Received #{status} from Sentry server: #{error_header}"
+            else
+              "Received #{status} from Sentry server"
+            end
 
           _ ->
             nil

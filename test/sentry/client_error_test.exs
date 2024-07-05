@@ -47,7 +47,7 @@ defmodule Sentry.ClientErrorTest do
         {400, "Rate limiting.", "{}"}
 
       assert "request failure reason: Sentry failed to report the event due to a server error.\nHTTP Status: 400\nResponse Headers: \"Rate limiting.\"\nResponse Body: \"{}\"\n" =
-               result_msg({:server_error, {status, headers, body}})
+               ClientError.server_error(status, headers, body) |> ClientError.message()
     end
   end
 

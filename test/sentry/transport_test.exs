@@ -54,8 +54,10 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(400, ~s<{}>)
       end)
 
-      assert {:error, {:server_error, {400, "some error", "{}"}}} =
-               Transport.post_envelope(envelope, HackneyClient, _retries = [])
+      {:error, {_status, headers, _body}} =
+        Transport.post_envelope(envelope, HackneyClient, _retries = [])
+
+      assert :proplists.get_value("x-sentry-error", headers, nil) == "some error"
     end
 
     test "returns an error if the HTTP client raises an error when making the request",

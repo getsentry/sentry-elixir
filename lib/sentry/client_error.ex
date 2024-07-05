@@ -25,14 +25,12 @@ defmodule Sentry.ClientError do
   @type t :: %__MODULE__{
           reason: reason(),
           http_response:
-            nil | {status :: 100..199, headers :: [{String.t(), String.t()}], body :: binary()}
+            nil | {status :: 100..599, headers :: [{String.t(), String.t()}], body :: binary()}
         }
 
   @type reason() ::
           :too_many_retries
           | :server_error
-          | {:server_error,
-             {status :: 100..199, headers :: [{String.t(), String.t()}], body :: binary()}}
           | {:invalid_json, Exception.t()}
           | {:request_failure, String.t()}
           | {:request_failure, atom}
@@ -41,12 +39,18 @@ defmodule Sentry.ClientError do
 
   @doc false
   @spec new(reason()) :: t
-  def new({:server_error, http_response}) do
-    %__MODULE__{reason: :server_error, http_response: http_response}
+  def new(reason) do
+    %__MODULE__{reason: reason}
   end
 
-  def new(reason) do
-    %__MODULE__{reason: reason, http_response: nil}
+  @spec server_error(
+          status :: 100..599,
+          headers ::
+            [{String.t(), String.t()}],
+          body :: binary()
+        ) :: t
+  def server_error(status, headers, body) do
+    %__MODULE__{reason: :server_error, http_response: {status, headers, body}}
   end
 
   @impl true
