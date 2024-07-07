@@ -70,10 +70,9 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:request_failure, reason}} =
+      assert {:error, {:error, %RuntimeError{} = exception, _stacktrace}} =
                Transport.post_envelope(envelope, RaisingHTTPClient, _retries = [])
 
-      assert {:error, %RuntimeError{} = exception, _stacktrace} = reason
       assert exception.message == "I'm a really bad HTTP client"
     after
       :code.delete(RaisingHTTPClient)
@@ -90,10 +89,8 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:request_failure, reason}} =
+      assert {:error, {:exit, :through_the_window, _stacktrace}} =
                Transport.post_envelope(envelope, ExitingHTTPClient, _retries = [])
-
-      assert {:exit, :through_the_window, _stacktrace} = reason
     after
       :code.delete(ExitingHTTPClient)
       :code.purge(ExitingHTTPClient)
@@ -109,10 +106,8 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:request_failure, reason}} =
+      assert {:error, {:throw, :catch_me_if_you_can, _stacktrace}} =
                Transport.post_envelope(envelope, ThrowingHTTPClient, _retries = [])
-
-      assert {:throw, :catch_me_if_you_can, _stacktrace} = reason
     after
       :code.delete(ThrowingHTTPClient)
       :code.purge(ThrowingHTTPClient)
@@ -135,10 +130,9 @@ defmodule Sentry.TransportTest do
 
       put_test_config(json_library: CrashingJSONLibrary)
 
-      assert {:error, {:request_failure, reason}} =
+      assert {:error, {:error, %RuntimeError{} = exception, _stacktrace}} =
                Transport.post_envelope(envelope, HackneyClient, _retries = [])
 
-      assert {:error, %RuntimeError{} = exception, _stacktrace} = reason
       assert exception.message == "I'm a really bad JSON library"
     after
       :code.delete(CrashingJSONLibrary)
