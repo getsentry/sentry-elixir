@@ -52,6 +52,6 @@ defmodule Sentry.ClientErrorTest do
   end
 
   defp result_msg(reason) do
-    ClientError.new(reason) |> ClientError.message()
+    reason |> ClientError.new() |> ClientError.message()
   end
 end
