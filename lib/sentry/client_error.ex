@@ -17,15 +17,20 @@ defmodule Sentry.ClientError do
   @doc """
   The exception struct for a Sentry error.
   """
-  defexception [:reason]
+  defexception [:reason, :http_response]
 
   @typedoc """
   The type for a Sentry error exception.
   """
-  @type t :: %__MODULE__{reason: reason()}
+  @type t :: %__MODULE__{
+          reason: reason(),
+          http_response:
+            nil | {status :: 100..599, headers :: [{String.t(), String.t()}], body :: binary()}
+        }
 
   @type reason() ::
           :too_many_retries
+          | :server_error
           | {:invalid_json, Exception.t()}
           | {:request_failure, String.t()}
           | {:request_failure, atom}
@@ -38,9 +43,25 @@ defmodule Sentry.ClientError do
     %__MODULE__{reason: reason}
   end
 
+  @doc false
+  @spec server_error(
+          status :: 100..599,
+          headers ::
+            [{String.t(), String.t()}],
+          body :: binary()
+        ) :: t
+  def server_error(status, headers, body) do
+    %__MODULE__{reason: :server_error, http_response: {status, headers, body}}
+  end
+
   @impl true
-  def message(%__MODULE__{reason: reason}) do
+  def message(%__MODULE__{reason: reason, http_response: http_response})
+      when is_nil(http_response) do
     "request failure reason: #{format(reason)}"
+  end
+
+  def message(%__MODULE__{reason: reason, http_response: http_response}) do
+    "request failure reason: #{format(reason, http_response)}"
   end
 
   defp format(:too_many_retries) do
@@ -71,6 +92,15 @@ defmodule Sentry.ClientError do
     Sentry failed to report event due to an unexpected error:
 
     #{Exception.format(kind, data, stacktrace)}\
+    """
+  end
+
+  defp format(:server_error, {status, headers, body}) do
+    """
+    Sentry failed to report the event due to a server error.
+    HTTP Status: #{status}
+    Response Headers: #{inspect(headers)}
+    Response Body: #{inspect(body)}
     """
   end
 end

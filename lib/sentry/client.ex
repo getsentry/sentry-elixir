@@ -152,6 +152,9 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
+      {:error, {status, headers, body}} ->
+        {:error, ClientError.server_error(status, headers, body)}
+
       {:error, reason} ->
         {:error, ClientError.new(reason)}
     end
@@ -371,6 +374,17 @@ defmodule Sentry.Client do
 
             _other ->
               "Error in HTTP Request to Sentry - #{inspect(last_error)}"
+          end
+
+        {:error, {status, headers, _body}} ->
+          error_header =
+            :proplists.get_value("X-Sentry-Error", headers, nil) ||
+              :proplists.get_value("x-sentry-error", headers, nil) || ""
+
+          if error_header != "" do
+            "Received #{status} from Sentry server: #{error_header}"
+          else
+            "Received #{status} from Sentry server"
           end
 
         {:ok, _} ->

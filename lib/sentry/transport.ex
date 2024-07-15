@@ -49,6 +49,9 @@ defmodule Sentry.Transport do
         Process.sleep(sleep_interval)
         post_envelope_with_retries(client, endpoint, headers, payload, retries_left)
 
+      {:error, {status, headers, body}} ->
+        {:error, {status, headers, body}}
+
       {:error, reason} ->
         {:error, {:request_failure, reason}}
     end
@@ -73,12 +76,8 @@ defmodule Sentry.Transport do
 
         {:retry_after, delay_ms}
 
-      {:ok, status, headers, _body} ->
-        error_header =
-          :proplists.get_value("X-Sentry-Error", headers, nil) ||
-            :proplists.get_value("x-sentry-error", headers, nil) || ""
-
-        {:error, "Received #{status} from Sentry server: #{error_header}"}
+      {:ok, status, headers, body} ->
+        {:error, {status, headers, body}}
 
       {:error, reason} ->
         {:error, reason}

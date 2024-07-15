@@ -226,6 +226,34 @@ defmodule Sentry.ClientTest do
       assert log =~ "Received 400 from Sentry server: Rate limiting."
     end
 
+    test "returns an error if Sentry server responds with error status", %{bypass: bypass} do
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Error", "Rate limiting.")
+        |> Plug.Conn.resp(400, "{}")
+      end)
+
+      put_test_config(log_level: :info)
+
+      event = Event.create_event(message: "Something went wrong")
+
+      {:error, %Sentry.ClientError{} = error} =
+        Client.send_event(event, result: :sync, request_retries: [])
+
+      assert error.reason == :server_error
+      assert error.http_response != nil
+    end
+
+    test "returns an error if there is a request failure", %{bypass: bypass} do
+      Bypass.down(bypass)
+      event = Event.create_event(message: "Something went wrong")
+
+      {:error, %Sentry.ClientError{} = error} =
+        Client.send_event(event, result: :sync, request_retries: [])
+
+      assert error.reason == {:request_failure, :econnrefused}
+    end
+
     test "logs an error when unable to encode JSON" do
       defmodule BadJSONClient do
         def encode(term) when term == %{}, do: {:ok, "{}"}
