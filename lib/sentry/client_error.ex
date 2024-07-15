@@ -43,6 +43,7 @@ defmodule Sentry.ClientError do
     %__MODULE__{reason: reason}
   end
 
+  @doc false
   @spec server_error(
           status :: 100..599,
           headers ::
