@@ -48,6 +48,11 @@ defmodule Sentry.Application do
   end
 
   defp start_integrations(config) do
+    # create new ets table for cron jobs
+    if :ets.whereis(:cron) == :undefined do
+      Sentry.Mapping.new()
+    end
+
     if config[:oban][:cron][:enabled] do
       Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
     end

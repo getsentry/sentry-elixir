@@ -1,5 +1,7 @@
 defmodule Sentry.Integrations.Quantum.Cron do
   @moduledoc false
+  alias Sentry.UUID
+  alias Sentry.Mapping
 
   require Logger
 
@@ -62,10 +64,19 @@ defmodule Sentry.Integrations.Quantum.Cron do
 
   defp check_in_opts(%{job: job} = metadata) when is_struct(job, Quantum.Job) do
     if schedule_opts = schedule_opts(job) do
-      id = metadata.telemetry_span_context |> :erlang.phash2() |> Integer.to_string()
+      quantum_id = metadata.telemetry_span_context |> :erlang.phash2() |> Integer.to_string()
+
+      {:ok, id} =
+        case Mapping.lookup(:cron, "quantum-#{quantum_id}") do
+          {:ok, value} ->
+            {:ok, value}
+
+          :error ->
+            Mapping.insert(:cron, "quantum-#{quantum_id}", UUID.uuid4_hex())
+        end
 
       [
-        check_in_id: "quantum-#{id}",
+        check_in_id: id,
         # This is already a binary.
         monitor_slug: "quantum-#{slugify(job.name)}",
         monitor_config: [schedule: schedule_opts]

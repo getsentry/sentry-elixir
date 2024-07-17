@@ -29,7 +29,7 @@ defmodule Sentry.Envelope do
   @spec from_check_in(CheckIn.t()) :: t()
   def from_check_in(%CheckIn{} = check_in) do
     %__MODULE__{
-      event_id: UUID.uuid4_hex(),
+      event_id: check_in.check_in_id,
       items: [check_in]
     }
   end

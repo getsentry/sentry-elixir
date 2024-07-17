@@ -1,5 +1,7 @@
 defmodule Sentry.Integrations.Oban.Cron do
   @moduledoc false
+  alias Sentry.UUID
+  alias Sentry.Mapping
 
   @events [
     [:oban, :job, :start],
@@ -68,9 +70,19 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
+    # lookup job.id -> if exists check-in-id is this uuid. Othereise store new key and create UUID value
     if schedule_opts = schedule_opts(job) do
+      {:ok, id} =
+        case Mapping.lookup(:cron, "oban-#{job.id}") do
+          {:ok, value} ->
+            {:ok, value}
+
+          :error ->
+            Mapping.insert(:cron, "oban-#{job.id}", UUID.uuid4_hex())
+        end
+
       [
-        check_in_id: "oban-#{job.id}",
+        check_in_id: id,
         # This is already a binary.
         monitor_slug: slugify(job.worker),
         monitor_config: [schedule: schedule_opts]
