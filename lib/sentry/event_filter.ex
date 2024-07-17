@@ -73,7 +73,7 @@ defmodule Sentry.EventFilter do
       defmodule MyApp.SentryEventFilter do
         def filter_non_500(%Sentry.Event{original_exception: exception} = event) do
           cond do
-            if Plug.Exception.status(exception) < 500 ->
+            Plug.Exception.status(exception) < 500 ->
               false
 
             # Fall back to the default event filter.
