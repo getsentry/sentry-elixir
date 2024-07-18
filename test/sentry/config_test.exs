@@ -131,6 +131,18 @@ defmodule Sentry.ConfigTest do
       assert Config.validate!(environment_name: "test")[:environment_name] == "test"
     end
 
+    test ":environment_name set to default" do
+      previous_value = Application.get_env(:sentry, :environment_name)
+      Application.delete_env(:sentry, :environment_name)
+
+      on_exit(fn ->
+        Application.put_env(:sentry, :environment_name, previous_value)
+        assert previous_value === Application.get_env(:sentry, :environment_name)
+      end)
+
+      assert Config.validate!()[:environment_name] == "production"
+    end
+
     test ":environment_name from system env" do
       with_system_env("SENTRY_ENVIRONMENT", "my_env", fn ->
         assert Config.validate!([])[:environment_name] == "my_env"
