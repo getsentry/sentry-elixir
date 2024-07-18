@@ -561,7 +561,10 @@ defmodule Sentry.Config do
   ## Helpers
 
   defp fill_in_from_env(config, key, system_key) do
-    Keyword.put_new_lazy(config, key, fn -> System.get_env(system_key, nil) end)
+    case System.get_env(system_key) do
+      nil -> config
+      value -> Keyword.put_new(config, key, value)
+    end
   end
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated
