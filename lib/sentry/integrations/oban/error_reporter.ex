@@ -24,11 +24,10 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           :no_config
         ) :: :ok
   def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
-    oban_worker_mod = Oban.Worker
     %{reason: exception, stacktrace: stacktrace} = job.unsaved_error
 
     stacktrace =
-      case {oban_worker_mod.from_string(job.worker), stacktrace} do
+      case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
         _ -> stacktrace
       end
