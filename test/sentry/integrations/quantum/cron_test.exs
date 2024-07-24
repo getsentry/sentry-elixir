@@ -1,6 +1,7 @@
 defmodule Sentry.Integrations.Quantum.CronTest do
   use Sentry.Case, async: false
 
+  alias Sentry.Integrations.CheckInIDMappings
   import Sentry.TestHelpers
 
   defmodule Scheduler do
@@ -52,10 +53,11 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
+      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
-      assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
+      assert check_in_body["check_in_id"] == id
       assert check_in_body["status"] == "in_progress"
       assert check_in_body["monitor_slug"] == "quantum-test-job"
       assert check_in_body["duration"] == nil
@@ -92,10 +94,11 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
+      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
-      assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
+      assert check_in_body["check_in_id"] == id
       assert check_in_body["status"] == "error"
       assert check_in_body["monitor_slug"] == "quantum-test-job"
       assert check_in_body["duration"] == 12.099
@@ -134,10 +137,11 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
+      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
-      assert check_in_body["check_in_id"] == "quantum-#{:erlang.phash2(ref)}"
+      assert check_in_body["check_in_id"] == id
       assert check_in_body["status"] == "ok"
       assert check_in_body["monitor_slug"] == "quantum-test-job"
       assert check_in_body["duration"] == 12.099

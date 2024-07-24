@@ -20,7 +20,11 @@ defmodule Sentry.Application do
       end
 
     children =
-      [{Registry, keys: :unique, name: Sentry.Transport.SenderRegistry}, Sentry.Dedupe] ++
+      [
+        {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
+        Sentry.Dedupe,
+        Sentry.Integrations.CheckInIDMappings
+      ] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
 
@@ -48,21 +52,18 @@ defmodule Sentry.Application do
   end
 
   defp start_integrations(config) do
-    # create new ets table for cron jobs
-    if :ets.whereis(:cron) == :undefined do
-      Sentry.Mapping.new()
-    end
+    if Code.ensure_loaded?(Sentry.Integrations.CheckInIDMappings) do
+      if config[:oban][:cron][:enabled] do
+        Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
+      end
 
-    if config[:oban][:cron][:enabled] do
-      Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
-    end
+      if config[:oban][:capture_errors] do
+        Sentry.Integrations.Oban.ErrorReporter.attach()
+      end
 
-    if config[:oban][:capture_errors] do
-      Sentry.Integrations.Oban.ErrorReporter.attach()
-    end
-
-    if config[:quantum][:cron][:enabled] do
-      Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
+      if config[:quantum][:cron][:enabled] do
+        Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
+      end
     end
   end
 end
