@@ -2,24 +2,25 @@ defmodule Sentry.Integrations.CheckInIDMappings do
   @moduledoc false
 
   use GenServer
+  alias Sentry.UUID
 
-  @table :cron
+  @table :sentry_cron_mappings
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link([] = _opts) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
-  @spec lookup(String.t()) :: {:ok, <<_::256>>}
-  def lookup(key) do
+  @spec lookup_or_insert_new(String.t()) :: UUID.t()
+  def lookup_or_insert_new(key) do
     case :ets.lookup(@table, key) do
       [{^key, value}] ->
-        {:ok, value}
+        value
 
       [] ->
-        value = Sentry.UUID.uuid4_hex()
+        value = UUID.uuid4_hex()
         :ets.insert(@table, {key, value})
-        {:ok, value}
+        value
     end
   end
 

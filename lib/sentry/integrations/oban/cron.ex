@@ -70,7 +70,7 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
     if schedule_opts = schedule_opts(job) do
-      {:ok, id} = CheckInIDMappings.lookup(job.id)
+      id = CheckInIDMappings.lookup_or_insert_new(job.id)
 
       [
         check_in_id: id,

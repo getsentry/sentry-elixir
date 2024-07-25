@@ -52,18 +52,16 @@ defmodule Sentry.Application do
   end
 
   defp start_integrations(config) do
-    if Code.ensure_loaded?(Sentry.Integrations.CheckInIDMappings) do
-      if config[:oban][:cron][:enabled] do
-        Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
-      end
+    if config[:oban][:cron][:enabled] do
+      Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
+    end
 
-      if config[:oban][:capture_errors] do
-        Sentry.Integrations.Oban.ErrorReporter.attach()
-      end
+    if config[:oban][:capture_errors] do
+      Sentry.Integrations.Oban.ErrorReporter.attach()
+    end
 
-      if config[:quantum][:cron][:enabled] do
-        Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
-      end
+    if config[:quantum][:cron][:enabled] do
+      Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
     end
   end
 end

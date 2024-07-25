@@ -64,7 +64,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
   defp check_in_opts(%{job: job} = metadata) when is_struct(job, Quantum.Job) do
     if schedule_opts = schedule_opts(job) do
       quantum_id = metadata.telemetry_span_context |> :erlang.phash2() |> Integer.to_string()
-      {:ok, id} = CheckInIDMappings.lookup("quantum-#{quantum_id}")
+      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{quantum_id}")
 
       [
         check_in_id: id,

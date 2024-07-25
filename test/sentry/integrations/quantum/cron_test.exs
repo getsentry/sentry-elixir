@@ -53,7 +53,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
-      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
+      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
@@ -94,7 +94,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
-      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
+      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
@@ -137,7 +137,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
-      {:ok, id} = CheckInIDMappings.lookup("quantum-#{:erlang.phash2(ref)}")
+      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
 
       assert headers["type"] == "check_in"
 
