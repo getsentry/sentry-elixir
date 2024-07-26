@@ -51,7 +51,6 @@ defmodule Sentry.FinchClient do
 
   @impl true
   def post(url, headers, body) do
-    # IO.inspect([url, headers, body])
     finch_opts =
       Sentry.Config.finch_opts()
       |> Keyword.put_new(:pool, @finch_pool_name)
