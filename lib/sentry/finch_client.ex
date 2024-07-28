@@ -25,7 +25,7 @@ defmodule Sentry.FinchClient do
     if Code.ensure_loaded?(Finch) do
       case Application.ensure_all_started(:finch) do
         {:ok, _apps} ->
-          finch_options = [
+          Finch.child_spec(
             name: @finch_pool_name,
             pools: %{
               :default => [
@@ -33,9 +33,8 @@ defmodule Sentry.FinchClient do
                 conn_max_idle_time: Sentry.Config.finch_timeout()
               ]
             }
-          ]
-
-          Finch.child_spec(finch_options)
+          )
+          |> IO.inspect()
 
         {:error, reason} ->
           raise "failed to start the :finch application: #{inspect(reason)}"
@@ -43,8 +42,8 @@ defmodule Sentry.FinchClient do
     else
       raise """
       cannot start the :sentry application because the HTTP client is set to \
-      Sentry.FinchClient (which is the default), but the Hackney library is not loaded. \
-      Add :hackney to your dependencies to fix this.
+      Sentry.FinchClient (which is the default), but the Finch library is not loaded. \
+      Add :finch to your dependencies to fix this.
       """
     end
   end
