@@ -13,32 +13,47 @@ defmodule Sentry.FinchClient do
 
   Sentry starts its own finch pool called `:sentry_pool`. If you need to set other
   [hackney configuration options](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5)
-  for things such as proxies, using your own pool, or response timeouts, the `:hackney_opts`
+  for things such as proxies, using your own pool, or response timeouts, the `:finch_opts`
   configuration is passed directly to hackney for each request. See the configuration
   documentation in the `Sentry` module.
   """
+  @finch_pool_name :sentry_pool
 
   @impl true
   def child_spec do
-    Supervisor.child_spec(
-      {Finch,
-       name: __MODULE__,
-       pools: %{
-         :default => [size: 10]
-       }},
-      id: __MODULE__
-    )
+    if Code.ensure_loaded?(Finch) do
+      case Application.ensure_all_started(:finch) do
+        {:ok, _apps} -> :ok
+        {:error, reason} -> raise "failed to start the :finch application: #{inspect(reason)}"
+      end
+
+      Finch.child_spec(
+        name: __MODULE__,
+        pools: %{
+          :default => [
+            size: Sentry.Config.max_finch_connections(),
+            conn_max_idle_time: Sentry.Config.finch_timeout()
+          ]
+        }
+      )
+    else
+      raise """
+      cannot start the :sentry application because the HTTP client is set to \
+      Sentry.FinchClient (which is the default), but the Finch library is not loaded. \
+      Add :finch to your dependencies to fix this.
+      """
+    end
   end
 
   @impl true
   def post(url, headers, body) do
     request = Finch.build(:post, url, headers, body)
 
-    IO.inspect(request)
+    finch_opts =
+      Sentry.Config.finch_opts()
+      |> Keyword.put_new(:pool, @finch_pool_name)
 
-    opts = Keyword.put_new([], :pool, :sentry_pool)
-
-    case Finch.request(request, __MODULE__, opts) do
+    case Finch.request(request, __MODULE__, finch_opts) do
       {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
         {:ok, status, headers, body}
 
