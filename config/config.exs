@@ -16,3 +16,6 @@ if config_env() == :test do
 end
 
 config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
+
+config :sentry,
+  client: Sentry.FinchClient
