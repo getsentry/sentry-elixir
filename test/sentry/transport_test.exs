@@ -54,8 +54,8 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(400, ~s<{}>)
       end)
 
-      assert {:error, {:request_failure, "Received 400 from Sentry server: some error"}} =
-               Transport.post_envelope(envelope, FinchClient, _retries = [])
+      assert {:error, {:request_failure, %Jason.DecodeError{}}} =
+               Transport.post_envelope(envelope, FinchClient, _retries = [0])
     end
 
     test "returns an error if the HTTP client raises an error when making the request",
@@ -128,7 +128,7 @@ defmodule Sentry.TransportTest do
 
       put_test_config(json_library: CrashingJSONLibrary)
 
-      assert {:error, {:request_failure, reason}} =
+      assert {:error, {:error, %RuntimeError{} = exception, _stacktrace}} =
                Transport.post_envelope(envelope, FinchClient, _retries = [])
 
       assert exception.message == "I'm a really bad JSON library"

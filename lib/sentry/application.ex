@@ -19,6 +19,8 @@ defmodule Sentry.Application do
         []
       end
 
+    IO.inspect(maybe_http_client_spec)
+
     children =
       [{Registry, keys: :unique, name: Sentry.Transport.SenderRegistry}, Sentry.Dedupe] ++
         maybe_http_client_spec ++

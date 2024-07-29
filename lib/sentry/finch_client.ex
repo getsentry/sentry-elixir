@@ -26,14 +26,16 @@ defmodule Sentry.FinchClient do
       case Application.ensure_all_started(:finch) do
         {:ok, _apps} ->
           Finch.child_spec(
-            name: @finch_pool_name,
-            pools: %{
-              :default => [
-                size: Sentry.Config.max_finch_connections(),
-                conn_max_idle_time: Sentry.Config.finch_timeout()
-              ]
-            }
+            name: @finch_pool_name
+            # pools: %{
+            #   :default => [
+            #     size: Sentry.Config.max_finch_connections(),
+            #     conn_max_idle_time: Sentry.Config.finch_timeout()
+            #   ]
+            # }
           )
+
+          # List.first(child.start)
           |> IO.inspect()
 
         {:error, reason} ->

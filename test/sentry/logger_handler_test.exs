@@ -1,5 +1,6 @@
 defmodule Sentry.LoggerHandlerTest do
   use Sentry.Case, async: false
+  import Finch
 
   import Sentry.TestHelpers
 
@@ -90,7 +91,8 @@ defmodule Sentry.LoggerHandlerTest do
 
     test "TODO", %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      req = Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+      Finch.request(req, __MODULE__)
       assert_receive {^ref, event}, 1000
       assert event.original_exception == %RuntimeError{message: "Error"}
     end
@@ -100,7 +102,7 @@ defmodule Sentry.LoggerHandlerTest do
          %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
 
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      Finch.get("http://127.0.0.1:8003/error_route", [], "", [])
 
       assert_receive {^ref, event}, 1000
       assert event.original_exception == %RuntimeError{message: "Error"}
@@ -114,7 +116,7 @@ defmodule Sentry.LoggerHandlerTest do
          %{sender_ref: ref} do
       start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
 
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      Finch.get("http://127.0.0.1:8003/error_route", [], "", [])
 
       assert_receive {^ref, _event}, 1000
     end
