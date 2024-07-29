@@ -11,14 +11,10 @@ defmodule Sentry.FinchClient do
   HTTP client, you'll have to implement your own `Sentry.HTTPClient`. See the
   documentation for `Sentry.HTTPClient` for more information.
 
-  Sentry starts its own finch pool called `:sentry_pool`. If you need to set other
-  [hackney configuration options](https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5)
-  for things such as proxies, using your own pool, or response timeouts, the `:finch_opts`
-  configuration is passed directly to hackney for each request. See the configuration
-  documentation in the `Sentry` module.
+  Finch is built on top of NimblePool. If you need to set other pool configuration options,
+  see "Pool Configuration Options" in the source code for details on the possible map values.
+  [finch configuration options](https://github.com/sneako/finch/blob/main/lib/finch.ex)
   """
-  @finch_pool_name :sentry_pool
-
   @impl true
   def child_spec do
     if Code.ensure_loaded?(Finch) do
@@ -49,11 +45,7 @@ defmodule Sentry.FinchClient do
   def post(url, headers, body) do
     request = Finch.build(:post, url, headers, body)
 
-    finch_opts =
-      Sentry.Config.finch_opts()
-      |> Keyword.put_new(:pool, @finch_pool_name)
-
-    case Finch.request(request, __MODULE__, finch_opts) do
+    case Finch.request(request, __MODULE__) do
       {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
         {:ok, status, headers, body}
 
