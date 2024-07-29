@@ -30,7 +30,7 @@ defmodule Sentry.TransportTest do
 
         assert {:ok, ^body} = Envelope.to_binary(envelope)
 
-        Plug.Conn.send_resp(conn, 200, ~s<{"id":"123"}>)
+        Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
       end)
 
       assert {:ok, "123"} = Transport.encode_and_post_envelope(envelope, FinchClient)
@@ -69,10 +69,8 @@ defmodule Sentry.TransportTest do
 
       Bypass.down(bypass)
 
-      assert {:request_failure, :econnrefused} =
-               error(fn ->
-                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
-               end)
+      assert {:error, {:request_failure, %Mint.TransportError{reason: :econnrefused}}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
     test "returns an error if the response from Sentry is not 200", %{bypass: bypass} do
@@ -85,7 +83,7 @@ defmodule Sentry.TransportTest do
       end)
 
       {:error, %ClientError{} = error} =
-        Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+        Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
 
       assert error.reason == :server_error
       assert {400, headers, "{}"} = error.http_response
@@ -171,7 +169,7 @@ defmodule Sentry.TransportTest do
 
       assert {:error, %RuntimeError{message: "I'm a really bad JSON library"}, _stacktrace} =
                error(fn ->
-                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+                 Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
                end)
     after
       :code.delete(CrashingJSONLibrary)
@@ -191,7 +189,7 @@ defmodule Sentry.TransportTest do
 
       assert {:request_failure, error} =
                error(fn ->
-                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [0])
+                 Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [0])
                end)
 
       if Version.match?(System.version(), "~> 1.18") do
@@ -224,7 +222,7 @@ defmodule Sentry.TransportTest do
       end)
 
       assert {:ok, "123"} =
-               Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [10, 25])
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [10, 25])
 
       assert System.system_time(:millisecond) - start_time >= 35
 

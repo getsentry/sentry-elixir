@@ -2,7 +2,7 @@ defmodule Sentry.HTTPClient do
   @moduledoc """
   A behaviour for HTTP clients that Sentry can use.
 
-  The default HTTP client is `Sentry.HackneyClient`.
+  The default HTTP client is `Sentry.FinchClient`.
 
   To configure a different HTTP client, implement the `Sentry.HTTPClient` behaviour and
   change the `:client` configuration:
@@ -25,46 +25,45 @@ defmodule Sentry.HTTPClient do
   ## Alternative Clients
 
   Let's look at an example of using an alternative HTTP client. In this example, we'll
-  use [Finch](https://github.com/sneako/finch), a lightweight HTTP client for Elixir.
+  use [Hackney](https://github.com/benoitc/hackney), a lightweight HTTP client for Elixir.
 
-  First, we need to add Finch to our dependencies:
+  First, we need to add Hackney to our dependencies:
 
       # In mix.exs
       defp deps do
         [
           # ...
-          {:finch, "~> 0.16"}
+          {:hackney, "~> 1.8"}
         ]
       end
 
   Then, we need to define a module that implements the `Sentry.HTTPClient` behaviour:
 
-      defmodule MyApp.SentryFinchHTTPClient do
+      defmodule MyApp.SentryHackneyHTTPClient do
         @behaviour Sentry.HTTPClient
 
-        @impl true
-        def child_spec do
-          Supervisor.child_spec({Finch, name: __MODULE__}, id: __MODULE__)
+        # @impl true
+        # def child_spec do
+        #     :hackney_pool.child_spec(
+        #       @hackney_pool_name,
+        #       timeout: Sentry.Config.hackney_timeout(),
+        #       max_connections: Sentry.Config.max_hackney_connections()
+        #     )
+        # end
+
+        # @impl true
+        # def post(url, headers, body) do
+        #   case :hackney.request(:post, url, headers, body) do
+        #     {:ok, _status, _headers, _body} = result -> result
+        #     {:error, _reason} = error -> error
+        #   end
+        # end
         end
-
-        @impl true
-        def post(url, headers, body) do
-          request = Finch.build(:post, url, headers, body)
-
-          case Finch.request(request, __MODULE__) do
-            {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
-              {:ok, status, headers, body}
-
-            {:error, error} ->
-              {:error, error}
-          end
-        end
-      end
 
   Last, we need to configure Sentry to use our new HTTP client:
 
       config :sentry,
-        client: MyApp.SentryFinchHTTPClient
+        client: Sentry.HackneyClient
 
   ### Umbrella Apps
 

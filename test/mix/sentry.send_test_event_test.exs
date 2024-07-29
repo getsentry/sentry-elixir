@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
   import Sentry.TestHelpers
 
   test "prints if :dsn is not set" do
-    put_test_config(dsn: nil, hackney_opts: [], environment_name: "some_env")
+    put_test_config(dsn: nil, finch_opts: [], environment_name: "some_env")
 
     output =
       capture_io(fn ->
@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     assert output =~ """
            Client configuration:
            current environment_name: "some_env"
-           hackney_opts: []
+           finch_opts: []
            """
 
     assert output =~ ~s(Event not sent because the :dsn option is not set)
@@ -35,7 +35,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       environment_name: "test",
-      hackney_opts: []
+      finch_opts: []
     )
 
     output =
@@ -49,7 +49,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            public_key: public
            secret_key: secret
            current environment_name: "test"
-           hackney_opts: []
+           finch_opts: []
            """
 
     assert output =~ "Sending test event..."

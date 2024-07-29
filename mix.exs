@@ -51,7 +51,7 @@ defmodule Sentry.Mixfile do
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn, Sentry.ClientReport],
-          HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
+          HTTP: [Sentry.HTTPClient, Sentry.FinchClient],
           Interfaces: [~r/^Sentry\.Interfaces/],
           Testing: [Sentry.Test]
         ],
@@ -65,8 +65,8 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, :telemetry]],
-      aliases: aliases()
+      xref: [exclude: [Finch, Plug.Conn, :telemetry]],
+      aliases: [aliases()]
     ]
   end
 
@@ -94,7 +94,6 @@ defmodule Sentry.Mixfile do
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
 
       # Optional dependencies
-      {:hackney, "~> 1.8", optional: true},
       {:finch, "~> 0.18.0", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
