@@ -94,7 +94,7 @@ defmodule Sentry.Mixfile do
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
 
       # Optional dependencies
-      {:finch, "~> 0.18.0", optional: true},
+      {:finch, "~> 0.19.0", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},

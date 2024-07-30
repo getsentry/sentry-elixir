@@ -696,7 +696,7 @@ defmodule Sentry.LoggerHandlerTest do
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       dedup_events: false,
-      hackney_opts: [recv_timeout: 500, pool: :sentry_pool]
+      finch_opts: []
     )
 
     Bypass.expect(bypass, fn conn ->

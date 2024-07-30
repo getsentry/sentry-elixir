@@ -11,9 +11,9 @@ defmodule Sentry.FinchClient do
   HTTP client, you'll have to implement your own `Sentry.HTTPClient`. See the
   documentation for `Sentry.HTTPClient` for more information.
 
-  Finch is built on top of NimblePool. If you need to set other pool configuration options,
-  see "Pool Configuration Options" in the source code for details on the possible map values.
-  [finch configuration options](https://github.com/sneako/finch/blob/main/lib/finch.ex)
+  Finch is built on top of [NimblePool](https://github.com/dashbitco/nimble_pool). If you need to set other pool configuration options,
+  see "Pool Configuration Options" in the Finch documentation for details on the possible map values.
+  [finch configuration options](https://hexdocs.pm/finch/Finch.html#start_link/1-pool-configuration-options)
   """
   @impl true
   def child_spec do
