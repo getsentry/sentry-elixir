@@ -1,4 +1,5 @@
 defmodule Sentry.Integrations.Oban.CronTest do
+  alias Sentry.Integrations.CheckInIDMappings
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
@@ -57,10 +58,11 @@ defmodule Sentry.Integrations.Oban.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
+      id = CheckInIDMappings.lookup_or_insert_new(123)
 
       assert headers["type"] == "check_in"
 
-      assert check_in_body["check_in_id"] == "oban-123"
+      assert check_in_body["check_in_id"] == id
       assert check_in_body["status"] == "in_progress"
       assert check_in_body["monitor_slug"] == "sentry-my-worker"
       assert check_in_body["duration"] == nil
@@ -113,10 +115,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         assert [{headers, check_in_body}] = decode_envelope!(body)
+        id = CheckInIDMappings.lookup_or_insert_new(942)
 
         assert headers["type"] == "check_in"
-
-        assert check_in_body["check_in_id"] == "oban-942"
+        assert check_in_body["check_in_id"] == id
         assert check_in_body["status"] == unquote(expected_status)
         assert check_in_body["monitor_slug"] == "sentry-my-worker"
         assert check_in_body["duration"] == 12.099
@@ -157,10 +159,11 @@ defmodule Sentry.Integrations.Oban.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{headers, check_in_body}] = decode_envelope!(body)
+      id = CheckInIDMappings.lookup_or_insert_new(942)
 
       assert headers["type"] == "check_in"
 
-      assert check_in_body["check_in_id"] == "oban-942"
+      assert check_in_body["check_in_id"] == id
       assert check_in_body["status"] == "error"
       assert check_in_body["monitor_slug"] == "sentry-my-worker"
       assert check_in_body["duration"] == 12.099
