@@ -6,7 +6,7 @@ defmodule Sentry.FinchClient do
 
   This client implements the `Sentry.HTTPClient` behaviour.
 
-  It's based on the [finch](https://github.com/sneako/finch) Erlang HTTP client,
+  It's based on the [Finch](https://github.com/sneako/finch) Elixir HTTP client,
   which is an *optional dependency* of this library. If you wish to use another
   HTTP client, you'll have to implement your own `Sentry.HTTPClient`. See the
   documentation for `Sentry.HTTPClient` for more information.
