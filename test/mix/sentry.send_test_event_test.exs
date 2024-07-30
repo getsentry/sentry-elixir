@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
     assert output =~ """
            Client configuration:
            current environment_name: "some_env"
-           finch_opts: []
+           Finch options: []
            """
 
     assert output =~ ~s(Event not sent because the :dsn option is not set)
@@ -49,7 +49,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
            public_key: public
            secret_key: secret
            current environment_name: "test"
-           finch_opts: []
+           Finch options: []
            """
 
     assert output =~ "Sending test event..."
