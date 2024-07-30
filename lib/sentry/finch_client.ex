@@ -35,7 +35,7 @@ defmodule Sentry.FinchClient do
     else
       raise """
       cannot start the :sentry application because the HTTP client is set to \
-      Sentry.FinchClient (which is the default), but the Finch library is not loaded. \
+      Sentry.FinchClient (which is the default), but the :finch library is not loaded. \
       Add :finch to your dependencies to fix this.
       """
     end
