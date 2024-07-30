@@ -288,7 +288,7 @@ defmodule Sentry.Config do
       doc: """
       A module that implements the `Sentry.HTTPClient`
       behaviour. Defaults to `Sentry.FinchClient`, which uses
-      [finch](https://github.com/sneako/finch) as the HTTP client.
+      [Finch](https://github.com/sneako/finch) as the HTTP client.
       """
     ],
     send_max_attempts: [
