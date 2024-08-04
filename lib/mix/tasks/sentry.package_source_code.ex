@@ -68,6 +68,13 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   @bytes_in_mb 1024 * 1024
   @bytes_in_gb 1024 * 1024 * 1024
 
+  # Don't call the app.config task here, see
+  # https://github.com/getsentry/sentry-elixir/commit/b2a04ddcf5d5c5f861da9888b3dec2f4f12cee01
+  @requirements [
+    "loadpaths",
+    "compile"
+  ]
+
   @switches [
     debug: :boolean,
     output: :string
