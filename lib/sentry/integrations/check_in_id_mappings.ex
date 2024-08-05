@@ -6,11 +6,10 @@ defmodule Sentry.Integrations.CheckInIDMappings do
 
   @table :sentry_cron_mappings
   @sweep_interval_millisec 30_000
-  @ttl_millisec 10_000_000
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link([] = _opts) do
-    GenServer.start_link(__MODULE__, nil, name: __MODULE__)
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   @spec lookup_or_insert_new(String.t()) :: UUID.t()
@@ -31,9 +30,9 @@ defmodule Sentry.Integrations.CheckInIDMappings do
   ## Callbacks
 
   @impl true
-  def init(nil) do
+  def init(state) do
     _table = :ets.new(@table, [:named_table, :public, :set])
-    schedule_sweep()
+    schedule_sweep(state)
     {:ok, :no_state}
   end
 
@@ -46,14 +45,14 @@ defmodule Sentry.Integrations.CheckInIDMappings do
     match_spec = [{{:"$1", :"$2", :"$3"}, [], [{:<, :"$3", now - ttl_millisec}]}]
     _ = :ets.select_delete(@table, match_spec)
 
-    schedule_sweep()
+    schedule_sweep(state)
     {:noreply, state}
   end
 
   ## Helpers
 
-  defp schedule_sweep do
-    Process.send_after(self(), {:sweep, @ttl_millisec}, @sweep_interval_millisec)
+  defp schedule_sweep(ttl_millisec) do
+    Process.send_after(self(), {:sweep, ttl_millisec}, @sweep_interval_millisec)
   end
 end
 
