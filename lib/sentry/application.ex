@@ -19,11 +19,13 @@ defmodule Sentry.Application do
         []
       end
 
+    integrations = Keyword.fetch!(config, :integrations)
+
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
         Sentry.Dedupe,
-        Sentry.Integrations.CheckInIDMappings
+        {Sentry.Integrations.CheckInIDMappings, integrations[:ttl]}
       ] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
@@ -33,7 +35,7 @@ defmodule Sentry.Application do
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
-      start_integrations(Keyword.fetch!(config, :integrations))
+      start_integrations(integrations)
       {:ok, pid}
     end
   end
