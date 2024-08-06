@@ -135,6 +135,16 @@ defmodule Sentry.LoggerHandlerTest do
       refute_received {^ref, _event}, 100
     end
 
+    @tag handler_config: %{capture_log_messages: true}
+    test "support structured logs", %{sender_ref: ref} do
+      Logger.error(foo: "bar")
+
+      assert_receive {^ref, event}
+      assert event.message.formatted == "[foo: \"bar\"]"
+
+      refute_received {^ref, _event}, 100
+    end
+
     @tag handler_config: %{capture_log_messages: true, level: :warning}
     test "respects the configured :level", %{sender_ref: ref} do
       Logger.log(:warning, "Testing warning")
