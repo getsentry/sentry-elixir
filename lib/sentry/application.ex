@@ -25,7 +25,8 @@ defmodule Sentry.Application do
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
         Sentry.Dedupe,
-        {Sentry.Integrations.CheckInIDMappings, integrations[:ttl]}
+        {Sentry.Integrations.CheckInIDMappings,
+         [max_expected_check_in_time: integrations_config[:max_expected_check_in_time]]}
       ] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
@@ -35,7 +36,7 @@ defmodule Sentry.Application do
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
-      start_integrations(integrations)
+      start_integrations(integrations_config)
       {:ok, pid}
     end
   end
