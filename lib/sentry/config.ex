@@ -2,14 +2,16 @@ defmodule Sentry.Config do
   @moduledoc false
 
   integrations_schema = [
-    ttl: [
+    max_expected_check_in_time: [
       type: :integer,
       default: 600_000,
       doc: """
       The time in milliseconds that a check-in id will live after it has been created.
 
-      For long running cron jobs, set ttl (time to live) to longest running job time in milliseconds.
-      This avoids jobs being sweeped from table before they've been completed. Defaults to ten minutes.
+      The SDK reports the start and end of each check-in. However, to optimize performance and prevent
+      potential memory issues, if a check-in end event is reported after the specified `max_expected_check_in_time`,
+      the SDK will not report it. This behavior helps manage resource usage effectively while still providing necessary
+      tracking for your jobs.
       """
     ],
     oban: [
