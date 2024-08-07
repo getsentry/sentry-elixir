@@ -33,9 +33,10 @@ defmodule Sentry.Integrations.CheckInIDMappings do
 
   @impl true
   def init(ttl_millisec) do
-    if :ets.whereis(@table) == :undefined do
-      :ets.new(@table, [:named_table, :public, :set])
-    end
+    _table =
+      if :ets.whereis(@table) == :undefined do
+        :ets.new(@table, [:named_table, :public, :set])
+      end
 
     schedule_sweep()
     {:ok, ttl_millisec}
