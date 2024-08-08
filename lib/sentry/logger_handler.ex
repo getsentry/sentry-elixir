@@ -341,17 +341,10 @@ defmodule Sentry.LoggerHandler do
   # "report" here is of type logger:report/0, which is a map or keyword list.
   defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config) do
     case Map.new(report) do
-      %{report: %{reason: {exception, stacktrace}}}
+      %{reason: {exception, stacktrace}}
       when is_exception(exception) and is_list(stacktrace) ->
         sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
         capture(:exception, exception, sentry_opts, config)
-
-      %{report: %{reason: {reason, stacktrace}}} when is_list(stacktrace) ->
-        sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
-        capture(:message, "** (stop) " <> Exception.format_exit(reason), sentry_opts, config)
-
-      %{report: report_info} ->
-        capture(:message, inspect(report_info), sentry_opts, config)
 
       %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
         sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
@@ -363,8 +356,8 @@ defmodule Sentry.LoggerHandler do
 
         capture(:message, "** (stop) #{Exception.format_exit(reason)}", sentry_opts, config)
 
-      _other ->
-        :ok
+      _ ->
+        capture(:message, inspect(report), sentry_opts, config)
     end
   end
 
