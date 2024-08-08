@@ -51,7 +51,6 @@ defmodule Sentry.Envelope do
       end
 
     items_iodata = Enum.map(envelope.items, &item_to_binary(json_library, &1))
-
     {:ok, IO.iodata_to_binary([headers_iodata, items_iodata])}
   catch
     {:error, _reason} = error -> error

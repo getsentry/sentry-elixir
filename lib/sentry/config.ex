@@ -239,11 +239,11 @@ defmodule Sentry.Config do
     client: [
       type: :atom,
       type_doc: "`t:module/0`",
-      default: Sentry.HackneyClient,
+      default: Sentry.FinchClient,
       doc: """
       A module that implements the `Sentry.HTTPClient`
-      behaviour. Defaults to `Sentry.HackneyClient`, which uses
-      [hackney](https://github.com/benoitc/hackney) as the HTTP client.
+      behaviour. Defaults to `Sentry.FinchClient`, which uses
+      [Finch](https://github.com/sneako/finch) as the HTTP client.
       """
     ],
     send_max_attempts: [
@@ -253,8 +253,35 @@ defmodule Sentry.Config do
       The maximum number of attempts to send an event to Sentry.
       """
     ],
+    finch_opts: [
+      type: :keyword_list,
+      default: [pool: :sentry_pool],
+      doc: """
+      Options to be passed to `finch`. Only
+      applied if `:client` is set to `Sentry.FinchClient`.
+      """
+    ],
+    finch_pool_timeout: [
+      type: :timeout,
+      default: 5000,
+      doc: """
+      The maximum time to wait for a
+      connection to become available. Only applied if `:client` is set to
+      `Sentry.FinchClient`.
+      """
+    ],
+    finch_pool_max_connections: [
+      type: :pos_integer,
+      default: 50,
+      doc: """
+      The maximum number of
+      connections to keep in the pool. Only applied if `:client` is set to
+      `Sentry.FinchClient`.
+      """
+    ],
     hackney_opts: [
       type: :keyword_list,
+      deprecated: "Use Finch instead as default client.",
       default: [pool: :sentry_pool],
       doc: """
       Options to be passed to `hackney`. Only
@@ -263,6 +290,7 @@ defmodule Sentry.Config do
     ],
     hackney_pool_timeout: [
       type: :timeout,
+      deprecated: "Use Finch instead as default client.",
       default: 5000,
       doc: """
       The maximum time to wait for a
@@ -272,6 +300,7 @@ defmodule Sentry.Config do
     ],
     hackney_pool_max_connections: [
       type: :pos_integer,
+      deprecated: "Use Finch instead as default client.",
       default: 50,
       doc: """
       The maximum number of
@@ -470,11 +499,11 @@ defmodule Sentry.Config do
   @spec environment_name() :: String.t() | nil
   def environment_name, do: fetch!(:environment_name)
 
-  @spec max_hackney_connections() :: pos_integer()
-  def max_hackney_connections, do: fetch!(:hackney_pool_max_connections)
+  @spec max_finch_connections() :: pos_integer()
+  def max_finch_connections, do: fetch!(:finch_pool_max_connections)
 
-  @spec hackney_timeout() :: timeout()
-  def hackney_timeout, do: fetch!(:hackney_pool_timeout)
+  @spec finch_timeout() :: timeout()
+  def finch_timeout, do: fetch!(:finch_pool_timeout)
 
   @spec tags() :: map()
   def tags, do: fetch!(:tags)
@@ -512,8 +541,8 @@ defmodule Sentry.Config do
   @spec sample_rate() :: float()
   def sample_rate, do: fetch!(:sample_rate)
 
-  @spec hackney_opts() :: keyword()
-  def hackney_opts, do: fetch!(:hackney_opts)
+  @spec finch_opts() :: keyword()
+  def finch_opts, do: fetch!(:finch_opts)
 
   @spec before_send() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
   def before_send, do: get(:before_send)

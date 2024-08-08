@@ -136,7 +136,9 @@ defmodule Sentry.LoggerBackendTest do
 
     start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
 
-    :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+    Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+    |> Finch.request(Sentry.FinchClient)
+
     assert_receive {^ref, _event}, 1000
   after
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
@@ -149,7 +151,9 @@ defmodule Sentry.LoggerBackendTest do
 
     start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
 
-    :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+    Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+    |> Finch.request(Sentry.FinchClient)
+
     assert_receive {^ref, _event}, 1000
   after
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])

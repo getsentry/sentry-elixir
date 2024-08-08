@@ -251,7 +251,7 @@ defmodule Sentry.ClientTest do
       {:error, %Sentry.ClientError{} = error} =
         Client.send_event(event, result: :sync, request_retries: [])
 
-      assert error.reason == {:request_failure, :econnrefused}
+      assert error.reason == {:request_failure, %Mint.TransportError{reason: :econnrefused}}
     end
 
     test "logs an error when unable to encode JSON" do
