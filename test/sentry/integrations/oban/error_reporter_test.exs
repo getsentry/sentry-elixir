@@ -17,10 +17,12 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
         %{"id" => "123", "entity" => "user", "type" => "delete"}
         |> MyWorker.new()
         |> Ecto.Changeset.apply_action!(:validate)
-        |> Map.replace!(:unsaved_error, %{
-          reason: %RuntimeError{message: "oops"},
-          kind: :error,
-          stacktrace: []
+        |> Map.merge(%{
+          unsaved_error: %{
+            reason: %RuntimeError{message: "oops"},
+            kind: :error,
+            stacktrace: []
+          }
         })
 
       Sentry.Test.start_collecting()
@@ -30,7 +32,79 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job},
-                 :no_config
+                 false
+               )
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert event.original_exception == %RuntimeError{message: "oops"}
+      assert [%{stacktrace: %{frames: [stacktrace]}} = exception] = event.exception
+
+      assert exception.type == "RuntimeError"
+      assert exception.value == "oops"
+      assert exception.mechanism.handled == true
+      assert stacktrace.module == MyWorker
+
+      assert stacktrace.function ==
+               "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker.process/1"
+
+      assert event.tags.oban_queue == "default"
+      assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
+    end
+
+    test "reports the correct error to Sentry - with max attempts only" do
+      # Any worker is okay here, this is just an easier way to get a job struct.
+      job =
+        %{"id" => "123", "entity" => "user", "type" => "delete"}
+        |> MyWorker.new()
+        |> Ecto.Changeset.apply_action!(:validate)
+        |> Map.merge(%{
+          unsaved_error: %{
+            reason: %RuntimeError{message: "oops"},
+            kind: :error,
+            stacktrace: []
+          },
+          attempt: 1,
+          max_attempts: 2
+        })
+
+      Sentry.Test.start_collecting()
+
+      assert :ok =
+               ErrorReporter.handle_event(
+                 [:oban, :job, :exception],
+                 %{},
+                 %{job: job},
+                 true
+               )
+
+      assert [] = Sentry.Test.pop_sentry_reports()
+    end
+
+    test "reports the correct error to Sentry - with max attempts only and reached max attempts" do
+      # Any worker is okay here, this is just an easier way to get a job struct.
+      job =
+        %{"id" => "123", "entity" => "user", "type" => "delete"}
+        |> MyWorker.new()
+        |> Ecto.Changeset.apply_action!(:validate)
+        |> Map.merge(%{
+          unsaved_error: %{
+            reason: %RuntimeError{message: "oops"},
+            kind: :error,
+            stacktrace: []
+          },
+          attempt: 1,
+          max_attempts: 1
+        })
+
+      Sentry.Test.start_collecting()
+
+      assert :ok =
+               ErrorReporter.handle_event(
+                 [:oban, :job, :exception],
+                 %{},
+                 %{job: job},
+                 true
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()

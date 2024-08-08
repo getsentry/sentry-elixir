@@ -4,14 +4,14 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  @spec attach() :: :ok
-  def attach do
+  @spec attach(boolean() | nil) :: :ok
+  def attach(max_attempts_only) do
     _ =
       :telemetry.attach(
         __MODULE__,
         [:oban, :job, :exception],
         &__MODULE__.handle_event/4,
-        :no_config
+        max_attempts_only
       )
 
     :ok
@@ -23,27 +23,44 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           %{required(:job) => struct(), optional(term()) => term()},
           :no_config
         ) :: :ok
-  def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
-    %{reason: exception, stacktrace: stacktrace} = job.unsaved_error
-
-    stacktrace =
-      case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
-        {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
-        _ -> stacktrace
+  def handle_event(
+        [:oban, :job, :exception],
+        _measurements,
+        %{job: job} = _metadata,
+        max_attempts_only
+      ) do
+    notify_error =
+      case max_attempts_only do
+        true -> job.attempt == job.max_attempts
+        false -> true
+        nil -> true
       end
 
-    _ =
-      Sentry.capture_exception(exception,
-        stacktrace: stacktrace,
-        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-        fingerprint: [
-          inspect(exception.__struct__),
-          inspect(job.worker),
-          Exception.message(exception)
-        ],
-        extra: Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker])
-      )
+    if notify_error do
+      %{reason: exception, stacktrace: stacktrace} = job.unsaved_error
 
-    :ok
+      stacktrace =
+        case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
+          {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
+          _ -> stacktrace
+        end
+
+      _ =
+        Sentry.capture_exception(exception,
+          stacktrace: stacktrace,
+          tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+          fingerprint: [
+            inspect(exception.__struct__),
+            inspect(job.worker),
+            Exception.message(exception)
+          ],
+          extra:
+            Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker])
+        )
+
+      :ok
+    else
+      :ok
+    end
   end
 end

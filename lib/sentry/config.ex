@@ -19,6 +19,14 @@ defmodule Sentry.Config do
           tuples. *Available since 10.3.0*.
           """
         ],
+        max_attempts_only: [
+          type: :boolean,
+          default: false,
+          doc: """
+          When `capture_errors` is enabled and `max_attempts_only` is enabled as well,
+          whether to only capture errors for jobs that have reached their maximum number of attempts.
+          """
+        ],
         cron: [
           doc: """
           Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
