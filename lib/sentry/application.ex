@@ -26,7 +26,10 @@ defmodule Sentry.Application do
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
         Sentry.Dedupe,
         {Sentry.Integrations.CheckInIDMappings,
-         [max_expected_check_in_time: integrations_config[:max_expected_check_in_time]]}
+         [
+           max_expected_check_in_time:
+             Keyword.fetch!(integrations_config, :max_expected_check_in_time)
+         ]}
       ] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
