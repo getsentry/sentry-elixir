@@ -14,6 +14,8 @@ defmodule Sentry.Config do
       if a check-in end event is reported after the specified `max_expected_check_in_time`,
       the SDK will not report it. This behavior helps manage resource usage effectively while still
       providing necessary tracking for your jobs.
+      
+      *Available since 10.6.3*.
       """
     ],
     oban: [
