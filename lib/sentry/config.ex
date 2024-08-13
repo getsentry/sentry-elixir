@@ -2,6 +2,21 @@ defmodule Sentry.Config do
   @moduledoc false
 
   integrations_schema = [
+    max_expected_check_in_time: [
+      type: :integer,
+      default: 600_000,
+      doc: """
+      The time in milliseconds that a check-in ID will live after it has been created.
+
+      The SDK reports the start and end of each check-in. A check-in is used to track the
+      progress of a specific check-in event associated with cron job telemetry events that are a part
+      of the same job. However, to optimize performance and prevent potential memory issues,
+      if a check-in end event is reported after the specified `max_expected_check_in_time`,
+      the SDK will not report it. This behavior helps manage resource usage effectively while still
+      providing necessary tracking for your jobs.
+      *Available since 10.6.3*.
+      """
+    ],
     oban: [
       type: :keyword_list,
       doc: """
