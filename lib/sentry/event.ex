@@ -59,7 +59,7 @@ defmodule Sentry.Event do
           modules: %{optional(String.t()) => String.t()},
           extra: map(),
           fingerprint: [String.t()],
-          integration_meta: map() | nil,
+          integration_meta: map(),
 
           # Interfaces.
           breadcrumbs: [Interfaces.Breadcrumb.t()],
