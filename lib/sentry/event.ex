@@ -349,31 +349,30 @@ defmodule Sentry.Event do
     source = Keyword.get(opts, :event_source)
     handled? = Keyword.fetch!(opts, :handled)
 
-    event =
-      %__MODULE__{
-        attachments: attachments_context,
-        breadcrumbs: breadcrumbs,
-        contexts: generate_contexts(),
-        culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
-        environment: Config.environment_name(),
-        event_id: UUID.uuid4_hex(),
-        exception: List.wrap(coerce_exception(exception, stacktrace, message, handled?)),
-        extra: extra,
-        fingerprint: Keyword.fetch!(opts, :fingerprint),
-        level: Keyword.fetch!(opts, :level),
-        message: message && build_message_interface(message, opts),
-        modules: :persistent_term.get({:sentry, :loaded_applications}),
-        original_exception: exception,
-        release: Config.release(),
-        request: struct(%Interfaces.Request{}, request),
-        sdk: @sdk,
-        server_name: Config.server_name() || to_string(:net_adm.localhost()),
-        source: source,
-        tags: tags,
-        timestamp: timestamp,
-        user: user,
-        integration_meta: nil
-      }
+    event = %__MODULE__{
+      attachments: attachments_context,
+      breadcrumbs: breadcrumbs,
+      contexts: generate_contexts(),
+      culprit: culprit_from_stacktrace(Keyword.get(opts, :stacktrace, [])),
+      environment: Config.environment_name(),
+      event_id: UUID.uuid4_hex(),
+      exception: List.wrap(coerce_exception(exception, stacktrace, message, handled?)),
+      extra: extra,
+      fingerprint: Keyword.fetch!(opts, :fingerprint),
+      level: Keyword.fetch!(opts, :level),
+      message: message && build_message_interface(message, opts),
+      modules: :persistent_term.get({:sentry, :loaded_applications}),
+      original_exception: exception,
+      release: Config.release(),
+      request: struct(%Interfaces.Request{}, request),
+      sdk: @sdk,
+      server_name: Config.server_name() || to_string(:net_adm.localhost()),
+      source: source,
+      tags: tags,
+      timestamp: timestamp,
+      user: user,
+      integration_meta: Keyword.fetch!(opts, :integration_meta)
+    }
 
     # If we have a message *and* a stacktrace, but no exception, we need to store the stacktrace
     # information within a "thread" interface. This is how the Python SDK also does it. An issue
