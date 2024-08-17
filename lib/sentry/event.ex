@@ -118,7 +118,7 @@ defmodule Sentry.Event do
     transaction: nil,
     threads: nil,
     user: %{},
-    integration_meta: nil,
+    integration_meta: %{},
 
     # "Culprit" is not documented anymore and we should move to transactions at some point.
     # https://forum.sentry.io/t/culprit-deprecated-in-favor-of-what/4871/9
