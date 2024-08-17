@@ -259,11 +259,8 @@ defmodule Sentry.Event do
     ],
     integration_meta: [
       type: :map,
-      doc: """
-      A map to store metadata specific to the integration.
-      It allows cron integrations, such as the Oban integration,
-      to store job-related metadata. *Available since v10.1.0*.
-      """
+      default: %{},
+      doc: false
     ],
 
     ## Internal options
