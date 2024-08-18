@@ -43,7 +43,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         ],
         extra:
           Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
-        integration_meta: %{oban: %{job_meta: job}}
+        integration_meta: %{oban: %{job: job}}
       )
 
     :ok

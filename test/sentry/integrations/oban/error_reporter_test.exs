@@ -48,7 +48,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.oban_queue == "default"
       assert event.tags.oban_state == "available"
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
-      assert %{job_meta: %Oban.Job{}} = event.integration_meta.oban
+      assert %{job: %Oban.Job{}} = event.integration_meta.oban
     end
   end
 end
