@@ -59,6 +59,7 @@ defmodule Sentry.Event do
           modules: %{optional(String.t()) => String.t()},
           extra: map(),
           fingerprint: [String.t()],
+          integration_meta: map(),
 
           # Interfaces.
           breadcrumbs: [Interfaces.Breadcrumb.t()],
@@ -117,6 +118,7 @@ defmodule Sentry.Event do
     transaction: nil,
     threads: nil,
     user: %{},
+    integration_meta: %{},
 
     # "Culprit" is not documented anymore and we should move to transactions at some point.
     # https://forum.sentry.io/t/culprit-deprecated-in-favor-of-what/4871/9
@@ -255,6 +257,11 @@ defmodule Sentry.Event do
       `Sentry.capture_message/2`. *Available since v10.1.0*.
       """
     ],
+    integration_meta: [
+      type: :map,
+      default: %{},
+      doc: false
+    ],
 
     ## Internal options
     handled: [
@@ -360,7 +367,8 @@ defmodule Sentry.Event do
       source: source,
       tags: tags,
       timestamp: timestamp,
-      user: user
+      user: user,
+      integration_meta: Keyword.fetch!(opts, :integration_meta)
     }
 
     # If we have a message *and* a stacktrace, but no exception, we need to store the stacktrace
