@@ -39,6 +39,14 @@ defmodule Sentry.Event do
       `:original_exception` field, instead, contains the original exception as the raw Elixir
       term (such as `%RuntimeError{...}`).
 
+    * `:integration_meta` - a free-form map of integration-specific metadata. Integrations
+      (such as [the Oban integration](https://docs.sentry.io/platforms/elixir/integrations/oban/))
+      can set this field to store metadata that
+      is specific to the integration. This field is not part of the Sentry API payload,
+      but you can use it for example in [`:before_send`
+      callbacks](`t:Sentry.before_send_event_callback/0`) to determine whether to report events.
+      *Available since v10.7.0*.
+
   See also [`%Sentry.Event{}`](`__struct__/0`).
   """
   @type t() :: %__MODULE__{
