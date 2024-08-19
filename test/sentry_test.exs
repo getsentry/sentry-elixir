@@ -122,11 +122,11 @@ defmodule SentryTest do
   test "raises error with validate_and_ignore/1 in dev mode if opts passed are invalid " do
     put_test_config(dsn: nil, test_mode: false)
 
-    assert_raise(NimbleOptions.ValidationError, fn ->
+    assert_raise NimbleOptions.ValidationError, fn ->
       Sentry.Client.validate_options!(client: [bad_key: :nada])
-    end)
+    end
 
-    assert [client: :hackney] == Sentry.Client.validate_options!(client: :hackney)
+    assert [client: :hackney] = Sentry.Client.validate_options!(client: :hackney)
   end
 
   test "does not send events if :dsn is not configured or nil (if not in test mode)" do
