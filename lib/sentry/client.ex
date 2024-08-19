@@ -116,7 +116,7 @@ defmodule Sentry.Client do
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
-    opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
+    opts = validate_options!(opts)
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
@@ -160,10 +160,9 @@ defmodule Sentry.Client do
     end
   end
 
-  @spec validate_and_ignore(keyword()) :: :ignored
-  def validate_and_ignore(opts) when is_list(opts) do
-    _opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
-    :ignored
+  @spec validate_options!(keyword()) :: keyword()
+  def validate_options!(opts) when is_list(opts) do
+    NimbleOptions.validate!(opts, @send_event_opts_schema)
   end
 
   defp sample_event(sample_rate) do
