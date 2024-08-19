@@ -160,6 +160,12 @@ defmodule Sentry.Client do
     end
   end
 
+  @spec validate_and_ignore(keyword()) :: :ignored
+  def validate_and_ignore(opts) when is_list(opts) do
+    _opts = NimbleOptions.validate!(opts, @send_event_opts_schema)
+    :ignored
+  end
+
   defp sample_event(sample_rate) do
     cond do
       sample_rate == 1 -> :ok

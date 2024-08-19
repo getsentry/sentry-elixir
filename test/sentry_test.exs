@@ -119,6 +119,16 @@ defmodule SentryTest do
     assert logged_count == 2
   end
 
+  test "raises error with validate_and_ignore/1 in dev mode if opts passed are invalid " do
+    put_test_config(dsn: nil, test_mode: false)
+
+    assert_raise(NimbleOptions.ValidationError, fn ->
+      Sentry.Client.validate_and_ignore(client: [bad_key: :nada])
+    end)
+
+    assert :ignored == Sentry.Client.validate_and_ignore(client: :hackney)
+  end
+
   test "does not send events if :dsn is not configured or nil (if not in test mode)" do
     put_test_config(dsn: nil, test_mode: false)
     event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])

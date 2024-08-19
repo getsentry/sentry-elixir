@@ -335,7 +335,7 @@ defmodule Sentry do
         Client.send_event(event, opts)
 
       !Config.dsn() ->
-        :ignored
+        Client.validate_and_ignore(opts)
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
         Client.send_event(event, opts)
