@@ -301,8 +301,12 @@ defmodule Sentry.Client do
     end)
   end
 
-  defp remove_nils(map) when is_map(map) do
+  defp remove_nils(map) when is_map(map) and not is_struct(map) do
     :maps.filter(fn _key, value -> not is_nil(value) end, map)
+  end
+
+  defp remove_nils(value) do
+    :maps.filter(fn _key, value -> not is_nil(value) end, Map.from_struct(value))
   end
 
   defp sanitize_non_jsonable_values(map, json_library) do
