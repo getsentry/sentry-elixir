@@ -345,7 +345,8 @@ defmodule Sentry.Client do
 
   defp sanitize_non_jsonable_value(value, json_library) do
     try do
-      json_library.encode(value)
+      struct(Sentry.Event, value)
+      |> json_library.encode()
     catch
       _type, _reason -> {:changed, inspect(value)}
     else
