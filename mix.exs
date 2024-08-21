@@ -101,7 +101,7 @@ defmodule Sentry.Mixfile do
       {:bandit, "~> 1.0", only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
-      {:ex_doc, "~> 0.29.0", only: :dev},
+      {:ex_doc, "~> 0.29", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
       # Required by Phoenix.LiveView's testing
       {:floki, ">= 0.30.0", only: :test},
@@ -112,7 +112,7 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      files: ["lib", "LICENSE", "mix.exs", "README.md", "CHANGELOG.md"],
+      files: ["lib", "LICENSE", "mix.exs", "*.md"],
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
