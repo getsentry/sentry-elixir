@@ -4,25 +4,19 @@
 
 ### Various fixes & improvements
 
-- Remove an unnecessary assertion (108bbe75) by @whatyouhide
-- Update ex_doc (b7521e45) by @whatyouhide
-- Clean up Sentry.ClientError (cc61afd9) by @whatyouhide
-- Validate options even if DSN is not set (#772) by @savhappy
-- Update key name in Sentry.Event's integration meta (22b5d212) by @whatyouhide
-- Document :integration_meta field in Sentry.Event (4a645297) by @whatyouhide
-- Add integration_meta key to Sentry.Event (#771) by @savhappy
-- Allow nimble_ownership 1.0 (9ec8e89a) by @whatyouhide
-- Periodically purge check-ins ETS table (#764) by @savhappy
-- Support structured logs in Sentry.LoggerHandler (#765) by @martosaur
-- Compile code before "sentry.package_source_code" (#761) by @whatyouhide
-- Map check-in IDs through an ETS table (#750) by @savhappy
-- Use apply/3 to avoid Elixir 1.17 warnings (#754) by @savhappy
-- Handle "nil" environment values correctly in Sentry config (#753) by @fahchen
-- Update documentation to remove `if` (#751) by @BobbyMcWho
-- Add HTTP response information to client error (#748) by @savhappy
-- Update links related to logger (#747) by @HarshBalyan
-- Add Sentry.ClientError exception (#745) by @savhappy
-- Update Elixir/OTP versions in CI (#746) by @savhappy
+New features:
+
+- Add `Sentry.ClientError` for more structured client errors. You can use this to programmatically deal with errors when reporting events, if you need to. — *@savhappy*
+- Add `:integration_meta` key to `Sentry.Event`. — *(#771) by @savhappy*
+- Validate Sentry options even if DSN is not set. — *(#772) by @savhappy*
+
+Bug fixes:
+
+- Fix Sentry check-ins by internally mapping check-in IDs for "start" and "stop" events. — *@savhappy*
+- Fix `mix sentry.package_source_code` edge cases by compiling code before running the task. — *@whatyouhide*
+- Support structured logs in `Sentry.LoggerHandler`. — *(#765) by @martosaur*
+- Handle `nil` environment correctly in Sentry config — *(#753) by @fahchen*
+- Fix exceptions with an empty stacktrace. — *(#755) by @savhappy*
 
 ## 10.6.2
 
