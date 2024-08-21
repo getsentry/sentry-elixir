@@ -50,7 +50,7 @@ defmodule Sentry.LoggerBackendTest do
     # it's fine. Just make sure that on the latest Elixir/OTP versions it's there.
     if System.otp_release() >= "26" do
       assert [thread] = event.threads
-      assert thread.stacktrace == nil
+      assert thread.stacktrace.frames == nil
     end
   end
 

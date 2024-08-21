@@ -481,7 +481,7 @@ defmodule Sentry.Event do
 
   defp coerce_stacktrace(stacktrace) when is_list(stacktrace) do
     case stacktrace_to_frames(stacktrace) do
-      [] -> nil
+      [] -> %Interfaces.Stacktrace{frames: nil}
       frames -> %Interfaces.Stacktrace{frames: frames}
     end
   end
