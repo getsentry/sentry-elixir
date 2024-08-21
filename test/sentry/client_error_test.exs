@@ -2,56 +2,61 @@ defmodule Sentry.ClientErrorTest do
   use Sentry.Case
   alias Sentry.ClientError
 
-  describe "message/1" do
-    test "with atom - returns message" do
-      assert "request failure reason: Sentry responded with status 429 - Too Many Requests" =
-               result_msg(:too_many_retries)
+  describe "c:Exception.message/1" do
+    test "with an atom reason" do
+      assert message_for_reason(:too_many_retries) ==
+               "Sentry responded with status 429 - Too Many Requests"
     end
 
-    test "with tuple {:invalid_json, _} - returns message" do
-      assert "request failure reason: Invalid JSON -> unexpected byte at position 0: 0x69 (\"i\")" =
-               result_msg(
-                 {:invalid_json,
-                  %Jason.DecodeError{position: 0, token: nil, data: "invalid JSON"}}
-               )
+    test "with {:invalid_json, _} reason" do
+      assert message_for_reason(
+               {:invalid_json, %Jason.DecodeError{position: 0, token: nil, data: "invalid JSON"}}
+             ) ==
+               "the Sentry SDK could not encode the event to JSON: unexpected byte at position 0: 0x69 (\"i\")"
     end
 
-    test "with tuple {:request_failure, _} and binary - returns message" do
-      assert "request failure reason: Received 400 from Sentry server: some error" =
-               result_msg({:request_failure, "Received 400 from Sentry server: some error"})
+    test "with {:request_failure, reason} reason" do
+      assert message_for_reason({:request_failure, "some error"}) ==
+               "there was a request failure: some error"
+
+      assert message_for_reason({:request_failure, :econnrefused}) ==
+               "there was a request failure: connection refused"
+
+      assert message_for_reason({:request_failure, :whatever}) ==
+               "there was a request failure: unknown POSIX error: whatever"
+
+      assert message_for_reason({:request_failure, 123}) == "there was a request failure: 123"
     end
 
-    test "with tuple {:request_failure, _} and atom - returns message" do
-      assert "request failure reason: connection refused" =
-               result_msg({:request_failure, :econnrefused})
+    test "with {kind, reason, stacktrace} reason" do
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+
+      assert message_for_reason(
+               {:error, %RuntimeError{message: "I'm a really bad HTTP client"}, stacktrace}
+             ) =~ """
+             there was an unexpected error:
+
+             ** (RuntimeError) I'm a really bad HTTP client
+                 (elixir\
+             """
     end
 
-    test "with tuple {:request_failure, _} and anything else - returns message" do
-      assert "request failure reason: {:error, %RuntimeError{message: \"I'm a really bad HTTP client\"}}" =
-               result_msg(
-                 {:request_failure,
-                  {:error, %RuntimeError{message: "I'm a really bad HTTP client"}}}
-               )
-    end
+    test "with :server_error and HTTP response as the reason" do
+      exception = ClientError.server_error(400, [{"X-Foo", "true"}], "{}")
 
-    test "with Exception- returns message" do
-      {kind, data, stacktrace} =
-        {:error, %RuntimeError{message: "I'm a really bad HTTP client"}, []}
-
-      assert "request failure reason: Sentry failed to report event due to an unexpected error:\n\n** (RuntimeError) I'm a really bad HTTP client" =
-               result_msg({kind, data, stacktrace})
-    end
-
-    test "with server_error- returns message" do
-      {status, headers, body} =
-        {400, "Rate limiting.", "{}"}
-
-      assert "request failure reason: Sentry failed to report the event due to a server error.\nHTTP Status: 400\nResponse Headers: \"Rate limiting.\"\nResponse Body: \"{}\"\n" =
-               ClientError.server_error(status, headers, body) |> ClientError.message()
+      assert Exception.message(exception) == """
+             Sentry failed to report event: the Sentry server responded with an error, the details are below.
+             HTTP Status: 400
+             Response Headers: [{"X-Foo", "true"}]
+             Response Body: "{}"
+             """
     end
   end
 
-  defp result_msg(reason) do
-    reason |> ClientError.new() |> ClientError.message()
+  defp message_for_reason(reason) do
+    assert "Sentry failed to report event: " <> rest =
+             reason |> ClientError.new() |> Exception.message()
+
+    rest
   end
 end
