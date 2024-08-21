@@ -83,6 +83,15 @@ defmodule Sentry.ClientTest do
       :code.delete(RaisingJSONClient)
       :code.purge(RaisingJSONClient)
     end
+
+    test "renders threads with stacktrace :frames field set to nil if empty" do
+      event =
+        Event.create_event(message: "No frames in stacktrace", stacktrace: [])
+
+      client = Client.render_event(event)
+
+      assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
+    end
   end
 
   describe "send_event/2" do

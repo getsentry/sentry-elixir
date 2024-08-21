@@ -223,7 +223,7 @@ defmodule Sentry.LoggerHandlerTest do
       if System.otp_release() >= "26" do
         assert [] = event.exception
         assert [thread] = event.threads
-        assert thread.stacktrace == nil
+        assert thread.stacktrace.frames == nil
         assert event.extra.genserver_state == ":no_state"
         assert event.extra.last_message =~ ~r/^\{:run, .*/
         assert event.extra.pid_which_sent_last_message == inspect(self())
