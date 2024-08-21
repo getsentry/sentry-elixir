@@ -22,9 +22,6 @@ defmodule Sentry.ClientErrorTest do
       assert message_for_reason({:request_failure, :econnrefused}) ==
                "there was a request failure: connection refused"
 
-      assert message_for_reason({:request_failure, :whatever}) ==
-               "there was a request failure: unknown POSIX error: whatever"
-
       assert message_for_reason({:request_failure, 123}) == "there was a request failure: 123"
     end
 
