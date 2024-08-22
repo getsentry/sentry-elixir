@@ -1,5 +1,23 @@
 # Changelog
 
+## 10.7.0
+
+### Various fixes & improvements
+
+New features:
+
+- Add `Sentry.ClientError` for more structured client errors. You can use this to programmatically deal with errors when reporting events, if you need to. — *@savhappy*
+- Add `:integration_meta` key to `Sentry.Event`. — *(#771) by @savhappy*
+- Validate Sentry options even if DSN is not set. — *(#772) by @savhappy*
+
+Bug fixes:
+
+- Fix Sentry check-ins by internally mapping check-in IDs for "start" and "stop" events. — *@savhappy*
+- Fix `mix sentry.package_source_code` edge cases by compiling code before running the task. — *@whatyouhide*
+- Support structured logs in `Sentry.LoggerHandler`. — *(#765) by @martosaur*
+- Handle `nil` environment correctly in Sentry config — *(#753) by @fahchen*
+- Fix exceptions with an empty stacktrace. — *(#755) by @savhappy*
+
 ## 10.6.2
 
 ### Various fixes & improvements
