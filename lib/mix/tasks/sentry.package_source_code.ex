@@ -55,6 +55,8 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
       `priv` directory is read-only, such as with [NixOS](https://github.com/NixOS/nixpkgs)
       and similar tools.
       *Available since v10.2.0*.
+    * `--no-compile` - does not compile applications before running
+    * `--no-deps-check` - does not check dependencies before running
 
   """
 
@@ -68,21 +70,27 @@ defmodule Mix.Tasks.Sentry.PackageSourceCode do
   @bytes_in_mb 1024 * 1024
   @bytes_in_gb 1024 * 1024 * 1024
 
-  # Don't call the app.config task here, see
-  # https://github.com/getsentry/sentry-elixir/commit/b2a04ddcf5d5c5f861da9888b3dec2f4f12cee01
-  @requirements [
-    "loadpaths",
-    "compile"
-  ]
-
   @switches [
     debug: :boolean,
-    output: :string
+    output: :string,
+    no_compile: :boolean,
+    no_deps_check: :boolean
   ]
 
   @impl true
   def run(args) do
     {opts, _args} = OptionParser.parse!(args, strict: @switches)
+
+    # Don't call the app.config task here, see
+    # https://github.com/getsentry/sentry-elixir/commit/b2a04ddcf5d5c5f861da9888b3dec2f4f12cee01
+
+    if not Keyword.get(opts, :no_deps_check, false) do
+      Mix.Task.run("loadpaths")
+    end
+
+    if not Keyword.get(opts, :no_compile, false) do
+      Mix.Task.run("compile")
+    end
 
     config = Application.get_all_env(:sentry)
 

@@ -75,6 +75,10 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
     assert :ok = Mix.Task.rerun("sentry.package_source_code")
   end
 
+  test "supports --no-compile and --no-deps-check" do
+    assert :ok = Mix.Task.rerun("sentry.package_source_code", ["--no-compile", "--no-deps-check"])
+  end
+
   defp validate_map_file!(path) do
     assert_receive {:mix_shell, :info, ["Wrote " <> _ = message]}
     assert message =~ path
