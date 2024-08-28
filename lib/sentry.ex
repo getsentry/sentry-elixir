@@ -174,7 +174,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils}
+  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options}
 
   require Logger
 
@@ -224,7 +224,12 @@ defmodule Sentry do
   and is not `nil`. See the [*Configuration* section](#module-configuration)
   in the module documentation.
 
-  The `opts` argument is passed as the second argument to `send_event/2`.
+    The `opts` argument is divided into two separate lists of options:
+
+   * `send_event_opts_schema`  — see `Sentry.Client`.
+   * `create_event_opts_schema`  — see `Sentry.Event`.
+
+  Refer to the schema defined in these two modules to properly define your expected options.
   """
   @spec capture_exception(Exception.t(), keyword()) :: send_result
   def capture_exception(exception, opts \\ []) do
@@ -263,7 +268,12 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
 
-  `opts` argument is passed as the second argument to `send_event/2`.
+  The `opts` argument is divided into two separate lists of options:
+
+   * `send_event_opts_schema`  — see `Sentry.Client`.
+   * `create_event_opts_schema`  — see `Sentry.Event`.
+
+  Refer to the schema defined in these two modules to properly define your expected options.
 
   ## Interpolation (since v10.1.0)
 
@@ -335,7 +345,7 @@ defmodule Sentry do
         Client.send_event(event, opts)
 
       !Config.dsn() ->
-        _opts = Client.validate_options!(opts)
+        _opts = Options.validate_options!(opts)
         :ignored
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->

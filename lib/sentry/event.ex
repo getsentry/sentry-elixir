@@ -8,7 +8,7 @@ defmodule Sentry.Event do
   See <https://develop.sentry.dev/sdk/event-payloads>.
   """
 
-  alias Sentry.{Attachment, Config, Interfaces, Sources, UUID}
+  alias Sentry.{Attachment, Config, Interfaces, Sources, UUID, Options}
 
   @sdk %Interfaces.SDK{
     name: "sentry-elixir",
@@ -279,7 +279,8 @@ defmodule Sentry.Event do
     ]
   ]
 
-  @create_event_opts_schema NimbleOptions.new!(create_event_opts_schema)
+  @create_event_opts_schema Options.get_event_options()
+  @create_event_opts_schema_2 NimbleOptions.new!(create_event_opts_schema)
 
   @doc """
   Creates an event struct out of collected context and options.
@@ -315,7 +316,7 @@ defmodule Sentry.Event do
   @spec create_event([option]) :: t()
         when option: unquote(NimbleOptions.option_typespec(@create_event_opts_schema))
   def create_event(opts) when is_list(opts) do
-    opts = NimbleOptions.validate!(opts, @create_event_opts_schema)
+    opts = NimbleOptions.validate!(opts, @create_event_opts_schema_2)
 
     timestamp =
       DateTime.utc_now()
