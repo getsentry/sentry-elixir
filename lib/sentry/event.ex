@@ -551,8 +551,9 @@ defmodule Sentry.Event do
       not Config.enable_source_code_context?() ->
         frame
 
-      source_map = Sources.get_source_code_map_from_persistent_term() ->
-        {pre_context, context, post_context} = Sources.get_source_context(source_map, file, line)
+      source_map_for_file = Sources.get_lines_for_file(file) ->
+        {pre_context, context, post_context} =
+          Sources.get_source_context(source_map_for_file, line)
 
         %Interfaces.Stacktrace.Frame{
           frame

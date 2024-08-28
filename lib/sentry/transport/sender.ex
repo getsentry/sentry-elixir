@@ -32,6 +32,10 @@ defmodule Sentry.Transport.Sender do
 
   @impl GenServer
   def init([]) do
+    if function_exported?(Process, :set_label, 1) do
+      apply(Process, :set_label, [__MODULE__])
+    end
+
     {:ok, %__MODULE__{}}
   end
 

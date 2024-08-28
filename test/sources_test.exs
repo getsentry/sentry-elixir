@@ -82,45 +82,33 @@ defmodule Sentry.SourcesTest do
     end
 
     @tag :tmp_dir
-    test "stores the source code map in :persistent_term if valid", %{tmp_dir: tmp_dir} do
+    test "reads the source code map from the file", %{tmp_dir: tmp_dir} do
       encoded_map = Sources.encode_source_code_map(%{"foo.ex" => %{}})
       path = Path.join(tmp_dir, "valid.map")
       File.write!(path, encoded_map)
       assert {:loaded, map} = Sources.load_source_code_map_if_present(path)
       assert map == %{"foo.ex" => %{}}
-      assert :persistent_term.get({:sentry, :source_code_map}) == %{"foo.ex" => %{}}
-    after
-      :persistent_term.erase({:sentry, :source_code_map})
     end
   end
 
-  describe "get_source_context/3" do
+  describe "get_source_context/2" do
     test "returns the correct context" do
       map = %{
-        "foo.ex" => %{
-          1 => "defmodule Foo do",
-          2 => "  def bar do",
-          3 => "    \"bar\"",
-          4 => "  end",
-          5 => "end"
-        },
-        "bar.ex" => %{
-          1 => "defmodule Bar do",
-          2 => "  def baz do",
-          3 => "    \"baz\"",
-          4 => "  end",
-          5 => "end"
-        }
+        1 => "defmodule Foo do",
+        2 => "  def bar do",
+        3 => "    \"bar\"",
+        4 => "  end",
+        5 => "end"
       }
 
-      assert {pre, context, post} = Sources.get_source_context(map, "foo.ex", 4)
+      assert {pre, context, post} = Sources.get_source_context(map, 4)
       assert pre == ["defmodule Foo do", "  def bar do", "    \"bar\""]
       assert context == "  end"
       assert post == ["end"]
     end
 
-    test "works if the file doesn't exist" do
-      assert {[], nil, []} = Sources.get_source_context(%{}, "foo.ex", 4)
+    test "works if the line number doesn't exist" do
+      assert {[], nil, []} = Sources.get_source_context(%{}, 4)
     end
   end
 end
