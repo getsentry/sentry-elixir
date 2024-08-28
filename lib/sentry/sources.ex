@@ -24,7 +24,7 @@ defmodule Sentry.Sources do
 
   @impl true
   def init(nil) do
-    :ets.new(@table, [:public, :named_table, read_concurrency: true])
+    _ = :ets.new(@table, [:public, :named_table, read_concurrency: true])
     {:ok, :no_state, {:continue, :load_source_code_map}}
   end
 
