@@ -144,7 +144,7 @@ defmodule Sentry.Event do
   def remove_non_payload_keys(%__MODULE__{} = event) do
     event
     |> Map.from_struct()
-    |> Map.drop([:original_exception, :source, :attachments])
+    |> Map.drop([:original_exception, :source, :attachments, :integration_meta])
   end
 
   create_event_opts_schema = [

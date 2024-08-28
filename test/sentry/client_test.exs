@@ -92,6 +92,22 @@ defmodule Sentry.ClientTest do
 
       assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
     end
+
+    test "removes non-payload fields" do
+      event = %Sentry.Event{
+        event_id: "abc123",
+        timestamp: DateTime.utc_now(),
+        original_exception: RuntimeError.exception("Original exception"),
+        integration_meta: %{some_key: "some_value"}
+      }
+
+      rendered = Client.render_event(event)
+
+      refute Map.has_key?(rendered, :original_exception)
+      refute Map.has_key?(rendered, :integration_meta)
+      refute Map.has_key?(rendered, :attachments)
+      refute Map.has_key?(rendered, :source)
+    end
   end
 
   describe "send_event/2" do
