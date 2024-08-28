@@ -30,11 +30,14 @@ defmodule Sentry.Sources do
 
   @impl true
   def handle_continue(:load_source_code_map, state) do
-    with {:loaded, source_map} <- load_source_code_map_if_present() do
-      Enum.each(source_map, fn {path, lines_map} ->
-        :ets.insert(@table, {path, lines_map})
-      end)
-    end
+    :ok =
+      with {:loaded, source_map} <- load_source_code_map_if_present() do
+        Enum.each(source_map, fn {path, lines_map} ->
+          :ets.insert(@table, {path, lines_map})
+        end)
+      else
+        _error -> :ok
+      end
 
     {:noreply, state}
   end
