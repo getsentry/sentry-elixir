@@ -1,15 +1,49 @@
 defmodule Sentry.Sources do
   @moduledoc false
 
+  use GenServer
+
   alias Sentry.Config
 
-  @type source_map :: %{
-          optional(String.t()) => %{
-            (line_no :: pos_integer()) => line_contents :: String.t()
-          }
+  @type source_map_for_file :: %{
+          optional(line_no :: pos_integer()) => line_contents :: String.t()
         }
 
-  @source_code_map_key {:sentry, :source_code_map}
+  @type source_map :: %{
+          optional(String.t()) => source_map_for_file()
+        }
+
+  ## GenServer
+
+  @table __MODULE__
+
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link([] = _) do
+    GenServer.start_link(__MODULE__, nil, name: __MODULE__)
+  end
+
+  @impl true
+  def init(nil) do
+    _ = :ets.new(@table, [:public, :named_table, read_concurrency: true])
+    {:ok, :no_state, {:continue, :load_source_code_map}}
+  end
+
+  @impl true
+  def handle_continue(:load_source_code_map, state) do
+    :ok =
+      with {:loaded, source_map} <- load_source_code_map_if_present() do
+        Enum.each(source_map, fn {path, lines_map} ->
+          :ets.insert(@table, {path, lines_map})
+        end)
+      else
+        _error -> :ok
+      end
+
+    {:noreply, state}
+  end
+
+  ## Other functions
+
   @compression_level if Mix.env() == :test, do: 0, else: 9
 
   # Default argument is here for testing.
@@ -21,7 +55,6 @@ defmodule Sentry.Sources do
 
     with {:ok, contents} <- File.read(path),
          {:ok, source_map} <- decode_source_code_map(contents) do
-      :persistent_term.put(@source_code_map_key, source_map)
       {:loaded, source_map}
     else
       {:error, :binary_to_term} ->
@@ -67,11 +100,6 @@ defmodule Sentry.Sources do
     end
   end
 
-  @spec get_source_code_map_from_persistent_term() :: source_map() | nil
-  def get_source_code_map_from_persistent_term do
-    :persistent_term.get(@source_code_map_key, nil)
-  end
-
   @spec load_files(keyword()) :: {:ok, source_map()} | {:error, message :: String.t()}
   def load_files(config \\ []) when is_list(config) do
     config = Sentry.Config.validate!(config)
@@ -106,23 +134,25 @@ defmodule Sentry.Sources do
     source_map -> {:ok, source_map}
   end
 
-  @spec get_source_context(source_map(), String.t() | nil, pos_integer() | nil) ::
-          {[String.t()], String.t() | nil, [String.t()]}
-  def get_source_context(%{} = files, file_name, line_number) do
-    context_lines = Config.context_lines()
-
-    case Map.fetch(files, file_name) do
-      :error -> {[], nil, []}
-      {:ok, file} -> get_source_context_for_file(file, line_number, context_lines)
+  @spec get_lines_for_file(Path.t()) :: map() | nil
+  def get_lines_for_file(file) do
+    case :ets.lookup(@table, file) do
+      [{^file, lines}] -> lines
+      [] -> nil
     end
   end
 
-  defp get_source_context_for_file(file, line_number, context_lines) do
+  @spec get_source_context(source_map_for_file(), pos_integer() | nil) ::
+          {[String.t()], String.t() | nil, [String.t()]}
+  def get_source_context(source_map_for_file, line_number)
+      when is_map(source_map_for_file) and (is_integer(line_number) or is_nil(line_number)) do
+    context_lines = Config.context_lines()
+
     context_line_indices = 0..(2 * context_lines)
 
     Enum.reduce(context_line_indices, {[], nil, []}, fn i, {pre_context, context, post_context} ->
       context_line_number = line_number - context_lines + i
-      source = Map.get(file, context_line_number)
+      source = Map.get(source_map_for_file, context_line_number)
 
       cond do
         context_line_number == line_number && source ->

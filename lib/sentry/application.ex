@@ -3,7 +3,7 @@ defmodule Sentry.Application do
 
   use Application
 
-  alias Sentry.{Config, Sources}
+  alias Sentry.Config
 
   @impl true
   def start(_type, _opts) do
@@ -24,6 +24,7 @@ defmodule Sentry.Application do
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
+        Sentry.Sources,
         Sentry.Dedupe,
         {Sentry.Integrations.CheckInIDMappings,
          [
@@ -35,7 +36,6 @@ defmodule Sentry.Application do
         [Sentry.Transport.SenderPool]
 
     cache_loaded_applications()
-    _ = Sources.load_source_code_map_if_present()
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
