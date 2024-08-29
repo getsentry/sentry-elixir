@@ -59,7 +59,7 @@ defmodule Sentry.Client do
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
-    opts = Options.validate_options!(opts)
+    opts = Options.validate_options!(opts, Options.get_client_options())
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)

@@ -60,7 +60,7 @@ defmodule Sentry.Options do
 
   create_event_opts_schema = [
     exception: [
-      type: {:custom, __MODULE__, :__validate_exception__, [:exception]},
+      type: {:custom, Sentry.Event, :__validate_exception__, [:exception]},
       type_doc: "`t:Exception.t/0`",
       doc: """
       This is the exception that gets reported in the
@@ -195,10 +195,6 @@ defmodule Sentry.Options do
 
   @create_event_opts_schema NimbleOptions.new!(create_event_opts_schema)
 
-  ## Options
-
-  {NimbleOptions.docs(@create_event_opts_schema)}
-
   @spec get_client_options() :: NimbleOptions.t()
   def get_client_options do
     @send_event_opts_schema
@@ -214,13 +210,8 @@ defmodule Sentry.Options do
     @create_event_opts_schema
   end
 
-  @spec validate_options!(keyword()) :: keyword()
-  def validate_options!(opts) when is_list(opts) do
-    NimbleOptions.validate!(opts, @send_event_opts_schema)
+  @spec validate_options!(keyword(), NimbleOptions.t()) :: keyword()
+  def validate_options!(opts, schema) when is_list(opts) do
+    NimbleOptions.validate!(opts, schema)
   end
-
-  # @spec validate_event_options!(keyword()) :: keyword()
-  # def validate_options!(opts) when is_list(opts) do
-  #   NimbleOptions.validate!(opts, @create_event_opts_schema)
-  # end
 end

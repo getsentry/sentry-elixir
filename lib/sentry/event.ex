@@ -147,143 +147,11 @@ defmodule Sentry.Event do
     |> Map.drop([:original_exception, :source, :attachments, :integration_meta])
   end
 
-  create_event_opts_schema = [
-    exception: [
-      type: {:custom, __MODULE__, :__validate_exception__, [:exception]},
-      type_doc: "`t:Exception.t/0`",
-      doc: """
-      This is the exception that gets reported in the
-      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
-      `:original_exception` field of `t:t/0`. This option is **required** unless the
-      `:message` option is present. Not present by default.
-      """
-    ],
-    stacktrace: [
-      type:
-        {:list,
-         {:or,
-          [
-            {:tuple, [:atom, :atom, :any, :keyword_list]},
-            {:tuple, [:any, :any, :keyword_list]}
-          ]}},
-      type_doc: "`t:Exception.stacktrace/0`",
-      doc: """
-      The exception's stacktrace. This can also be used with messages (`:message`). Not
-      present by default.
-      """
-    ],
-    message: [
-      type: :string,
-      doc: """
-      A message to report. The string can contain interpolation markers (`%s`). In that
-      case, you can pass the `:interpolation_parameters` option as well to fill
-      in those parameters. See `Sentry.capture_message/2` for more information on
-      message interpolation. Not present by default.
-      """
-    ],
-    extra: [
-      type: {:map, {:or, [:atom, :string]}, :any},
-      type_doc: "`t:Sentry.Context.extra/0`",
-      default: %{},
-      doc: """
-      Map of extra context, which gets merged with the current context
-      (see `Sentry.Context.set_extra_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context.
-      """
-    ],
-    user: [
-      type: :map,
-      type_doc: "`t:Sentry.Context.user_context/0`",
-      default: %{},
-      doc: """
-      Map of user context, which gets merged with the current context
-      (see `Sentry.Context.set_user_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context.
-      """
-    ],
-    tags: [
-      type: {:map, {:or, [:atom, :string]}, :any},
-      type_doc: "`t:Sentry.Context.tags/0`",
-      default: %{},
-      doc: """
-      Map of tags context, which gets merged with the current context (see
-      `Sentry.Context.set_tags_context/1`) and with the `:tags` option in the global
-      Sentry configuration. If fields collide, the ones in the map passed through
-      this option have precedence over the ones in the context, which have precedence
-      over the ones in the configuration.
-      """
-    ],
-    request: [
-      type: :map,
-      type_doc: "`t:Sentry.Context.request_context/0`",
-      default: %{},
-      doc: """
-      Map of request context, which gets merged with the current context
-      (see `Sentry.Context.set_request_context/1`). If fields collide, the ones
-      in the map passed through this option have precedence over the ones in
-      the context.
-      """
-    ],
-    breadcrumbs: [
-      type: {:list, {:or, [:keyword_list, :map]}},
-      type_doc: "list of `t:keyword/0` or `t:Sentry.Context.breadcrumb/0`",
-      default: [],
-      doc: """
-      List of breadcrumbs. This list gets **prepended** to the list
-      in the context (see `Sentry.Context.add_breadcrumb/1`).
-      """
-    ],
-    level: [
-      type: {:in, [:fatal, :error, :warning, :info, :debug]},
-      type_doc: "`t:level/0`",
-      default: :error,
-      doc: """
-      The level of the event.
-      """
-    ],
-    fingerprint: [
-      type: {:list, :string},
-      default: ["{{ default }}"],
-      doc: """
-      List of the fingerprint for grouping this event.
-      """
-    ],
-    event_source: [
-      type: :atom,
-      doc: """
-      The source of the event. This fills in the `:source` field of the
-      returned struct. This is not present by default.
-      """
-    ],
-    interpolation_parameters: [
-      type: {:list, :any},
-      doc: """
-      The parameters to use for message interpolation. This is only used if the
-      `:message` option is present. This is not present by default. See
-      `Sentry.capture_message/2`. *Available since v10.1.0*.
-      """
-    ],
-    integration_meta: [
-      type: :map,
-      default: %{},
-      doc: false
-    ],
-
-    ## Internal options
-    handled: [
-      type: :boolean,
-      default: true,
-      doc: false
-    ]
-  ]
-
   @create_event_opts_schema Options.get_event_options()
-  @create_event_opts_schema_2 NimbleOptions.new!(create_event_opts_schema)
 
   @doc """
-  Creates an event struct out of collected context and options.
+  Creates an event struct out of collected context and options. See the full list of options in
+  the `Sentry.Options` module.
 
   > #### Merging Options with Context and Config {: .info}
   >
@@ -316,7 +184,7 @@ defmodule Sentry.Event do
   @spec create_event([option]) :: t()
         when option: unquote(NimbleOptions.option_typespec(@create_event_opts_schema))
   def create_event(opts) when is_list(opts) do
-    opts = NimbleOptions.validate!(opts, @create_event_opts_schema_2)
+    opts = Options.validate_options!(opts, @create_event_opts_schema)
 
     timestamp =
       DateTime.utc_now()

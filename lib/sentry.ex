@@ -314,7 +314,7 @@ defmodule Sentry do
 
   ## Options
 
-  #{NimbleOptions.docs(Client.send_events_opts_schema())}
+  #{NimbleOptions.docs(Options.get_client_options())}
 
   > #### Async Send {: .error}
   >
@@ -345,7 +345,7 @@ defmodule Sentry do
         Client.send_event(event, opts)
 
       !Config.dsn() ->
-        _opts = Options.validate_options!(opts)
+        _opts = Options.validate_options!(opts, Options.get_client_options())
         :ignored
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
