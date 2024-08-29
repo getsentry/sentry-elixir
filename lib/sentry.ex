@@ -172,6 +172,41 @@ defmodule Sentry do
   > `:source_code_path_pattern` configuration option from its default is also
   > an avenue to avoid compile problems, as well as pruning unnecessary files
   > with `:source_code_exclude_patterns`.
+
+  ## Options
+
+  Options passed to `capture_exception/2` and `capture_message/2`:
+
+  ### Send Event Options
+
+  - `:result` - Specifies how the event result is handled. Options are `:sync` for synchronous API calls
+      and `:none` for fire-and-forget.
+  - `:sample_rate` - A float representing the sampling rate for the event, overriding the global setting.
+  - `:before_send` - A callback to modify the event before it's sent; can be a function or a module/function tuple.
+  - `:after_send_event` - A callback executed after an event is sent; can be a function or a module/function tuple.
+  - `:client` - Specifies which client module to use for sending the event.
+  - `:request_retries` (private) - Used for testing, specifies the retry logic.
+
+  ### Create Event Options
+
+  - `:exception` - The exception data to report, required unless `:message` is provided.
+  - `:stacktrace` - The stacktrace associated with the exception or message.
+  - `:message` - A message describing the event, supports interpolation.
+  - `:extra` - A map of additional context to include in the event.
+  - `:user` - User-specific context information.
+  - `:tags` - Tags to classify and organize the event.
+  - `:request` - Request context information to include in the event.
+  - `:breadcrumbs` - A list of breadcrumbs that precede the event for context.
+  - `:level` - The severity level of the event (`:fatal`, `:error`, `:warning`, `:info`, `:debug`).
+  - `:fingerprint` - A list that determines how events are grouped.
+  - `:event_source` - Specifies the source of the event.
+  - `:interpolation_parameters` - Parameters for message interpolation, used if `:message` is provided.
+  - `:integration_meta` (internal) - Metadata for integrations.
+  - `:handled` (internal) - Indicates if the exception was handled, defaults to `true`.
+
+  For more detailed explanations and usage examples, see the Options module.
+
+
   """
 
   alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options}
@@ -224,12 +259,8 @@ defmodule Sentry do
   and is not `nil`. See the [*Configuration* section](#module-configuration)
   in the module documentation.
 
-    The `opts` argument is divided into two separate lists of options:
-
-   * `send_event_opts_schema`  — see `Sentry.Client`.
-   * `create_event_opts_schema`  — see `Sentry.Event`.
-
-  Refer to the schema defined in these two modules to properly define your expected options.
+  The `opts` argument is passed as the second argument to `send_event/2`.
+  See the Options section for a list of all valid options or refer to the Options module.
   """
   @spec capture_exception(Exception.t(), keyword()) :: send_result
   def capture_exception(exception, opts \\ []) do
@@ -268,12 +299,8 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
 
-  The `opts` argument is divided into two separate lists of options:
-
-   * `send_event_opts_schema`  — see `Sentry.Client`.
-   * `create_event_opts_schema`  — see `Sentry.Event`.
-
-  Refer to the schema defined in these two modules to properly define your expected options.
+  The `opts` argument is passed as the second argument to `send_event/2`.
+  See the Options section for a list of all valid options or refer to the Options module.
 
   ## Interpolation (since v10.1.0)
 
@@ -375,10 +402,6 @@ defmodule Sentry do
   > If the `:dsn` configuration is not set, this function won't report the check-in
   > to Sentry and will instead return `:ignored`. This behaviour is consistent with
   > the rest of the SDK (such as `capture_exception/2`).
-
-  ## Options
-
-  This functions supports all the options mentioned in `Sentry.CheckIn.new/1`.
 
   ## Examples
 

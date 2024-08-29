@@ -1,10 +1,6 @@
 defmodule Sentry.Options do
-  @moduledoc """
-  A module to store and document globally available options.
-  """
+  @moduledoc false
 
-  # The docs for the options here are generated in the Sentry module, so you can refer to types
-  # and functions and so on like if you were writing these docs in the Sentry module itself.
   send_event_opts_schema = [
     result: [
       type: {:in, [:sync, :none]},
