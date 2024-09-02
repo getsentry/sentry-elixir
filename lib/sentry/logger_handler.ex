@@ -338,7 +338,12 @@ defmodule Sentry.LoggerHandler do
     log_from_crash_reason(log_event.meta[:crash_reason], unicode_chardata, sentry_opts, config)
   end
 
-  # "report" here is of type logger:report/0, which is a map or keyword list.
+  # "report" here is of type logger:report/0, which is a struct, map or keyword list.
+  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config)
+       when is_struct(report) do
+    capture(:message, inspect(report), sentry_opts, config)
+  end
+
   defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config) do
     case Map.new(report) do
       %{reason: {exception, stacktrace}}
