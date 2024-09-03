@@ -17,6 +17,16 @@ defmodule Sentry.Config do
       *Available since 10.6.3*.
       """
     ],
+    monitor_config_defaults: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Defaults to be used for the `monitor_config` when reporting cron jobs with one of the
+      integrations. This supports all the keys defined in the [Sentry
+      documentation](https://develop.sentry.dev/sdk/telemetry/check-ins/#monitor-upsert-support).
+      See also `Sentry.CheckIn.new/1`. *Available since v10.8.0*.
+      """
+    ],
     oban: [
       type: :keyword_list,
       doc: """
@@ -554,6 +564,9 @@ defmodule Sentry.Config do
 
   @spec test_mode?() :: boolean()
   def test_mode?, do: fetch!(:test_mode)
+
+  @spec integrations() :: keyword()
+  def integrations, do: fetch!(:integrations)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

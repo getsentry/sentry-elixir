@@ -115,7 +115,11 @@ defmodule Sentry.CheckIn do
       """
     ],
     monitor_config: [
-      doc: "If you pass this optional option, you **must** pass the nested `:schedule` option.",
+      doc: """
+      If you pass this optional option, you **must** pass the nested `:schedule` option. The
+      options below are described in detail in the [Sentry
+      documentation](https://develop.sentry.dev/sdk/telemetry/check-ins/#monitor-upsert-support).
+      """,
       type: :keyword_list,
       keys: [
         checkin_margin: number_schema_opts,

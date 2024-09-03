@@ -194,4 +194,49 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
     assert_receive {^ref, :done}, 1000
   end
+
+  test "uses default monitor configuration in Sentry's config if present", %{bypass: bypass} do
+    put_test_config(
+      integrations: [
+        monitor_config_defaults: [
+          checkin_margin: 10,
+          max_runtime: 42,
+          failure_issue_threshold: 84
+        ]
+      ]
+    )
+
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert [{_headers, check_in_body}] = decode_envelope!(body)
+
+      assert check_in_body["monitor_config"] == %{
+               "checkin_margin" => 10,
+               "failure_issue_threshold" => 84,
+               "max_runtime" => 42,
+               "schedule" => %{
+                 "type" => "crontab",
+                 "value" => "* 1 1 1 1"
+               }
+             }
+
+      send(test_pid, {ref, :done})
+
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+    end)
+
+    :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
+      state: :success,
+      job: %Oban.Job{
+        worker: "Sentry.MyWorker",
+        id: 942,
+        meta: %{"cron" => true, "cron_expr" => "* 1 1 1 1"}
+      }
+    })
+
+    assert_receive {^ref, :done}, 1000
+  end
 end
