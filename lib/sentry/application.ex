@@ -19,7 +19,7 @@ defmodule Sentry.Application do
         []
       end
 
-    integrations_config = Keyword.fetch!(config, :integrations)
+    integrations_config = Config.integrations()
 
     children =
       [

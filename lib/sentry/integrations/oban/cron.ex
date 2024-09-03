@@ -69,31 +69,35 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
-    if schedule_opts = schedule_opts(job) do
-      id = CheckInIDMappings.lookup_or_insert_new(job.id)
+    monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
 
-      [
-        check_in_id: id,
-        # This is already a binary.
-        monitor_slug: slugify(job.worker),
-        monitor_config: [schedule: schedule_opts]
-      ]
-    else
-      nil
+    case Keyword.merge(monitor_config_opts, schedule_opts(job)) do
+      [] ->
+        nil
+
+      monitor_config_opts ->
+        id = CheckInIDMappings.lookup_or_insert_new(job.id)
+
+        [
+          check_in_id: id,
+          # This is already a binary.
+          monitor_slug: slugify(job.worker),
+          monitor_config: monitor_config_opts
+        ]
     end
   end
 
   defp schedule_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do
     case meta["cron_expr"] do
-      "@hourly" -> [type: :interval, value: 1, unit: :hour]
-      "@daily" -> [type: :interval, value: 1, unit: :day]
-      "@weekly" -> [type: :interval, value: 1, unit: :week]
-      "@monthly" -> [type: :interval, value: 1, unit: :month]
-      "@yearly" -> [type: :interval, value: 1, unit: :year]
-      "@annually" -> [type: :interval, value: 1, unit: :year]
-      "@reboot" -> nil
-      cron_expr when is_binary(cron_expr) -> [type: :crontab, value: cron_expr]
-      _other -> nil
+      "@hourly" -> [schedule: [type: :interval, value: 1, unit: :hour]]
+      "@daily" -> [schedule: [type: :interval, value: 1, unit: :day]]
+      "@weekly" -> [schedule: [type: :interval, value: 1, unit: :week]]
+      "@monthly" -> [schedule: [type: :interval, value: 1, unit: :month]]
+      "@yearly" -> [schedule: [type: :interval, value: 1, unit: :year]]
+      "@annually" -> [schedule: [type: :interval, value: 1, unit: :year]]
+      "@reboot" -> []
+      cron_expr when is_binary(cron_expr) -> [schedule: [type: :crontab, value: cron_expr]]
+      _other -> []
     end
   end
 
