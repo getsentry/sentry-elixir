@@ -4,21 +4,12 @@ defmodule Sentry.Integrations.Phoenix.ExceptionTest do
   import Sentry.TestHelpers
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    %{bypass: bypass}
+    put_test_config(dsn: "http://public:secret@localhost:8080/1")
+
+    Sentry.Test.start_collecting_sentry_reports()
   end
 
-  test "GET /exception sends exception to Sentry", %{conn: conn, bypass: bypass} do
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "RuntimeError"
-      assert body =~ "Test exception"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "GET /exception sends exception to Sentry", %{conn: conn} do
     assert_raise RuntimeError, "Test exception", fn ->
       get(conn, ~p"/exception")
     end

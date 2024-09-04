@@ -2,7 +2,7 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID, Transaction}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
@@ -43,6 +43,17 @@ defmodule Sentry.Envelope do
     %__MODULE__{
       event_id: UUID.uuid4_hex(),
       items: [client_report]
+    }
+  end
+
+  @doc """
+  Creates a new envelope containing a transaction with spans.
+  """
+  @spec from_transaction(Sentry.Transaction.t()) :: t()
+  def from_transaction(%Transaction{} = transaction) do
+    %__MODULE__{
+      event_id: transaction.event_id,
+      items: [transaction]
     }
   end
 
@@ -121,6 +132,17 @@ defmodule Sentry.Envelope do
       {:ok, encoded_client_report} ->
         header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
         [header, ?\n, encoded_client_report, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %Transaction{} = transaction) do
+    case transaction |> Sentry.Client.render_transaction() |> json_library.encode() do
+      {:ok, encoded_transaction} ->
+        header = ~s({"type": "transaction", "length": #{byte_size(encoded_transaction)}})
+        [header, ?\n, encoded_transaction, ?\n]
 
       {:error, _reason} = error ->
         throw(error)
