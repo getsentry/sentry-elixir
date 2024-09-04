@@ -19,6 +19,8 @@ defmodule PhoenixAppWeb.Router do
 
     get "/", PageController, :home
     get "/exception", PageController, :exception
+    get "/transaction", PageController, :transaction
+    get "/users", PageController, :users
   end
 
   # Other scopes may use custom stacks.

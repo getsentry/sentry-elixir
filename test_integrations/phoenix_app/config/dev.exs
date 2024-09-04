@@ -1,5 +1,10 @@
 import Config
 
+# Configure your database
+config :phoenix_app, PhoenixApp.Repo,
+  adapter: Ecto.Adapters.SQLite3,
+  database: "db/dev.sqlite3"
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
