@@ -4,6 +4,7 @@ defmodule Sentry.Transport.SenderPool do
   use Supervisor
 
   @queued_events_key {__MODULE__, :queued_events}
+  @queued_transactions_key {__MODULE__, :queued_transactions}
 
   @spec start_link(keyword()) :: Supervisor.on_start()
   def start_link([] = _opts) do
@@ -14,6 +15,9 @@ defmodule Sentry.Transport.SenderPool do
   def init([]) do
     queued_events_counter = :counters.new(1, [])
     :persistent_term.put(@queued_events_key, queued_events_counter)
+
+    queued_transactions_counter = :counters.new(1, [])
+    :persistent_term.put(@queued_transactions_key, queued_transactions_counter)
 
     children =
       for index <- 1..pool_size() do
@@ -39,6 +43,12 @@ defmodule Sentry.Transport.SenderPool do
   @spec increase_queued_events_counter() :: :ok
   def increase_queued_events_counter do
     counter = :persistent_term.get(@queued_events_key)
+    :counters.add(counter, 1, 1)
+  end
+
+  @spec increase_queued_transactions_counter() :: :ok
+  def increase_queued_transactions_counter do
+    counter = :persistent_term.get(@queued_transactions_key)
     :counters.add(counter, 1, 1)
   end
 
