@@ -1,5 +1,10 @@
 import Config
 
+# Configure your database
+config :phoenix_app, PhoenixApp.Repo,
+  adapter: Ecto.Adapters.SQLite3,
+  database: "db/test.sqlite3"
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :phoenix_app, PhoenixAppWeb.Endpoint,
@@ -24,9 +29,8 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sentry,
-  dsn: "http://public:secret@localhost:8080/1",
-  environment_name: Mix.env(),
+  dsn: nil,
+  environment_name: :dev,
   enable_source_code_context: true,
-  root_source_code_paths: [File.cwd!()],
-  test_mode: true,
-  send_result: :sync
+  send_result: :sync,
+  test_mode: true

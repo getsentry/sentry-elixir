@@ -7,8 +7,21 @@ defmodule PhoenixApp.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = Application.ensure_started(:inets)
+
+    :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:file, :line]}
+    })
+
+    OpentelemetryBandit.setup()
+    OpentelemetryPhoenix.setup()
+    OpentelemetryEcto.setup([:phoenix_app, :repo])
+
     children = [
       PhoenixAppWeb.Telemetry,
+      PhoenixApp.Repo,
+      {Ecto.Migrator,
+       repos: Application.fetch_env!(:phoenix_app, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:phoenix_app, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PhoenixApp.PubSub},
       # Start the Finch HTTP client for sending emails
@@ -25,12 +38,15 @@ defmodule PhoenixApp.Application do
     Supervisor.start_link(children, opts)
   end
 
-  # TODO: Uncomment if we ever move the endpoint from test/support to the phoenix_app dir
   # Tell Phoenix to update the endpoint configuration
   # whenever the application is updated.
-  # @impl true
-  # def config_change(changed, _new, removed) do
-  #   PhoenixAppWeb.Endpoint.config_change(changed, removed)
-  #   :ok
-  # end
+  @impl true
+  def config_change(changed, _new, removed) do
+    PhoenixAppWeb.Endpoint.config_change(changed, removed)
+    :ok
+  end
+
+  defp skip_migrations?() do
+    System.get_env("RELEASE_NAME") != nil
+  end
 end
