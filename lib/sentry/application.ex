@@ -26,6 +26,7 @@ defmodule Sentry.Application do
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
         Sentry.Sources,
         Sentry.Dedupe,
+        Sentry.Telemetry.SpanProcessor.SpanStorage,
         {Sentry.Integrations.CheckInIDMappings,
          [
            max_expected_check_in_time:
