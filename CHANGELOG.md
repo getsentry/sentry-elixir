@@ -1,5 +1,15 @@
 # Changelog
 
+## 10.7.1
+
+### Various fixes & improvements
+
+- Add :monitor_config_defaults integrations option (#782) by @whatyouhide
+- Accept structs as structured logs in Sentry.LoggerHandler (#780) by @mrdotb
+- Don't send :integration_meta field (116140d6) by @whatyouhide
+- Move source code maps to ETS (#777) by @whatyouhide
+- Allow --no-compile/--no-check-deps to "mix sentry.package_source_code" (#776) by @razielgn
+
 ## 10.7.0
 
 ### Various fixes & improvements
