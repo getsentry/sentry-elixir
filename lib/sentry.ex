@@ -173,39 +173,14 @@ defmodule Sentry do
   > an avenue to avoid compile problems, as well as pruning unnecessary files
   > with `:source_code_exclude_patterns`.
 
-  ## Options
+  ### Options
 
-  Options passed to `capture_exception/2` and `capture_message/2`:
+  List of options passed to `capture_exception/2` and `capture_message/2`:
 
-  ### Send Event Options
+  #{NimbleOptions.docs(Sentry.Options.get_event_options())}
+  #{NimbleOptions.docs(Sentry.Options.get_client_options())}
 
-  - `:result` - Specifies how the event result is handled. Options are `:sync` for synchronous API calls
-      and `:none` for fire-and-forget.
-  - `:sample_rate` - A float representing the sampling rate for the event, overriding the global setting.
-  - `:before_send` - A callback to modify the event before it's sent; can be a function or a module/function tuple.
-  - `:after_send_event` - A callback executed after an event is sent; can be a function or a module/function tuple.
-  - `:client` - Specifies which client module to use for sending the event.
-  - `:request_retries` (private) - Used for testing, specifies the retry logic.
-
-  ### Create Event Options
-
-  - `:exception` - The exception data to report, required unless `:message` is provided.
-  - `:stacktrace` - The stacktrace associated with the exception or message.
-  - `:message` - A message describing the event, supports interpolation.
-  - `:extra` - A map of additional context to include in the event.
-  - `:user` - User-specific context information.
-  - `:tags` - Tags to classify and organize the event.
-  - `:request` - Request context information to include in the event.
-  - `:breadcrumbs` - A list of breadcrumbs that precede the event for context.
-  - `:level` - The severity level of the event (`:fatal`, `:error`, `:warning`, `:info`, `:debug`).
-  - `:fingerprint` - A list that determines how events are grouped.
-  - `:event_source` - Specifies the source of the event.
-  - `:interpolation_parameters` - Parameters for message interpolation, used if `:message` is provided.
-  - `:integration_meta` (internal) - Metadata for integrations.
-  - `:handled` (internal) - Indicates if the exception was handled, defaults to `true`.
-
-  For more detailed explanations and usage examples, see the Options module.
-
+  For more details, see the Options module.
 
   """
 
@@ -338,10 +313,6 @@ defmodule Sentry do
   An **event** is the most generic payload you can send to Sentry. It encapsulates
   information about an exception, a message, or any other event that you want to
   report. To manually build events, see the functions in `Sentry.Event`.
-
-  ## Options
-
-  #{NimbleOptions.docs(Options.get_client_options())}
 
   > #### Async Send {: .error}
   >
