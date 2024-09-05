@@ -1,5 +1,15 @@
 # Changelog
 
+## 10.7.1
+
+### Various fixes & improvements
+
+- Add `:monitor_config_defaults` integrations option (#782). — *@whatyouhide*
+- Allow `--no-compile`/`--no-check-deps` flags for `mix sentry.package_source_code` (#776). — *@razielgn*
+- Accept structs as structured logs in `Sentry.LoggerHandler` (#780). — *@mrdotb*
+- Fix a bug where we were accidentally sending the `:integration_meta` field (116140d6). — *@whatyouhide*
+- Reduce memory usage of source code maps (#777). — *@whatyouhide*
+
 ## 10.7.0
 
 ### Various fixes & improvements
