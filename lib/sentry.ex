@@ -314,6 +314,9 @@ defmodule Sentry do
   information about an exception, a message, or any other event that you want to
   report. To manually build events, see the functions in `Sentry.Event`.
 
+    ## Options
+    #{NimbleOptions.docs(Options.get_client_options())}
+
   > #### Async Send {: .error}
   >
   > Before v9.0.0 of this library, the `:result` option also supported the `:async` value.
