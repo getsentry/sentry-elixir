@@ -289,7 +289,7 @@ defmodule Sentry.Client do
     |> Map.from_struct()
     |> update_if_present(:mechanism, &Map.from_struct/1)
     |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
-      %{frames: Enum.map(frames, &Map.from_struct/1)}
+      %{frames: frames && Enum.map(frames, &Map.from_struct/1)}
     end)
   end
 

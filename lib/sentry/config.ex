@@ -249,6 +249,15 @@ defmodule Sentry.Config do
       """,
       default: [],
       keys: integrations_schema
+    ],
+    sendClientReports: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Set this boolean to false to disable sending of client reports. Client reports are a protocol
+      feature that let clients send status reports about themselves to Sentry. They are currently
+      mainly used to emit outcomes for events that were never sent.
+      """
     ]
   ]
 
@@ -567,6 +576,9 @@ defmodule Sentry.Config do
 
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)
+
+  @spec send_client_reports?() :: boolean()
+  def send_client_reports?, do: fetch!(:send_client_reports)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
