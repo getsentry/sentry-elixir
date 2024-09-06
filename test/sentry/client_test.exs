@@ -93,6 +93,15 @@ defmodule Sentry.ClientTest do
       assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
     end
 
+    test "renders exception with stacktrace :frames field set to nil if empty" do
+      event =
+        Event.transform_exception(%RuntimeError{message: "foo"}, stacktrace: [])
+
+      assert %{
+               exception: [%{stacktrace: %{frames: nil}}]
+             } = Client.render_event(event)
+    end
+
     test "removes non-payload fields" do
       event = %Sentry.Event{
         event_id: "abc123",
