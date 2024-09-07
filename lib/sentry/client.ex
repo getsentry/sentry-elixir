@@ -354,10 +354,27 @@ defmodule Sentry.Client do
     end
   end
 
+  defp update_if_present(map, :stacktrace, fun) do
+    case Map.pop(map, :stacktrace) do
+      {nil, _} ->
+        map
+
+      {value, map} ->
+        if is_nil(value.frames) || value.frames == [] do
+          Map.delete(map, :stacktrace)
+        else
+          Map.put(map, :stacktrace, fun.(value))
+        end
+    end
+  end
+
   defp update_if_present(map, key, fun) do
     case Map.pop(map, key) do
-      {nil, _} -> map
-      {value, map} -> Map.put(map, key, fun.(value))
+      {nil, _} ->
+        map
+
+      {value, map} ->
+        Map.put(map, key, fun.(value))
     end
   end
 

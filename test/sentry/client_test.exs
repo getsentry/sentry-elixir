@@ -84,22 +84,24 @@ defmodule Sentry.ClientTest do
       :code.purge(RaisingJSONClient)
     end
 
-    test "renders threads with stacktrace :frames field set to nil if empty" do
+    test "renders threads with stacktrace property deleted if :frames field set to nil if empty" do
       event =
         Event.create_event(message: "No frames in stacktrace", stacktrace: [])
 
       client = Client.render_event(event)
 
-      assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
+      assert is_nil(get_in(client.threads, [Access.at(0), :stacktrace]))
+
+      # assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
     end
 
-    test "renders exception with stacktrace :frames field set to nil if empty" do
+    test "renders exception with stacktrace property deleted if :frames field set to nil if empty" do
       event =
         Event.transform_exception(%RuntimeError{message: "foo"}, stacktrace: [])
 
-      assert %{
-               exception: [%{stacktrace: %{frames: nil}}]
-             } = Client.render_event(event)
+      client = Client.render_event(event)
+
+      assert is_nil(get_in(client.exception, [Access.at(0), :stacktrace]))
     end
 
     test "removes non-payload fields" do
