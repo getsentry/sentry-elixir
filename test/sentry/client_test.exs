@@ -91,8 +91,6 @@ defmodule Sentry.ClientTest do
       client = Client.render_event(event)
 
       assert is_nil(get_in(client.threads, [Access.at(0), :stacktrace]))
-
-      # assert %{frames: nil} = get_in(client.threads, [Access.at(0), :stacktrace])
     end
 
     test "renders exception with stacktrace property deleted if :frames field set to nil if empty" do
