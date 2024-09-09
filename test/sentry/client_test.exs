@@ -84,22 +84,63 @@ defmodule Sentry.ClientTest do
       :code.purge(RaisingJSONClient)
     end
 
-    test "renders threads with stacktrace property deleted if :frames field set to nil if empty" do
+    test "renders stacktrace for threads" do
+      event =
+        Event.create_event(
+          message: "Stacktrace for threads",
+          stacktrace: [
+            {Kernel, :apply, 3, [file: "lib/kernel.ex", line: 1]},
+            {URI, :new!, 1, [file: "lib/uri.ex", line: 2]}
+          ]
+        )
+
+      assert %{threads: [thread]} = Client.render_event(event)
+
+      refute is_struct(thread.stacktrace),
+             ":stacktrace shouldn't be a struct, got: #{inspect(thread.stacktrace)}"
+
+      assert [
+               %{module: URI, function: "URI.new!/1", filename: "lib/uri.ex", lineno: 2},
+               %{module: Kernel, function: "Kernel.apply/3", filename: "lib/kernel.ex", lineno: 1}
+             ] = thread.stacktrace.frames
+    end
+
+    test "renders threads with :stacktrace property deleted if :frames field set to nil if empty" do
       event =
         Event.create_event(message: "No frames in stacktrace", stacktrace: [])
 
-      client = Client.render_event(event)
-
-      assert is_nil(get_in(client.threads, [Access.at(0), :stacktrace]))
+      assert %{threads: [thread]} = Client.render_event(event)
+      refute Map.has_key?(thread, :stacktrace)
     end
 
-    test "renders exception with stacktrace property deleted if :frames field set to nil if empty" do
+    test "renders stacktrace for exceptions" do
+      event =
+        Event.transform_exception(
+          %RuntimeError{message: "foo"},
+          stacktrace: [
+            {Kernel, :apply, 3, [file: "lib/kernel.ex", line: 1]},
+            {URI, :new!, 1, [file: "lib/uri.ex", line: 2]}
+          ]
+        )
+
+      assert %{exception: [exception]} = Client.render_event(event)
+
+      refute is_struct(exception.stacktrace),
+             ":stacktrace shouldn't be a struct, got: #{inspect(exception.stacktrace)}"
+
+      assert [
+               %{module: URI, function: "URI.new!/1", filename: "lib/uri.ex", lineno: 2},
+               %{module: Kernel, function: "Kernel.apply/3", filename: "lib/kernel.ex", lineno: 1}
+             ] = exception.stacktrace.frames
+    end
+
+    test "renders exception with :stacktrace property deleted if :frames field set to nil if empty" do
       event =
         Event.transform_exception(%RuntimeError{message: "foo"}, stacktrace: [])
 
-      client = Client.render_event(event)
+      assert %{exception: [exception]} = Client.render_event(event)
 
-      assert is_nil(get_in(client.exception, [Access.at(0), :stacktrace]))
+      refute Map.has_key?(exception, :stacktrace)
     end
 
     test "removes non-payload fields" do
