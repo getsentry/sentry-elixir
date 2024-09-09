@@ -287,18 +287,24 @@ defmodule Sentry.Client do
   defp render_exception(%Interfaces.Exception{} = exception) do
     exception
     |> Map.from_struct()
+    |> render_stacktrace()
     |> update_if_present(:mechanism, &Map.from_struct/1)
-    |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
-      %{frames: Enum.map(frames, &Map.from_struct/1)}
-    end)
   end
 
   defp render_thread(%Interfaces.Thread{} = thread) do
     thread
     |> Map.from_struct()
-    |> update_if_present(:stacktrace, fn %Interfaces.Stacktrace{frames: frames} ->
-      %{frames: frames && Enum.map(frames, &Map.from_struct/1)}
-    end)
+    |> render_stacktrace()
+  end
+
+  defp render_stacktrace(map) do
+    case map do
+      %{stacktrace: %{frames: %Interfaces.Stacktrace{frames: [_ | _]} = stacktrace}} ->
+        %{stacktrace | frames: Enum.map(stacktrace.frames, &Map.from_struct/1)}
+
+      map_without_stacktrace ->
+        Map.delete(map_without_stacktrace, :stacktrace)
+    end
   end
 
   defp remove_nils(map) when is_map(map) do
@@ -356,8 +362,11 @@ defmodule Sentry.Client do
 
   defp update_if_present(map, key, fun) do
     case Map.pop(map, key) do
-      {nil, _} -> map
-      {value, map} -> Map.put(map, key, fun.(value))
+      {nil, _} ->
+        map
+
+      {value, map} ->
+        Map.put(map, key, fun.(value))
     end
   end
 
