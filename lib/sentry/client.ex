@@ -23,7 +23,6 @@ defmodule Sentry.Client do
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 
-
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | {:error, term()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
