@@ -14,79 +14,14 @@ defmodule Sentry.Client do
     Event,
     Interfaces,
     LoggerUtils,
-    Transport
+    Transport,
+    Options
   }
 
   require Logger
 
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
-
-  # The docs for the options here are generated in the Sentry module, so you can refer to types
-  # and functions and so on like if you were writing these docs in the Sentry module itself.
-  send_event_opts_schema = [
-    result: [
-      type: {:in, [:sync, :none]},
-      doc: """
-      Allows specifying how the result should be returned. The possible values are:
-
-      * `:sync` - Sentry will make an API call synchronously (including retries) and will
-        return `{:ok, event_id}` if successful.
-
-      * `:none` - Sentry will send the event in the background, in a *fire-and-forget*
-        fashion. The function will return `{:ok, ""}` regardless of whether the API
-        call ends up being successful or not.
-      """
-    ],
-    sample_rate: [
-      type: :float,
-      doc: """
-      Same as the global `:sample_rate` configuration, but applied only to
-      this call. See the module documentation. *Available since v10.0.0*.
-      """
-    ],
-    before_send: [
-      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
-      type_doc: "`t:before_send_event_callback/0`",
-      doc: """
-      Same as the global `:before_send` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-      """
-    ],
-    after_send_event: [
-      type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
-      type_doc: "`t:after_send_event_callback/1`",
-      doc: """
-      Same as the global `:after_send_event` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-      """
-    ],
-    client: [
-      type: :atom,
-      type_doc: "`t:module/0`",
-      doc: """
-      Same as the global `:client` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-      """
-    ],
-
-    # Private options, only used in testing.
-    request_retries: [
-      type: {:list, :integer},
-      doc: false
-    ]
-  ]
-
-  @send_event_opts_schema NimbleOptions.new!(send_event_opts_schema)
-  @send_event_opts_keys Keyword.keys(send_event_opts_schema)
-
-  @spec send_events_opts_schema() :: NimbleOptions.t()
-  def send_events_opts_schema, do: @send_event_opts_schema
-
-  @spec split_send_event_opts(keyword()) :: {keyword(), keyword()}
-  def split_send_event_opts(options) when is_list(options) do
-    Keyword.split(options, @send_event_opts_keys)
-  end
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | {:error, term()}
@@ -116,7 +51,7 @@ defmodule Sentry.Client do
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
-    opts = validate_options!(opts)
+    opts = NimbleOptions.validate!(opts, Options.send_event_schema())
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
@@ -158,11 +93,6 @@ defmodule Sentry.Client do
       {:error, reason} ->
         {:error, ClientError.new(reason)}
     end
-  end
-
-  @spec validate_options!(keyword()) :: keyword()
-  def validate_options!(opts) when is_list(opts) do
-    NimbleOptions.validate!(opts, @send_event_opts_schema)
   end
 
   defp sample_event(sample_rate) do

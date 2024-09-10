@@ -16,6 +16,9 @@ defmodule Sentry do
       [*Setup with Plug and Phoenix* guide](setup-with-plug-and-phoenix.html), and the
       `Sentry.PlugCapture` and `Sentry.PlugContext` modules.
 
+    * Through integrations for various ecosystem tools, like [Oban](oban-integration.html)
+      or [Quantum](quantum-integration.html).
+
   ## Usage
 
   Add the following to your production configuration:
@@ -65,9 +68,11 @@ defmodule Sentry do
 
   ## Configuration
 
-  You can configure Sentry through the application environment. Configure
-  the following keys under the `:sentry` application. For example, you can
-  do this in `config/config.exs`:
+  *See also the [official Sentry
+  documentation](https://docs.sentry.io/platforms/elixir/configuration/).*
+
+  You can configure Sentry through the application environment, under the `:sentry` application.
+  For example, you can do this in `config/config.exs`:
 
       # config/config.exs
       config :sentry,
@@ -174,7 +179,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils}
+  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options}
 
   require Logger
 
@@ -224,13 +229,15 @@ defmodule Sentry do
   and is not `nil`. See the [*Configuration* section](#module-configuration)
   in the module documentation.
 
-  The `opts` argument is passed as the second argument to `send_event/2`.
+  ## Options
+
+  #{Options.docs_for(:capture_exception)}
   """
-  @spec capture_exception(Exception.t(), keyword()) :: send_result
-  def capture_exception(exception, opts \\ []) do
+  @spec capture_exception(Exception.t(), keyword()) :: send_result()
+  def capture_exception(exception, options \\ []) do
     filter_module = Config.filter()
-    event_source = Keyword.get(opts, :event_source)
-    {send_opts, create_event_opts} = Client.split_send_event_opts(opts)
+    event_source = Keyword.get(options, :event_source)
+    {send_opts, create_event_opts} = Options.split_send_event_options(options)
 
     if filter_module.exclude_exception?(exception, event_source) do
       :excluded
@@ -263,7 +270,9 @@ defmodule Sentry do
   @doc """
   Reports a message to Sentry.
 
-  `opts` argument is passed as the second argument to `send_event/2`.
+  ## Options
+
+  #{Options.docs_for(:capture_message)}
 
   ## Interpolation (since v10.1.0)
 
@@ -289,7 +298,7 @@ defmodule Sentry do
     {send_opts, create_event_opts} =
       opts
       |> Keyword.put(:message, message)
-      |> Client.split_send_event_opts()
+      |> Options.split_send_event_options()
 
     event = Event.create_event(create_event_opts)
     send_event(event, send_opts)
@@ -302,9 +311,13 @@ defmodule Sentry do
   information about an exception, a message, or any other event that you want to
   report. To manually build events, see the functions in `Sentry.Event`.
 
+  This function doesn't build the event for you, it only *sends* it. Most of the time,
+  you'll want to use `capture_exception/2` or `capture_message/2`. To manually create events,
+  see `Sentry.Event.create_event/1`.
+
   ## Options
 
-  #{NimbleOptions.docs(Client.send_events_opts_schema())}
+  #{Options.docs_for(:send_event)}
 
   > #### Async Send {: .error}
   >
@@ -321,7 +334,7 @@ defmodule Sentry do
   > use cases, use `capture_exception/2` or `capture_message/2`.
   """
   @spec send_event(Event.t(), keyword()) :: send_result
-  def send_event(event, opts \\ []) do
+  def send_event(event, options \\ []) do
     # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
@@ -332,14 +345,16 @@ defmodule Sentry do
 
       # If we're in test mode, let's send the event down the pipeline anyway.
       Config.test_mode?() ->
-        Client.send_event(event, opts)
+        Client.send_event(event, options)
 
       !Config.dsn() ->
-        _opts = Client.validate_options!(opts)
+        # We still validate options even if we're not sending the event. This aims at catching
+        # configuration issues during development instead of only when deploying to production.
+        _options = NimbleOptions.validate!(options, Options.send_event_schema())
         :ignored
 
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
-        Client.send_event(event, opts)
+        Client.send_event(event, options)
 
       true ->
         :ignored
@@ -365,10 +380,6 @@ defmodule Sentry do
   > If the `:dsn` configuration is not set, this function won't report the check-in
   > to Sentry and will instead return `:ignored`. This behaviour is consistent with
   > the rest of the SDK (such as `capture_exception/2`).
-
-  ## Options
-
-  This functions supports all the options mentioned in `Sentry.CheckIn.new/1`.
 
   ## Examples
 
