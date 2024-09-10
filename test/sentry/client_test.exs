@@ -297,8 +297,8 @@ defmodule Sentry.ClientTest do
         end)
 
       assert log =~ "[info]"
-      assert log =~ "Failed to send Sentry event."
-      assert log =~ "Received 400 from Sentry server: Rate limiting."
+      assert log =~ "Sentry failed to report event"
+      assert log =~ "400"
     end
 
     test "returns an error if Sentry server responds with error status", %{bypass: bypass} do

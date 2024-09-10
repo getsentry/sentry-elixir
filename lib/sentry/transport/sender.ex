@@ -3,7 +3,7 @@ defmodule Sentry.Transport.Sender do
 
   use GenServer
 
-  alias Sentry.{Envelope, Event, LoggerUtils, Transport}
+  alias Sentry.{Envelope, Event, LoggerUtils, Transport, ClientError}
 
   require Logger
 
@@ -61,7 +61,7 @@ defmodule Sentry.Transport.Sender do
       message =
         case send_result do
           {:error, {:invalid_json, error}} ->
-            "Unable to encode JSON Sentry error - #{inspect(error)}"
+            "Failed to send Sentry event. Unable to encode JSON Sentry error - #{inspect(error)}"
 
           {:error, {:request_failure, last_error}} ->
             case last_error do
@@ -70,29 +70,20 @@ defmodule Sentry.Transport.Sender do
                 Exception.format(kind, data, stacktrace)
 
               _other ->
-                "Error in HTTP Request to Sentry - #{inspect(last_error)}"
+                "Failed to send Sentry event. Error in HTTP Request to Sentry - #{inspect(last_error)}"
             end
 
-          {:error, http_reponse} ->
-            {status, headers, _body} = http_reponse
+          {:error, {status, headers, body}} ->
+            {:error, ClientError.server_error(status, headers, body)}
 
-            error_header =
-              :proplists.get_value("X-Sentry-Error", headers, nil) ||
-                :proplists.get_value("x-sentry-error", headers, nil) || ""
-
-            if error_header != "" do
-              "Received #{status} from Sentry server: #{error_header}"
-            else
-              "Received #{status} from Sentry server"
-            end
+          {:error, reason} ->
+            {:error, ClientError.new(reason)}
 
           _ ->
             nil
         end
 
-      if message do
-        LoggerUtils.log(fn -> ["Failed to send Sentry event. ", message] end)
-      end
+      if message, do: LoggerUtils.log(fn -> [message] end)
     end
   end
 end
