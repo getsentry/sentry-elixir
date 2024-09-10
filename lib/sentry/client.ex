@@ -23,13 +23,6 @@ defmodule Sentry.Client do
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 
-  @spec send_events_opts_schema() :: NimbleOptions.t()
-  def send_events_opts_schema, do: Options.get_client_options()
-
-  @spec split_send_event_opts(keyword()) :: {keyword(), keyword()}
-  def split_send_event_opts(options) when is_list(options) do
-    Keyword.split(options, Options.get_client_options_keys())
-  end
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | {:error, term()}
@@ -59,7 +52,7 @@ defmodule Sentry.Client do
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
-    opts = Options.validate_options!(opts, Options.get_client_options())
+    opts = NimbleOptions.validate!(opts, Options.send_event_schema())
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)

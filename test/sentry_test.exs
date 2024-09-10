@@ -123,16 +123,16 @@ defmodule SentryTest do
     put_test_config(dsn: nil, test_mode: false)
 
     assert_raise NimbleOptions.ValidationError, fn ->
-      Sentry.Options.validate_options!(
+      NimbleOptions.validate!(
         [client: [bad_key: :nada]],
-        Sentry.Options.get_client_options()
+        Sentry.Options.send_event_schema()
       )
     end
 
     assert [client: :hackney] =
-             Sentry.Options.validate_options!(
+             NimbleOptions.validate!(
                [client: :hackney],
-               Sentry.Options.get_client_options()
+               Sentry.Options.send_event_schema()
              )
   end
 

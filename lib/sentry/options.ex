@@ -1,7 +1,7 @@
 defmodule Sentry.Options do
   @moduledoc false
 
-  send_event_opts_schema = [
+  @send_event_opts_schema_as_keyword [
     result: [
       type: {:in, [:sync, :none]},
       doc: """
@@ -32,7 +32,7 @@ defmodule Sentry.Options do
     ],
     after_send_event: [
       type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
-      type_doc: "`t:after_send_event_callback/1`",
+      type_doc: "`t:after_send_event_callback/0`",
       doc: """
       Same as the global `:after_send_event` configuration, but
       applied only to this call. See the module documentation. *Available since v10.0.0*.
@@ -54,15 +54,15 @@ defmodule Sentry.Options do
     ]
   ]
 
-  create_event_opts_schema = [
+  @create_event_opts_schema_as_keyword [
     exception: [
       type: {:custom, Sentry.Event, :__validate_exception__, [:exception]},
       type_doc: "`t:Exception.t/0`",
       doc: """
       This is the exception that gets reported in the
-      `:exception` field of `t:t/0`. The term passed here also ends up unchanged in the
-      `:original_exception` field of `t:t/0`. This option is **required** unless the
-      `:message` option is present. Not present by default.
+      `:exception` field of `t:Sentry.Event.t/0`. The term passed here also ends up unchanged in
+      the `:original_exception` field of `t:Sentry.Event.t/0`. This option is **required** unless
+      the `:message` option is present. Not present by default.
       """
     ],
     stacktrace: [
@@ -186,28 +186,46 @@ defmodule Sentry.Options do
     ]
   ]
 
-  @send_event_opts_schema NimbleOptions.new!(send_event_opts_schema)
-  @send_event_opts_keys Keyword.keys(send_event_opts_schema)
+  @send_event_opts_schema NimbleOptions.new!(@send_event_opts_schema_as_keyword)
+  @send_event_opts_keys Keyword.keys(@send_event_opts_schema_as_keyword)
 
-  @create_event_opts_schema NimbleOptions.new!(create_event_opts_schema)
+  @create_event_opts_schema NimbleOptions.new!(@create_event_opts_schema_as_keyword)
 
-  @spec get_client_options() :: NimbleOptions.t()
-  def get_client_options do
+  @spec send_event_schema() :: NimbleOptions.t()
+  def send_event_schema do
     @send_event_opts_schema
   end
 
-  @spec get_client_options_keys() :: list(atom())
-  def get_client_options_keys do
-    @send_event_opts_keys
+  @spec split_send_event_options(keyword()) :: {keyword(), keyword()}
+  def split_send_event_options(options) do
+    Keyword.split(options, @send_event_opts_keys)
   end
 
-  @spec get_event_options() :: NimbleOptions.t()
-  def get_event_options do
+  @spec create_event_schema() :: NimbleOptions.t()
+  def create_event_schema do
     @create_event_opts_schema
   end
 
-  @spec validate_options!(keyword(), NimbleOptions.t()) :: keyword()
-  def validate_options!(opts, schema) when is_list(opts) do
-    NimbleOptions.validate!(opts, schema)
+  @spec docs_for(atom()) :: String.t()
+  def docs_for(type)
+
+  def docs_for(:capture_message) do
+    @send_event_opts_schema_as_keyword
+    |> Keyword.merge(@create_event_opts_schema_as_keyword)
+    |> Keyword.drop([:message])
+    |> Enum.sort_by(fn {key, _val} -> key end)
+    |> NimbleOptions.docs()
+  end
+
+  def docs_for(:capture_exception) do
+    @send_event_opts_schema_as_keyword
+    |> Keyword.merge(@create_event_opts_schema_as_keyword)
+    |> Keyword.drop([:exception])
+    |> Enum.sort_by(fn {key, _val} -> key end)
+    |> NimbleOptions.docs()
+  end
+
+  def docs_for(:send_event) do
+    NimbleOptions.docs(@send_event_opts_schema)
   end
 end

@@ -147,11 +147,10 @@ defmodule Sentry.Event do
     |> Map.drop([:original_exception, :source, :attachments, :integration_meta])
   end
 
-  @create_event_opts_schema Options.get_event_options()
+  @create_event_opts_schema Options.create_event_schema()
 
   @doc """
-  Creates an event struct out of collected context and options. See the full list of options in
-  the `Sentry.Options` module.
+  Creates an event struct out of collected context and options.
 
   > #### Merging Options with Context and Config {: .info}
   >
@@ -184,7 +183,7 @@ defmodule Sentry.Event do
   @spec create_event([option]) :: t()
         when option: unquote(NimbleOptions.option_typespec(@create_event_opts_schema))
   def create_event(opts) when is_list(opts) do
-    opts = Options.validate_options!(opts, @create_event_opts_schema)
+    opts = NimbleOptions.validate!(opts, @create_event_opts_schema)
 
     timestamp =
       DateTime.utc_now()
@@ -330,12 +329,11 @@ defmodule Sentry.Event do
   @doc """
   Transforms an exception to a Sentry event.
 
-  This essentially defers to `create_event/1`, inferring some options from
-  the given `exception`.
+  This essentially defers to `create_event/1`.
 
   ## Options
 
-  This function takes the same options as `create_event/1`.
+  This function takes the same options as `create_event/1`, except for the `:exception` option.
   """
   @spec transform_exception(Exception.t(), keyword()) :: t()
   def transform_exception(exception, opts) when is_exception(exception) and is_list(opts) do
