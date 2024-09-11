@@ -133,7 +133,7 @@ Thanks to everyone who has contributed to this project so far.
 
 ## Getting Help/Support
 
-If you need help setting up or configuring the Python SDK (or anything else in the Sentry universe) please head over to the [Sentry Community on Discord](https://discord.com/invite/Ww9hbqr). There is a ton of great people in our Discord community ready to help you!
+If you need help setting up or configuring the Elixir SDK (or anything else in the Sentry universe) please head over to the [Sentry Community on Discord](https://discord.com/invite/Ww9hbqr). There is a ton of great people in our Discord community ready to help you!
 
 ## Resources
 
