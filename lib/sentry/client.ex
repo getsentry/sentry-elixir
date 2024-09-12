@@ -300,41 +300,40 @@ defmodule Sentry.Client do
     end
   end
 
-  defp maybe_log_send_result(_send_result, %Event{source: :logger}) do
+  def maybe_log_send_result(_send_result, %Event{source: :logger}) do
     :ok
   end
 
-  defp maybe_log_send_result(send_result, _other) do
-    message =
-      case send_result do
-        {:error, {:invalid_json, error}} ->
-          "Unable to encode JSON Sentry error - #{inspect(error)}"
+  def maybe_log_send_result(send_result, events) do
+    if is_list(events) && Enum.any?(events, &(&1.source == :logger)) do
+      :ok
+    else
+      message =
+        case send_result do
+          {:error, {:invalid_json, error}} ->
+            "Failed to send Sentry event. Unable to encode JSON Sentry error - #{inspect(error)}"
 
-        {:error, {:request_failure, last_error}} ->
-          case last_error do
-            {kind, data, stacktrace}
-            when kind in [:exit, :throw, :error] and is_list(stacktrace) ->
-              Exception.format(kind, data, stacktrace)
+          {:error, {:request_failure, last_error}} ->
+            case last_error do
+              {kind, data, stacktrace}
+              when kind in [:exit, :throw, :error] and is_list(stacktrace) ->
+                Exception.format(kind, data, stacktrace)
 
-            _other ->
-              "Error in HTTP Request to Sentry - #{inspect(last_error)}"
-          end
+              _other ->
+                "Failed to send Sentry event. Error in HTTP Request to Sentry - #{inspect(last_error)}"
+            end
 
-        {:error, {status, headers, _body}} ->
-          error_header =
-            :proplists.get_value("X-Sentry-Error", headers, nil) ||
-              :proplists.get_value("x-sentry-error", headers, nil) || ""
+          {:error, {status, headers, body}} ->
+            ClientError.server_error(status, headers, body) |> ClientError.message()
 
-          if error_header != "" do
-            "Received #{status} from Sentry server: #{error_header}"
-          else
-            "Received #{status} from Sentry server"
-          end
+          {:error, reason} ->
+            ClientError.new(reason) |> ClientError.message()
 
-        {:ok, _} ->
-          nil
-      end
+          {:ok, _} ->
+            nil
+        end
 
-    if message, do: LoggerUtils.log(fn -> ["Failed to send Sentry event. ", message] end)
+      if message, do: LoggerUtils.log(fn -> [message] end)
+    end
   end
 end
