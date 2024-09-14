@@ -304,6 +304,11 @@ defmodule Sentry.Client do
     :ok
   end
 
+  @spec maybe_log_send_result(
+          {:error, any()} | {:ok, binary()},
+          Sentry.CheckIn.t() | Event.t() | list(Event.t())
+        ) ::
+          :ok | nil
   def maybe_log_send_result(send_result, events) do
     if is_list(events) && Enum.any?(events, &(&1.source == :logger)) do
       :ok
