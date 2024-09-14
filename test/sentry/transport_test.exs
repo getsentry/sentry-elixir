@@ -184,5 +184,24 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}
     end
+
+    test "fails when it exhausts retries and Sentry replies with 429", %{bypass: bypass} do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, {:request, ref})
+
+        conn
+        |> Plug.Conn.put_resp_header("retry-after", "1")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      assert {:error, :too_many_retries} =
+               Transport.post_envelope(envelope, HackneyClient, _retries = [])
+
+      assert_received {:request, ^ref}
+    end
   end
 end
