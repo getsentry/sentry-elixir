@@ -58,7 +58,7 @@ defmodule Sentry.Transport do
   end
 
   defp request(client, endpoint, headers, body) do
-    with {:ok, 200, _headers, body} <- client.post(endpoint, headers, body),
+    with {:ok, 200, _headers, body} <- post_validation(client, endpoint, headers, body),
          {:ok, json} <- Config.json_library().decode(body) do
       {:ok, Map.get(json, "id")}
     else
@@ -84,6 +84,22 @@ defmodule Sentry.Transport do
     end
   catch
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
+  end
+
+  defp post_validation(client, endpoint, headers, body) do
+    case client.post(endpoint, headers, body) do
+      {:ok, status, resp_headers, resp_body} ->
+        cond do
+          !is_list(resp_headers) ->
+            {:error, :invalid_headers}
+
+          true ->
+            {:ok, status, resp_headers, resp_body}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp get_endpoint_and_headers do
