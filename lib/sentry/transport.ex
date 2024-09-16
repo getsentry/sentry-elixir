@@ -94,8 +94,8 @@ defmodule Sentry.Transport do
              is_binary(resp_body) ->
         {:ok, status, resp_headers, resp_body}
 
-      {:ok, _status, _resp_headers, _resp_body} ->
-        {:error, :invalid_http_response}
+      {:ok, status, resp_headers, resp_body} ->
+        {:error, {:malformed_http_client_response, status, resp_headers, resp_body}}
 
       {:error, reason} ->
         {:error, reason}
