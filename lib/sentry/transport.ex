@@ -58,7 +58,8 @@ defmodule Sentry.Transport do
   end
 
   defp request(client, endpoint, headers, body) do
-    with {:ok, 200, _headers, body} <- client.post(endpoint, headers, body),
+    with {:ok, 200, _headers, body} <-
+           client_post_and_validate_return_value(client, endpoint, headers, body),
          {:ok, json} <- Config.json_library().decode(body) do
       {:ok, Map.get(json, "id")}
     else
@@ -84,6 +85,21 @@ defmodule Sentry.Transport do
     end
   catch
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
+  end
+
+  defp client_post_and_validate_return_value(client, endpoint, headers, body) do
+    case client.post(endpoint, headers, body) do
+      {:ok, status, resp_headers, resp_body}
+      when is_integer(status) and status in 200..599 and is_list(resp_headers) and
+             is_binary(resp_body) ->
+        {:ok, status, resp_headers, resp_body}
+
+      {:ok, status, resp_headers, resp_body} ->
+        {:error, {:malformed_http_client_response, status, resp_headers, resp_body}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp get_endpoint_and_headers do

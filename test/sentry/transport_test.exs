@@ -36,6 +36,21 @@ defmodule Sentry.TransportTest do
       assert {:ok, "123"} = Transport.post_envelope(envelope, HackneyClient)
     end
 
+    defmodule InvalidHTTPClient do
+      def post(_endpoint, _headers, _body) do
+        {:ok, "not an integer", :badarg, %{}}
+      end
+    end
+
+    test "returns an error with an invalid response from a POST request" do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello 1"))
+
+      assert {:error,
+              {:request_failure,
+               {:malformed_http_client_response, "not an integer", :badarg, %{}}}} =
+               Transport.post_envelope(envelope, InvalidHTTPClient, _retries = [])
+    end
+
     test "returns the HTTP client's error if the HTTP client returns one", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
