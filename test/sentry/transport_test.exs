@@ -38,14 +38,14 @@ defmodule Sentry.TransportTest do
 
     defmodule InvalidHTTPClient do
       def post(_endpoint, _headers, _body) do
-        {:ok, 200, :badarg, ~s<{"id":"123"}>}
+        {:ok, "not an integer", :badarg, %{}}
       end
     end
 
-    test "sends a POST request with invalid headers" do
+    test "returns an error with an invalid response from a POST request" do
       envelope = Envelope.from_event(Event.create_event(message: "Hello 1"))
 
-      assert {:error, {:request_failure, :invalid_headers}} =
+      assert {:error, {:request_failure, :invalid_http_response}} =
                Transport.post_envelope(envelope, InvalidHTTPClient, _retries = [])
     end
 
