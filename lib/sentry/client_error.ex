@@ -70,11 +70,18 @@ defmodule Sentry.ClientError do
   end
 
   defp format(:too_many_retries) do
-    "Sentry responded with status 429 - Too Many Requests"
+    "Sentry responded with status 429 - Too Many Requests and the SDK exhausted the configured retries"
   end
 
   defp format({:invalid_json, reason}) do
-    "the Sentry SDK could not encode the event to JSON: #{Exception.message(reason)}"
+    formatted =
+      if is_exception(reason) do
+        Exception.message(reason)
+      else
+        inspect(reason)
+      end
+
+    "the Sentry SDK could not encode the event to JSON: #{formatted}"
   end
 
   defp format({:request_failure, reason}) do

@@ -43,7 +43,7 @@ defmodule Sentry.Transport.Sender do
   def handle_cast({:send, client, %Event{} = event}, %__MODULE__{} = state) do
     event
     |> Envelope.from_event()
-    |> Transport.post_envelope(client)
+    |> Transport.encode_and_post_envelope(client)
     |> Client.maybe_log_send_result([event])
 
     # We sent an event, so we can decrease the number of queued events.

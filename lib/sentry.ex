@@ -404,7 +404,7 @@ defmodule Sentry do
   """
   @doc since: "10.2.0"
   @spec capture_check_in(keyword()) ::
-          {:ok, check_in_id :: String.t()} | :ignored | {:error, term()}
+          {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
   def capture_check_in(options) when is_list(options) do
     if Config.dsn() do
       options

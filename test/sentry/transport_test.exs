@@ -3,9 +3,9 @@ defmodule Sentry.TransportTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Envelope, Event, HackneyClient, Transport}
+  alias Sentry.{ClientError, Envelope, Event, HackneyClient, Transport}
 
-  describe "post_envelope/2" do
+  describe "encode_and_post_envelope/2" do
     setup do
       bypass = Bypass.open()
       put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
@@ -33,22 +33,35 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
       end)
 
-      assert {:ok, "123"} = Transport.post_envelope(envelope, HackneyClient)
+      assert {:ok, "123"} = Transport.encode_and_post_envelope(envelope, HackneyClient)
     end
 
-    defmodule InvalidHTTPClient do
-      def post(_endpoint, _headers, _body) do
-        {:ok, "not an integer", :badarg, %{}}
+    test "returns an error if the HTTP client returns a badly-typed response" do
+      defmodule InvalidHTTPClient do
+        def post(_endpoint, _headers, _body) do
+          Process.get(:invalid_http_return_value) ||
+            raise "missing :invalid_http_return_value from pdict"
+        end
       end
-    end
 
-    test "returns an error with an invalid response from a POST request" do
       envelope = Envelope.from_event(Event.create_event(message: "Hello 1"))
 
-      assert {:error,
-              {:request_failure,
-               {:malformed_http_client_response, "not an integer", :badarg, %{}}}} =
-               Transport.post_envelope(envelope, InvalidHTTPClient, _retries = [])
+      for {:ok, status, headers, body} = invalid_return_value <- [
+            {:ok, 10000, [], ""},
+            {:ok, 200, %{}, ""},
+            {:ok, 200, [], :not_a_binary}
+          ] do
+        Process.put(:invalid_http_return_value, invalid_return_value)
+
+        assert {:request_failure, {:malformed_http_client_response, ^status, ^headers, ^body}} =
+                 error(fn ->
+                   Transport.encode_and_post_envelope(envelope, InvalidHTTPClient, _retries = [])
+                 end)
+      end
+    after
+      Process.delete(:invalid_http_return_value)
+      :code.delete(InvalidHTTPClient)
+      :code.purge(InvalidHTTPClient)
     end
 
     test "returns the HTTP client's error if the HTTP client returns one", %{bypass: bypass} do
@@ -56,8 +69,10 @@ defmodule Sentry.TransportTest do
 
       Bypass.down(bypass)
 
-      assert {:error, {:request_failure, :econnrefused}} =
-               Transport.post_envelope(envelope, HackneyClient, _retries = [])
+      assert {:request_failure, :econnrefused} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+               end)
     end
 
     test "returns an error if the response from Sentry is not 200", %{bypass: bypass} do
@@ -69,10 +84,15 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(400, ~s<{}>)
       end)
 
-      {:error, {_status, headers, _body}} =
-        Transport.post_envelope(envelope, HackneyClient, _retries = [])
+      {:error, %ClientError{} = error} =
+        Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
 
+      assert error.reason == :server_error
+      assert {400, headers, "{}"} = error.http_response
       assert :proplists.get_value("x-sentry-error", headers, nil) == "some error"
+
+      assert Exception.message(error) =~
+               "the Sentry server responded with an error, the details are below."
     end
 
     test "returns an error if the HTTP client raises an error when making the request",
@@ -85,10 +105,10 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:error, %RuntimeError{} = exception, _stacktrace}} =
-               Transport.post_envelope(envelope, RaisingHTTPClient, _retries = [])
-
-      assert exception.message == "I'm a really bad HTTP client"
+      assert {:error, %RuntimeError{message: "I'm a really bad HTTP client"}, _stacktrace} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, RaisingHTTPClient, _retries = [])
+               end)
     after
       :code.delete(RaisingHTTPClient)
       :code.purge(RaisingHTTPClient)
@@ -104,8 +124,10 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:exit, :through_the_window, _stacktrace}} =
-               Transport.post_envelope(envelope, ExitingHTTPClient, _retries = [])
+      assert {:exit, :through_the_window, _stacktrace} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, ExitingHTTPClient, _retries = [])
+               end)
     after
       :code.delete(ExitingHTTPClient)
       :code.purge(ExitingHTTPClient)
@@ -121,8 +143,10 @@ defmodule Sentry.TransportTest do
         end
       end
 
-      assert {:error, {:throw, :catch_me_if_you_can, _stacktrace}} =
-               Transport.post_envelope(envelope, ThrowingHTTPClient, _retries = [])
+      assert {:throw, :catch_me_if_you_can, _stacktrace} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, ThrowingHTTPClient, _retries = [])
+               end)
     after
       :code.delete(ThrowingHTTPClient)
       :code.purge(ThrowingHTTPClient)
@@ -145,10 +169,10 @@ defmodule Sentry.TransportTest do
 
       put_test_config(json_library: CrashingJSONLibrary)
 
-      assert {:error, {:error, %RuntimeError{} = exception, _stacktrace}} =
-               Transport.post_envelope(envelope, HackneyClient, _retries = [])
-
-      assert exception.message == "I'm a really bad JSON library"
+      assert {:error, %RuntimeError{message: "I'm a really bad JSON library"}, _stacktrace} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+               end)
     after
       :code.delete(CrashingJSONLibrary)
       :code.purge(CrashingJSONLibrary)
@@ -165,8 +189,10 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<invalid JSON>)
       end)
 
-      assert {:error, {:request_failure, %Jason.DecodeError{}}} =
-               Transport.post_envelope(envelope, HackneyClient, _retries = [0])
+      assert {:request_failure, %Jason.DecodeError{}} =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [0])
+               end)
 
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}
@@ -191,7 +217,8 @@ defmodule Sentry.TransportTest do
         end
       end)
 
-      assert {:ok, "123"} = Transport.post_envelope(envelope, HackneyClient, _retries = [10, 25])
+      assert {:ok, "123"} =
+               Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [10, 25])
 
       assert System.system_time(:millisecond) - start_time >= 35
 
@@ -213,10 +240,18 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(429, ~s<{}>)
       end)
 
-      assert {:error, :too_many_retries} =
-               Transport.post_envelope(envelope, HackneyClient, _retries = [])
+      assert :too_many_retries =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+               end)
 
       assert_received {:request, ^ref}
     end
+  end
+
+  defp error(fun) do
+    assert {:error, %ClientError{} = error} = fun.()
+    assert is_binary(Exception.message(error))
+    error.reason
   end
 end
