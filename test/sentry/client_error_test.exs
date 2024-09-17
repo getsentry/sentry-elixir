@@ -5,7 +5,7 @@ defmodule Sentry.ClientErrorTest do
   describe "c:Exception.message/1" do
     test "with an atom reason" do
       assert message_for_reason(:too_many_retries) ==
-               "Sentry responded with status 429 - Too Many Requests"
+               "Sentry responded with status 429 - Too Many Requests and the SDK exhausted the configured retries"
     end
 
     test "with {:invalid_json, _} reason" do

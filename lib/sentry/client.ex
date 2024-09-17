@@ -24,7 +24,7 @@ defmodule Sentry.Client do
   @max_message_length 8_192
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
-          {:ok, check_in_id :: String.t()} | {:error, term()}
+          {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
@@ -37,7 +37,7 @@ defmodule Sentry.Client do
     send_result =
       check_in
       |> Envelope.from_check_in()
-      |> Transport.post_envelope(client, request_retries)
+      |> Transport.encode_and_post_envelope(client, request_retries)
 
     _ = maybe_log_send_result(send_result, check_in)
     send_result
@@ -87,11 +87,8 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
 
-      {:error, {status, headers, body}} ->
-        {:error, ClientError.server_error(status, headers, body)}
-
-      {:error, reason} ->
-        {:error, ClientError.new(reason)}
+      {:error, %ClientError{} = error} ->
+        {:error, error}
     end
   end
 
@@ -176,7 +173,7 @@ defmodule Sentry.Client do
         send_result =
           event
           |> Envelope.from_event()
-          |> Transport.post_envelope(client, request_retries)
+          |> Transport.encode_and_post_envelope(client, request_retries)
 
         _ = maybe_log_send_result(send_result, event)
         send_result
@@ -315,24 +312,8 @@ defmodule Sentry.Client do
     else
       message =
         case send_result do
-          {:error, {:invalid_json, error}} ->
-            "Failed to send Sentry event. Unable to encode JSON Sentry error - #{inspect(error)}"
-
-          {:error, {:request_failure, last_error}} ->
-            case last_error do
-              {kind, data, stacktrace}
-              when kind in [:exit, :throw, :error] and is_list(stacktrace) ->
-                Exception.format(kind, data, stacktrace)
-
-              _other ->
-                "Failed to send Sentry event. Error in HTTP Request to Sentry - #{inspect(last_error)}"
-            end
-
-          {:error, {status, headers, body}} ->
-            ClientError.server_error(status, headers, body) |> ClientError.message()
-
-          {:error, reason} ->
-            ClientError.new(reason) |> ClientError.message()
+          {:error, %ClientError{} = error} ->
+            "Failed to send Sentry event. #{Exception.message(error)}"
 
           {:ok, _} ->
             nil

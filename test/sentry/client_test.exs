@@ -342,7 +342,7 @@ defmodule Sentry.ClientTest do
 
       assert capture_log(fn ->
                Client.send_event(event, result: :sync)
-             end) =~ "Failed to send Sentry event. Unable to encode JSON"
+             end) =~ "the Sentry SDK could not encode the event to JSON: :im_just_bad"
     end
 
     test "uses the async sender pool when :result is :none", %{bypass: bypass} do

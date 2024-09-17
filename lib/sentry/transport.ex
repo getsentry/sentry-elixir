@@ -1,8 +1,9 @@
 defmodule Sentry.Transport do
   @moduledoc false
 
-  # This module is exclusively responsible for POSTing envelopes to Sentry.
+  # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
+  alias Sentry.ClientError
   alias Sentry.Config
   alias Sentry.Envelope
 
@@ -15,10 +16,16 @@ defmodule Sentry.Transport do
     @default_retries
   end
 
-  # The "retries" parameter is there for better testing.
-  @spec post_envelope(Envelope.t(), module(), [non_neg_integer()]) ::
-          {:ok, envelope_id :: String.t()} | {:error, term()}
-  def post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
+  @doc """
+  Encodes the given envelope and POSTs it to Sentry.
+
+
+  The `retries` parameter is there for better testing. This function also logs
+  a warning if there is an error encoding or posting the envelope.
+  """
+  @spec encode_and_post_envelope(Envelope.t(), module(), [non_neg_integer()]) ::
+          {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
+  def encode_and_post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
     case Envelope.to_binary(envelope) do
       {:ok, body} ->
@@ -26,7 +33,7 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(client, endpoint, headers, body, retries)
 
       {:error, reason} ->
-        {:error, {:invalid_json, reason}}
+        {:error, ClientError.new({:invalid_json, reason})}
     end
   end
 
@@ -42,18 +49,18 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
 
       {:retry_after, _delay_ms} ->
-        {:error, :too_many_retries}
+        {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
         post_envelope_with_retries(client, endpoint, headers, payload, retries_left)
 
-      {:error, {status, headers, body}} ->
-        {:error, {status, headers, body}}
+      {:error, {:http, {status, headers, body}}} ->
+        {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
-        {:error, {:request_failure, reason}}
+        {:error, ClientError.new(reason)}
     end
   end
 
@@ -78,10 +85,10 @@ defmodule Sentry.Transport do
         {:retry_after, delay_ms}
 
       {:ok, status, headers, body} ->
-        {:error, {status, headers, body}}
+        {:error, {:http, {status, headers, body}}}
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, {:request_failure, reason}}
     end
   catch
     kind, data -> {:error, {kind, data, __STACKTRACE__}}
