@@ -13,6 +13,7 @@ defmodule Sentry.Mixfile do
       package: package(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_paths: test_paths(System.get_env("SENTRY_INTEGRATION")),
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :extra_return],
         plt_file: {:no_warn, "plts/dialyzer.plt"},
@@ -22,7 +23,8 @@ defmodule Sentry.Mixfile do
       ],
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
-        "coveralls.html": :test
+        "coveralls.html": :test,
+        "test.integrations": :test
       ],
       name: "Sentry",
       docs: [
@@ -83,6 +85,9 @@ defmodule Sentry.Mixfile do
   defp elixirc_paths(:test), do: ["test/support"] ++ elixirc_paths(:dev)
   defp elixirc_paths(_other), do: ["lib"]
 
+  defp test_paths(nil), do: ["test"]
+  defp test_paths(integration), do: ["test_integrations/#{integration}/test"]
+
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
@@ -123,6 +128,54 @@ defmodule Sentry.Mixfile do
   end
 
   defp aliases do
-    [test: ["sentry.package_source_code", "test"]]
+    [
+      test: ["sentry.package_source_code", "test", &run_integration_tests_if_supported/1],
+      "test.integrations": &test_integrations/1
+    ]
+  end
+
+  defp run_integration_tests_if_supported(_args) do
+    if Version.match?(System.version(), ">= 1.16.0") do
+      Mix.Task.run("test.integrations")
+    else
+      IO.puts("Skipping integration tests for Elixir versions < 1.16")
+    end
+  end
+
+  @integrations [
+    "phoenix_app"
+  ]
+
+  defp test_integrations(args) do
+    if Version.match?(System.version(), ">= 1.16.0") do
+      for integration <- @integrations do
+        run_integration_tests(integration, args)
+      end
+    else
+      IO.puts("Skipping integration tests for Elixir versions < 1.16")
+    end
+  end
+
+  defp run_integration_tests(integration, args) do
+    header = if IO.ANSI.enabled?(), do: IO.ANSI.bright() <> IO.ANSI.cyan(), else: ""
+    reset = if IO.ANSI.enabled?(), do: IO.ANSI.reset(), else: ""
+
+    IO.puts("\n#{header}==> Running tests for integration: #{integration}#{reset}")
+
+    integration_dir = Path.join("test_integrations", integration)
+
+    {_, status} =
+      System.cmd("sh", ["-c", "cd #{integration_dir} && mix test #{Enum.join(args, " ")}"],
+        into: IO.binstream(:stdio, :line)
+      )
+
+    if status > 0 do
+      error = if IO.ANSI.enabled?(), do: IO.ANSI.red(), else: ""
+      IO.puts("#{error}Integration tests for #{integration} failed#{reset}")
+      System.at_exit(fn _ -> exit({:shutdown, 1}) end)
+    else
+      success = if IO.ANSI.enabled?(), do: IO.ANSI.green(), else: ""
+      IO.puts("#{success}Integration tests for #{integration} passed#{reset}")
+    end
   end
 end
