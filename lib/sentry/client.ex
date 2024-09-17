@@ -24,7 +24,7 @@ defmodule Sentry.Client do
   @max_message_length 8_192
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
-          {:ok, check_in_id :: String.t()} | {:error, Client.t()}
+          {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
