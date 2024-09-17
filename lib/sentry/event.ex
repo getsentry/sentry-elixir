@@ -78,6 +78,7 @@ defmodule Sentry.Event do
           sdk: Interfaces.SDK.t() | nil,
           threads: [Interfaces.Thread.t()] | nil,
           user: Interfaces.user() | nil,
+          client_reports: Interfaces.ClientReport.t(),
 
           # Non-payload fields.
           source: atom(),
@@ -127,7 +128,7 @@ defmodule Sentry.Event do
     threads: nil,
     user: %{},
     integration_meta: %{},
-
+    client_reports: %Interfaces.ClientReport{},
     # "Culprit" is not documented anymore and we should move to transactions at some point.
     # https://forum.sentry.io/t/culprit-deprecated-in-favor-of-what/4871/9
     culprit: nil,

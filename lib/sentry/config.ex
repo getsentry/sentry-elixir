@@ -147,6 +147,14 @@ defmodule Sentry.Config do
       [`:jason`](https://hex.pm/packages/jason) as a dependency of your application.
       """
     ],
+    send_client_reports: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Send SDK Client Reports, this option defaults to `true`
+      *Available since v10.0.0*.
+      """
+    ],
     server_name: [
       type: :string,
       doc: """
@@ -561,6 +569,9 @@ defmodule Sentry.Config do
 
   @spec dedup_events?() :: boolean()
   def dedup_events?, do: fetch!(:dedup_events)
+
+  @spec send_client_reports?() :: boolean()
+  def send_client_reports?, do: fetch!(:send_client_reports)
 
   @spec test_mode?() :: boolean()
   def test_mode?, do: fetch!(:test_mode)
