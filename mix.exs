@@ -64,7 +64,7 @@ defmodule Sentry.Mixfile do
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, :telemetry]],
-      aliases: [aliases()]
+      aliases: aliases()
     ]
   end
 
