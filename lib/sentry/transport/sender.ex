@@ -41,9 +41,10 @@ defmodule Sentry.Transport.Sender do
 
   @impl GenServer
   def handle_cast({:send, client, %Event{} = event}, %__MODULE__{} = state) do
-    event
-    |> Envelope.from_event()
-    |> Transport.encode_and_post_envelope(client)
+    _ =
+      event
+      |> Envelope.from_event()
+      |> Transport.encode_and_post_envelope(client)
 
     # We sent an event, so we can decrease the number of queued events.
     Transport.SenderPool.decrease_queued_events_counter()

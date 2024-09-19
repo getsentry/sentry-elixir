@@ -3,7 +3,6 @@ defmodule Sentry.Transport do
 
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
-  require Logger
   alias Sentry.{ClientError, Config, Envelope, LoggerUtils}
 
   @default_retries [1000, 2000, 4000, 8000]
@@ -148,11 +147,7 @@ defmodule Sentry.Transport do
             nil
         end
 
-      if message,
-        do:
-          LoggerUtils.log(fn ->
-            [message]
-          end)
+      if message, do: LoggerUtils.log(fn -> [message] end)
     end
   end
 end
