@@ -26,7 +26,7 @@ defmodule Sentry.Transport do
           {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
   def encode_and_post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
-    res =
+    result =
       case Envelope.to_binary(envelope) do
         {:ok, body} ->
           {endpoint, headers} = get_endpoint_and_headers()
@@ -36,8 +36,9 @@ defmodule Sentry.Transport do
           {:error, ClientError.new({:invalid_json, reason})}
       end
 
-    _ = maybe_log_send_result(res, envelope.items)
-    res
+    _ = maybe_log_send_result(result, envelope.items)
+
+    result
   end
 
   defp post_envelope_with_retries(client, endpoint, headers, payload, retries_left) do
@@ -135,7 +136,7 @@ defmodule Sentry.Transport do
   end
 
   def maybe_log_send_result(send_result, events) do
-    if is_list(events) && Enum.any?(events, &(&1.source == :logger)) do
+    if Enum.any?(events, &(Map.has_key?(&1, :source) && &1.source == :logger)) do
       :ok
     else
       message =
