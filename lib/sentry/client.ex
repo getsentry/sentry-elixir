@@ -39,7 +39,6 @@ defmodule Sentry.Client do
       |> Envelope.from_check_in()
       |> Transport.encode_and_post_envelope(client, request_retries)
 
-    _ = maybe_log_send_result(send_result, check_in)
     send_result
   end
 
@@ -175,7 +174,6 @@ defmodule Sentry.Client do
           |> Envelope.from_event()
           |> Transport.encode_and_post_envelope(client, request_retries)
 
-        _ = maybe_log_send_result(send_result, event)
         send_result
     end
   end
@@ -294,32 +292,6 @@ defmodule Sentry.Client do
     case Map.pop(map, key) do
       {nil, _} -> map
       {value, map} -> Map.put(map, key, fun.(value))
-    end
-  end
-
-  def maybe_log_send_result(_send_result, %Event{source: :logger}) do
-    :ok
-  end
-
-  @spec maybe_log_send_result(
-          {:error, any()} | {:ok, binary()},
-          Sentry.CheckIn.t() | Event.t() | list(Event.t())
-        ) ::
-          :ok | nil
-  def maybe_log_send_result(send_result, events) do
-    if is_list(events) && Enum.any?(events, &(&1.source == :logger)) do
-      :ok
-    else
-      message =
-        case send_result do
-          {:error, %ClientError{} = error} ->
-            "Failed to send Sentry event. #{Exception.message(error)}"
-
-          {:ok, _} ->
-            nil
-        end
-
-      if message, do: LoggerUtils.log(fn -> [message] end)
     end
   end
 end

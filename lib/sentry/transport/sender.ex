@@ -3,7 +3,7 @@ defmodule Sentry.Transport.Sender do
 
   use GenServer
 
-  alias Sentry.{Envelope, Event, Transport, Client}
+  alias Sentry.{Envelope, Event, Transport}
 
   require Logger
 
@@ -44,7 +44,6 @@ defmodule Sentry.Transport.Sender do
     event
     |> Envelope.from_event()
     |> Transport.encode_and_post_envelope(client)
-    |> Client.maybe_log_send_result([event])
 
     # We sent an event, so we can decrease the number of queued events.
     Transport.SenderPool.decrease_queued_events_counter()
