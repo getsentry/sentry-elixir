@@ -134,7 +134,7 @@ defmodule Sentry.Transport do
     {dsn.endpoint_uri, auth_headers}
   end
 
-  def maybe_log_send_result(send_result, events) do
+  defp maybe_log_send_result(send_result, events) do
     if Enum.any?(events, &(Map.has_key?(&1, :source) && &1.source == :logger)) do
       :ok
     else
