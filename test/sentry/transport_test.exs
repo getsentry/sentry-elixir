@@ -2,6 +2,7 @@ defmodule Sentry.TransportTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
+  import ExUnit.CaptureLog
 
   alias Sentry.{ClientError, Envelope, Event, HackneyClient, Transport}
 
@@ -245,6 +246,12 @@ defmodule Sentry.TransportTest do
                  Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
                end)
 
+      log =
+        capture_log(fn ->
+          Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+        end)
+
+      assert log =~ "[warning]"
       assert_received {:request, ^ref}
     end
   end
