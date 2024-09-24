@@ -73,3 +73,14 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+dsn =
+  if System.get_env("SENTRY_LOCAL"),
+    do: System.get_env("SENTRY_DSN_LOCAL"),
+    else: System.get_env("SENTRY_DSN")
+
+config :sentry,
+  dsn: dsn,
+  environment_name: :dev,
+  enable_source_code_context: true,
+  send_result: :sync
