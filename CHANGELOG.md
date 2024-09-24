@@ -1,5 +1,20 @@
 # Changelog
 
+## 10.7.2
+
+### Various fixes & improvements
+
+- Refactor maybe_log_send_result/2 (#799) by @savhappy
+- Fix our custom test task (#798) by @solnic
+- Always return Sentry.ClientError when possible (#795) by @whatyouhide
+- Validate that custom HTTP clients return correct stuff (#794) by @savhappy
+- Add specs and test for :too_many_retries (#793) by @savhappy
+- Update maybe_log_send_result/2 with proper error (#789) by @savhappy
+- Fix a typo in the README (#791) by @BobbyMcWho
+- Slightly re-haul how we document options (#778) by @savhappy
+- Actually fix empty frames in stacktraces (d79919fd) by @whatyouhide
+- Fix stacktraces with no frames (#787) by @savhappy
+
 ## 10.7.1
 
 ### Various fixes & improvements
