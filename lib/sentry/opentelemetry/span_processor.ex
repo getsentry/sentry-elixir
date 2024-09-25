@@ -71,11 +71,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
           origin: root_span.origin
         }
       },
-      platform: "elixir",
-      sdk: %{
-        name: "sentry.elixir",
-        version: "10.7.1"
-      },
       data: %{
         "db.system" => attributes[:"db.system"],
         "db.name" => attributes[:"db.name"],
@@ -110,11 +105,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: trace
       },
-      platform: "elixir",
-      sdk: %{
-        name: "sentry.elixir",
-        version: "10.7.1"
-      },
       request: %{
         url: attributes[:"http.target"],
         method: attributes[:"http.method"],
@@ -145,7 +135,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
          child_spans
        ) do
     %Sentry.Transaction{
-      event_id: Sentry.UUID.uuid4_hex(),
       start_timestamp: root_span.start_time,
       timestamp: root_span.end_time,
       transaction: attributes[:"http.target"],
@@ -158,11 +147,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
           span_id: root_span.span_id,
           parent_span_id: root_span.parent_span_id
         }
-      },
-      platform: "elixir",
-      sdk: %{
-        name: "sentry.elixir",
-        version: "10.7.1"
       },
       request: %{
         url: attributes[:"http.url"],
