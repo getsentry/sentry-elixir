@@ -13,7 +13,7 @@ defmodule PhoenixApp.Application do
       config: %{metadata: [:file, :line]}
     })
 
-    OpentelemetryBandit.setup()
+    # OpentelemetryBandit.setup()
     OpentelemetryPhoenix.setup()
     OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)
 
