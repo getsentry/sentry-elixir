@@ -26,7 +26,7 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   end
 
   def handle_call({:store_span, span_data}, _from, state) do
-    if span_data.parent_span_id == :undefined do
+    if span_data.parent_span_id == nil do
       new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
       {:reply, :ok, new_state}
     else
@@ -48,7 +48,7 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   end
 
   def handle_call({:update_span, span_data}, _from, state) do
-    if span_data.parent_span_id == :undefined do
+    if span_data.parent_span_id == nil do
       new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
       {:reply, :ok, new_state}
     else
