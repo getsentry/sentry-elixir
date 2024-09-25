@@ -30,6 +30,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         |> Keyword.delete(:attributes)
         |> Keyword.merge(
           trace_id: cast_trace_id(otel_attrs[:trace_id]),
+          span_id: cast_span_id(otel_attrs[:span_id]),
+          parent_span_id: cast_span_id(otel_attrs[:parent_span_id]),
           origin: origin,
           attributes: attributes
         )
@@ -37,6 +39,10 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
 
       struct(__MODULE__, attrs)
     end
+
+    defp cast_span_id(nil), do: nil
+    defp cast_span_id(:undefined), do: nil
+    defp cast_span_id(span_id), do: bytes_to_hex(span_id, 16)
 
     defp cast_trace_id(trace_id), do: bytes_to_hex(trace_id, 32)
 
@@ -63,7 +69,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
 
     SpanStorage.update_span(span_record)
 
-    if span_record.parent_span_id == :undefined do
+    if span_record.parent_span_id == nil do
       root_span = SpanStorage.get_root_span(span_record.span_id)
       child_spans = SpanStorage.get_child_spans(span_record.span_id)
 
@@ -91,7 +97,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: %{
           trace_id: root_span.trace_id,
-          span_id: cast_span_id(root_span.span_id),
+          span_id: root_span.span_id,
           op: root_span.name
         }
       },
@@ -113,8 +119,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: %{
           trace_id: root_span.trace_id,
-          span_id: cast_span_id(root_span.span_id),
-          parent_span_id: cast_span_id(root_span.parent_span_id),
+          span_id: root_span.span_id,
+          parent_span_id: root_span.parent_span_id,
           op: "db",
           origin: root_span.origin
         }
@@ -203,8 +209,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: %{
           trace_id: root_span.trace_id,
-          span_id: cast_span_id(root_span.span_id),
-          parent_span_id: cast_span_id(root_span.parent_span_id)
+          span_id: root_span.span_id,
+          parent_span_id: root_span.parent_span_id
         }
       },
       platform: "elixir",
@@ -231,7 +237,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   defp build_trace_context(%SpanRecord{origin: origin, attributes: attributes} = root_span) do
     %{
       trace_id: root_span.trace_id,
-      span_id: cast_span_id(root_span.span_id),
+      span_id: root_span.span_id,
       parent_span_id: nil,
       op: "http.server",
       origin: origin,
@@ -252,8 +258,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
       trace_id: trace_id,
-      span_id: cast_span_id(span_record.span_id),
-      parent_span_id: cast_span_id(span_record.parent_span_id),
+      span_id: span_record.span_id,
+      parent_span_id: span_record.parent_span_id,
       description: attributes[:"http.route"],
       origin: span_record.origin
     }
@@ -265,8 +271,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
-      span_id: cast_span_id(span_record.span_id),
-      parent_span_id: cast_span_id(span_record.parent_span_id)
+      span_id: span_record.span_id,
+      parent_span_id: span_record.parent_span_id
     }
   end
 
@@ -276,8 +282,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
-      span_id: cast_span_id(span_record.span_id),
-      parent_span_id: cast_span_id(span_record.parent_span_id),
+      span_id: span_record.span_id,
+      parent_span_id: span_record.parent_span_id,
       description: span_record.name,
       origin: span_record.origin
     }
@@ -292,8 +298,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
-      span_id: cast_span_id(span_record.span_id),
-      parent_span_id: cast_span_id(span_record.parent_span_id),
+      span_id: span_record.span_id,
+      parent_span_id: span_record.parent_span_id,
       origin: span_record.origin,
       data: %{
         "db.system" => attributes[:"db.system"],
@@ -311,14 +317,10 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
-      span_id: cast_span_id(span_record.span_id),
-      parent_span_id: cast_span_id(span_record.parent_span_id)
+      span_id: span_record.span_id,
+      parent_span_id: span_record.parent_span_id
     }
   end
-
-  defp cast_span_id(nil), do: nil
-  defp cast_span_id(:undefined), do: nil
-  defp cast_span_id(span_id), do: bytes_to_hex(span_id, 16)
 
   defp cast_timestamp(:undefined), do: nil
   defp cast_timestamp(nil), do: nil
@@ -328,12 +330,5 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     {:ok, datetime} = DateTime.from_unix(div(nano_timestamp, 1_000_000), :millisecond)
 
     DateTime.to_iso8601(datetime)
-  end
-
-  defp bytes_to_hex(bytes, length) do
-    case(:otel_utils.format_binary_string("~#{length}.16.0b", [bytes])) do
-      {:ok, result} -> result
-      {:error, _} -> raise "Failed to convert bytes to hex: #{inspect(bytes)}"
-    end
   end
 end
