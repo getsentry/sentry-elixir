@@ -267,22 +267,4 @@ defmodule Sentry.Interfaces do
       :stacktrace
     ]
   end
-
-  defmodule ClientReport do
-    @moduledoc """
-    The struct for a **client report** interface.
-
-    See <https://develop.sentry.dev/sdk/client-reports/>.
-    """
-
-    @moduledoc since: "10.0.0"
-
-    @typedoc since: "10.0.0"
-    @type t() :: %__MODULE__{
-            timestamp: String.t() | number(),
-            discarded_events: %{{String.t(), String.t()} => pos_integer()}
-          }
-
-    defstruct [:timestamp, :discarded_events]
-  end
 end

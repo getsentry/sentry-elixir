@@ -2,11 +2,11 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, Config, Event, UUID}
+  alias Sentry.{Attachment, CheckIn, Config, Event, UUID, ClientReport}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
-          items: [Event.t() | Attachment.t() | CheckIn.t(), ...]
+          items: [Event.t() | Attachment.t() | CheckIn.t() | ClientReport.t(), ...]
         }
 
   @enforce_keys [:event_id, :items]
@@ -31,6 +31,17 @@ defmodule Sentry.Envelope do
     %__MODULE__{
       event_id: check_in.check_in_id,
       items: [check_in]
+    }
+  end
+
+  @doc """
+  Creates a new envelope containing the client report and a map of discarded events.
+  """
+  @spec from_client_report(ClientReport.t()) :: t()
+  def from_client_report(%ClientReport{} = client_report) do
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: [client_report]
     }
   end
 
@@ -87,6 +98,17 @@ defmodule Sentry.Envelope do
       {:ok, encoded_check_in} ->
         header = ~s({"type": "check_in", "length": #{byte_size(encoded_check_in)}})
         [header, ?\n, encoded_check_in, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %ClientReport{} = client_report) do
+    case client_report |> Map.from_struct() |> json_library.encode() do
+      {:ok, encoded_client_report} ->
+        header = ~s({"type": "client_report", "length": #{byte_size(encoded_client_report)}})
+        [header, ?\n, encoded_client_report, ?\n]
 
       {:error, _reason} = error ->
         throw(error)
