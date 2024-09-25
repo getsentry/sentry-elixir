@@ -101,7 +101,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
           op: root_span.name
         }
       },
-      spans: Enum.map([root_span | child_spans], &build_span(&1, root_span.trace_id))
+      spans: Enum.map([root_span | child_spans], &build_span(&1))
     })
   end
 
@@ -143,7 +143,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         "query_time_microseconds" => attributes[:query_time_microseconds]
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
+      spans: Enum.map(child_spans, &build_span(&1))
     })
   end
 
@@ -190,7 +190,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         }
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
+      spans: Enum.map(child_spans, &build_span(&1))
     })
   end
 
@@ -230,7 +230,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         }
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
+      spans: Enum.map(child_spans, &build_span(&1))
     }
   end
 
@@ -248,8 +248,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   end
 
   defp build_span(
-         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record,
-         trace_id
+         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record
        ) do
     op = "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}"
 
@@ -257,7 +256,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       op: op,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
-      trace_id: trace_id,
+      trace_id: span_record.trace_id,
       span_id: span_record.span_id,
       parent_span_id: span_record.parent_span_id,
       description: attributes[:"http.route"],
@@ -265,9 +264,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(%SpanRecord{origin: "phoenix_app"} = span_record, trace_id) do
+  defp build_span(%SpanRecord{origin: "phoenix_app"} = span_record) do
     %Span{
-      trace_id: trace_id,
+      trace_id: span_record.trace_id,
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
@@ -276,9 +275,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(%SpanRecord{origin: "opentelemetry_bandit"} = span_record, trace_id) do
+  defp build_span(%SpanRecord{origin: "opentelemetry_bandit"} = span_record) do
     %Span{
-      trace_id: trace_id,
+      trace_id: span_record.trace_id,
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
@@ -289,12 +288,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(
-         %SpanRecord{origin: "opentelemetry_ecto", attributes: attributes} = span_record,
-         trace_id
-       ) do
+  defp build_span(%SpanRecord{origin: "opentelemetry_ecto", attributes: attributes} = span_record) do
     %Span{
-      trace_id: trace_id,
+      trace_id: span_record.trace_id,
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
@@ -308,12 +304,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(
-         %SpanRecord{origin: :undefined, attributes: _attributes} = span_record,
-         trace_id
-       ) do
+  defp build_span(%SpanRecord{origin: :undefined, attributes: _attributes} = span_record) do
     %Span{
-      trace_id: trace_id,
+      trace_id: span_record.trace_id,
       op: span_record.name,
       start_timestamp: cast_timestamp(span_record.start_time),
       timestamp: cast_timestamp(span_record.end_time),
