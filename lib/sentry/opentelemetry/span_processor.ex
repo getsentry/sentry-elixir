@@ -79,7 +79,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         trace: build_trace_context(root_span)
       },
       request: %{
-        url: attributes["http.target"],
+        url: url_from_attributes(attributes),
         method: attributes["http.method"],
         headers: %{
           "User-Agent" => attributes["http.user_agent"]
@@ -142,6 +142,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       parent_span_id: nil,
       op: "http.server",
       origin: root_span.origin,
+      status: status_from_attributes(attributes),
       data: %{
         "http.response.status_code" => attributes["http.status_code"]
       }
@@ -176,10 +177,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   defp build_span(
          %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record
        ) do
-    op = "#{attributes["phoenix.plug"]}##{attributes["phoenix.action"]}"
-
     %Span{
-      op: op,
+      op: "#{attributes["phoenix.plug"]}##{attributes["phoenix.action"]}",
       start_timestamp: span_record.start_time,
       timestamp: span_record.end_time,
       trace_id: span_record.trace_id,
@@ -237,5 +236,39 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       span_id: span_record.span_id,
       parent_span_id: span_record.parent_span_id
     }
+  end
+
+  defp url_from_attributes(attributes) do
+    URI.to_string(%URI{
+      scheme: attributes["http.scheme"],
+      host: attributes["net.host.name"],
+      port: attributes["net.host.port"],
+      path: attributes["http.target"]
+    })
+  end
+
+  defp status_from_attributes(%{"http.status_code" => status_code}) do
+    cond do
+      status_code in 200..299 ->
+        "ok"
+
+      status_code in [400, 401, 403, 404, 409, 429, 499, 500, 501, 503, 504] ->
+        %{
+          400 => "invalid_argument",
+          401 => "unauthenticated",
+          403 => "permission_denied",
+          404 => "not_found",
+          409 => "already_exists",
+          429 => "resource_exhausted",
+          499 => "cancelled",
+          500 => "internal_error",
+          501 => "unimplemented",
+          503 => "unavailable",
+          504 => "deadline_exceeded"
+        }[status_code]
+
+      true ->
+        "unknown_error"
+    end
   end
 end
