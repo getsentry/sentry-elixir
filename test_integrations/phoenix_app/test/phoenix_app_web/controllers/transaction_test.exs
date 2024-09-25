@@ -60,7 +60,8 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     assert [span] = transaction.spans
 
-    assert span.op == "phoenix_app.repo.query:users"
+    assert span.op == "db.sql.ecto"
+    assert String.starts_with?(span.description, "SELECT ")
     assert span.trace_id == trace.trace_id
     assert span.parent_span_id == trace.span_id
   end
