@@ -271,7 +271,15 @@ defmodule Sentry.Client do
 
   @spec render_transaction(%Transaction{}) :: map()
   def render_transaction(%Transaction{} = transaction) do
-    Transaction.to_map(transaction)
+    transaction
+    |> Transaction.to_map()
+    |> Map.merge(%{
+      platform: "elixir",
+      sdk: %{
+        name: "sentry.elixir",
+        version: "10.7.1"
+      }
+    })
   end
 
   defp render_exception(%Interfaces.Exception{} = exception) do
