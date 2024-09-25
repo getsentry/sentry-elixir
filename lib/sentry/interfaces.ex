@@ -280,28 +280,9 @@ defmodule Sentry.Interfaces do
     @typedoc since: "10.0.0"
     @type t() :: %__MODULE__{
             timestamp: String.t() | number(),
-            discarded_events: String.t()
+            discarded_events: %{{String.t(), String.t()} => pos_integer()}
           }
 
     defstruct [:timestamp, :discarded_events]
-  end
-
-  defmodule ClientReport.DiscardedEvent do
-    @moduledoc """
-    The struct for a **client report** interface.
-
-    See `Sentry.Interfaces.ClientReport`.
-    """
-
-    @moduledoc since: "10.0.0"
-
-    @typedoc since: "10.0.0"
-    @type t() :: %__MODULE__{
-            reason: String.t(),
-            category: String.t(),
-            quantity: pos_integer()
-          }
-
-    defstruct [:reason, :category, :quantity]
   end
 end
