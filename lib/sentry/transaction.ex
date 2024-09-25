@@ -9,6 +9,7 @@ defmodule Sentry.Transaction do
     :timestamp,
     :transaction,
     :transaction_info,
+    :status,
     :contexts,
     :request,
     :measurements,
