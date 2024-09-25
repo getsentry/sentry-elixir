@@ -1,4 +1,4 @@
-defmodule Sentry.Telemetry.SpanProcessor do
+defmodule Sentry.Opentelemetry.SpanProcessor do
   @behaviour :otel_span_processor
 
   require Record
@@ -6,7 +6,7 @@ defmodule Sentry.Telemetry.SpanProcessor do
   @fields Record.extract(:span, from: "deps/opentelemetry/include/otel_span.hrl")
   Record.defrecordp(:span, @fields)
 
-  alias Sentry.{Span, Transaction, Telemetry.SpanStorage}
+  alias Sentry.{Span, Transaction, Opentelemetry.SpanStorage}
 
   @impl true
   def on_start(_ctx, otel_span, _config) do
