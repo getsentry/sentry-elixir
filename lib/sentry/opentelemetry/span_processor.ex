@@ -28,10 +28,23 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       attrs =
         otel_attrs
         |> Keyword.delete(:attributes)
-        |> Keyword.merge(origin: origin, attributes: attributes)
+        |> Keyword.merge(
+          trace_id: cast_trace_id(otel_attrs[:trace_id]),
+          origin: origin,
+          attributes: attributes
+        )
         |> Map.new()
 
       struct(__MODULE__, attrs)
+    end
+
+    defp cast_trace_id(trace_id), do: bytes_to_hex(trace_id, 32)
+
+    defp bytes_to_hex(bytes, length) do
+      case(:otel_utils.format_binary_string("~#{length}.16.0b", [bytes])) do
+        {:ok, result} -> result
+        {:error, _} -> raise "Failed to convert bytes to hex: #{inspect(bytes)}"
+      end
     end
   end
 
@@ -67,29 +80,26 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   end
 
   defp transaction_from_root_span(root_span, child_spans) do
-    trace_id = cast_trace_id(root_span.trace_id)
-
-    build_transaction(trace_id, root_span, child_spans)
+    build_transaction(root_span, child_spans)
   end
 
-  defp build_transaction(trace_id, %SpanRecord{origin: :undefined} = root_span, child_spans) do
+  defp build_transaction(%SpanRecord{origin: :undefined} = root_span, child_spans) do
     Transaction.new(%{
       transaction: root_span.name,
       start_timestamp: cast_timestamp(root_span.start_time),
       timestamp: cast_timestamp(root_span.end_time),
       contexts: %{
         trace: %{
-          trace_id: trace_id,
+          trace_id: root_span.trace_id,
           span_id: cast_span_id(root_span.span_id),
           op: root_span.name
         }
       },
-      spans: Enum.map([root_span | child_spans], &build_span(&1, trace_id))
+      spans: Enum.map([root_span | child_spans], &build_span(&1, root_span.trace_id))
     })
   end
 
   defp build_transaction(
-         trace_id,
          %SpanRecord{attributes: attributes, origin: "opentelemetry_ecto"} = root_span,
          child_spans
        ) do
@@ -102,7 +112,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       },
       contexts: %{
         trace: %{
-          trace_id: trace_id,
+          trace_id: root_span.trace_id,
           span_id: cast_span_id(root_span.span_id),
           parent_span_id: cast_span_id(root_span.parent_span_id),
           op: "db",
@@ -127,17 +137,16 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         "query_time_microseconds" => attributes[:query_time_microseconds]
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, trace_id))
+      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
     })
   end
 
   defp build_transaction(
-         trace_id,
          %SpanRecord{attributes: attributes, origin: "opentelemetry_phoenix"} = root_span,
          child_spans
        ) do
     name = "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}"
-    trace = build_trace_context(trace_id, root_span)
+    trace = build_trace_context(root_span)
 
     Transaction.new(%{
       transaction: name,
@@ -175,12 +184,11 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         }
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, trace_id))
+      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
     })
   end
 
   defp build_transaction(
-         trace_id,
          %SpanRecord{attributes: attributes, origin: "opentelemetry_bandit"} = root_span,
          child_spans
        ) do
@@ -194,7 +202,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       },
       contexts: %{
         trace: %{
-          trace_id: trace_id,
+          trace_id: root_span.trace_id,
           span_id: cast_span_id(root_span.span_id),
           parent_span_id: cast_span_id(root_span.parent_span_id)
         }
@@ -216,16 +224,13 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         }
       },
       measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1, trace_id))
+      spans: Enum.map(child_spans, &build_span(&1, root_span.trace_id))
     }
   end
 
-  defp build_trace_context(
-         trace_id,
-         %SpanRecord{origin: origin, attributes: attributes} = root_span
-       ) do
+  defp build_trace_context(%SpanRecord{origin: origin, attributes: attributes} = root_span) do
     %{
-      trace_id: trace_id,
+      trace_id: root_span.trace_id,
       span_id: cast_span_id(root_span.span_id),
       parent_span_id: nil,
       op: "http.server",
@@ -314,8 +319,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   defp cast_span_id(nil), do: nil
   defp cast_span_id(:undefined), do: nil
   defp cast_span_id(span_id), do: bytes_to_hex(span_id, 16)
-
-  defp cast_trace_id(trace_id), do: bytes_to_hex(trace_id, 32)
 
   defp cast_timestamp(:undefined), do: nil
   defp cast_timestamp(nil), do: nil
