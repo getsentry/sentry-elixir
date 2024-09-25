@@ -1,4 +1,4 @@
-defmodule Sentry.Telemetry.SpanProcessorTest do
+defmodule Sentry.Opentelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
