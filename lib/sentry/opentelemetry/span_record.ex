@@ -1,7 +1,7 @@
 defmodule Sentry.Opentelemetry.SpanRecord do
   require Record
 
-  @fields Record.extract(:span, from: "deps/opentelemetry/include/otel_span.hrl")
+  @fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
   Record.defrecordp(:span, @fields)
 
   defstruct @fields ++ [:origin]
