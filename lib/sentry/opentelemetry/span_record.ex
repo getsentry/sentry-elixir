@@ -30,11 +30,18 @@ defmodule Sentry.Opentelemetry.SpanRecord do
         origin: origin,
         start_time: cast_timestamp(otel_attrs[:start_time]),
         end_time: cast_timestamp(otel_attrs[:end_time]),
-        attributes: attributes
+        attributes: normalize_attributes(attributes)
       )
       |> Map.new()
 
     struct(__MODULE__, attrs)
+  end
+
+  defp normalize_attributes(attributes) do
+    Enum.map(attributes, fn {key, value} ->
+      {to_string(key), value}
+    end)
+    |> Map.new()
   end
 
   defp cast_span_id(nil), do: nil
