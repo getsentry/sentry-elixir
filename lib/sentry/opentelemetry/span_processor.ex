@@ -22,7 +22,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       root_span = SpanStorage.get_root_span(span_record.span_id)
       child_spans = SpanStorage.get_child_spans(span_record.span_id)
 
-      transaction = transaction_from_root_span(root_span, child_spans)
+      transaction = build_transaction(root_span, child_spans)
+
       Sentry.send_transaction(transaction)
     end
 
@@ -32,10 +33,6 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   @impl true
   def force_flush(_config) do
     :ok
-  end
-
-  defp transaction_from_root_span(root_span, child_spans) do
-    build_transaction(root_span, child_spans)
   end
 
   defp build_transaction(%SpanRecord{origin: :undefined} = root_span, child_spans) do
