@@ -25,9 +25,10 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert trace.origin == "opentelemetry_phoenix"
     assert trace.op == "http.server"
     assert trace.data == %{"http.response.status_code" => 200}
+    assert trace.status == "ok"
 
     assert transaction.request.env == %{"SERVER_NAME" => "www.example.com", "SERVER_PORT" => 80}
-    assert transaction.request.url == "/transaction"
+    assert transaction.request.url == "http://www.example.com/transaction"
     assert transaction.request.method == "GET"
 
     assert [span] = transaction.spans
@@ -53,9 +54,10 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert trace.origin == "opentelemetry_phoenix"
     assert trace.op == "http.server"
     assert trace.data == %{"http.response.status_code" => 200}
+    assert trace.status == "ok"
 
     assert transaction.request.env == %{"SERVER_NAME" => "www.example.com", "SERVER_PORT" => 80}
-    assert transaction.request.url == "/users"
+    assert transaction.request.url == "http://www.example.com/users"
     assert transaction.request.method == "GET"
 
     assert [span] = transaction.spans
