@@ -27,7 +27,7 @@ defmodule Sentry.Application do
         Sentry.Sources,
         Sentry.Dedupe,
         Sentry.ClientReport.Sender,
-        Sentry.Telemetry.SpanProcessor.SpanStorage,
+        Sentry.Telemetry.SpanStorage,
         {Sentry.Integrations.CheckInIDMappings,
          [
            max_expected_check_in_time:
