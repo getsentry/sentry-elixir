@@ -1,4 +1,4 @@
-defmodule Sentry.Telemetry.SpanStorage do
+defmodule Sentry.Opentelemetry.SpanStorage do
   use GenServer
 
   def start_link(_opts) do
