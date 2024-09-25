@@ -15,7 +15,7 @@ defmodule PhoenixApp.Application do
 
     OpentelemetryBandit.setup()
     OpentelemetryPhoenix.setup()
-    OpentelemetryEcto.setup([:phoenix_app, :repo])
+    OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)
 
     children = [
       PhoenixAppWeb.Telemetry,
