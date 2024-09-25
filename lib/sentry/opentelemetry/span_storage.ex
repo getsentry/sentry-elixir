@@ -26,12 +26,12 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   end
 
   def handle_call({:store_span, span_data}, _from, state) do
-    if span_data[:parent_span_id] == :undefined do
-      new_state = put_in(state, [:root_spans, span_data[:span_id]], span_data)
+    if span_data.parent_span_id == :undefined do
+      new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
       {:reply, :ok, new_state}
     else
       new_state =
-        update_in(state, [:child_spans, span_data[:parent_span_id]], fn spans ->
+        update_in(state, [:child_spans, span_data.parent_span_id], fn spans ->
           (spans || []) ++ [span_data]
         end)
 
@@ -48,14 +48,14 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   end
 
   def handle_call({:update_span, span_data}, _from, state) do
-    if span_data[:parent_span_id] == :undefined do
-      new_state = put_in(state, [:root_spans, span_data[:span_id]], span_data)
+    if span_data.parent_span_id == :undefined do
+      new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
       {:reply, :ok, new_state}
     else
       new_state =
-        update_in(state, [:child_spans, span_data[:parent_span_id]], fn spans ->
+        update_in(state, [:child_spans, span_data.parent_span_id], fn spans ->
           Enum.map(spans || [], fn span ->
-            if span[:span_id] == span_data[:span_id], do: span_data, else: span
+            if span.span_id == span_data.span_id, do: span_data, else: span
           end)
         end)
 

@@ -1,16 +1,43 @@
 defmodule Sentry.Opentelemetry.SpanProcessor do
   @behaviour :otel_span_processor
 
-  require Record
-
-  @fields Record.extract(:span, from: "deps/opentelemetry/include/otel_span.hrl")
-  Record.defrecordp(:span, @fields)
-
   alias Sentry.{Span, Transaction, Opentelemetry.SpanStorage}
+
+  defmodule SpanRecord do
+    require Record
+
+    @fields Record.extract(:span, from: "deps/opentelemetry/include/otel_span.hrl")
+    Record.defrecordp(:span, @fields)
+
+    defstruct @fields ++ [:origin]
+
+    def new(otel_span) do
+      otel_attrs = span(otel_span)
+
+      {:attributes, _, _, _, attributes} = otel_attrs[:attributes]
+
+      origin =
+        case otel_attrs[:instrumentation_scope] do
+          {:instrumentation_scope, origin, _version, _} ->
+            origin
+
+          _ ->
+            :undefined
+        end
+
+      attrs =
+        otel_attrs
+        |> Keyword.delete(:attributes)
+        |> Keyword.merge(origin: origin, attributes: attributes)
+        |> Map.new()
+
+      struct(__MODULE__, attrs)
+    end
+  end
 
   @impl true
   def on_start(_ctx, otel_span, _config) do
-    span_record = span(otel_span)
+    span_record = SpanRecord.new(otel_span)
 
     SpanStorage.store_span(span_record)
 
@@ -19,13 +46,13 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
 
   @impl true
   def on_end(otel_span, _config) do
-    span_record = span(otel_span)
+    span_record = SpanRecord.new(otel_span)
 
     SpanStorage.update_span(span_record)
 
-    if span_record[:parent_span_id] == :undefined do
-      root_span = SpanStorage.get_root_span(span_record[:span_id])
-      child_spans = SpanStorage.get_child_spans(span_record[:span_id])
+    if span_record.parent_span_id == :undefined do
+      root_span = SpanStorage.get_root_span(span_record.span_id)
+      child_spans = SpanStorage.get_child_spans(span_record.span_id)
 
       transaction = transaction_from_root_span(root_span, child_spans)
       Sentry.send_transaction(transaction)
@@ -40,33 +67,21 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   end
 
   defp transaction_from_root_span(root_span, child_spans) do
-    {:attributes, _, _, _, attributes} = root_span[:attributes]
+    trace_id = cast_trace_id(root_span.trace_id)
 
-    build_transaction(attributes, root_span, child_spans)
+    build_transaction(trace_id, root_span, child_spans)
   end
 
-  defp build_transaction(attributes, root_span, child_spans) when is_map(attributes) do
-    trace_id = cast_trace_id(root_span[:trace_id])
-
-    case root_span[:instrumentation_scope] do
-      {:instrumentation_scope, origin, _version, _} ->
-        build_transaction(origin, trace_id, root_span, child_spans, attributes)
-
-      :undefined ->
-        build_transaction(trace_id, root_span, child_spans)
-    end
-  end
-
-  defp build_transaction(trace_id, root_span, child_spans) when is_binary(trace_id) do
+  defp build_transaction(trace_id, %SpanRecord{origin: :undefined} = root_span, child_spans) do
     Transaction.new(%{
-      transaction: root_span[:name],
-      start_timestamp: cast_timestamp(root_span[:start_time]),
-      timestamp: cast_timestamp(root_span[:end_time]),
+      transaction: root_span.name,
+      start_timestamp: cast_timestamp(root_span.start_time),
+      timestamp: cast_timestamp(root_span.end_time),
       contexts: %{
         trace: %{
           trace_id: trace_id,
-          span_id: cast_span_id(root_span[:span_id]),
-          op: root_span[:name]
+          span_id: cast_span_id(root_span.span_id),
+          op: root_span.name
         }
       },
       spans: Enum.map([root_span | child_spans], &build_span(&1, trace_id))
@@ -74,26 +89,24 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   end
 
   defp build_transaction(
-         "opentelemetry_ecto" = origin,
          trace_id,
-         root_span,
-         child_spans,
-         attributes
+         %SpanRecord{attributes: attributes, origin: "opentelemetry_ecto"} = root_span,
+         child_spans
        ) do
     Transaction.new(%{
-      transaction: root_span[:name],
-      start_timestamp: cast_timestamp(root_span[:start_time]),
-      timestamp: cast_timestamp(root_span[:end_time]),
+      transaction: root_span.name,
+      start_timestamp: cast_timestamp(root_span.start_time),
+      timestamp: cast_timestamp(root_span.end_time),
       transaction_info: %{
         source: "db"
       },
       contexts: %{
         trace: %{
           trace_id: trace_id,
-          span_id: cast_span_id(root_span[:span_id]),
-          parent_span_id: cast_span_id(root_span[:parent_span_id]),
+          span_id: cast_span_id(root_span.span_id),
+          parent_span_id: cast_span_id(root_span.parent_span_id),
           op: "db",
-          origin: origin
+          origin: root_span.origin
         }
       },
       platform: "elixir",
@@ -119,19 +132,17 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
   end
 
   defp build_transaction(
-         "opentelemetry_phoenix" = origin,
          trace_id,
-         root_span,
-         child_spans,
-         attributes
+         %SpanRecord{attributes: attributes, origin: "opentelemetry_phoenix"} = root_span,
+         child_spans
        ) do
     name = "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}"
-    trace = build_trace_context(trace_id, origin, root_span, attributes)
+    trace = build_trace_context(trace_id, root_span)
 
     Transaction.new(%{
       transaction: name,
-      start_timestamp: cast_timestamp(root_span[:start_time]),
-      timestamp: cast_timestamp(root_span[:end_time]),
+      start_timestamp: cast_timestamp(root_span.start_time),
+      timestamp: cast_timestamp(root_span.end_time),
       transaction_info: %{
         source: "view"
       },
@@ -168,11 +179,15 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     })
   end
 
-  defp build_transaction("opentelemetry_bandit", trace_id, root_span, child_spans, attributes) do
+  defp build_transaction(
+         trace_id,
+         %SpanRecord{attributes: attributes, origin: "opentelemetry_bandit"} = root_span,
+         child_spans
+       ) do
     %Sentry.Transaction{
       event_id: Sentry.UUID.uuid4_hex(),
-      start_timestamp: cast_timestamp(root_span[:start_time]),
-      timestamp: cast_timestamp(root_span[:end_time]),
+      start_timestamp: cast_timestamp(root_span.start_time),
+      timestamp: cast_timestamp(root_span.end_time),
       transaction: attributes[:"http.target"],
       transaction_info: %{
         source: "url"
@@ -180,8 +195,8 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: %{
           trace_id: trace_id,
-          span_id: cast_span_id(root_span[:span_id]),
-          parent_span_id: cast_span_id(root_span[:parent_span_id])
+          span_id: cast_span_id(root_span.span_id),
+          parent_span_id: cast_span_id(root_span.parent_span_id)
         }
       },
       platform: "elixir",
@@ -205,10 +220,13 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_trace_context(trace_id, origin, root_span, attributes) do
+  defp build_trace_context(
+         trace_id,
+         %SpanRecord{origin: origin, attributes: attributes} = root_span
+       ) do
     %{
       trace_id: trace_id,
-      span_id: cast_span_id(root_span[:span_id]),
+      span_id: cast_span_id(root_span.span_id),
       parent_span_id: nil,
       op: "http.server",
       origin: origin,
@@ -218,66 +236,60 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(span_record, trace_id) do
-    {:attributes, _, _, _, attributes} = span_record[:attributes]
-
-    case span_record[:instrumentation_scope] do
-      {:instrumentation_scope, origin, _version, _} ->
-        build_span(origin, span_record, trace_id, attributes)
-
-      :undefined ->
-        build_span(:custom, span_record, trace_id, attributes)
-    end
-  end
-
-  defp build_span("opentelemetry_phoenix" = origin, span_record, trace_id, attributes) do
+  defp build_span(
+         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record,
+         trace_id
+       ) do
     op = "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}"
 
     %Span{
       op: op,
-      start_timestamp: cast_timestamp(span_record[:start_time]),
-      timestamp: cast_timestamp(span_record[:end_time]),
+      start_timestamp: cast_timestamp(span_record.start_time),
+      timestamp: cast_timestamp(span_record.end_time),
       trace_id: trace_id,
-      span_id: cast_span_id(span_record[:span_id]),
-      parent_span_id: cast_span_id(span_record[:parent_span_id]),
+      span_id: cast_span_id(span_record.span_id),
+      parent_span_id: cast_span_id(span_record.parent_span_id),
       description: attributes[:"http.route"],
-      origin: origin
+      origin: span_record.origin
     }
   end
 
-  defp build_span("phoenix_app", span_record, trace_id, _attributes) do
+  defp build_span(%SpanRecord{origin: "phoenix_app"} = span_record, trace_id) do
     %Span{
       trace_id: trace_id,
-      op: span_record[:name],
-      start_timestamp: cast_timestamp(span_record[:start_time]),
-      timestamp: cast_timestamp(span_record[:end_time]),
-      span_id: cast_span_id(span_record[:span_id]),
-      parent_span_id: cast_span_id(span_record[:parent_span_id])
+      op: span_record.name,
+      start_timestamp: cast_timestamp(span_record.start_time),
+      timestamp: cast_timestamp(span_record.end_time),
+      span_id: cast_span_id(span_record.span_id),
+      parent_span_id: cast_span_id(span_record.parent_span_id)
     }
   end
 
-  defp build_span("opentelemetry_bandit" = origin, span_record, trace_id, _attributes) do
+  defp build_span(%SpanRecord{origin: "opentelemetry_bandit"} = span_record, trace_id) do
     %Span{
       trace_id: trace_id,
-      op: span_record[:name],
-      start_timestamp: cast_timestamp(span_record[:start_time]),
-      timestamp: cast_timestamp(span_record[:end_time]),
-      span_id: cast_span_id(span_record[:span_id]),
-      parent_span_id: cast_span_id(span_record[:parent_span_id]),
-      description: span_record[:name],
-      origin: origin
+      op: span_record.name,
+      start_timestamp: cast_timestamp(span_record.start_time),
+      timestamp: cast_timestamp(span_record.end_time),
+      span_id: cast_span_id(span_record.span_id),
+      parent_span_id: cast_span_id(span_record.parent_span_id),
+      description: span_record.name,
+      origin: span_record.origin
     }
   end
 
-  defp build_span("opentelemetry_ecto" = origin, span_record, trace_id, attributes) do
+  defp build_span(
+         %SpanRecord{origin: "opentelemetry_ecto", attributes: attributes} = span_record,
+         trace_id
+       ) do
     %Span{
       trace_id: trace_id,
-      op: span_record[:name],
-      start_timestamp: cast_timestamp(span_record[:start_time]),
-      timestamp: cast_timestamp(span_record[:end_time]),
-      span_id: cast_span_id(span_record[:span_id]),
-      parent_span_id: cast_span_id(span_record[:parent_span_id]),
-      origin: origin,
+      op: span_record.name,
+      start_timestamp: cast_timestamp(span_record.start_time),
+      timestamp: cast_timestamp(span_record.end_time),
+      span_id: cast_span_id(span_record.span_id),
+      parent_span_id: cast_span_id(span_record.parent_span_id),
+      origin: span_record.origin,
       data: %{
         "db.system" => attributes[:"db.system"],
         "db.name" => attributes[:"db.name"]
@@ -285,14 +297,17 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_span(:custom, span_record, trace_id, _attributes) do
+  defp build_span(
+         %SpanRecord{origin: :undefined, attributes: _attributes} = span_record,
+         trace_id
+       ) do
     %Span{
       trace_id: trace_id,
-      op: span_record[:name],
-      start_timestamp: cast_timestamp(span_record[:start_time]),
-      timestamp: cast_timestamp(span_record[:end_time]),
-      span_id: cast_span_id(span_record[:span_id]),
-      parent_span_id: cast_span_id(span_record[:parent_span_id])
+      op: span_record.name,
+      start_timestamp: cast_timestamp(span_record.start_time),
+      timestamp: cast_timestamp(span_record.end_time),
+      span_id: cast_span_id(span_record.span_id),
+      parent_span_id: cast_span_id(span_record.parent_span_id)
     }
   end
 
