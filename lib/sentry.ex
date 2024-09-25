@@ -112,7 +112,7 @@ defmodule Sentry do
 
   Before v9.0.0, the recommended way to filter out exceptions was to use a *filter*,
   that is, a module implementing the `Sentry.EventFilter` behaviour. This is still supported,
-  but is not deprecated. See `Sentry.EventFilter` for more information.
+  but is now deprecated. See `Sentry.EventFilter` for more information.
 
   ## Event Callbacks
 
