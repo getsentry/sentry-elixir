@@ -41,11 +41,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       start_timestamp: root_span.start_time,
       timestamp: root_span.end_time,
       contexts: %{
-        trace: %{
-          trace_id: root_span.trace_id,
-          span_id: root_span.span_id,
-          op: root_span.name
-        }
+        trace: build_trace_context(root_span)
       },
       spans: Enum.map([root_span | child_spans], &build_span(&1))
     })
@@ -63,13 +59,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         source: "db"
       },
       contexts: %{
-        trace: %{
-          trace_id: root_span.trace_id,
-          span_id: root_span.span_id,
-          parent_span_id: root_span.parent_span_id,
-          op: "db",
-          origin: root_span.origin
-        }
+        trace: build_trace_context(root_span)
       },
       data: %{
         "db.system" => attributes[:"db.system"],
@@ -92,18 +82,15 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
          %SpanRecord{attributes: attributes, origin: "opentelemetry_phoenix"} = root_span,
          child_spans
        ) do
-    name = "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}"
-    trace = build_trace_context(root_span)
-
     Transaction.new(%{
-      transaction: name,
+      transaction: "#{attributes[:"phoenix.plug"]}##{attributes[:"phoenix.action"]}",
       start_timestamp: root_span.start_time,
       timestamp: root_span.end_time,
       transaction_info: %{
         source: "view"
       },
       contexts: %{
-        trace: trace
+        trace: build_trace_context(root_span)
       },
       request: %{
         url: attributes[:"http.target"],
@@ -142,11 +129,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
         source: "url"
       },
       contexts: %{
-        trace: %{
-          trace_id: root_span.trace_id,
-          span_id: root_span.span_id,
-          parent_span_id: root_span.parent_span_id
-        }
+        trace: build_trace_context(root_span)
       },
       request: %{
         url: attributes[:"http.url"],
@@ -164,16 +147,40 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
     }
   end
 
-  defp build_trace_context(%SpanRecord{origin: origin, attributes: attributes} = root_span) do
+  defp build_trace_context(
+         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = root_span
+       ) do
     %{
       trace_id: root_span.trace_id,
       span_id: root_span.span_id,
       parent_span_id: nil,
       op: "http.server",
-      origin: origin,
+      origin: root_span.origin,
       data: %{
         "http.response.status_code" => attributes[:"http.status_code"]
       }
+    }
+  end
+
+  defp build_trace_context(%SpanRecord{origin: "opentelemetry_ecto"} = root_span) do
+    %{
+      trace_id: root_span.trace_id,
+      span_id: root_span.span_id,
+      parent_span_id: root_span.parent_span_id,
+      op: "db",
+      origin: root_span.origin,
+      data: root_span.attributes
+    }
+  end
+
+  defp build_trace_context(%SpanRecord{attributes: attributes} = root_span) do
+    %{
+      trace_id: root_span.trace_id,
+      span_id: root_span.span_id,
+      parent_span_id: nil,
+      op: root_span.name,
+      origin: root_span.origin,
+      data: attributes
     }
   end
 
