@@ -10,8 +10,6 @@ defmodule Sentry.Transaction do
     :transaction,
     :transaction_info,
     :contexts,
-    :platform,
-    :sdk,
     :request,
     :measurements,
     spans: [],
