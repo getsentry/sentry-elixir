@@ -53,7 +53,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       start_timestamp: root_span.start_time,
       timestamp: root_span.end_time,
       transaction_info: %{
-        source: "db"
+        source: "component"
       },
       contexts: %{
         trace: build_trace_context(root_span)
@@ -156,6 +156,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       span_id: root_span.span_id,
       parent_span_id: root_span.parent_span_id,
       op: "db.#{attributes["db.type"]}.ecto",
+      description: attributes["db.statement"] || root_span.name,
       origin: root_span.origin,
       data: attributes
     }
