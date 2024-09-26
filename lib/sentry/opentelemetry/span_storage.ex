@@ -73,10 +73,11 @@ defmodule Sentry.Opentelemetry.SpanStorage do
 
   def handle_call({:remove_span, span_id}, _from, state) do
     new_state = %{
-      state |
-      root_spans: Map.delete(state.root_spans, span_id),
-      child_spans: Map.delete(state.child_spans, span_id)
+      state
+      | root_spans: Map.delete(state.root_spans, span_id),
+        child_spans: Map.delete(state.child_spans, span_id)
     }
+
     {:reply, :ok, new_state}
   end
 
