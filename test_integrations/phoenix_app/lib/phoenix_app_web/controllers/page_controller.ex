@@ -14,7 +14,7 @@ defmodule PhoenixAppWeb.PageController do
   end
 
   def transaction(conn, _params) do
-    Tracer.with_span("test_span") do
+    Tracer.with_span "test_span" do
       :timer.sleep(100)
     end
 

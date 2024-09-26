@@ -54,9 +54,10 @@ defmodule PhoenixAppWeb.UserLiveTest do
 
       transactions = Sentry.Test.pop_sentry_transactions()
 
-      transaction_save = Enum.find(transactions, fn transaction ->
-        transaction.transaction == "PhoenixAppWeb.UserLive.Index.handle_event#save"
-      end)
+      transaction_save =
+        Enum.find(transactions, fn transaction ->
+          transaction.transaction == "PhoenixAppWeb.UserLive.Index.handle_event#save"
+        end)
 
       assert transaction_save.transaction == "PhoenixAppWeb.UserLive.Index.handle_event#save"
       assert transaction_save.transaction_info.source == "view"
