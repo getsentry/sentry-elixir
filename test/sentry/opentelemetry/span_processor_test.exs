@@ -80,6 +80,22 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert_valid_trace_id(child_span_two.trace_id)
   end
 
+  test "removes span records from storage after sending a transaction" do
+    put_test_config(environment_name: "test")
+
+    Sentry.Test.start_collecting_sentry_reports()
+
+    TestEndpoint.instrumented_function()
+
+    assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+    assert nil ==
+             Sentry.Opentelemetry.SpanStorage.get_root_span(transaction.contexts.trace.span_id)
+
+    assert [] ==
+             Sentry.Opentelemetry.SpanStorage.get_child_spans(transaction.contexts.trace.span_id)
+  end
+
   defp assert_valid_iso8601(timestamp) do
     case DateTime.from_iso8601(timestamp) do
       {:ok, datetime, _offset} ->
