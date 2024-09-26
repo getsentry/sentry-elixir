@@ -25,6 +25,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       transaction = build_transaction(root_span, child_spans)
 
       Sentry.send_transaction(transaction)
+
+      SpanStorage.remove_span(span_record.span_id)
+      SpanStorage.remove_child_spans(span_record.span_id)
     end
 
     :ok
