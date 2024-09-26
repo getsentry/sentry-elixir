@@ -25,6 +25,14 @@ defmodule Sentry.Opentelemetry.SpanStorage do
     GenServer.call(__MODULE__, {:update_span, span_data})
   end
 
+  def remove_span(span_id) do
+    GenServer.call(__MODULE__, {:remove_span, span_id})
+  end
+
+  def remove_child_spans(parent_span_id) do
+    GenServer.call(__MODULE__, {:remove_child_spans, parent_span_id})
+  end
+
   def handle_call({:store_span, span_data}, _from, state) do
     if span_data.parent_span_id == nil do
       new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
@@ -61,5 +69,19 @@ defmodule Sentry.Opentelemetry.SpanStorage do
 
       {:reply, :ok, new_state}
     end
+  end
+
+  def handle_call({:remove_span, span_id}, _from, state) do
+    new_state = %{
+      state |
+      root_spans: Map.delete(state.root_spans, span_id),
+      child_spans: Map.delete(state.child_spans, span_id)
+    }
+    {:reply, :ok, new_state}
+  end
+
+  def handle_call({:remove_child_spans, parent_span_id}, _from, state) do
+    new_state = %{state | child_spans: Map.delete(state.child_spans, parent_span_id)}
+    {:reply, :ok, new_state}
   end
 end
