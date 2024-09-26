@@ -3,6 +3,7 @@ import Config
 # Configure your database
 config :phoenix_app, PhoenixApp.Repo,
   adapter: Ecto.Adapters.SQLite3,
+  pool: Ecto.Adapters.SQL.Sandbox,
   database: "db/test.sqlite3"
 
 # We don't run a server during test. If one is required,
