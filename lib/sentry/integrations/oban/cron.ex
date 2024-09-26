@@ -8,23 +8,23 @@ defmodule Sentry.Integrations.Oban.Cron do
     [:oban, :job, :exception]
   ]
 
-  @spec attach_telemetry_handler() :: :ok
-  def attach_telemetry_handler do
-    _ = :telemetry.attach_many(__MODULE__, @events, &__MODULE__.handle_event/4, :no_config)
+  @spec attach_telemetry_handler(keyword()) :: :ok
+  def attach_telemetry_handler(config \\ []) do
+    _ = :telemetry.attach_many(__MODULE__, @events, &__MODULE__.handle_event/4, config)
     :ok
   end
 
-  @spec handle_event([atom()], term(), term(), :no_config) :: :ok
-  def handle_event(event, measurements, metadata, _config)
+  @spec handle_event([atom()], term(), term(), keyword()) :: :ok
+  def handle_event(event, measurements, metadata, config)
 
   def handle_event(
         [:oban, :job, event],
         measurements,
         %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} = metadata,
-        _config
+        config
       )
       when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
-    _ = handle_event(event, measurements, metadata)
+    _ = handle_oban_job_event(event, measurements, metadata, config)
     :ok
   end
 
@@ -35,16 +35,16 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   ## Helpers
 
-  defp handle_event(:start, _measurements, metadata) do
-    if opts = job_to_check_in_opts(metadata.job) do
+  defp handle_oban_job_event(:start, _measurements, metadata, config) do
+    if opts = job_to_check_in_opts(metadata.job, config) do
       opts
       |> Keyword.merge(status: :in_progress)
       |> Sentry.capture_check_in()
     end
   end
 
-  defp handle_event(:stop, measurements, metadata) do
-    if opts = job_to_check_in_opts(metadata.job) do
+  defp handle_oban_job_event(:stop, measurements, metadata, config) do
+    if opts = job_to_check_in_opts(metadata.job, config) do
       status =
         case metadata.state do
           :success -> :ok
@@ -60,16 +60,22 @@ defmodule Sentry.Integrations.Oban.Cron do
     end
   end
 
-  defp handle_event(:exception, measurements, metadata) do
-    if opts = job_to_check_in_opts(metadata.job) do
+  defp handle_oban_job_event(:exception, measurements, metadata, config) do
+    if opts = job_to_check_in_opts(metadata.job, config) do
       opts
       |> Keyword.merge(status: :error, duration: duration_in_seconds(measurements))
       |> Sentry.capture_check_in()
     end
   end
 
-  defp job_to_check_in_opts(job) when is_struct(job, Oban.Job) do
+  defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
     monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
+
+    monitor_slug =
+      case config[:monitor_name_generator] do
+        nil -> slugify(job.worker)
+        generator when is_function(generator) -> job |> generator.() |> slugify()
+      end
 
     case Keyword.merge(monitor_config_opts, schedule_opts(job)) do
       [] ->
@@ -81,7 +87,7 @@ defmodule Sentry.Integrations.Oban.Cron do
         [
           check_in_id: id,
           # This is already a binary.
-          monitor_slug: slugify(job.worker),
+          monitor_slug: monitor_slug,
           monitor_config: monitor_config_opts
         ]
     end
