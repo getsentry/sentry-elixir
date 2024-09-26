@@ -34,22 +34,20 @@ defmodule PhoenixApp.MixProject do
     [
       {:nimble_options, "~> 1.0"},
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
-
       {:ecto, "~> 3.12"},
       {:ecto_sql, "~> 3.12"},
       {:ecto_sqlite3, "~> 0.16"},
-
       {:phoenix, "~> 1.7.14"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_ecto, "~> 4.6", optional: true},
       {:heroicons,
-      github: "tailwindlabs/heroicons",
-      tag: "v2.1.1",
-      sparse: "optimized",
-      app: false,
-      compile: false,
-      depth: 1},
+       github: "tailwindlabs/heroicons",
+       tag: "v2.1.1",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1},
       # TODO bump on release to {:phoenix_live_view, "~> 1.0.0"},
       {:phoenix_live_view, "~> 1.0.0-rc.1", override: true},
       {:floki, ">= 0.30.0", only: :test},
@@ -65,13 +63,11 @@ defmodule PhoenixApp.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
       {:bypass, "~> 2.1", only: :test},
-
       {:opentelemetry, "~> 1.4"},
       {:opentelemetry_api, "~> 1.3"},
       {:opentelemetry_phoenix, "~> 1.2"},
       {:opentelemetry_bandit, "~> 0.1.4", github: "solnic/opentelemetry-bandit"},
       {:opentelemetry_ecto, "~> 1.2"},
-
       {:sentry, path: "../.."},
       {:hackney, "~> 1.18"}
     ]
