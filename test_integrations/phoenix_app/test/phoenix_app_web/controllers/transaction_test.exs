@@ -47,7 +47,7 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     assert [transaction] = transactions
 
-    assert transaction.transaction == "Elixir.PhoenixAppWeb.PageController#users"
+    assert transaction.transaction == "Elixir.Phoenix.LiveView.Plug#index"
     assert transaction.transaction_info == %{source: "view"}
 
     trace = transaction.contexts.trace
@@ -60,11 +60,12 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert transaction.request.url == "http://www.example.com/users"
     assert transaction.request.method == "GET"
 
-    assert [span] = transaction.spans
+    assert [span_mount, span_handle_params] = transaction.spans
 
-    assert span.op == "db.sql.ecto"
-    assert String.starts_with?(span.description, "SELECT ")
-    assert span.trace_id == trace.trace_id
-    assert span.parent_span_id == trace.span_id
+    assert span_mount.op == "http.server.live"
+    assert span_mount.description == "PhoenixAppWeb.UserLive.Index.mount"
+
+    assert span_handle_params.op == "http.server.live"
+    assert span_handle_params.description == "PhoenixAppWeb.UserLive.Index.handle_params"
   end
 end

@@ -42,6 +42,7 @@ defmodule PhoenixApp.MixProject do
       {:phoenix, "~> 1.7.14"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
+      {:phoenix_ecto, "~> 4.6", optional: true},
       {:heroicons,
       github: "tailwindlabs/heroicons",
       tag: "v2.1.1",
