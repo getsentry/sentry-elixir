@@ -1,6 +1,8 @@
 defmodule Sentry.Opentelemetry.SpanProcessor do
   @behaviour :otel_span_processor
 
+  require Logger
+
   alias Sentry.{Span, Transaction, Opentelemetry.SpanStorage, Opentelemetry.SpanRecord}
 
   @impl true
@@ -24,13 +26,26 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
 
       transaction = build_transaction(root_span, child_spans)
 
-      Sentry.send_transaction(transaction)
+      result =
+        case Sentry.send_transaction(transaction) do
+          {:ok, _id} ->
+            true
+
+          :ignored ->
+            true
+
+          {:error, error} ->
+            Logger.error("Failed to send transaction to Sentry: #{inspect(error)}")
+            {:error, :invalid_span}
+        end
 
       SpanStorage.remove_span(span_record.span_id)
       SpanStorage.remove_child_spans(span_record.span_id)
-    end
 
-    :ok
+      result
+    else
+      true
+    end
   end
 
   @impl true
