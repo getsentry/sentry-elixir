@@ -123,11 +123,8 @@ defmodule Sentry.Client do
       {:ok, id} ->
         {:ok, id}
 
-      {:error, {status, headers, body}} ->
-        {:error, ClientError.server_error(status, headers, body)}
-
-      {:error, reason} ->
-        {:error, ClientError.new(reason)}
+      {:error, %ClientError{} = error} ->
+        {:error, error}
     end
   end
 
