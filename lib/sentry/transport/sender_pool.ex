@@ -58,6 +58,12 @@ defmodule Sentry.Transport.SenderPool do
     :counters.sub(counter, 1, 1)
   end
 
+  @spec decrease_queued_transactions_counter() :: :ok
+  def decrease_queued_transactions_counter do
+    counter = :persistent_term.get(@queued_transactions_key)
+    :counters.sub(counter, 1, 1)
+  end
+
   @spec get_queued_events_counter() :: non_neg_integer()
   def get_queued_events_counter do
     counter = :persistent_term.get(@queued_events_key)
