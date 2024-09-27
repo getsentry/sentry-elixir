@@ -6,7 +6,7 @@ defmodule Sentry.Envelope do
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
-          items: [Event.t() | Attachment.t() | CheckIn.t(), ...]
+          items: [Event.t() | Attachment.t() | CheckIn.t() | Transaction.t(), ...]
         }
 
   @enforce_keys [:event_id, :items]
