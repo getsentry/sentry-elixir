@@ -53,6 +53,8 @@ jobs:
         path: |
           _build
           deps
+          test_integrations/phoenix_app/_build
+          test_integrations/phoenix_app/deps
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
         restore-keys: |
