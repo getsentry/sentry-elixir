@@ -1,5 +1,6 @@
 defmodule Sentry.Opentelemetry.SpanRecord do
   require Record
+  require OpenTelemetry
 
   @fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
   Record.defrecordp(:span, @fields)
@@ -54,7 +55,7 @@ defmodule Sentry.Opentelemetry.SpanRecord do
   defp cast_timestamp(nil), do: nil
 
   defp cast_timestamp(timestamp) do
-    nano_timestamp = :opentelemetry.timestamp_to_nano(timestamp)
+    nano_timestamp = OpenTelemetry.timestamp_to_nano(timestamp)
     {:ok, datetime} = DateTime.from_unix(div(nano_timestamp, 1_000_000), :millisecond)
 
     DateTime.to_iso8601(datetime)
