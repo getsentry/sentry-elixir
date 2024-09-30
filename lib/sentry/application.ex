@@ -19,9 +19,10 @@ defmodule Sentry.Application do
         []
       end
 
+    # if Config.dsn() && Config.send_client_reports?() do
     client_report_enabled =
-      if Config.dsn() && Config.send_client_reports?() do
-        Sentry.ClientReport
+      if Config.send_client_reports?() do
+        [Sentry.ClientReport]
       end
 
     integrations_config = Config.integrations()
