@@ -269,7 +269,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, check_in_body}] = decode_envelope!(body)
+        assert [{_headers, check_in_body}] = decode_envelope!(body)
         assert check_in_body["monitor_slug"] == "sentry-my-worker"
         send(test_pid, {ref, :done})
 
@@ -296,7 +296,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, check_in_body}] = decode_envelope!(body)
+        assert [{_headers, check_in_body}] = decode_envelope!(body)
         assert check_in_body["monitor_slug"] == "sentry-client-worker-my-client"
         send(test_pid, {ref, :done})
 
