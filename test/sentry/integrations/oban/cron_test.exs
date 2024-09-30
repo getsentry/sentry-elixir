@@ -7,6 +7,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
   describe "default configuration" do
     setup do
       Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
+      on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.Cron) end)
     end
 
     setup do
@@ -247,6 +248,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
       Sentry.Integrations.Oban.Cron.attach_telemetry_handler(
         monitor_name_generator: &custom_name_generator/1
       )
+
+      on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.Cron) end)
     end
 
     setup do
