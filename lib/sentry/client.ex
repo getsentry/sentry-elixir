@@ -113,7 +113,7 @@ defmodule Sentry.Client do
   def record_discarded_event(reason, category) do
     # if Config.send_client_reports?() == true do
     # call to client report genserver
-    ClientReport.add_discarded_event({reason, category}) |> IO.inspect()
+    ClientReport.add_discarded_event({reason, category})
     # end
 
     :ok

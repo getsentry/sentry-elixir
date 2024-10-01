@@ -1,5 +1,5 @@
 defmodule Sentry.ClientReportTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   alias Sentry.ClientReport
 
