@@ -100,7 +100,6 @@ defmodule Sentry.ClientReport do
     else
       # state is nil so nothing to send but keep looping
       schedule_report()
-      IO.inspect(state)
       {:noreply, %__MODULE__{}}
     end
   end

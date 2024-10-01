@@ -25,8 +25,6 @@ defmodule Sentry.Transport do
           {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
   def encode_and_post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
-    IO.inspect(envelope)
-
     result =
       case Envelope.to_binary(envelope) do
         {:ok, body} ->
