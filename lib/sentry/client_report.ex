@@ -93,7 +93,7 @@ defmodule Sentry.ClientReport do
           discarded_events: transform_map(state.discarded_events)
       }
 
-      Client.send_client_report(updated_state)
+      _ = Client.send_client_report(updated_state)
 
       schedule_report()
       {:noreply, %__MODULE__{}}
