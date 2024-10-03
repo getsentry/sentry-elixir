@@ -361,6 +361,22 @@ defmodule Sentry do
     end
   end
 
+  def send_transaction(transaction, opts \\ []) do
+    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    included_envs = Config.included_environments()
+
+    cond do
+      Config.test_mode?() ->
+        Client.send_transaction(transaction, opts)
+
+      included_envs == :all or to_string(Config.environment_name()) in included_envs ->
+        Client.send_transaction(transaction, opts)
+
+      true ->
+        :ignored
+    end
+  end
+
   @doc """
   Captures a check-in built with the given `options`.
 
