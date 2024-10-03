@@ -1,4 +1,4 @@
-ExUnit.start(assert_receive_timeout: 1000)
+ExUnit.start()
 
 File.rm_rf!(Sentry.Sources.path_of_packaged_source_code())
 
