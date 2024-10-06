@@ -2,7 +2,7 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, Config, Event, UUID, ClientReport}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
@@ -35,7 +35,8 @@ defmodule Sentry.Envelope do
   end
 
   @doc """
-  Creates a new envelope containing the client report and a map of discarded events.
+  Creates a new envelope containing the client report.
+  since: "10.8.0"
   """
   @spec from_client_report(ClientReport.t()) :: t()
   def from_client_report(%ClientReport{} = client_report) do
@@ -71,7 +72,7 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %Event{} = event) do
     case event |> Sentry.Client.render_event() |> json_library.encode() do
       {:ok, encoded_event} ->
-        header = ~s({"type": "event", "length": #{byte_size(encoded_event)}})
+        header = ~s({"type":"event","length":#{byte_size(encoded_event)}})
         [header, ?\n, encoded_event, ?\n]
 
       {:error, _reason} = error ->
@@ -96,7 +97,7 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %CheckIn{} = check_in) do
     case check_in |> CheckIn.to_map() |> json_library.encode() do
       {:ok, encoded_check_in} ->
-        header = ~s({"type": "check_in", "length": #{byte_size(encoded_check_in)}})
+        header = ~s({"type":"check_in","length":#{byte_size(encoded_check_in)}})
         [header, ?\n, encoded_check_in, ?\n]
 
       {:error, _reason} = error ->
@@ -107,7 +108,7 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %ClientReport{} = client_report) do
     case client_report |> Map.from_struct() |> json_library.encode() do
       {:ok, encoded_client_report} ->
-        header = ~s({"type": "client_report", "length": #{byte_size(encoded_client_report)}})
+        header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
         [header, ?\n, encoded_client_report, ?\n]
 
       {:error, _reason} = error ->
