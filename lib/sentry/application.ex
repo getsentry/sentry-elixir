@@ -19,12 +19,6 @@ defmodule Sentry.Application do
         []
       end
 
-    # if Config.dsn() && Config.send_client_reports?() do
-    client_report_enabled =
-      if Config.send_client_reports?() do
-        [Sentry.ClientReport]
-      end
-
     integrations_config = Config.integrations()
 
     children =
@@ -32,6 +26,7 @@ defmodule Sentry.Application do
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
         Sentry.Sources,
         Sentry.Dedupe,
+        Sentry.ClientReport,
         {Sentry.Integrations.CheckInIDMappings,
          [
            max_expected_check_in_time:
@@ -40,13 +35,6 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         [Sentry.Transport.SenderPool]
-
-    # only add client_reports if enabled
-    children =
-      case client_report_enabled do
-        nil -> children
-        _ -> children ++ client_report_enabled
-      end
 
     cache_loaded_applications()
 

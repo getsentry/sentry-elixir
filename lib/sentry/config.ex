@@ -151,8 +151,10 @@ defmodule Sentry.Config do
       type: :boolean,
       default: true,
       doc: """
-      Send SDK Client Reports, this option defaults to `true`
-      *Available since v10.0.0*.
+      Send diagnostic client reports about discarded events, interval is set to send a report
+      once every 30 seconds if any discarded events exist.
+      See [Client Reports](https://develop.sentry.dev/sdk/client-reports/) in Sentry docs.
+      *Available since v10.8.0*.
       """
     ],
     server_name: [

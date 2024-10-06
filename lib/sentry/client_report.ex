@@ -5,37 +5,10 @@ defmodule Sentry.ClientReport do
   See <https://develop.sentry.dev/sdk/client-reports/>.
   """
 
-  @moduledoc since: "10.0.0"
-
-  @typedoc since: "10.0.0"
+  @moduledoc since: "10.8.0"
 
   use GenServer
   alias Sentry.Client
-
-  @typedoc """
-  The possible reasons of the discarded event.
-  """
-  @type reasons() ::
-          :ratelimit_backoff
-          | :queue_overflow
-          | :cache_overflow
-          | :network_error
-          | :sample_rate
-          | :before_send
-          | :event_processor
-          | :insufficient_data
-          | :backpressure
-
-  @typedoc """
-  The struct for a **client report** interface.
-  """
-  @type t() :: %__MODULE__{
-          timestamp: String.t() | number(),
-          discarded_events:
-            list(%{reason: reasons(), category: String.t(), quantity: pos_integer()})
-        }
-
-  defstruct [:timestamp, :discarded_events]
 
   @client_report_reasons [
     :ratelimit_backoff,
@@ -49,15 +22,31 @@ defmodule Sentry.ClientReport do
     :backpressure
   ]
 
+  @typedoc """
+  The possible reasons of the discarded event.
+  """
+  @type reason() ::
+          unquote(Enum.reduce(@client_report_reasons, &quote(do: unquote(&1) | unquote(&2))))
+
+  @typedoc """
+  The struct for a **client report** interface.
+  """
+  @type t() :: %__MODULE__{
+          timestamp: String.t() | number(),
+          discarded_events: [%{reason: reason(), category: String.t(), quantity: pos_integer()}]
+        }
+
+  defstruct [:timestamp, discarded_events: %{}]
+
   @send_interval 5000
 
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(_) do
+  @spec start_link([]) :: GenServer.on_start()
+  def start_link([]) do
     # check config to see if send_client_report is true
     GenServer.start_link(__MODULE__, %__MODULE__{}, name: __MODULE__)
   end
 
-  @spec add_discarded_event({reasons(), String.t()}) :: :ok
+  @spec add_discarded_event({reason(), String.t()}) :: :ok
   def add_discarded_event({reason, category}) do
     if Enum.member?(@client_report_reasons, reason) do
       GenServer.cast(__MODULE__, {:add_discarded_event, {reason, category}})
@@ -74,19 +63,19 @@ defmodule Sentry.ClientReport do
 
   @impl true
   def handle_cast({:add_discarded_event, {reason, category}}, client_report) do
-    if client_report.discarded_events == nil do
+    if map_size(client_report.discarded_events) == 0 do
       {:noreply, %{client_report | discarded_events: %{{reason, category} => 1}}}
     else
       discarded_events =
         Map.update(client_report.discarded_events, {reason, category}, 1, &(&1 + 1))
 
-      {:noreply, %{client_report | discarded_events: discarded_events}}
+      {:noreply, %__MODULE__{client_report | discarded_events: discarded_events}}
     end
   end
 
   @impl true
   def handle_info(:send_report, state) do
-    if state.discarded_events != nil do
+    if map_size(state.discarded_events) == 0 do
       updated_state = %{
         state
         | timestamp: timestamp(),
@@ -110,7 +99,7 @@ defmodule Sentry.ClientReport do
 
   defp timestamp do
     DateTime.utc_now()
-    |> DateTime.truncate(:microsecond)
+    |> DateTime.truncate(:second)
     |> DateTime.to_iso8601()
     |> String.trim_trailing("Z")
   end
