@@ -110,15 +110,6 @@ defmodule Sentry.Client do
     send_result
   end
 
-  def record_discarded_event(reason, category) do
-    # if Config.send_client_reports?() == true do
-    # call to client report genserver
-    ClientReport.add_discarded_event({reason, category})
-    # end
-
-    :ok
-  end
-
   defp sample_event(sample_rate) do
     cond do
       sample_rate == 1 -> :ok

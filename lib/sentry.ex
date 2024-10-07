@@ -179,7 +179,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options}
+  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options, Transport}
 
   require Logger
 
@@ -341,7 +341,7 @@ defmodule Sentry do
     cond do
       is_nil(event.message) and event.exception == [] ->
         LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
-        Client.record_discarded_event(:event_processor, "no message or exception")
+        Transport.record_discarded_event(:event_processor, event)
         # record discarded_event here
         :ignored
 
