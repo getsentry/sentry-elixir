@@ -3,7 +3,7 @@ defmodule Sentry.Transport do
 
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
-  alias Sentry.{ClientError, Config, Envelope, LoggerUtils}
+  alias Sentry.{ClientError, ClientReport, Config, DataCategory, Envelope, LoggerUtils}
 
   @default_retries [1000, 2000, 4000, 8000]
   @sentry_version 5
@@ -40,6 +40,11 @@ defmodule Sentry.Transport do
     result
   end
 
+  def record_discarded_event(reason, category) do
+    ClientReport.add_discarded_event({reason, DataCategory.data_category_mapping(category)})
+    :ok
+  end
+
   defp post_envelope_with_retries(client, endpoint, headers, payload, retries_left) do
     case request(client, endpoint, headers, payload) do
       {:ok, id} ->
@@ -52,6 +57,7 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
 
       {:retry_after, _delay_ms} ->
+        # record_discarded_event(:ratelimit_backoff, "replace with data catgory")
         {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->

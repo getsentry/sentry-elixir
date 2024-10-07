@@ -6,7 +6,7 @@ defmodule Sentry.ClientReportTest do
   describe "add_discarded_event/1" do
     test "records discarded event to state" do
       assert :sys.get_state(ClientReport) == %Sentry.ClientReport{
-               discarded_events: nil
+               discarded_events: %{}
              }
 
       ClientReport.add_discarded_event({:event_processor, "error"})

@@ -8,7 +8,7 @@ defmodule Sentry.ClientReport do
   @moduledoc since: "10.8.0"
 
   use GenServer
-  alias Sentry.Client
+  alias Sentry.{Client, Config}
 
   @client_report_reasons [
     :ratelimit_backoff,
@@ -82,7 +82,10 @@ defmodule Sentry.ClientReport do
           discarded_events: transform_map(state.discarded_events)
       }
 
-      _ = Client.send_client_report(updated_state)
+      _ =
+        if !Config.dsn() do
+          Client.send_client_report(updated_state)
+        end
 
       schedule_report()
       {:noreply, %__MODULE__{}}
