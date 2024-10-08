@@ -29,7 +29,7 @@ defmodule Sentry.Transport do
       case Envelope.to_binary(envelope) do
         {:ok, body} ->
           {endpoint, headers} = get_endpoint_and_headers()
-          post_envelope_with_retries(client, endpoint, headers, body, retries)
+          post_envelope_with_retries(client, endpoint, headers, body, retries, envelope.items)
 
         {:error, reason} ->
           {:error, ClientError.new({:invalid_json, reason})}
@@ -40,12 +40,26 @@ defmodule Sentry.Transport do
     result
   end
 
-  def record_discarded_event(reason, category) do
-    ClientReport.add_discarded_event({reason, DataCategory.data_category_mapping(category)})
+  def record_discarded_event(reason, event_item) do
+    if is_list(event_item) do
+      Enum.map(event_item, fn event ->
+        ClientReport.add_discarded_event({reason, Envelope.get_data_category(event)})
+      end)
+    else
+      ClientReport.add_discarded_event({reason, Envelope.get_data_category(event_item)})
+    end
+
     :ok
   end
 
-  defp post_envelope_with_retries(client, endpoint, headers, payload, retries_left) do
+  defp post_envelope_with_retries(
+         client,
+         endpoint,
+         headers,
+         payload,
+         retries_left,
+         envelope_items
+       ) do
     case request(client, endpoint, headers, payload) do
       {:ok, id} ->
         {:ok, id}
@@ -54,21 +68,39 @@ defmodule Sentry.Transport do
       # own retry.
       {:retry_after, delay_ms} when retries_left != [] ->
         Process.sleep(delay_ms)
-        post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
+
+        post_envelope_with_retries(
+          client,
+          endpoint,
+          headers,
+          payload,
+          tl(retries_left),
+          envelope_items
+        )
 
       {:retry_after, _delay_ms} ->
-        # record_discarded_event(:ratelimit_backoff, "replace with data catgory")
+        record_discarded_event(:ratelimit_backoff, envelope_items)
         {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
-        post_envelope_with_retries(client, endpoint, headers, payload, retries_left)
+
+        post_envelope_with_retries(
+          client,
+          endpoint,
+          headers,
+          payload,
+          retries_left,
+          envelope_items
+        )
 
       {:error, {:http, {status, headers, body}}} ->
+        record_discarded_event(:send_error, envelope_items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
+        record_discarded_event(:send_error, envelope_items)
         {:error, ClientError.new(reason)}
     end
   end
