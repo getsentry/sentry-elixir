@@ -15,7 +15,8 @@ defmodule Sentry.Client do
     Interfaces,
     LoggerUtils,
     Transport,
-    Options
+    Options,
+    ClientReport
   }
 
   require Logger
@@ -81,14 +82,32 @@ defmodule Sentry.Client do
       :unsampled ->
         # See https://github.com/getsentry/develop/pull/551/files
         Sentry.put_last_event_id_and_source(event.event_id, event.source)
+        Transport.record_discarded_event(:sample_rate, "error")
         :unsampled
 
       :excluded ->
+        # do we need to add this if an event is dropped due to it being a duplicate??
+        Transport.record_discarded_event(:event_processor, "error")
+
         :excluded
 
       {:error, %ClientError{} = error} ->
         {:error, error}
     end
+  end
+
+  @spec send_client_report(ClientReport.t()) ::
+          {:ok, client_report_id :: String.t()} | {:error, ClientError.t()}
+  def send_client_report(%ClientReport{} = client_report) do
+    client = Config.client()
+
+    # This is a "private" option, only really used in testing.
+    request_retries =
+      Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
+    client_report
+    |> Envelope.from_client_report()
+    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp sample_event(sample_rate) do

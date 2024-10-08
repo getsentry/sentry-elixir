@@ -2,11 +2,11 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, Config, Event, UUID}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
-          items: [Event.t() | Attachment.t() | CheckIn.t(), ...]
+          items: [Event.t() | Attachment.t() | CheckIn.t() | ClientReport.t(), ...]
         }
 
   @enforce_keys [:event_id, :items]
@@ -35,6 +35,41 @@ defmodule Sentry.Envelope do
   end
 
   @doc """
+  Creates a new envelope containing the client report.
+  since: "10.8.0"
+  """
+  @spec from_client_report(ClientReport.t()) :: t()
+  def from_client_report(%ClientReport{} = client_report) do
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: [client_report]
+    }
+  end
+
+  def get_data_category(type) do
+    if is_binary(type) do
+      type
+    else
+      case type do
+        %Attachment{} ->
+          "attachment"
+
+        %CheckIn{} ->
+          "monitor"
+
+        %ClientReport{} ->
+          "internal"
+
+        %Event{} ->
+          "error"
+
+        _ ->
+          "default"
+      end
+    end
+  end
+
+  @doc """
   Encodes the envelope into its binary representation.
 
   For now, we support only envelopes with a single event and any number of attachments
@@ -60,7 +95,7 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %Event{} = event) do
     case event |> Sentry.Client.render_event() |> json_library.encode() do
       {:ok, encoded_event} ->
-        header = ~s({"type": "event", "length": #{byte_size(encoded_event)}})
+        header = ~s({"type":"event","length":#{byte_size(encoded_event)}})
         [header, ?\n, encoded_event, ?\n]
 
       {:error, _reason} = error ->
@@ -85,8 +120,19 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %CheckIn{} = check_in) do
     case check_in |> CheckIn.to_map() |> json_library.encode() do
       {:ok, encoded_check_in} ->
-        header = ~s({"type": "check_in", "length": #{byte_size(encoded_check_in)}})
+        header = ~s({"type":"check_in","length":#{byte_size(encoded_check_in)}})
         [header, ?\n, encoded_check_in, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %ClientReport{} = client_report) do
+    case client_report |> Map.from_struct() |> json_library.encode() do
+      {:ok, encoded_client_report} ->
+        header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
+        [header, ?\n, encoded_client_report, ?\n]
 
       {:error, _reason} = error ->
         throw(error)

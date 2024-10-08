@@ -179,7 +179,7 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options}
+  alias Sentry.{CheckIn, Client, ClientError, Config, Event, LoggerUtils, Options, Transport}
 
   require Logger
 
@@ -341,6 +341,7 @@ defmodule Sentry do
     cond do
       is_nil(event.message) and event.exception == [] ->
         LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
+        Transport.record_discarded_event(:event_processor, event)
         :ignored
 
       # If we're in test mode, let's send the event down the pipeline anyway.
@@ -411,6 +412,7 @@ defmodule Sentry do
       |> CheckIn.new()
       |> Client.send_check_in(options)
     else
+      # add record dropped event here? Dropped due to....
       :ignored
     end
   end
