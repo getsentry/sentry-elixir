@@ -46,6 +46,25 @@ defmodule Sentry.Envelope do
     }
   end
 
+  def get_data_category(envelope_item) do
+    case envelope_item do
+      %Attachment{} ->
+        "attachment"
+
+      %CheckIn{} ->
+        "monitor"
+
+      %ClientReport{} ->
+        "internal"
+
+      %Event{} ->
+        "error"
+
+      _ ->
+        "default"
+    end
+  end
+
   @doc """
   Encodes the envelope into its binary representation.
 
