@@ -46,22 +46,26 @@ defmodule Sentry.Envelope do
     }
   end
 
-  def get_data_category(envelope_item) do
-    case envelope_item do
-      %Attachment{} ->
-        "attachment"
+  def get_data_category(type) do
+    if is_binary(type) do
+      type
+    else
+      case type do
+        %Attachment{} ->
+          "attachment"
 
-      %CheckIn{} ->
-        "monitor"
+        %CheckIn{} ->
+          "monitor"
 
-      %ClientReport{} ->
-        "internal"
+        %ClientReport{} ->
+          "internal"
 
-      %Event{} ->
-        "error"
+        %Event{} ->
+          "error"
 
-      _ ->
-        "default"
+        _ ->
+          "default"
+      end
     end
   end
 

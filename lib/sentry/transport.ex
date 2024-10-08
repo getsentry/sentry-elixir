@@ -3,7 +3,7 @@ defmodule Sentry.Transport do
 
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
-  alias Sentry.{ClientError, ClientReport, Config, DataCategory, Envelope, LoggerUtils}
+  alias Sentry.{ClientError, ClientReport, Config, Envelope, LoggerUtils}
 
   @default_retries [1000, 2000, 4000, 8000]
   @sentry_version 5
@@ -36,19 +36,21 @@ defmodule Sentry.Transport do
       end
 
     _ = maybe_log_send_result(result, envelope.items)
-
     result
   end
 
   def record_discarded_event(reason, event_item) do
-    if is_list(event_item) do
-      Enum.map(event_item, fn event ->
-        ClientReport.add_discarded_event({reason, Envelope.get_data_category(event)})
-      end)
-    else
-      ClientReport.add_discarded_event({reason, Envelope.get_data_category(event_item)})
-    end
+    _ =
+      if is_list(event_item) do
+        Enum.map(event_item, fn event ->
+          ClientReport.add_discarded_event({reason, Envelope.get_data_category(event)})
+        end)
+      else
+        ClientReport.add_discarded_event({reason, Envelope.get_data_category(event_item)})
+      end
 
+    # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
+    # https://develop.sentry.dev/sdk/client-reports/
     :ok
   end
 

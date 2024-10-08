@@ -29,7 +29,7 @@ defmodule Sentry.ClientReport do
           unquote(Enum.reduce(@client_report_reasons, &quote(do: unquote(&1) | unquote(&2))))
 
   @typedoc """
-  The struct for a **client report** interface.
+  The struct for a **client report**.
   """
   @type t() :: %__MODULE__{
           timestamp: String.t() | number(),
@@ -38,12 +38,12 @@ defmodule Sentry.ClientReport do
 
   defstruct [:timestamp, discarded_events: %{}]
 
-  @send_interval 5000
+  @send_interval 30_000
 
+  @doc false
   @spec start_link([]) :: GenServer.on_start()
   def start_link([]) do
-    # check config to see if send_client_report is true
-    GenServer.start_link(__MODULE__, %__MODULE__{}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
   @spec add_discarded_event({reason(), String.t()}) :: :ok
@@ -55,44 +55,49 @@ defmodule Sentry.ClientReport do
     :ok
   end
 
+  @doc false
   @impl true
   def init(state) do
     schedule_report()
     {:ok, state}
   end
 
+  @doc false
   @impl true
-  def handle_cast({:add_discarded_event, {reason, category}}, client_report) do
-    if map_size(client_report.discarded_events) == 0 do
-      {:noreply, %{client_report | discarded_events: %{{reason, category} => 1}}}
-    else
-      discarded_events =
-        Map.update(client_report.discarded_events, {reason, category}, 1, &(&1 + 1))
-
-      {:noreply, %__MODULE__{client_report | discarded_events: discarded_events}}
-    end
+  def handle_cast({:add_discarded_event, {reason, category}}, discarded_events) do
+    {:noreply, Map.update(discarded_events, {reason, category}, 1, &(&1 + 1))}
   end
 
+  @doc false
   @impl true
-  def handle_info(:send_report, state) do
-    if map_size(state.discarded_events) == 0 do
-      updated_state = %{
-        state
-        | timestamp: timestamp(),
-          discarded_events: transform_map(state.discarded_events)
+  def handle_info(:send_report, discarded_events) do
+    if map_size(discarded_events) != 0 do
+      discarded_events =
+        discarded_events
+        |> Enum.map(fn {{reason, category}, quantity} ->
+          %{
+            reason: reason,
+            category: category,
+            quantity: quantity
+          }
+        end)
+
+      client_report = %__MODULE__{
+        timestamp: timestamp(),
+        discarded_events: discarded_events
       }
 
       _ =
-        if !Config.dsn() do
-          Client.send_client_report(updated_state)
+        if Config.dsn() != nil && Config.send_client_reports?() do
+          Client.send_client_report(client_report)
         end
 
       schedule_report()
-      {:noreply, %__MODULE__{}}
+      {:noreply, %{}}
     else
       # state is nil so nothing to send but keep looping
       schedule_report()
-      {:noreply, %__MODULE__{}}
+      {:noreply, %{}}
     end
   end
 
@@ -105,16 +110,5 @@ defmodule Sentry.ClientReport do
     |> DateTime.truncate(:second)
     |> DateTime.to_iso8601()
     |> String.trim_trailing("Z")
-  end
-
-  defp transform_map(discarded_events_map) do
-    discarded_events_map
-    |> Enum.map(fn {{reason, category}, quantity} ->
-      %{
-        reason: reason,
-        category: category,
-        quantity: quantity
-      }
-    end)
   end
 end

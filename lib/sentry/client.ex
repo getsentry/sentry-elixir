@@ -99,19 +99,15 @@ defmodule Sentry.Client do
   @spec send_client_report(ClientReport.t()) ::
           {:ok, client_report_id :: String.t()} | {:error, ClientError.t()}
   def send_client_report(%ClientReport{} = client_report) do
-    # We don't pass options because this is internal. But should we use default client or users?
     client = Config.client()
 
     # This is a "private" option, only really used in testing.
     request_retries =
       Application.get_env(:sentry, :request_retries, Transport.default_retries())
 
-    send_result =
-      client_report
-      |> Envelope.from_client_report()
-      |> Transport.encode_and_post_envelope(client, request_retries)
-
-    send_result
+    client_report
+    |> Envelope.from_client_report()
+    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp sample_event(sample_rate) do
