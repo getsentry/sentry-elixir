@@ -33,18 +33,22 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       end
 
     _ =
-      Sentry.capture_exception(exception,
-        stacktrace: stacktrace,
-        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-        fingerprint: [
-          inspect(exception.__struct__),
-          inspect(job.worker),
-          Exception.message(exception)
-        ],
-        extra:
-          Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
-        integration_meta: %{oban: %{job: job}}
-      )
+      if is_struct(exception) do
+        Sentry.capture_exception(exception,
+          stacktrace: stacktrace,
+          tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+          fingerprint: [
+            inspect(exception.__struct__),
+            inspect(job.worker),
+            Exception.message(exception)
+          ],
+          extra:
+            Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
+          integration_meta: %{oban: %{job: job}}
+        )
+      else
+        Sentry.capture_message("Error with %s", interpolation_parameters: [exception])
+      end
 
     :ok
   end
