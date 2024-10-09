@@ -33,7 +33,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       end
 
     _ =
-      if is_struct(exception) do
+      if is_exception(exception) do
         Sentry.capture_exception(exception,
           stacktrace: stacktrace,
           tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
