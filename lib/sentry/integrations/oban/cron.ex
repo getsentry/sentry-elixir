@@ -72,16 +72,12 @@ defmodule Sentry.Integrations.Oban.Cron do
     monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
 
     monitor_slug =
-      case config[:monitor_name_generator] do
+      case config[:monitor_slug_generator] do
         nil ->
           slugify(job.worker)
 
-        {mod, fun, args} when is_atom(mod) and is_atom(fun) and is_list(args) ->
-          if function_exported?(mod, fun, Enum.count(args) + 1) do
-            apply(mod, fun, [job | args]) |> slugify()
-          else
-            slugify(job.worker)
-          end
+        {mod, fun} when is_atom(mod) and is_atom(fun) ->
+          mod |> apply(fun, [job]) |> slugify()
       end
 
     case Keyword.merge(monitor_config_opts, schedule_opts(job)) do

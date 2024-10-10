@@ -5,12 +5,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
   import Sentry.TestHelpers
 
   setup context do
-    opts =
-      if context[:custom_monitor_name_generator] do
-        [monitor_name_generator: {__MODULE__, :custom_name_generator, []}]
-      else
-        []
-      end
+    opts = context[:attach_opts] || []
 
     Sentry.Integrations.Oban.Cron.attach_telemetry_handler(opts)
     on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.Cron) end)
@@ -248,7 +243,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     assert_receive {^ref, :done}, 1000
   end
 
-  @tag :custom_monitor_name_generator
+  @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is not affected if the custom monitor_name_generator does not target the worker",
        %{bypass: bypass} do
     test_pid = self()
@@ -274,7 +269,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     assert_receive {^ref, :done}, 1000
   end
 
-  @tag :custom_monitor_name_generator
+  @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is set based on the custom monitor_name_generator if it targets the worker",
        %{bypass: bypass} do
     client_name = "my-client"

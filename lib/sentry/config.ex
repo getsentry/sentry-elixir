@@ -59,12 +59,13 @@ defmodule Sentry.Config do
               capture check-ins for Oban jobs. *Available since v10.2.0*.
               """
             ],
-            monitor_name_generator: [
-              type: :mfa,
+            monitor_slug_generator: [
+              type: {:tuple, [:atom, :atom]},
+              type_doc: "`{module(), atom()}`",
               doc: """
-              A {module, function, arguments} tuple that generates a monitor name based on the Oban.Job struct.
-              This function should only accept a single argument, the Oban.Job struct, and return a string.
-              This can be used to create monitors specific to a Job's argument. *Available since v10.7.1*.
+              A `{module, function}` tuple that generates a monitor name based on the `Oban.Job` struct.
+              The function is called with the `Oban.Job` as its arguments and must return a string.
+              This can be used to customize monitor slugs. *Available since v10.8.0*.
               """
             ]
           ]
