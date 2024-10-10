@@ -58,6 +58,15 @@ defmodule Sentry.Config do
               Whether to enable the Oban integration. When enabled, the Sentry SDK will
               capture check-ins for Oban jobs. *Available since v10.2.0*.
               """
+            ],
+            monitor_slug_generator: [
+              type: {:tuple, [:atom, :atom]},
+              type_doc: "`{module(), atom()}`",
+              doc: """
+              A `{module, function}` tuple that generates a monitor name based on the `Oban.Job` struct.
+              The function is called with the `Oban.Job` as its arguments and must return a string.
+              This can be used to customize monitor slugs. *Available since v10.8.0*.
+              """
             ]
           ]
         ]

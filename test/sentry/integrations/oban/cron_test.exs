@@ -4,8 +4,11 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
   import Sentry.TestHelpers
 
-  setup_all do
-    Sentry.Integrations.Oban.Cron.attach_telemetry_handler()
+  setup context do
+    opts = context[:attach_opts] || []
+
+    Sentry.Integrations.Oban.Cron.attach_telemetry_handler(opts)
+    on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.Cron) end)
   end
 
   setup do
@@ -239,4 +242,64 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
     assert_receive {^ref, :done}, 1000
   end
+
+  @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
+  test "monitor_slug is not affected if the custom monitor_name_generator does not target the worker",
+       %{bypass: bypass} do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert [{_headers, check_in_body}] = decode_envelope!(body)
+      assert check_in_body["monitor_slug"] == "sentry-my-worker"
+      send(test_pid, {ref, :done})
+
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+    end)
+
+    :telemetry.execute([:oban, :job, :start], %{}, %{
+      job: %Oban.Job{
+        worker: "Sentry.MyWorker",
+        id: 123,
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      }
+    })
+
+    assert_receive {^ref, :done}, 1000
+  end
+
+  @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
+  test "monitor_slug is set based on the custom monitor_name_generator if it targets the worker",
+       %{bypass: bypass} do
+    client_name = "my-client"
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert [{_headers, check_in_body}] = decode_envelope!(body)
+      assert check_in_body["monitor_slug"] == "sentry-client-worker-my-client"
+      send(test_pid, {ref, :done})
+
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+    end)
+
+    :telemetry.execute([:oban, :job, :start], %{}, %{
+      job: %Oban.Job{
+        worker: "Sentry.ClientWorker",
+        id: 123,
+        args: %{"client" => client_name},
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      }
+    })
+
+    assert_receive {^ref, :done}, 1000
+  end
+
+  def custom_name_generator(%Oban.Job{worker: "Sentry.ClientWorker", args: %{"client" => client}}) do
+    "Sentry.ClientWorker.#{client}"
+  end
+
+  def custom_name_generator(%Oban.Job{worker: worker}), do: worker
 end
