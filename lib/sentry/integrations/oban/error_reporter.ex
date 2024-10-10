@@ -24,7 +24,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           :no_config
         ) :: :ok
   def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
-    %{reason: exception, stacktrace: stacktrace} = job.unsaved_error
+    %{reason: reason, stacktrace: stacktrace} = job.unsaved_error
 
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
@@ -33,21 +33,21 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       end
 
     _ =
-      if is_exception(exception) do
-        Sentry.capture_exception(exception,
+      if is_exception(reason) do
+        Sentry.capture_exception(reason,
           stacktrace: stacktrace,
           tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
           fingerprint: [
-            inspect(exception.__struct__),
+            inspect(reason.__struct__),
             inspect(job.worker),
-            Exception.message(exception)
+            Exception.message(reason)
           ],
           extra:
             Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
           integration_meta: %{oban: %{job: job}}
         )
       else
-        Sentry.capture_message("Error with %s", interpolation_parameters: [exception])
+        Sentry.capture_message("Error with %s", interpolation_parameters: [reason])
       end
 
     :ok
