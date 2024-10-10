@@ -9,7 +9,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   ]
 
   @spec attach_telemetry_handler(keyword()) :: :ok
-  def attach_telemetry_handler(config \\ []) do
+  def attach_telemetry_handler(config) when is_list(config) do
     _ = :telemetry.attach_many(__MODULE__, @events, &__MODULE__.handle_event/4, config)
     :ok
   end
@@ -73,8 +73,15 @@ defmodule Sentry.Integrations.Oban.Cron do
 
     monitor_slug =
       case config[:monitor_name_generator] do
-        nil -> slugify(job.worker)
-        generator when is_function(generator) -> job |> generator.() |> slugify()
+        nil ->
+          slugify(job.worker)
+
+        {mod, fun, args} when is_atom(mod) and is_atom(fun) and is_list(args) ->
+          if function_exported?(mod, fun, Enum.count(args) + 1) do
+            apply(mod, fun, [job | args]) |> slugify()
+          else
+            slugify(job.worker)
+          end
       end
 
     case Keyword.merge(monitor_config_opts, schedule_opts(job)) do

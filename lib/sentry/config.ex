@@ -60,10 +60,11 @@ defmodule Sentry.Config do
               """
             ],
             monitor_name_generator: [
-              type: {:fun, 1},
+              type: :mfa,
               doc: """
-              A function that generates a monitor name based on the Oban.Job struct. This can be used
-              to create monitors specific to a Job's argument. *Available since v10.7.1*.
+              A {module, function, arguments} tuple that generates a monitor name based on the Oban.Job struct.
+              This function should only accept a single argument, the Oban.Job struct, and return a string.
+              This can be used to create monitors specific to a Job's argument. *Available since v10.7.1*.
               """
             ]
           ]
