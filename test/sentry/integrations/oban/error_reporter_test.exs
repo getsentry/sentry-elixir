@@ -73,12 +73,26 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
+      assert %{job: %Oban.Job{}} = event.integration_meta.oban
 
       assert event.message == %Sentry.Interfaces.Message{
-               message: "Error with %s",
-               params: [:undef],
-               formatted: "Error with undef"
+               formatted:
+                 "Oban job Sentry.Integrations.Oban.ErrorReporterTest.MyWorker errored out: :undef",
+               message:
+                 "Oban job Sentry.Integrations.Oban.ErrorReporterTest.MyWorker errored out: %s",
+               params: [":undef"]
              }
+
+      assert [%Sentry.Interfaces.Thread{stacktrace: %{frames: [stacktrace]}}] = event.threads
+
+      assert stacktrace.module == MyWorker
+
+      assert stacktrace.function ==
+               "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker.process/1"
+
+      assert event.tags.oban_queue == "default"
+      assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
     end
   end
 end

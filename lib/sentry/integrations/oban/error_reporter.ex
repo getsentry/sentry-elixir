@@ -32,23 +32,34 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         _ -> stacktrace
       end
 
-    _ =
-      if is_exception(reason) do
-        Sentry.capture_exception(reason,
-          stacktrace: stacktrace,
-          tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-          fingerprint: [
-            inspect(reason.__struct__),
-            inspect(job.worker),
-            Exception.message(reason)
-          ],
-          extra:
-            Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
-          integration_meta: %{oban: %{job: job}}
-        )
-      else
-        Sentry.capture_message("Error with %s", interpolation_parameters: [reason])
-      end
+    fingerprint_opts =
+      (is_exception(reason) && [inspect(reason.__struct__), Exception.message(reason)]) ||
+        [inspect(reason)]
+
+    opts =
+      [
+        stacktrace: stacktrace,
+        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+        fingerprint:
+          [
+            inspect(job.worker)
+          ] ++ fingerprint_opts,
+        extra:
+          Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
+        integration_meta: %{oban: %{job: job}}
+      ]
+
+    if is_exception(reason) do
+      Sentry.capture_exception(
+        reason,
+        opts
+      )
+    else
+      Sentry.capture_message(
+        "Oban job #{job.worker} errored out: %s",
+        opts ++ [interpolation_parameters: [inspect(reason)]]
+      )
+    end
 
     :ok
   end
