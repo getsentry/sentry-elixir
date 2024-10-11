@@ -33,17 +33,17 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       end
 
     fingerprint_opts =
-      (is_exception(reason) && [inspect(reason.__struct__), Exception.message(reason)]) ||
+      if is_exception(reason) do
+        [inspect(reason.__struct__), Exception.message(reason)]
+      else
         [inspect(reason)]
+      end
 
     opts =
       [
         stacktrace: stacktrace,
         tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-        fingerprint:
-          [
-            inspect(job.worker)
-          ] ++ fingerprint_opts,
+        fingerprint: [inspect(job.worker)] ++ fingerprint_opts,
         extra:
           Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
         integration_meta: %{oban: %{job: job}}
@@ -51,10 +51,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
     _ =
       if is_exception(reason) do
-        Sentry.capture_exception(
-          reason,
-          opts
-        )
+        Sentry.capture_exception(reason, opts)
       else
         Sentry.capture_message(
           "Oban job #{job.worker} errored out: %s",
