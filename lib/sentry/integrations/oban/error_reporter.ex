@@ -49,17 +49,18 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         integration_meta: %{oban: %{job: job}}
       ]
 
-    if is_exception(reason) do
-      Sentry.capture_exception(
-        reason,
-        opts
-      )
-    else
-      Sentry.capture_message(
-        "Oban job #{job.worker} errored out: %s",
-        opts ++ [interpolation_parameters: [inspect(reason)]]
-      )
-    end
+    _ =
+      if is_exception(reason) do
+        Sentry.capture_exception(
+          reason,
+          opts
+        )
+      else
+        Sentry.capture_message(
+          "Oban job #{job.worker} errored out: %s",
+          opts ++ [interpolation_parameters: [inspect(reason)]]
+        )
+      end
 
     :ok
   end
