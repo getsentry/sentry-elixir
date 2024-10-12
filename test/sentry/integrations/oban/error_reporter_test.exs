@@ -50,5 +50,49 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
       assert %{job: %Oban.Job{}} = event.integration_meta.oban
     end
+
+    test "reports non-exception errors to Sentry" do
+      job =
+        %{"id" => "123", "entity" => "user", "type" => "delete"}
+        |> MyWorker.new()
+        |> Ecto.Changeset.apply_action!(:validate)
+        |> Map.replace!(:unsaved_error, %{
+          reason: :undef,
+          kind: :error,
+          stacktrace: []
+        })
+
+      Sentry.Test.start_collecting()
+
+      assert :ok =
+               ErrorReporter.handle_event(
+                 [:oban, :job, :exception],
+                 %{},
+                 %{job: job},
+                 :no_config
+               )
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert %{job: %Oban.Job{}} = event.integration_meta.oban
+
+      assert event.message == %Sentry.Interfaces.Message{
+               formatted:
+                 "Oban job Sentry.Integrations.Oban.ErrorReporterTest.MyWorker errored out: :undef",
+               message:
+                 "Oban job Sentry.Integrations.Oban.ErrorReporterTest.MyWorker errored out: %s",
+               params: [":undef"]
+             }
+
+      assert [%Sentry.Interfaces.Thread{stacktrace: %{frames: [stacktrace]}}] = event.threads
+
+      assert stacktrace.module == MyWorker
+
+      assert stacktrace.function ==
+               "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker.process/1"
+
+      assert event.tags.oban_queue == "default"
+      assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
+    end
   end
 end
