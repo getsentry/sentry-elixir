@@ -82,13 +82,10 @@ defmodule Sentry.Client do
       :unsampled ->
         # See https://github.com/getsentry/develop/pull/551/files
         Sentry.put_last_event_id_and_source(event.event_id, event.source)
-        Transport.record_discarded_event(:sample_rate, "error")
+        Transport.record_discarded_event(:sample_rate, event)
         :unsampled
 
       :excluded ->
-        # do we need to add this if an event is dropped due to it being a duplicate??
-        Transport.record_discarded_event(:event_processor, "error")
-
         :excluded
 
       {:error, %ClientError{} = error} ->

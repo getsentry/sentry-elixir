@@ -36,8 +36,8 @@ defmodule Sentry.Envelope do
 
   @doc """
   Creates a new envelope containing the client report.
-  since: "10.8.0"
   """
+  @doc since: "10.8.0"
   @spec from_client_report(ClientReport.t()) :: t()
   def from_client_report(%ClientReport{} = client_report) do
     %__MODULE__{
@@ -46,26 +46,27 @@ defmodule Sentry.Envelope do
     }
   end
 
+  @spec get_data_category(Attachment.t() | CheckIn.t() | ClientReport.t() | Event.t()) ::
+          String.t()
   def get_data_category(type) do
-    if is_binary(type) do
-      type
-    else
-      case type do
-        %Attachment{} ->
-          "attachment"
+    case type do
+      %Attachment{} ->
+        "attachment"
 
-        %CheckIn{} ->
-          "monitor"
+      %CheckIn{} ->
+        "monitor"
 
-        %ClientReport{} ->
-          "internal"
+      %ClientReport{} ->
+        "internal"
 
-        %Event{} ->
-          "error"
+      %Event{} ->
+        "error"
 
-        _ ->
-          "default"
-      end
+      _ ->
+        raise ArgumentError, """
+        data category only accepts defined structs but was passed the invalid:
+        #{inspect(type)}\
+        """
     end
   end
 

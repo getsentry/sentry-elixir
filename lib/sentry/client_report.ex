@@ -46,10 +46,10 @@ defmodule Sentry.ClientReport do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
-  @spec add_discarded_event({reason(), String.t()}) :: :ok
-  def add_discarded_event({reason, category}) do
+  @spec add_discarded_event(reason(), String.t()) :: :ok
+  def add_discarded_event(reason, category) do
     if Enum.member?(@client_report_reasons, reason) do
-      GenServer.cast(__MODULE__, {:add_discarded_event, {reason, category}})
+      GenServer.cast(__MODULE__, {:add_discarded_event, reason, category})
     end
 
     :ok
@@ -64,7 +64,7 @@ defmodule Sentry.ClientReport do
 
   @doc false
   @impl true
-  def handle_cast({:add_discarded_event, {reason, category}}, discarded_events) do
+  def handle_cast({:add_discarded_event, reason, category}, discarded_events) do
     {:noreply, Map.update(discarded_events, {reason, category}, 1, &(&1 + 1))}
   end
 
@@ -82,10 +82,11 @@ defmodule Sentry.ClientReport do
           }
         end)
 
-      client_report = %__MODULE__{
-        timestamp: timestamp(),
-        discarded_events: discarded_events
-      }
+      client_report =
+        %__MODULE__{
+          timestamp: timestamp(),
+          discarded_events: discarded_events
+        }
 
       _ =
         if Config.dsn() != nil && Config.send_client_reports?() do

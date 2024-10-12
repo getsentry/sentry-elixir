@@ -3,7 +3,7 @@ defmodule Sentry.EnvelopeTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Attachment, CheckIn, Envelope, Event}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event}
 
   describe "to_binary/1" do
     test "encodes an envelope" do
@@ -113,5 +113,40 @@ defmodule Sentry.EnvelopeTest do
       assert decoded_check_in["monitor_slug"] == "test"
       assert decoded_check_in["status"] == "ok"
     end
+  end
+
+  test "works with client reports" do
+    put_test_config(environment_name: "test")
+
+    client_report = %ClientReport{
+      timestamp: "2024-10-12T13:21:13",
+      discarded_events: [%{reason: :event_processor, category: "error"}]
+    }
+
+    envelope = Envelope.from_client_report(client_report)
+
+    assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+    assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+    assert %{"event_id" => _} = Jason.decode!(id_line)
+    assert %{"type" => "client_report", "length" => _} = Jason.decode!(header_line)
+
+    assert {:ok, decoded_client_report} = Jason.decode(event_line)
+    assert decoded_client_report["timestamp"] == client_report.timestamp
+
+    assert decoded_client_report["discarded_events"] == [
+             %{"category" => "error", "reason" => "event_processor"}
+           ]
+  end
+
+  test "returns correct data_category" do
+    assert Envelope.get_data_category(%Sentry.Event{
+             event_id: Sentry.UUID.uuid4_hex(),
+             timestamp: "2024-10-12T13:21:13"
+           }) == "error"
+
+    assert_raise ArgumentError,
+                 ~r/data category only accepts defined structs but was passed the invalid:\n:completely_banana_value/,
+                 fn -> Envelope.get_data_category(:completely_banana_value) end
   end
 end

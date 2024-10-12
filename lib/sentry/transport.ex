@@ -41,13 +41,9 @@ defmodule Sentry.Transport do
 
   def record_discarded_event(reason, event_item) do
     _ =
-      if is_list(event_item) do
-        Enum.map(event_item, fn event ->
-          ClientReport.add_discarded_event({reason, Envelope.get_data_category(event)})
-        end)
-      else
-        ClientReport.add_discarded_event({reason, Envelope.get_data_category(event_item)})
-      end
+      event_item
+      |> List.wrap()
+      |> Enum.each(&ClientReport.add_discarded_event(reason, Envelope.get_data_category(&1)))
 
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
     # https://develop.sentry.dev/sdk/client-reports/

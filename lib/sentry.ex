@@ -412,7 +412,6 @@ defmodule Sentry do
       |> CheckIn.new()
       |> Client.send_check_in(options)
     else
-      # add record dropped event here? Dropped due to....
       :ignored
     end
   end
