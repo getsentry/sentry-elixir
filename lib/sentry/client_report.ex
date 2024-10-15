@@ -8,7 +8,7 @@ defmodule Sentry.ClientReport do
   @moduledoc since: "10.8.0"
 
   use GenServer
-  alias Sentry.{Client, Config}
+  alias Sentry.{Client, Config, Envelope}
 
   @client_report_reasons [
     :ratelimit_backoff,
@@ -19,7 +19,9 @@ defmodule Sentry.ClientReport do
     :before_send,
     :event_processor,
     :insufficient_data,
-    :backpressure
+    :backpressure,
+    :send_error,
+    :internal_sdk_error
   ]
 
   @typedoc """
@@ -42,15 +44,35 @@ defmodule Sentry.ClientReport do
 
   @doc false
   @spec start_link([]) :: GenServer.on_start()
-  def start_link([]) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, %{}, name: Keyword.get(opts, :name, __MODULE__))
   end
 
-  @spec add_discarded_event(reason(), String.t()) :: :ok
-  def add_discarded_event(reason, category) do
+  @doc false
+  @spec record_discarded_events(
+          reason(),
+          [item]
+        ) :: :ok
+        when item:
+               Sentry.Attachment.t()
+               | Sentry.CheckIn.t()
+               | Sentry.ClientReport.t()
+               | Sentry.Event.t()
+  def record_discarded_events(reason, event_items, genserver \\ __MODULE__)
+      when is_list(event_items) do
     if Enum.member?(@client_report_reasons, reason) do
-      GenServer.cast(__MODULE__, {:add_discarded_event, reason, category})
+      _ =
+        event_items
+        |> Enum.each(
+          &GenServer.cast(
+            genserver,
+            {:record_discarded_events, reason, Envelope.get_data_category(&1)}
+          )
+        )
     end
+
+    # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
+    # https://develop.sentry.dev/sdk/client-reports/
 
     :ok
   end
@@ -64,7 +86,7 @@ defmodule Sentry.ClientReport do
 
   @doc false
   @impl true
-  def handle_cast({:add_discarded_event, reason, category}, discarded_events) do
+  def handle_cast({:record_discarded_events, reason, category}, discarded_events) do
     {:noreply, Map.update(discarded_events, {reason, category}, 1, &(&1 + 1))}
   end
 

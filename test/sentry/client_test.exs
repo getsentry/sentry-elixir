@@ -418,4 +418,34 @@ defmodule Sentry.ClientTest do
       end
     end
   end
+
+  describe "send_client_report/1" do
+    test "succefully sends discarded events to Sentry" do
+      bypass = Bypass.open()
+      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+      client_report =
+        %Sentry.ClientReport{
+          timestamp: "2024-10-15T14:22:49",
+          discarded_events: [
+            %{reason: :event_processor, category: "error", quantity: 1}
+          ]
+        }
+
+      Bypass.expect_once(bypass, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{_headers, client_report_body}] = decode_envelope!(body)
+
+        assert client_report_body["discarded_events"] == [
+                 %{"category" => "error", "quantity" => 1, "reason" => "event_processor"}
+               ]
+
+        assert client_report_body["timestamp"] == "2024-10-15T14:22:49"
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Client.send_client_report(client_report)
+    end
+  end
 end

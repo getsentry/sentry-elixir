@@ -48,7 +48,7 @@ defmodule Sentry.Envelope do
 
   @spec get_data_category(Attachment.t() | CheckIn.t() | ClientReport.t() | Event.t()) ::
           String.t()
-  def get_data_category(type) do
+  def get_data_category(%mod{} = type) when mod in [Attachment, CheckIn, ClientReport, Event] do
     case type do
       %Attachment{} ->
         "attachment"
@@ -61,12 +61,6 @@ defmodule Sentry.Envelope do
 
       %Event{} ->
         "error"
-
-      _ ->
-        raise ArgumentError, """
-        data category only accepts defined structs but was passed the invalid:
-        #{inspect(type)}\
-        """
     end
   end
 

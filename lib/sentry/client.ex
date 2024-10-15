@@ -8,6 +8,7 @@ defmodule Sentry.Client do
   alias Sentry.{
     CheckIn,
     ClientError,
+    ClientReport,
     Config,
     Dedupe,
     Envelope,
@@ -15,8 +16,7 @@ defmodule Sentry.Client do
     Interfaces,
     LoggerUtils,
     Transport,
-    Options,
-    ClientReport
+    Options
   }
 
   require Logger
@@ -82,7 +82,7 @@ defmodule Sentry.Client do
       :unsampled ->
         # See https://github.com/getsentry/develop/pull/551/files
         Sentry.put_last_event_id_and_source(event.event_id, event.source)
-        Transport.record_discarded_event(:sample_rate, event)
+        ClientReport.record_discarded_events(:sample_rate, [event])
         :unsampled
 
       :excluded ->

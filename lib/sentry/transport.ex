@@ -39,17 +39,6 @@ defmodule Sentry.Transport do
     result
   end
 
-  def record_discarded_event(reason, event_item) do
-    _ =
-      event_item
-      |> List.wrap()
-      |> Enum.each(&ClientReport.add_discarded_event(reason, Envelope.get_data_category(&1)))
-
-    # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
-    # https://develop.sentry.dev/sdk/client-reports/
-    :ok
-  end
-
   defp post_envelope_with_retries(
          client,
          endpoint,
@@ -77,7 +66,7 @@ defmodule Sentry.Transport do
         )
 
       {:retry_after, _delay_ms} ->
-        record_discarded_event(:ratelimit_backoff, envelope_items)
+        ClientReport.record_discarded_events(:ratelimit_backoff, envelope_items)
         {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->
@@ -94,11 +83,11 @@ defmodule Sentry.Transport do
         )
 
       {:error, {:http, {status, headers, body}}} ->
-        record_discarded_event(:send_error, envelope_items)
+        ClientReport.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
-        record_discarded_event(:send_error, envelope_items)
+        ClientReport.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.new(reason)}
     end
   end

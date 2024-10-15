@@ -145,8 +145,7 @@ defmodule Sentry.EnvelopeTest do
              timestamp: "2024-10-12T13:21:13"
            }) == "error"
 
-    assert_raise ArgumentError,
-                 ~r/data category only accepts defined structs but was passed the invalid:\n:completely_banana_value/,
+    assert_raise FunctionClauseError,
                  fn -> Envelope.get_data_category(:completely_banana_value) end
   end
 end
