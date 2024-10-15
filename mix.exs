@@ -150,30 +150,40 @@ defmodule Sentry.Mixfile do
       ])
     )
 
-    color_arg = if IO.ANSI.enabled?(), do: "--color", else: "--no-color"
+    case setup_integration(integration) do
+      {_, 0} ->
+        color_arg = if IO.ANSI.enabled?(), do: "--color", else: "--no-color"
 
-    {_, status} =
-      System.cmd("mix", ["test", color_arg | args],
-        into: IO.binstream(:stdio, :line),
-        cd: Path.join("test_integrations", integration)
-      )
+        {_, status} = run_in_integration(integration, ["test", color_arg | args])
 
-    if status > 0 do
-      IO.puts(
-        IO.ANSI.format([
-          :red,
-          "Integration tests for #{integration} failed"
-        ])
-      )
+        if status > 0 do
+          IO.puts(
+            IO.ANSI.format([
+              :red,
+              "Integration tests for #{integration} failed"
+            ])
+          )
 
-      System.at_exit(fn _ -> exit({:shutdown, 1}) end)
-    else
-      IO.puts(
-        IO.ANSI.format([
-          :green,
-          "Integration tests for #{integration} passed"
-        ])
-      )
+          System.at_exit(fn _ -> exit({:shutdown, 1}) end)
+        else
+          IO.puts(
+            IO.ANSI.format([
+              :green,
+              "Integration tests for #{integration} passed"
+            ])
+          )
+        end
     end
+  end
+
+  defp setup_integration(integration) do
+    run_in_integration(integration, ["deps.get"])
+  end
+
+  defp run_in_integration(integration, args) do
+    System.cmd("mix", args,
+      into: IO.binstream(:stdio, :line),
+      cd: Path.join("test_integrations", integration)
+    )
   end
 end
