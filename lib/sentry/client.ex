@@ -8,6 +8,7 @@ defmodule Sentry.Client do
   alias Sentry.{
     CheckIn,
     ClientError,
+    ClientReport,
     Config,
     Dedupe,
     Envelope,
@@ -81,6 +82,7 @@ defmodule Sentry.Client do
       :unsampled ->
         # See https://github.com/getsentry/develop/pull/551/files
         Sentry.put_last_event_id_and_source(event.event_id, event.source)
+        ClientReport.record_discarded_events(:sample_rate, [event])
         :unsampled
 
       :excluded ->
@@ -89,6 +91,20 @@ defmodule Sentry.Client do
       {:error, %ClientError{} = error} ->
         {:error, error}
     end
+  end
+
+  @spec send_client_report(ClientReport.t()) ::
+          {:ok, client_report_id :: String.t()} | {:error, ClientError.t()}
+  def send_client_report(%ClientReport{} = client_report) do
+    client = Config.client()
+
+    # This is a "private" option, only really used in testing.
+    request_retries =
+      Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
+    client_report
+    |> Envelope.from_client_report()
+    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp sample_event(sample_rate) do
