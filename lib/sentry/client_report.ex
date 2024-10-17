@@ -1,8 +1,16 @@
 defmodule Sentry.ClientReport do
   @moduledoc """
-  **TODO** add proper doc for module
+  A struct and GenServer implementation to represent and manage **client reports** for Sentry.
 
-  See <https://develop.sentry.dev/sdk/client-reports/>.
+  Client reports are used to provide insights into which events are being dropped and for what reason.
+
+  This module is responsible for recording, storing, and periodically sending these client
+  reports to Sentry. You can choose to turn off these reports by configuring the
+  option `send_client_reports?`.
+
+  Refer to <https://develop.sentry.dev/sdk/client-reports/> for more details.
+
+  *Available since v10.8.0*.
   """
 
   @moduledoc since: "10.8.0"
@@ -27,12 +35,14 @@ defmodule Sentry.ClientReport do
   @typedoc """
   The possible reasons of the discarded event.
   """
+  @typedoc since: "10.8.0"
   @type reason() ::
           unquote(Enum.reduce(@client_report_reasons, &quote(do: unquote(&1) | unquote(&2))))
 
   @typedoc """
   The struct for a **client report**.
   """
+  @typedoc since: "10.8.0"
   @type t() :: %__MODULE__{
           timestamp: String.t() | number(),
           discarded_events: [%{reason: reason(), category: String.t(), quantity: pos_integer()}]
@@ -109,6 +119,8 @@ defmodule Sentry.ClientReport do
           timestamp: timestamp(),
           discarded_events: discarded_events
         }
+
+      IO.inspect(client_report)
 
       _ =
         if Config.dsn() != nil && Config.send_client_reports?() do

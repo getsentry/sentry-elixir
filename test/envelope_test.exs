@@ -120,7 +120,7 @@ defmodule Sentry.EnvelopeTest do
 
     client_report = %ClientReport{
       timestamp: "2024-10-12T13:21:13",
-      discarded_events: [%{reason: :event_processor, category: "error"}]
+      discarded_events: [%{reason: :event_processor, category: "error", quantity: 1}]
     }
 
     envelope = Envelope.from_client_report(client_report)
@@ -135,7 +135,7 @@ defmodule Sentry.EnvelopeTest do
     assert decoded_client_report["timestamp"] == client_report.timestamp
 
     assert decoded_client_report["discarded_events"] == [
-             %{"category" => "error", "reason" => "event_processor"}
+             %{"category" => "error", "reason" => "event_processor", "quantity" => 1}
            ]
   end
 
