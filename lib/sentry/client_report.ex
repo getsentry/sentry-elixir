@@ -120,8 +120,6 @@ defmodule Sentry.ClientReport do
           discarded_events: discarded_events
         }
 
-      IO.inspect(client_report)
-
       _ =
         if Config.dsn() != nil && Config.send_client_reports?() do
           Client.send_client_report(client_report)
