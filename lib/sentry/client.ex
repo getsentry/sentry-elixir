@@ -82,7 +82,7 @@ defmodule Sentry.Client do
       :unsampled ->
         # See https://github.com/getsentry/develop/pull/551/files
         Sentry.put_last_event_id_and_source(event.event_id, event.source)
-        ClientReport.record_discarded_events(:sample_rate, [event])
+        ClientReport.Sender.record_discarded_events(:sample_rate, [event])
         :unsampled
 
       :excluded ->

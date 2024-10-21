@@ -66,7 +66,7 @@ defmodule Sentry.Transport do
         )
 
       {:retry_after, _delay_ms} ->
-        ClientReport.record_discarded_events(:ratelimit_backoff, envelope_items)
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, envelope_items)
         {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->
@@ -83,11 +83,11 @@ defmodule Sentry.Transport do
         )
 
       {:error, {:http, {status, headers, body}}} ->
-        ClientReport.record_discarded_events(:send_error, envelope_items)
+        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
-        ClientReport.record_discarded_events(:send_error, envelope_items)
+        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.new(reason)}
     end
   end
