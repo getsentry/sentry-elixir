@@ -54,6 +54,8 @@ jobs:
         path: |
           _build
           deps
+          test_integrations/phoenix_app/_build
+          test_integrations/phoenix_app/deps
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
         restore-keys: |
@@ -61,7 +63,10 @@ jobs:
 
     - name: Install and compile Mix dependencies
       if: steps.mix-deps-cache.outputs.cache-hit != 'true'
-      run: mix do deps.get --check-locked, deps.compile
+      run: |
+        mix do deps.get --check-locked, deps.compile
+        cd test_integrations/phoenix_app
+        mix do deps.get --check-locked, deps.compile
 
     - name: Save Mix dependencies cache
       uses: actions/cache/save@v4
@@ -70,6 +75,8 @@ jobs:
         path: |
           _build
           deps
+          test_integrations/phoenix_app/_build
+          test_integrations/phoenix_app/deps
         key: |
           ${{ steps.mix-deps-cache.outputs.cache-primary-key }}
 
@@ -83,6 +90,9 @@ jobs:
 
     - name: Run tests
       run: mix test
+
+    - name: Run integration tests
+      run: mix test.integrations
 
     - name: Retrieve PLT Cache
       uses: actions/cache@v4
