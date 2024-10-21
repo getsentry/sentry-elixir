@@ -341,7 +341,7 @@ defmodule Sentry do
     cond do
       is_nil(event.message) and event.exception == [] ->
         LoggerUtils.log("Cannot report event without message or exception: #{inspect(event)}")
-        ClientReport.record_discarded_events(:event_processor, [event])
+        ClientReport.Sender.record_discarded_events(:event_processor, [event])
         :ignored
 
       # If we're in test mode, let's send the event down the pipeline anyway.

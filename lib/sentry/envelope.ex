@@ -46,23 +46,16 @@ defmodule Sentry.Envelope do
     }
   end
 
+  @doc """
+  Returns the "data category" of the envelope's contents (to be used in client reports and more).
+  """
+  @doc since: "10.8.0"
   @spec get_data_category(Attachment.t() | CheckIn.t() | ClientReport.t() | Event.t()) ::
           String.t()
-  def get_data_category(%mod{} = type) when mod in [Attachment, CheckIn, ClientReport, Event] do
-    case type do
-      %Attachment{} ->
-        "attachment"
-
-      %CheckIn{} ->
-        "monitor"
-
-      %ClientReport{} ->
-        "internal"
-
-      %Event{} ->
-        "error"
-    end
-  end
+  def get_data_category(%Attachment{}), do: "attachment"
+  def get_data_category(%CheckIn{}), do: "monitor"
+  def get_data_category(%ClientReport{}), do: "internal"
+  def get_data_category(%Event{}), do: "error"
 
   @doc """
   Encodes the envelope into its binary representation.
