@@ -3,7 +3,7 @@ defmodule Sentry.Transport do
 
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
-  alias Sentry.{ClientError, Config, Envelope, LoggerUtils}
+  alias Sentry.{ClientError, ClientReport, Config, Envelope, LoggerUtils}
 
   @default_retries [1000, 2000, 4000, 8000]
   @sentry_version 5
@@ -29,18 +29,24 @@ defmodule Sentry.Transport do
       case Envelope.to_binary(envelope) do
         {:ok, body} ->
           {endpoint, headers} = get_endpoint_and_headers()
-          post_envelope_with_retries(client, endpoint, headers, body, retries)
+          post_envelope_with_retries(client, endpoint, headers, body, retries, envelope.items)
 
         {:error, reason} ->
           {:error, ClientError.new({:invalid_json, reason})}
       end
 
     _ = maybe_log_send_result(result, envelope.items)
-
     result
   end
 
-  defp post_envelope_with_retries(client, endpoint, headers, payload, retries_left) do
+  defp post_envelope_with_retries(
+         client,
+         endpoint,
+         headers,
+         payload,
+         retries_left,
+         envelope_items
+       ) do
     case request(client, endpoint, headers, payload) do
       {:ok, id} ->
         {:ok, id}
@@ -49,20 +55,39 @@ defmodule Sentry.Transport do
       # own retry.
       {:retry_after, delay_ms} when retries_left != [] ->
         Process.sleep(delay_ms)
-        post_envelope_with_retries(client, endpoint, headers, payload, tl(retries_left))
+
+        post_envelope_with_retries(
+          client,
+          endpoint,
+          headers,
+          payload,
+          tl(retries_left),
+          envelope_items
+        )
 
       {:retry_after, _delay_ms} ->
+        ClientReport.record_discarded_events(:ratelimit_backoff, envelope_items)
         {:error, ClientError.new(:too_many_retries)}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
-        post_envelope_with_retries(client, endpoint, headers, payload, retries_left)
+
+        post_envelope_with_retries(
+          client,
+          endpoint,
+          headers,
+          payload,
+          retries_left,
+          envelope_items
+        )
 
       {:error, {:http, {status, headers, body}}} ->
+        ClientReport.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
+        ClientReport.record_discarded_events(:send_error, envelope_items)
         {:error, ClientError.new(reason)}
     end
   end

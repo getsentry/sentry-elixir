@@ -156,6 +156,16 @@ defmodule Sentry.Config do
       [`:jason`](https://hex.pm/packages/jason) as a dependency of your application.
       """
     ],
+    send_client_reports: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Send diagnostic client reports about discarded events, interval is set to send a report
+      once every 30 seconds if any discarded events exist.
+      See [Client Reports](https://develop.sentry.dev/sdk/client-reports/) in Sentry docs.
+      *Available since v10.8.0*.
+      """
+    ],
     server_name: [
       type: :string,
       doc: """
@@ -570,6 +580,9 @@ defmodule Sentry.Config do
 
   @spec dedup_events?() :: boolean()
   def dedup_events?, do: fetch!(:dedup_events)
+
+  @spec send_client_reports?() :: boolean()
+  def send_client_reports?, do: fetch!(:send_client_reports)
 
   @spec test_mode?() :: boolean()
   def test_mode?, do: fetch!(:test_mode)
