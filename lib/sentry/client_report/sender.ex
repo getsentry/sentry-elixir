@@ -55,26 +55,27 @@ defmodule Sentry.ClientReport.Sender do
 
   @impl true
   def handle_info(:send_report, state) do
-    if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
-      client_report =
-        %ClientReport{
-          timestamp:
-            DateTime.utc_now()
-            |> DateTime.truncate(:second)
-            |> DateTime.to_iso8601()
-            |> String.trim_trailing("Z"),
-          discarded_events:
-            Enum.map(state, fn {{reason, category}, quantity} ->
-              %{
-                reason: reason,
-                category: category,
-                quantity: quantity
-              }
-            end)
-        }
+    _ =
+      if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
+        client_report =
+          %ClientReport{
+            timestamp:
+              DateTime.utc_now()
+              |> DateTime.truncate(:second)
+              |> DateTime.to_iso8601()
+              |> String.trim_trailing("Z"),
+            discarded_events:
+              Enum.map(state, fn {{reason, category}, quantity} ->
+                %{
+                  reason: reason,
+                  category: category,
+                  quantity: quantity
+                }
+              end)
+          }
 
-      Client.send_client_report(client_report)
-    end
+        Client.send_client_report(client_report)
+      end
 
     schedule_report()
     {:noreply, %{}}
