@@ -211,8 +211,18 @@ defmodule Sentry.PlugContext do
 
   defp remote_port(conn) do
     case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
-      [] -> nil
-      [_value | _rest] -> Plug.Conn.get_peer_data(conn).port
+      [] ->
+        nil
+
+      [_value | _rest] ->
+        # As of bandit v1.5.7 during client disconnection it will raise "Unable to obtain transport_info: [reason]"
+        # everytime it tries to get the transport info. Let's handle that exception by returning nil instead of bubbling the exception.
+        # Refer to: https://github.com/mtrudel/bandit/blob/b06e43dcee93c5c044b18ed8347838fc2a1728f0/lib/bandit/transport_info.ex#L26
+        try do
+          Plug.Conn.get_peer_data(conn).port
+        rescue
+          _ -> nil
+        end
     end
   end
 
