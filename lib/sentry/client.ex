@@ -284,7 +284,6 @@ defmodule Sentry.Client do
 
   @spec render_transaction(%Transaction{}) :: map()
   def render_transaction(%Transaction{} = transaction) do
-    # IO.inspect(transaction, label: "transaction")
     transaction
     |> Transaction.to_map()
     |> Map.merge(%{
