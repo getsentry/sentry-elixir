@@ -67,7 +67,7 @@ defmodule PhoenixApp.MixProject do
       {:opentelemetry, "~> 1.4"},
       {:opentelemetry_api, "~> 1.3"},
       {:opentelemetry_phoenix, "~> 1.2"},
-      {:opentelemetry_bandit, "~> 0.1.4", github: "solnic/opentelemetry-bandit"},
+      # {:opentelemetry_bandit, "~> 0.1.4", github: "solnic/opentelemetry-bandit", depth: 1},
       {:opentelemetry_ecto, "~> 1.2"},
       {:sentry, path: "../.."},
       {:hackney, "~> 1.18"}
