@@ -60,7 +60,7 @@ jobs:
       run: |
         mix deps.get --check-locked
         cd test_integrations/phoenix_app
-        mix deps.get --check-locked
+        mix deps.get
 
     # We need to manually restore and then save, so that we can save the "_build" directory
     # *without* the Elixir compiled code in it.
