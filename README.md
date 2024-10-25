@@ -40,7 +40,7 @@ Sentry has a range of configuration options, but most applications will have a c
 # config/config.exs
 config :sentry,
   dsn: "https://public_key@app.getsentry.com/1",
-  environment_name: Mix.env(),
+  environment_name: config_env(),
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()]
 ```
