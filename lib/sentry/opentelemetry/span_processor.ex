@@ -1,4 +1,5 @@
 defmodule Sentry.Opentelemetry.SpanProcessor do
+  @moduledoc false
   @behaviour :otel_span_processor
 
   require Logger
