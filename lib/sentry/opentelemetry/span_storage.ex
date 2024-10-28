@@ -1,78 +1,82 @@
 defmodule Sentry.Opentelemetry.SpanStorage do
   @moduledoc false
 
-  @root_spans_table :sentry_root_spans
-  @child_spans_table :sentry_child_spans
+  @table :span_storage
 
-  def setup do
-    case :ets.whereis(@root_spans_table) do
-      :undefined ->
-        :ets.new(@root_spans_table, [:set, :public, :named_table])
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(opts \\ []) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, nil, name: name)
+  end
 
-      _ ->
-        :ok
-    end
+  # start ets table on initialization
+  @impl true
+  def init(nil) do
+    _table =
+      if :ets.whereis(@table) == :undefined do
+        :ets.new(@table, [:named_table, :public, :bag])
+      end
 
-    case :ets.whereis(@child_spans_table) do
-      :undefined ->
-        :ets.new(@child_spans_table, [:bag, :public, :named_table])
+    {:ok, :no_state}
+  end
 
-      _ ->
-        :ok
-    end
-
-    :ok
+  def store_span(span_data) when span_data.parent_span_id == nil do
+    _ = :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
   end
 
   def store_span(span_data) do
-    if span_data.parent_span_id == nil do
-      :ets.insert(@root_spans_table, {span_data.span_id, span_data})
-    else
-      :ets.insert(@child_spans_table, {span_data.parent_span_id, span_data})
-    end
-
-    :ok
+    _ = :ets.insert(@table, {span_data.parent_span_id, span_data})
   end
 
   def get_root_span(span_id) do
-    case :ets.lookup(@root_spans_table, span_id) do
-      [{^span_id, span}] -> span
+    case :ets.lookup(@table, {:root_span, span_id}) do
+      [{{:root_span, ^span_id}, span}] -> span
+      # how do we handle if span cannot be found?
       [] -> nil
     end
   end
 
   def get_child_spans(parent_span_id) do
-    :ets.lookup(@child_spans_table, parent_span_id)
-    |> Enum.map(fn {_parent_id, span} -> span end)
+    child_spans = :ets.lookup(@table, parent_span_id)
+
+    if child_spans == [] do
+      nil
+    else
+      Enum.map(child_spans, fn {parent_span_id, span} -> span end)
+    end
+  end
+
+  def update_span(span_data) when span_data.parent_span_id == nil do
+    case :ets.lookup(@table, {:root_span, span_data.span_id}) do
+      [] ->
+        :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
+
+      [{{:root_span, span_data.span_id}, span}] ->
+        :ets.delete(@table, {:root_span, span_data.span_id})
+        :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
+    end
   end
 
   def update_span(span_data) do
-    if span_data.parent_span_id == nil do
-      :ets.insert(@root_spans_table, {span_data.span_id, span_data})
-    else
-      existing_spans = :ets.lookup(@child_spans_table, span_data.parent_span_id)
+    existing_spans = :ets.lookup(@table, span_data.parent_span_id)
 
-      :ets.delete(@child_spans_table, span_data.parent_span_id)
+    :ets.delete(@table, span_data.parent_span_id)
 
-      Enum.each(existing_spans, fn {parent_id, span} ->
-        if span.span_id != span_data.span_id do
-          :ets.insert(@child_spans_table, {parent_id, span})
-        end
-      end)
-
-      :ets.insert(@child_spans_table, {span_data.parent_span_id, span_data})
-    end
-
-    :ok
+    Enum.each(existing_spans, fn {parent_span_id, span} ->
+      if span.span_id == span_data.span_id do
+        :ets.delete_object(@table, span)
+        :ets.insert(@table, {parent_span_id, span_data})
+      end
+    end)
   end
 
   def remove_span(span_id) do
-    :ets.delete(@root_spans_table, span_id)
+    :ets.delete(@table, {:root_span, span_id})
     :ok
   end
 
   def remove_child_spans(parent_span_id) do
-    :ets.delete(@child_spans_table, parent_span_id)
+    :ets.delete(@table, parent_span_id)
     :ok
   end
 end
