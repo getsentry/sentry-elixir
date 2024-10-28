@@ -3,6 +3,26 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   import Sentry.TestHelpers
 
+  alias Sentry.Opentelemetry.SpanStorage
+
+  setup do
+    # Create tables
+    SpanStorage.setup()
+
+    on_exit(fn ->
+      # Only try to clean up tables if they exist
+      if :ets.whereis(:sentry_root_spans) != :undefined do
+        :ets.delete_all_objects(:sentry_root_spans)
+      end
+
+      if :ets.whereis(:sentry_child_spans) != :undefined do
+        :ets.delete_all_objects(:sentry_child_spans)
+      end
+    end)
+
+    :ok
+  end
+
   defmodule TestEndpoint do
     require OpenTelemetry.Tracer, as: Tracer
 

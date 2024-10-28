@@ -1,88 +1,78 @@
 defmodule Sentry.Opentelemetry.SpanStorage do
-  use GenServer
+  @moduledoc false
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, nil, name: __MODULE__)
-  end
+  @root_spans_table :sentry_root_spans
+  @child_spans_table :sentry_child_spans
 
-  def init(_) do
-    {:ok, %{root_spans: %{}, child_spans: %{}}}
+  def setup do
+    case :ets.whereis(@root_spans_table) do
+      :undefined ->
+        :ets.new(@root_spans_table, [:set, :public, :named_table])
+
+      _ ->
+        :ok
+    end
+
+    case :ets.whereis(@child_spans_table) do
+      :undefined ->
+        :ets.new(@child_spans_table, [:bag, :public, :named_table])
+
+      _ ->
+        :ok
+    end
+
+    :ok
   end
 
   def store_span(span_data) do
-    GenServer.call(__MODULE__, {:store_span, span_data})
+    if span_data.parent_span_id == nil do
+      :ets.insert(@root_spans_table, {span_data.span_id, span_data})
+    else
+      :ets.insert(@child_spans_table, {span_data.parent_span_id, span_data})
+    end
+
+    :ok
   end
 
   def get_root_span(span_id) do
-    GenServer.call(__MODULE__, {:get_root_span, span_id})
+    case :ets.lookup(@root_spans_table, span_id) do
+      [{^span_id, span}] -> span
+      [] -> nil
+    end
   end
 
   def get_child_spans(parent_span_id) do
-    GenServer.call(__MODULE__, {:get_child_spans, parent_span_id})
+    :ets.lookup(@child_spans_table, parent_span_id)
+    |> Enum.map(fn {_parent_id, span} -> span end)
   end
 
   def update_span(span_data) do
-    GenServer.call(__MODULE__, {:update_span, span_data})
+    if span_data.parent_span_id == nil do
+      :ets.insert(@root_spans_table, {span_data.span_id, span_data})
+    else
+      existing_spans = :ets.lookup(@child_spans_table, span_data.parent_span_id)
+
+      :ets.delete(@child_spans_table, span_data.parent_span_id)
+
+      Enum.each(existing_spans, fn {parent_id, span} ->
+        if span.span_id != span_data.span_id do
+          :ets.insert(@child_spans_table, {parent_id, span})
+        end
+      end)
+
+      :ets.insert(@child_spans_table, {span_data.parent_span_id, span_data})
+    end
+
+    :ok
   end
 
   def remove_span(span_id) do
-    GenServer.call(__MODULE__, {:remove_span, span_id})
+    :ets.delete(@root_spans_table, span_id)
+    :ok
   end
 
   def remove_child_spans(parent_span_id) do
-    GenServer.call(__MODULE__, {:remove_child_spans, parent_span_id})
-  end
-
-  def handle_call({:store_span, span_data}, _from, state) do
-    if span_data.parent_span_id == nil do
-      new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
-      {:reply, :ok, new_state}
-    else
-      new_state =
-        update_in(state, [:child_spans, span_data.parent_span_id], fn spans ->
-          (spans || []) ++ [span_data]
-        end)
-
-      {:reply, :ok, new_state}
-    end
-  end
-
-  def handle_call({:get_root_span, span_id}, _from, state) do
-    {:reply, state.root_spans[span_id], state}
-  end
-
-  def handle_call({:get_child_spans, parent_span_id}, _from, state) do
-    {:reply, state.child_spans[parent_span_id] || [], state}
-  end
-
-  def handle_call({:update_span, span_data}, _from, state) do
-    if span_data.parent_span_id == nil do
-      new_state = put_in(state, [:root_spans, span_data.span_id], span_data)
-      {:reply, :ok, new_state}
-    else
-      new_state =
-        update_in(state, [:child_spans, span_data.parent_span_id], fn spans ->
-          Enum.map(spans || [], fn span ->
-            if span.span_id == span_data.span_id, do: span_data, else: span
-          end)
-        end)
-
-      {:reply, :ok, new_state}
-    end
-  end
-
-  def handle_call({:remove_span, span_id}, _from, state) do
-    new_state = %{
-      state
-      | root_spans: Map.delete(state.root_spans, span_id),
-        child_spans: Map.delete(state.child_spans, span_id)
-    }
-
-    {:reply, :ok, new_state}
-  end
-
-  def handle_call({:remove_child_spans, parent_span_id}, _from, state) do
-    new_state = %{state | child_spans: Map.delete(state.child_spans, parent_span_id)}
-    {:reply, :ok, new_state}
+    :ets.delete(@child_spans_table, parent_span_id)
+    :ok
   end
 end

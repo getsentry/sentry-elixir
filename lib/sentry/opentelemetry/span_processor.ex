@@ -62,7 +62,7 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       contexts: %{
         trace: build_trace_context(root_span)
       },
-      spans: Enum.map([root_span | child_spans], &build_span(&1))
+      spans: [build_span(root_span) | Enum.map(child_spans, &build_span(&1))]
     })
   end
 
@@ -304,7 +304,9 @@ defmodule Sentry.Opentelemetry.SpanProcessor do
       start_timestamp: span_record.start_time,
       timestamp: span_record.end_time,
       span_id: span_record.span_id,
-      parent_span_id: span_record.parent_span_id
+      parent_span_id: span_record.parent_span_id,
+      # Add origin to match other span types
+      origin: span_record.origin
     }
   end
 
