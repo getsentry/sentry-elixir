@@ -1,5 +1,34 @@
 # Changelog
 
+## 10.8.0
+
+### Various fixes & improvements
+
+- Require Elixir 1.13+ (21f0f77e) by @whatyouhide
+- Special-case Ranch errors in the logger handler for OTP 25 (#818) by @whatyouhide
+- Only use --check-locked if linting in CI (#816) by @whatyouhide
+- Use config_env/0 instead of Mix.env/0 in docs (#815) by @dvic
+- Handle Bandit exception when fetching peer data (#814) by @ardhitama
+- Refactor and improve docs for client reports (#810) by @whatyouhide
+- Update caching strategy in CI (#809) by @whatyouhide
+- Add support for client reports (#801) by @savhappy
+- Add option for generating custom cron monitor slugs (#803) by @iautom8things
+- Add full end-to-end Phoenix app test (#797) by @solnic
+- Add 10 min timeout to CI (#808) by @solnic
+- Support non-exception error values from Oban jobs (#807) by @savhappy
+- Remove --halt-exit-status option when running dialyzer on CI (#804) by @solnic
+- Fix a typo in the docs (#802) by @wladimirgramacho
+- Refactor maybe_log_send_result/2 (#799) by @savhappy
+- Fix our custom test task (#798) by @solnic
+- Always return Sentry.ClientError when possible (#795) by @whatyouhide
+- Validate that custom HTTP clients return correct stuff (#794) by @savhappy
+- Add specs and test for :too_many_retries (#793) by @savhappy
+- Update maybe_log_send_result/2 with proper error (#789) by @savhappy
+- Fix a typo in the README (#791) by @BobbyMcWho
+- Slightly re-haul how we document options (#778) by @savhappy
+- Actually fix empty frames in stacktraces (d79919fd) by @whatyouhide
+- Fix stacktraces with no frames (#787) by @savhappy
+
 ## 10.7.1
 
 ### Various fixes & improvements
