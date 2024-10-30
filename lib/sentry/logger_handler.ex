@@ -361,6 +361,10 @@ defmodule Sentry.LoggerHandler do
 
         capture(:message, "** (stop) #{Exception.format_exit(reason)}", sentry_opts, config)
 
+      # Special-case Ranch messages because their formatting is their formatting.
+      %{format: ~c"Ranch listener ~p" ++ _, args: args} ->
+        capture_from_ranch_error(args, sentry_opts, config)
+
       _ ->
         capture(:message, inspect(report), sentry_opts, config)
     end
@@ -585,6 +589,28 @@ defmodule Sentry.LoggerHandler do
   defp try_to_parse_message_or_just_report_it(chardata_message, sentry_opts, config) do
     string_message = :unicode.characters_to_binary(chardata_message)
     capture(:message, string_message, sentry_opts, config)
+  end
+
+  # This is only causing issues on OTP 25 apparently.
+  # TODO: remove special-cased Ranch handling when we depend on OTP 26+.
+  defp capture_from_ranch_error(
+         _args = [
+           _listener,
+           _connection_process,
+           _stream,
+           _request_process,
+           _reason = {{exception, stacktrace}, _}
+         ],
+         sentry_opts,
+         %__MODULE__{} = config
+       )
+       when is_exception(exception) do
+    sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
+    capture(:exception, exception, sentry_opts, config)
+  end
+
+  defp capture_from_ranch_error(args, sentry_opts, %__MODULE__{} = config) do
+    capture(:message, "Ranch listener error: #{inspect(args)}", sentry_opts, config)
   end
 
   defp add_extra_to_sentry_opts(sentry_opts, new_extra) do
