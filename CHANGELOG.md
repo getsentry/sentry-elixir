@@ -1,5 +1,31 @@
 # Changelog
 
+## 10.8.0
+
+This release bumps the minimum Elixir requirement to 1.13, fixes a few bugs, and introduces **client reports**. Client reports will be sent to Sentry by default, but you can disable them with:
+
+```elixir
+config :sentry,
+  # ...,
+  send_client_reports: false
+```
+
+### Improvements and new features
+
+- Add support for [client reports](https://develop.sentry.dev/sdk/telemetry/client-reports/) (#801) by @savhappy
+- Add option for generating custom cron monitor slugs (#803) by @iautom8things
+- Improvements to documentation
+- Require Elixir 1.13+ (21f0f77e) by @whatyouhide
+- Validate that custom HTTP clients return correct stuff (#794) by @savhappy
+
+### Bug fixes
+
+- Fix stacktraces with no frames (#787) by @savhappy
+- Special-case Ranch errors in the logger handler for OTP 25 (#818) by @whatyouhide
+- Few fixes to `mix sentry.send_test_event`
+- Handle Bandit exception when fetching peer data (#814) by @ardhitama
+- Support non-exception error values from Oban jobs (#807) by @savhappy
+
 ## 10.7.1
 
 ### Various fixes & improvements
