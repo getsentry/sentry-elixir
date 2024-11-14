@@ -1,5 +1,6 @@
 defmodule Sentry.Opentelemetry.SpanStorage do
   @moduledoc false
+  use GenServer
 
   @table :span_storage
 
@@ -9,7 +10,6 @@ defmodule Sentry.Opentelemetry.SpanStorage do
     GenServer.start_link(__MODULE__, nil, name: name)
   end
 
-  # start ets table on initialization
   @impl true
   def init(nil) do
     _table =
@@ -21,7 +21,10 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   end
 
   def store_span(span_data) when span_data.parent_span_id == nil do
-    _ = :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
+    case :ets.lookup(@table, {:root_span, span_data.span_id}) do
+      [] -> :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
+      _ -> :ok
+    end
   end
 
   def store_span(span_data) do
@@ -31,43 +34,37 @@ defmodule Sentry.Opentelemetry.SpanStorage do
   def get_root_span(span_id) do
     case :ets.lookup(@table, {:root_span, span_id}) do
       [{{:root_span, ^span_id}, span}] -> span
-      # how do we handle if span cannot be found?
       [] -> nil
     end
   end
 
   def get_child_spans(parent_span_id) do
-    child_spans = :ets.lookup(@table, parent_span_id)
-
-    if child_spans == [] do
-      nil
-    else
-      Enum.map(child_spans, fn {parent_span_id, span} -> span end)
-    end
-  end
-
-  def update_span(span_data) when span_data.parent_span_id == nil do
-    case :ets.lookup(@table, {:root_span, span_data.span_id}) do
-      [] ->
-        :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
-
-      [{{:root_span, span_data.span_id}, span}] ->
-        :ets.delete(@table, {:root_span, span_data.span_id})
-        :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
-    end
+    :ets.lookup(@table, parent_span_id)
+    |> Enum.map(fn {_parent_id, span} -> span end)
   end
 
   def update_span(span_data) do
-    existing_spans = :ets.lookup(@table, span_data.parent_span_id)
+    if span_data.parent_span_id == nil do
+      case :ets.lookup(@table, {:root_span, span_data.parent_span_id}) do
+        [] ->
+          :ets.insert(@table, {{:root_span, span_data.parent_span_id}, span_data})
 
-    :ets.delete(@table, span_data.parent_span_id)
-
-    Enum.each(existing_spans, fn {parent_span_id, span} ->
-      if span.span_id == span_data.span_id do
-        :ets.delete_object(@table, span)
-        :ets.insert(@table, {parent_span_id, span_data})
+        _ ->
+          :ets.delete(@table, {:root_span, span_data.parent_span_id})
+          :ets.insert(@table, {{:root_span, span_data.parent_span_id}, span_data})
       end
-    end)
+    else
+      existing_spans = :ets.lookup(@table, span_data.parent_span_id)
+
+      Enum.each(existing_spans, fn {parent_id, span} ->
+        if span.span_id == span_data.span_id do
+          :ets.delete_object(@table, {parent_id, span})
+          :ets.insert(@table, {span_data.parent_span_id, span_data})
+        end
+      end)
+    end
+
+    :ok
   end
 
   def remove_span(span_id) do
@@ -79,4 +76,6 @@ defmodule Sentry.Opentelemetry.SpanStorage do
     :ets.delete(@table, parent_span_id)
     :ok
   end
+
+  # need to ad in sweep for any leftover spans. Should we initiate a sweep on_end or add a ttl or both?
 end
