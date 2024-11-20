@@ -31,7 +31,7 @@ jobs:
           - elixir: '1.16'
             otp: '26.2'
 
-          # Oldest supported Elixir/Erlang pair.
+          # Oldest supported Elixir/Erlang pair. Bump
           - elixir: '1.13.4-otp-22'
             otp: '22.3.4'
 
