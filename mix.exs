@@ -88,14 +88,6 @@ defmodule Sentry.Mixfile do
   defp test_paths(nil), do: ["test"]
   defp test_paths(integration), do: ["test_integrations/#{integration}/test"]
 
-  defp live_view_version() do
-    if Version.match?(System.version(), ">= 1.14.0") do
-      "~> 1.0"
-    else
-      "~> 0.20"
-    end
-  end
-
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
@@ -105,7 +97,7 @@ defmodule Sentry.Mixfile do
       {:hackney, "~> 1.8", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
-      {:phoenix_live_view, live_view_version(), optional: true},
+      {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
 
