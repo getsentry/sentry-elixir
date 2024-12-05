@@ -45,13 +45,13 @@ defmodule Sentry.Opentelemetry.SpanStorage do
 
   def update_span(span_data) do
     if span_data.parent_span_id == nil do
-      case :ets.lookup(@table, {:root_span, span_data.parent_span_id}) do
+      case :ets.lookup(@table, {:root_span, span_data.span_id}) do
         [] ->
-          :ets.insert(@table, {{:root_span, span_data.parent_span_id}, span_data})
+          :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
 
         _ ->
-          :ets.delete(@table, {:root_span, span_data.parent_span_id})
-          :ets.insert(@table, {{:root_span, span_data.parent_span_id}, span_data})
+          :ets.delete(@table, {:root_span, span_data.span_id})
+          :ets.insert(@table, {{:root_span, span_data.span_id}, span_data})
       end
     else
       existing_spans = :ets.lookup(@table, span_data.parent_span_id)
