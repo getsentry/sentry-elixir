@@ -58,7 +58,8 @@ defmodule Sentry.CheckIn do
                 optional(:max_runtime) => number(),
                 optional(:failure_issue_threshold) => number(),
                 optional(:recovery_threshold) => number(),
-                optional(:timezone) => String.t()
+                optional(:timezone) => String.t(),
+                optional(:owner) => String.t()
               },
           contexts: Interfaces.context()
         }
@@ -127,6 +128,7 @@ defmodule Sentry.CheckIn do
         failure_issue_threshold: number_schema_opts,
         recovery_threshold: number_schema_opts,
         timezone: [type: :string],
+        owner: [type: :string],
         schedule: [
           type:
             {:or,
