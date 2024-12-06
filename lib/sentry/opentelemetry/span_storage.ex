@@ -76,6 +76,4 @@ defmodule Sentry.Opentelemetry.SpanStorage do
     :ets.delete(@table, parent_span_id)
     :ok
   end
-
-  # need to ad in sweep for any leftover spans. Should we initiate a sweep on_end or add a ttl or both?
 end
