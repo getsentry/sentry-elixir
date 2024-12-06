@@ -6,17 +6,10 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   alias Sentry.Opentelemetry.SpanStorage
 
   setup do
-    # Create tables
-    SpanStorage.setup()
-
     on_exit(fn ->
       # Only try to clean up tables if they exist
-      if :ets.whereis(:sentry_root_spans) != :undefined do
-        :ets.delete_all_objects(:sentry_root_spans)
-      end
-
-      if :ets.whereis(:sentry_child_spans) != :undefined do
-        :ets.delete_all_objects(:sentry_child_spans)
+      if :ets.whereis(:span_storage) != :undefined do
+        :ets.delete_all_objects(:span_storage)
       end
     end)
 
@@ -71,7 +64,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     TestEndpoint.instrumented_function()
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
-
     assert_valid_iso8601(transaction.timestamp)
     assert_valid_iso8601(transaction.start_timestamp)
     assert transaction.timestamp > transaction.start_timestamp

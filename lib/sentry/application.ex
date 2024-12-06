@@ -10,9 +10,6 @@ defmodule Sentry.Application do
     config = Config.validate!()
     :ok = Config.persist(config)
 
-    # Setup ETS tables for span storage
-    Sentry.Opentelemetry.SpanStorage.setup()
-
     http_client = Keyword.fetch!(config, :client)
 
     maybe_http_client_spec =
@@ -30,6 +27,7 @@ defmodule Sentry.Application do
         Sentry.Sources,
         Sentry.Dedupe,
         Sentry.ClientReport.Sender,
+        Sentry.Opentelemetry.SpanStorage,
         {Sentry.Integrations.CheckInIDMappings,
          [
            max_expected_check_in_time:
