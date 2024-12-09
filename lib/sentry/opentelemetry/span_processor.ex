@@ -42,7 +42,6 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
         end
 
       SpanStorage.remove_span(span_record.span_id)
-      SpanStorage.remove_child_spans(span_record.span_id)
 
       result
     else
