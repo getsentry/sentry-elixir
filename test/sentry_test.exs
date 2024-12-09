@@ -235,4 +235,41 @@ defmodule SentryTest do
       assert Sentry.get_dsn() == random_dsn
     end
   end
+
+  describe "send_transaction/2" do
+    setup do
+      transaction =
+        Sentry.Transaction.new(%{
+          transaction: "test-transaction",
+          start_timestamp: System.system_time(:second),
+          timestamp: System.system_time(:second)
+        })
+
+      {:ok, transaction: transaction}
+    end
+
+    test "sends transaction to Sentry when configured properly", %{
+      bypass: bypass,
+      transaction: transaction
+    } do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, transaction_body}] = decode_envelope!(body)
+
+        assert headers["type"] == "transaction"
+        assert Map.has_key?(headers, "length")
+        assert transaction_body["transaction"] == "test-transaction"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Sentry.send_transaction(transaction)
+    end
+
+    test "ignores transaction when dsn is not configured", %{transaction: transaction} do
+      put_test_config(dsn: nil, test_mode: false)
+
+      assert :ignored = Sentry.send_transaction(transaction)
+    end
+  end
 end
