@@ -1,9 +1,9 @@
-defmodule Sentry.Opentelemetry.SpanProcessorTest do
+defmodule Sentry.OpenTelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
 
-  alias Sentry.Opentelemetry.SpanStorage
+  alias Sentry.OpenTelemetry.SpanStorage
 
   setup do
     on_exit(fn ->
@@ -102,10 +102,10 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
     assert nil ==
-             Sentry.Opentelemetry.SpanStorage.get_root_span(transaction.contexts.trace.span_id)
+             Sentry.OpenTelemetry.SpanStorage.get_root_span(transaction.contexts.trace.span_id)
 
     assert [] ==
-             Sentry.Opentelemetry.SpanStorage.get_child_spans(transaction.contexts.trace.span_id)
+             Sentry.OpenTelemetry.SpanStorage.get_child_spans(transaction.contexts.trace.span_id)
   end
 
   defp assert_valid_iso8601(timestamp) do
