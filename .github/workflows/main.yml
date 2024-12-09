@@ -55,6 +55,13 @@ jobs:
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix.lock') }}
 
+    - name: Download Mix dependencies (1.13)
+      if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true' && ${{ matrix.elixir }} < "1.16"
+      run: |
+        cd test_integrations/phoenix_app
+        mix deps.unlock phoenix_live_view
+        mix deps.get
+
     - name: Download Mix dependencies
       if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
       run: |
