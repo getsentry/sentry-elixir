@@ -15,6 +15,6 @@ if config_env() == :test do
   config :logger, backends: []
 end
 
-config :opentelemetry, span_processor: {Sentry.Opentelemetry.SpanProcessor, []}
+config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 
 config :phoenix, :json_library, Jason

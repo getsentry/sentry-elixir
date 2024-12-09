@@ -1,4 +1,4 @@
-defmodule Sentry.Opentelemetry.SpanStorage do
+defmodule Sentry.OpenTelemetry.SpanStorage do
   @moduledoc false
   use GenServer
 
