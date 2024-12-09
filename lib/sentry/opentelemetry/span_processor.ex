@@ -1,10 +1,11 @@
-defmodule Sentry.Opentelemetry.SpanProcessor do
+defmodule Sentry.OpenTelemetry.SpanProcessor do
   @moduledoc false
+
   @behaviour :otel_span_processor
 
   require Logger
 
-  alias Sentry.{Span, Transaction, Opentelemetry.SpanStorage, Opentelemetry.SpanRecord}
+  alias Sentry.{Span, Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
 
   @impl true
   def on_start(_ctx, otel_span, _config) do

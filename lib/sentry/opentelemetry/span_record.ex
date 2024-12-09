@@ -1,4 +1,4 @@
-defmodule Sentry.Opentelemetry.SpanRecord do
+defmodule Sentry.OpenTelemetry.SpanRecord do
   require Record
   require OpenTelemetry
 
