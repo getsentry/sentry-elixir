@@ -68,8 +68,12 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   end
 
   def remove_span(span_id) do
-    :ets.delete(@table, {:root_span, span_id})
-    :ok
+    case get_root_span(span_id) do
+      nil -> :ok
+      _root_span ->
+        :ets.delete(@table, {:root_span, span_id})
+        remove_child_spans(span_id)
+    end
   end
 
   def remove_child_spans(parent_span_id) do

@@ -68,6 +68,44 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       SpanStorage.remove_span("abc123")
       assert nil == SpanStorage.get_root_span("abc123")
     end
+
+    test "removes root span and all its children" do
+      root_span = %SpanRecord{
+        span_id: "root123",
+        parent_span_id: nil,
+        trace_id: "trace123",
+        name: "root_span"
+      }
+
+      child_span1 = %SpanRecord{
+        span_id: "child1",
+        parent_span_id: "root123",
+        trace_id: "trace123",
+        name: "child_span_1"
+      }
+
+      child_span2 = %SpanRecord{
+        span_id: "child2",
+        parent_span_id: "root123",
+        trace_id: "trace123",
+        name: "child_span_2"
+      }
+
+      SpanStorage.store_span(root_span)
+      SpanStorage.store_span(child_span1)
+      SpanStorage.store_span(child_span2)
+
+      # Verify initial state
+      assert root_span == SpanStorage.get_root_span("root123")
+      assert length(SpanStorage.get_child_spans("root123")) == 2
+
+      # Remove root span should remove everything
+      SpanStorage.remove_span("root123")
+
+      # Verify everything is removed
+      assert nil == SpanStorage.get_root_span("root123")
+      assert [] == SpanStorage.get_child_spans("root123")
+    end
   end
 
   describe "child spans" do
