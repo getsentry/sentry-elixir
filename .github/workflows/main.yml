@@ -58,12 +58,20 @@ jobs:
     - name: Download Mix dependencies
       if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
       run: |
-        mix deps.get --check-locked
-        cd test_integrations/phoenix_app
-        if [ ${{ matrix.lint }} == 'true' ]; then
+        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
           mix deps.get --check-locked
         else
           mix deps.get
+        fi
+
+        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
+          cd test_integrations/phoenix_app
+
+          if [ ${{ matrix.lint }} == 'true' ]; then
+            mix deps.get --check-locked
+          else
+            mix deps.get
+          fi
         fi
 
     # We need to manually restore and then save, so that we can save the "_build" directory
