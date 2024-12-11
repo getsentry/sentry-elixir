@@ -1,5 +1,9 @@
 # Changelog
 
+## 10.8.1
+
+Optional dependency on phoenix_live_view has been updated to `~> 0.20 or ~> 1.0`.
+
 ## 10.8.0
 
 This release bumps the minimum Elixir requirement to 1.13, fixes a few bugs, and introduces **client reports**. Client reports will be sent to Sentry by default, but you can disable them with:
