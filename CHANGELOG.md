@@ -1,5 +1,12 @@
 # Changelog
 
+## 10.8.1
+
+### Various fixes & improvements
+
+- Update to LiveView 1.0 🎉 (#826) by @solnic
+- Replace release bot with GH app (#828) by @Jeffreyhung
+
 ## 10.8.0
 
 This release bumps the minimum Elixir requirement to 1.13, fixes a few bugs, and introduces **client reports**. Client reports will be sent to Sentry by default, but you can disable them with:
