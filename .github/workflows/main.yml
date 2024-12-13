@@ -27,13 +27,12 @@ jobs:
             lint: true
             dialyzer: true
 
-          # One version before the last supported one.
-          - elixir: '1.16'
-            otp: '26.2'
+          - elixir: '1.17'
+            otp: '27.1'
+            blend: phoenix_live_view_0_20
+            lint: true
+            dialyzer: true
 
-          # Oldest supported Elixir/Erlang pair.
-          - elixir: '1.13.4-otp-22'
-            otp: '22.3.4'
 
     steps:
     - name: Check out this repository
@@ -44,6 +43,10 @@ jobs:
       with:
         elixir-version: ${{ matrix.elixir }}
         otp-version: ${{ matrix.otp }}
+
+    - name: Set lock file from blend
+      run: cp blend/${{matrix.blend}}.mix.lock mix.lock
+      if: matrix.blend
 
     - name: Cache downloaded dependencies
       uses: actions/cache@v4

@@ -1,3 +1,7 @@
+if File.exists?("blend/premix.exs") do
+  Code.compile_file("blend/premix.exs")
+end
+
 defmodule Sentry.Mixfile do
   use Mix.Project
 
@@ -68,6 +72,7 @@ defmodule Sentry.Mixfile do
       xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, :telemetry]],
       aliases: aliases()
     ]
+    |> Keyword.merge(maybe_lockfile_option())
   end
 
   def application do
@@ -108,6 +113,7 @@ defmodule Sentry.Mixfile do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
+      {:blend, "~> 0.4.1", only: :dev},
       # Required by Phoenix.LiveView's testing
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
@@ -185,5 +191,13 @@ defmodule Sentry.Mixfile do
       into: IO.binstream(:stdio, :line),
       cd: Path.join("test_integrations", integration)
     )
+  end
+
+  defp maybe_lockfile_option do
+    case System.get_env("MIX_LOCKFILE") do
+      nil -> []
+      "" -> []
+      lockfile -> [lockfile: lockfile]
+     end
   end
 end
