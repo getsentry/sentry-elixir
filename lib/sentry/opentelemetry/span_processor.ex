@@ -172,6 +172,22 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     })
   end
 
+  defp build_transaction(%SpanRecord{origin: "opentelemetry_oban"} = root_span, child_spans) do
+    Transaction.new(%{
+      transaction: root_span.name |> String.split(" ") |> List.first(),
+      start_timestamp: root_span.start_time,
+      timestamp: root_span.end_time,
+      transaction_info: %{
+        source: "task"
+      },
+      contexts: %{
+        trace: build_trace_context(root_span)
+      },
+      measurements: %{},
+      spans: Enum.map(child_spans, &build_span(&1))
+    })
+  end
+
   defp build_trace_context(
          %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = root_span
        )
@@ -214,6 +230,47 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
       description: attributes["db.statement"] || root_span.name,
       origin: root_span.origin,
       data: attributes
+    }
+  end
+
+  defp build_trace_context(
+         %SpanRecord{
+           origin: "opentelemetry_oban",
+           attributes: %{"oban.plugin" => Oban.Stager} = _attributes
+         } = root_span
+       ) do
+    %{
+      trace_id: root_span.trace_id,
+      span_id: root_span.span_id,
+      parent_span_id: root_span.parent_span_id,
+      op: "queue.process",
+      origin: root_span.origin,
+      data: %{
+        "oban.plugin" => "stager"
+      }
+    }
+  end
+
+  defp build_trace_context(
+         %SpanRecord{origin: "opentelemetry_oban", attributes: attributes} = root_span
+       ) do
+    now = DateTime.utc_now()
+    {:ok, scheduled_at, _} = DateTime.from_iso8601(attributes["oban.job.scheduled_at"])
+
+    latency = DateTime.diff(now, scheduled_at, :millisecond)
+
+    %{
+      trace_id: root_span.trace_id,
+      span_id: root_span.span_id,
+      parent_span_id: root_span.parent_span_id,
+      op: "queue.process",
+      origin: root_span.origin,
+      data: %{
+        id: attributes["oban.job.job_id"],
+        queue: attributes["messaging.destination"],
+        retry_count: attributes["oban.job.attempt"],
+        latency: latency
+      }
     }
   end
 

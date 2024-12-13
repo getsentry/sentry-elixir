@@ -64,13 +64,15 @@ defmodule PhoenixApp.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
       {:bypass, "~> 2.1", only: :test},
-      {:opentelemetry, "~> 1.4"},
+      {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.3"},
       {:opentelemetry_phoenix, "~> 1.2"},
+      {:opentelemetry_oban, "~> 1.1"},
       # {:opentelemetry_bandit, "~> 0.1.4", github: "solnic/opentelemetry-bandit", depth: 1},
       {:opentelemetry_ecto, "~> 1.2"},
       {:sentry, path: "../.."},
-      {:hackney, "~> 1.18"}
+      {:hackney, "~> 1.18"},
+      {:oban, "~> 2.10"}
     ]
   end
 

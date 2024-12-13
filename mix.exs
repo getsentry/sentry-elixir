@@ -114,8 +114,8 @@ defmodule Sentry.Mixfile do
       {:quantum, "~> 3.0", only: [:test]},
 
       # Required by Tracing
-      {:opentelemetry, "~> 1.4", only: [:test]},
-      {:opentelemetry_api, "~> 1.3", only: [:test]}
+      {:opentelemetry, "~> 1.5"},
+      {:opentelemetry_api, "~> 1.3"}
     ]
   end
 
