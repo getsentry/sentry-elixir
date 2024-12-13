@@ -35,3 +35,8 @@ config :sentry,
   enable_source_code_context: true,
   send_result: :sync,
   test_mode: true
+
+config :phoenix_app, Oban,
+  repo: PhoenixApp.Repo,
+  engine: Oban.Engines.Lite,
+  queues: [default: 10, background: 5]

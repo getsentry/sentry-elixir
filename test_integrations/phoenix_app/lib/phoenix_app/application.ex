@@ -15,6 +15,7 @@ defmodule PhoenixApp.Application do
 
     # OpentelemetryBandit.setup()
     OpentelemetryPhoenix.setup()
+    OpentelemetryOban.setup()
     OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)
 
     children = [
@@ -26,8 +27,8 @@ defmodule PhoenixApp.Application do
       {Phoenix.PubSub, name: PhoenixApp.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: PhoenixApp.Finch},
-      # Start a worker by calling: PhoenixApp.Worker.start_link(arg)
-      # {PhoenixApp.Worker, arg},
+      # Start Oban
+      {Oban, Application.fetch_env!(:phoenix_app, Oban)},
       # Start to serve requests, typically the last entry
       PhoenixAppWeb.Endpoint
     ]
