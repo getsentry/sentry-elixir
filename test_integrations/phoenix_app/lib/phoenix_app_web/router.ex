@@ -21,6 +21,8 @@ defmodule PhoenixAppWeb.Router do
     get "/exception", PageController, :exception
     get "/transaction", PageController, :transaction
 
+    live "/test-worker", TestWorkerLive
+
     live "/users", UserLive.Index, :index
     live "/users/new", UserLive.Index, :new
     live "/users/:id/edit", UserLive.Index, :edit
