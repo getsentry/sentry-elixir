@@ -112,8 +112,10 @@ defmodule Sentry.Mixfile do
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
       {:quantum, "~> 3.0", only: [:test]},
-      {:opentelemetry, "~> 1.4", optional: true},
-      {:opentelemetry_api, "~> 1.3", optional: true}
+
+      # Required by Tracing
+      {:opentelemetry, "~> 1.4", only: [:test]},
+      {:opentelemetry_api, "~> 1.3", only: [:test]}
     ]
   end
 
