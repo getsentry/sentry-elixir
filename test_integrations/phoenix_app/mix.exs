@@ -66,7 +66,10 @@ defmodule PhoenixApp.MixProject do
       {:bypass, "~> 2.1", only: :test},
       {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.3"},
-      {:opentelemetry_phoenix, "~> 1.2"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      # TODO: Remove when opentelemetry_oban upstream has been updated
+      # from opentelemetry_semantic_conventions 0.2 to 1.0
+      {:opentelemetry_semantic_conventions, "~> 1.0", override: true},
       {:opentelemetry_oban, "~> 1.1"},
       # {:opentelemetry_bandit, "~> 0.1.4", github: "solnic/opentelemetry-bandit", depth: 1},
       {:opentelemetry_ecto, "~> 1.2"},

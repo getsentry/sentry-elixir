@@ -60,17 +60,17 @@ defmodule PhoenixAppWeb.UserLiveTest do
         end)
 
       assert transaction_save.transaction == "PhoenixAppWeb.UserLive.Index.handle_event#save"
-      assert transaction_save.transaction_info.source == "view"
-      assert transaction_save.contexts.trace.op == "http.server.live"
+      assert transaction_save.transaction_info.source == :custom
+      assert transaction_save.contexts.trace.op == "PhoenixAppWeb.UserLive.Index.handle_event#save"
       assert transaction_save.contexts.trace.origin == "opentelemetry_phoenix"
 
-      assert length(transaction_save.spans) == 1
-      span = List.first(transaction_save.spans)
-      assert span.op == "db.sql.ecto"
-      assert span.description =~ "INSERT INTO \"users\""
-      assert span.data["db.system"] == :sqlite
-      assert span.data["db.type"] == :sql
-      assert span.origin == "opentelemetry_ecto"
+      assert length(transaction_save.spans) == 2
+      assert [_span_1, span_2] = transaction_save.spans
+      assert span_2.op == "db"
+      assert span_2.description =~ "INSERT INTO \"users\""
+      assert span_2.data["db.system"] == :sqlite
+      assert span_2.data["db.type"] == :sql
+      assert span_2.origin == "opentelemetry_ecto"
     end
 
     test "updates user in listing", %{conn: conn, user: user} do

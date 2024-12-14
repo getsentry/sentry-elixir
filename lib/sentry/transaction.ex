@@ -12,8 +12,6 @@ defmodule Sentry.Transaction do
     :transaction,
     :transaction_info,
     :contexts,
-    :request,
-    :data,
     :measurements,
     :spans,
     type: "transaction"

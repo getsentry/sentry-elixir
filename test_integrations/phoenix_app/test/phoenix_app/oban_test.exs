@@ -28,17 +28,16 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
     [transaction] = transactions
 
-    assert transaction.transaction == "Sentry.Integrations.Phoenix.ObanTest.TestWorker"
-    assert transaction.transaction_info == %{source: "task"}
+    assert transaction.transaction == "Sentry.Integrations.Phoenix.ObanTest.TestWorker process"
+    assert transaction.transaction_info == %{source: :custom}
 
     trace = transaction.contexts.trace
     assert trace.origin == "opentelemetry_oban"
-    assert trace.op == "queue.process"
-    assert trace.data.id
-    assert trace.data.queue == "default"
-    assert trace.data.retry_count == 1
-    assert trace.data.latency > 0
+    assert trace.op == "Sentry.Integrations.Phoenix.ObanTest.TestWorker process"
+    assert trace.data["oban.job.job_id"]
+    assert trace.data["messaging.destination"] == "default"
+    assert trace.data["oban.job.attempt"] == 1
 
-    assert [] = transaction.spans
+    assert [_span] = transaction.spans
   end
 end

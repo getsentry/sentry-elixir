@@ -50,6 +50,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert transaction_data.environment == "test"
     assert transaction_data.type == "transaction"
     assert transaction_data.op == "child_instrumented_function_one"
+    assert transaction_data.transaction_info == %{source: :custom}
     assert_valid_iso8601(transaction_data.timestamp)
     assert_valid_iso8601(transaction_data.start_timestamp)
     assert transaction_data.timestamp > transaction_data.start_timestamp
