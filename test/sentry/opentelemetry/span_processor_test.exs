@@ -44,6 +44,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
+    assert transaction.environment == "test"
+    assert transaction.type == "transaction"
     assert_valid_iso8601(transaction.timestamp)
     assert_valid_iso8601(transaction.start_timestamp)
     assert transaction.timestamp > transaction.start_timestamp
@@ -64,6 +66,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     TestEndpoint.instrumented_function()
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+    assert transaction.environment == "test"
+    assert transaction.type == "transaction"
     assert_valid_iso8601(transaction.timestamp)
     assert_valid_iso8601(transaction.start_timestamp)
     assert transaction.timestamp > transaction.start_timestamp

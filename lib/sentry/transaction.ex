@@ -1,10 +1,11 @@
 defmodule Sentry.Transaction do
   @type t() :: %__MODULE__{}
 
-  alias Sentry.{UUID}
+  alias Sentry.{Config, UUID}
 
   defstruct [
     :event_id,
+    :environment,
     :start_timestamp,
     :timestamp,
     :transaction,
@@ -18,7 +19,12 @@ defmodule Sentry.Transaction do
   ]
 
   def new(attrs) do
-    struct(__MODULE__, Map.put(attrs, :event_id, UUID.uuid4_hex()))
+    struct(
+      __MODULE__,
+      attrs
+      |> Map.put(:event_id, UUID.uuid4_hex())
+      |> Map.put(:environment, Config.environment_name())
+    )
   end
 
   # Used to then encode the returned map to JSON.
