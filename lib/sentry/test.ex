@@ -361,7 +361,7 @@ defmodule Sentry.Test do
 
       iex> Sentry.Test.start_collecting_sentry_reports()
       :ok
-      iex> Sentry.send_transaction(%Sentry.Transaction{})
+      iex> Sentry.send_transaction(Sentry.Transaction.new(%{span_id: "123", spans: []}))
       {:ok, ""}
       iex> [%Sentry.Transaction{}] = Sentry.Test.pop_sentry_transactions()
 

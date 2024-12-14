@@ -57,8 +57,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   defp build_transaction(%SpanRecord{origin: :undefined} = root_span, child_spans) do
     Transaction.new(%{
       transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       contexts: %{
         trace: build_trace_context(root_span)
       },
@@ -69,8 +68,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   defp build_transaction(%SpanRecord{origin: "opentelemetry_ecto"} = root_span, child_spans) do
     Transaction.new(%{
       transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       transaction_info: %{
         source: "component"
       },
@@ -90,8 +88,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
        when map_size(attributes) > 0 do
     Transaction.new(%{
       transaction: "#{attributes["phoenix.plug"]}##{attributes["phoenix.action"]}",
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       transaction_info: %{
         source: "view"
       },
@@ -130,8 +127,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
        when map_size(attributes) == 0 do
     Transaction.new(%{
       transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       transaction_info: %{
         source: "view"
       },
@@ -147,8 +143,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
          child_spans
        ) do
     Transaction.new(%{
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       transaction: attributes["http.target"],
       transaction_info: %{
         source: "url"
@@ -175,8 +170,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   defp build_transaction(%SpanRecord{origin: "opentelemetry_oban"} = root_span, child_spans) do
     Transaction.new(%{
       transaction: root_span.name |> String.split(" ") |> List.first(),
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
       transaction_info: %{
         source: "task"
       },

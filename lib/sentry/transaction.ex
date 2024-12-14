@@ -3,23 +3,24 @@ defmodule Sentry.Transaction do
 
   alias Sentry.{Config, UUID}
 
+  @enforce_keys ~w(event_id span_id spans)a
+
   defstruct [
     :event_id,
     :environment,
-    :start_timestamp,
-    :timestamp,
+    :span_id,
     :transaction,
     :transaction_info,
-    :status,
     :contexts,
     :request,
+    :data,
     :measurements,
-    spans: [],
+    :spans,
     type: "transaction"
   ]
 
   def new(attrs) do
-    struct(
+    struct!(
       __MODULE__,
       attrs
       |> Map.put(:event_id, UUID.uuid4_hex())
@@ -30,27 +31,32 @@ defmodule Sentry.Transaction do
   # Used to then encode the returned map to JSON.
   @doc false
   def to_map(%__MODULE__{} = transaction) do
-    Map.put(
-      Map.from_struct(transaction),
-      :spans,
-      Enum.map(transaction.spans, &Sentry.Span.to_map(&1))
-    )
+    transaction_attrs = Map.take(transaction, [:event_id, :environment, :transaction, :transaction_info, :contexts, :measurements, :type])
+    {[root_span], child_spans} = Enum.split_with(transaction.spans, &is_nil(&1.parent_span_id))
+
+    root_span
+    |> Sentry.Span.to_map()
+    |> Map.put(:spans, Enum.map(child_spans, &Sentry.Span.to_map/1))
+    |> Map.drop([:description])
+    |> Map.merge(transaction_attrs)
   end
 end
 
 defmodule Sentry.Span do
+  @enforce_keys ~w(span_id trace_id start_timestamp timestamp)a
+
   defstruct [
-    :op,
+    :trace_id,
+    :span_id,
+    :parent_span_id,
     :start_timestamp,
     :timestamp,
     :description,
-    :span_id,
-    :parent_span_id,
-    :trace_id,
+    :op,
+    :status,
     :tags,
     :data,
-    :origin,
-    :status
+    :origin
   ]
 
   # Used to then encode the returned map to JSON.

@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.{Event, Transaction}
+  alias Sentry.{Event, Transaction, Span}
 
   setup do
     original_retries =
@@ -19,6 +19,8 @@ defmodule Sentry.ClientReportTest do
     %{bypass: bypass}
   end
 
+  @span_id Sentry.UUID.uuid4_hex()
+
   describe "record_discarded_events/2 + flushing" do
     test "succefully records the discarded event to the client report", %{bypass: bypass} do
       start_supervised!({Sender, name: :test_client_report})
@@ -28,10 +30,16 @@ defmodule Sentry.ClientReportTest do
           event_id: Sentry.UUID.uuid4_hex(),
           timestamp: "2024-10-12T13:21:13"
         },
-        %Transaction{
-          event_id: Sentry.UUID.uuid4_hex(),
-          timestamp: "2024-10-12T13:21:13"
-        }
+        Transaction.new(%{
+          span_id: @span_id,
+          transaction: "test-transaction",
+          spans: [%Span{
+            span_id: @span_id,
+            trace_id: Sentry.UUID.uuid4_hex(),
+            start_timestamp: "2024-10-12T13:21:13",
+            timestamp: "2024-10-12T13:21:13"
+          }]
+        })
       ]
 
       assert :ok = Sender.record_discarded_events(:before_send, events, :test_client_report)
