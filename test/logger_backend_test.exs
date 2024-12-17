@@ -350,6 +350,57 @@ defmodule Sentry.LoggerBackendTest do
     Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
+  describe "with logger metadata as tags" do
+    setup do
+      Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+      :ok
+    end
+
+    test "includes configured Logger metadata as tags" do
+      Logger.configure_backend(Sentry.LoggerBackend, tags: [:string, :number])
+      ref = register_before_send()
+
+      Logger.metadata(string: "value", number: 42, other: "ignored")
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert event.tags == %{string: "value", number: 42}
+    end
+
+    test "includes all Logger metadata as tags when configured with :all" do
+      Logger.configure_backend(Sentry.LoggerBackend, tags: :all)
+      ref = register_before_send()
+
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert %{string: "value", number: 42, pid: _, domain: [:elixir], mfa: _} = event.tags
+    end
+
+    test "does not include Logger metadata as tags when disabled" do
+      Logger.configure_backend(Sentry.LoggerBackend, tags: [])
+      ref = register_before_send()
+
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert event.tags == %{}
+    end
+
+    test "merges configured tags with explicitly set tags" do
+      Logger.configure_backend(Sentry.LoggerBackend, tags: [:string, :number])
+      ref = register_before_send()
+
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error", sentry: [tags: %{explicit: "tag"}])
+
+      assert_receive {^ref, event}
+      assert event.tags == %{string: "value", number: 42, explicit: "tag"}
+    end
+  end
+
   def task(parent, fun \\ fn -> raise "oops" end) do
     mon = Process.monitor(parent)
     Process.unlink(parent)
