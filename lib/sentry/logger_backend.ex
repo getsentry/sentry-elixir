@@ -42,6 +42,10 @@ defmodule Sentry.LoggerBackend do
   to `[]`. If set to `:all`, all metadata will be included. `:all` is available
   since v9.0.0 of this library.
 
+  * `:tags` - To include Logger metadata as tags in reports, the `:tags` key can be set to a list of keys.
+  Metadata under those keys will be added as tags to the event. Defaults to `[]`. If set to `:all`, all metadata
+  will be included as tags.
+
   * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels
     to send events for. Defaults to `:error`.
 
@@ -58,6 +62,8 @@ defmodule Sentry.LoggerBackend do
         excluded_domains: [],
         # Include metadata added with `Logger.metadata([foo_bar: "value"])`
         metadata: [:foo_bar],
+        # Include metadata as tags
+        tags: [:request_id],
         # Send messages like `Logger.error("error")` to Sentry
         capture_log_messages: true
 
@@ -72,6 +78,7 @@ defmodule Sentry.LoggerBackend do
 
   defstruct level: :error,
             metadata: [],
+            tags: [],
             excluded_domains: [:cowboy, :bandit],
             capture_log_messages: false
 
@@ -141,7 +148,10 @@ defmodule Sentry.LoggerBackend do
 
     sentry_context =
       if sentry_context_from_meta || sentry_context_from_sentry do
-        Map.merge(sentry_context_from_meta || %{}, sentry_context_from_sentry || %{})
+        Map.merge(
+          Map.new(sentry_context_from_meta || %{}),
+          Map.new(sentry_context_from_sentry || %{})
+        )
       else
         nil
       end
@@ -150,7 +160,14 @@ defmodule Sentry.LoggerBackend do
     # The context in the Logger backend process is not the same as the one in the process
     # that did the logging. This behavior is different than the one in Sentry.LoggerHandler,
     # since Logger handlers run in the caller process.
-    opts = LoggerUtils.build_sentry_options(level, sentry_context, Map.new(meta), state.metadata)
+    opts =
+      LoggerUtils.build_sentry_options(
+        level,
+        sentry_context,
+        Map.new(meta),
+        state.metadata,
+        state.tags
+      )
 
     case meta[:crash_reason] do
       # If the crash reason is an exception, we want to report the exception itself

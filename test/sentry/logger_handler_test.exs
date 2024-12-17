@@ -206,6 +206,45 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
+  describe "with logger metadata as tags" do
+    @tag handler_config: %{capture_log_messages: true, tags: [:string, :number]}
+    test "includes configured Logger metadata as tags", %{sender_ref: ref} do
+      Logger.metadata(string: "value", number: 42, other: "ignored")
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert event.tags == %{string: "value", number: 42}
+    end
+
+    @tag handler_config: %{capture_log_messages: true, tags: :all}
+    test "includes all Logger metadata as tags when configured with :all", %{sender_ref: ref} do
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert %{string: "value", number: 42, pid: _, domain: [:elixir], mfa: _} = event.tags
+    end
+
+    @tag handler_config: %{capture_log_messages: true, tags: []}
+    test "does not include Logger metadata as tags when disabled",
+         %{sender_ref: ref} do
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error")
+
+      assert_receive {^ref, event}
+      assert event.tags == %{}
+    end
+
+    @tag handler_config: %{capture_log_messages: true, tags: [:string, :number]}
+    test "merges configured tags with explicitly set tags", %{sender_ref: ref} do
+      Logger.metadata(string: "value", number: 42)
+      Logger.error("Testing error", sentry: [tags: %{explicit: "tag"}])
+
+      assert_receive {^ref, event}
+      assert event.tags == %{string: "value", number: 42, explicit: "tag"}
+    end
+  end
+
   describe "with a crashing GenServer" do
     setup do
       %{test_genserver: start_supervised!(TestGenServer, restart: :temporary)}
