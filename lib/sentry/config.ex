@@ -665,7 +665,7 @@ defmodule Sentry.Config do
       """
   end
 
-  @compile {:inline, fetch!: 1}
+  @compile {:inline, get: 1}
   defp get(key) do
     :persistent_term.get({:sentry_config, key}, nil)
   end
