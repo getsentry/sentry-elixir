@@ -59,9 +59,9 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     :ok
   end
 
-  # TODO: is it safe to ignore these? ie "Elixir.Oban.Stager process" is an internal span
-  #       and it prodocuses a lot of noise, so it makes sense to ignore it.
-  defp build_transaction(%{kind: :internal}, _), do: nil
+  # TODO: "Elixir.Oban.Stager process" is an internal span and it produces a lot of noise
+  #       so it makes sense to ignore it - should this be configurable?
+  defp build_transaction(%{name: "Elixir.Oban.Stager process"}, _), do: nil
 
   defp build_transaction(root_span_record, child_span_records) do
     root_span = build_span(root_span_record)
