@@ -29,7 +29,17 @@ defmodule Sentry.Transaction do
   # Used to then encode the returned map to JSON.
   @doc false
   def to_map(%__MODULE__{} = transaction) do
-    transaction_attrs = Map.take(transaction, [:event_id, :environment, :transaction, :transaction_info, :contexts, :measurements, :type])
+    transaction_attrs =
+      Map.take(transaction, [
+        :event_id,
+        :environment,
+        :transaction,
+        :transaction_info,
+        :contexts,
+        :measurements,
+        :type
+      ])
+
     {[root_span], child_spans} = Enum.split_with(transaction.spans, &is_nil(&1.parent_span_id))
 
     root_span
