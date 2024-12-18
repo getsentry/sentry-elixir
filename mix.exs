@@ -115,8 +115,8 @@ defmodule Sentry.Mixfile do
 
       # Required by Tracing
       {:opentelemetry, "~> 1.5"},
-      {:opentelemetry_api, "~> 1.3"},
-      {:opentelemetry_semantic_conventions, "~> 1.0"}
+      {:opentelemetry_api, "~> 1.4"},
+      {:opentelemetry_semantic_conventions, "~> 1.27"}
     ]
   end
 
