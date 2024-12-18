@@ -32,7 +32,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
       child_span_records = SpanStorage.get_child_spans(span_record.span_id)
       transaction = build_transaction(root_span_record, child_span_records)
 
-      result =
+      if transaction do
         case Sentry.send_transaction(transaction) do
           {:ok, _id} ->
             true
@@ -44,10 +44,11 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
             Logger.error("Failed to send transaction to Sentry: #{inspect(error)}")
             {:error, :invalid_span}
         end
+      end
 
-      SpanStorage.remove_span(span_record.span_id)
+      :ok = SpanStorage.remove_span(span_record.span_id)
 
-      result
+      true
     else
       true
     end
@@ -57,6 +58,10 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   def force_flush(_config) do
     :ok
   end
+
+  # TODO: is it safe to ignore these? ie "Elixir.Oban.Stager process" is an internal span
+  #       and it prodocuses a lot of noise, so it makes sense to ignore it.
+  defp build_transaction(%{kind: :internal}, _), do: nil
 
   defp build_transaction(root_span_record, child_span_records) do
     root_span = build_span(root_span_record)
