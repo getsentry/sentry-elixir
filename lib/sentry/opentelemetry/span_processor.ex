@@ -5,7 +5,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
   require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
   require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
-
+  require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
   @behaviour :otel_span_processor
 
   require Logger
@@ -64,7 +64,7 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
 
     Transaction.new(%{
       span_id: root_span.span_id,
-      transaction: root_span_record.name,
+      transaction: transaction_name(root_span_record),
       transaction_info: %{source: :custom},
       contexts: %{
         trace: build_trace_context(root_span_record),
@@ -73,6 +73,15 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
       spans: [root_span | child_spans]
     })
   end
+
+  defp transaction_name(
+         %{attributes: %{unquote(to_string(MessagingAttributes.messaging_system())) => :oban}} =
+           span_record
+       ) do
+    span_record.attributes["oban.job.worker"]
+  end
+
+  defp transaction_name(span_record), do: span_record.name
 
   defp build_trace_context(span_record) do
     {op, description} = get_op_description(span_record)
@@ -116,6 +125,13 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     db_query_text = Map.get(span_record.attributes, "db.statement")
 
     {"db", db_query_text}
+  end
+
+  defp get_op_description(%{
+         attributes:
+           %{unquote(to_string(MessagingAttributes.messaging_system())) => :oban} = attributes
+       }) do
+    {"queue.process", attributes["oban.job.worker"]}
   end
 
   defp get_op_description(span_record) do
