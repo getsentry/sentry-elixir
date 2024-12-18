@@ -33,12 +33,14 @@ defmodule Sentry.ClientReportTest do
         Transaction.new(%{
           span_id: @span_id,
           transaction: "test-transaction",
-          spans: [%Span{
-            span_id: @span_id,
-            trace_id: Sentry.UUID.uuid4_hex(),
-            start_timestamp: "2024-10-12T13:21:13",
-            timestamp: "2024-10-12T13:21:13"
-          }]
+          spans: [
+            %Span{
+              span_id: @span_id,
+              trace_id: Sentry.UUID.uuid4_hex(),
+              start_timestamp: "2024-10-12T13:21:13",
+              timestamp: "2024-10-12T13:21:13"
+            }
+          ]
         })
       ]
 
