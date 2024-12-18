@@ -44,16 +44,18 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
-    assert_valid_iso8601(transaction.timestamp)
-    assert_valid_iso8601(transaction.start_timestamp)
-    assert transaction.timestamp > transaction.start_timestamp
-    assert length(transaction.spans) == 1
+    transaction_data = Sentry.Transaction.to_map(transaction)
 
-    assert_valid_trace_id(transaction.contexts.trace.trace_id)
-
-    assert [span] = transaction.spans
-
-    assert span.op == "child_instrumented_function_one"
+    assert transaction_data.event_id
+    assert transaction_data.environment == "test"
+    assert transaction_data.type == "transaction"
+    assert transaction_data.op == "child_instrumented_function_one"
+    assert transaction_data.transaction_info == %{source: :custom}
+    assert_valid_iso8601(transaction_data.timestamp)
+    assert_valid_iso8601(transaction_data.start_timestamp)
+    assert transaction_data.timestamp > transaction_data.start_timestamp
+    assert_valid_trace_id(transaction_data.contexts.trace.trace_id)
+    assert length(transaction_data.spans) == 0
   end
 
   test "sends captured spans as transactions with child spans" do
@@ -64,12 +66,16 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     TestEndpoint.instrumented_function()
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
-    assert_valid_iso8601(transaction.timestamp)
-    assert_valid_iso8601(transaction.start_timestamp)
-    assert transaction.timestamp > transaction.start_timestamp
-    assert length(transaction.spans) == 3
 
-    [root_span, child_span_one, child_span_two] = transaction.spans
+    transaction_data = Sentry.Transaction.to_map(transaction)
+
+    assert transaction_data.op == "instrumented_function"
+    assert_valid_iso8601(transaction_data.timestamp)
+    assert_valid_iso8601(transaction_data.start_timestamp)
+    assert transaction_data.timestamp > transaction_data.start_timestamp
+    assert length(transaction_data.spans) == 2
+
+    [child_span_one, child_span_two] = transaction_data.spans
     assert child_span_one.op == "child_instrumented_function_one"
     assert child_span_two.op == "child_instrumented_function_two"
     assert child_span_one.parent_span_id == transaction.contexts.trace.span_id
@@ -82,10 +88,10 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     assert child_span_one.timestamp > child_span_one.start_timestamp
     assert child_span_two.timestamp > child_span_two.start_timestamp
-    assert root_span.timestamp >= child_span_one.timestamp
-    assert root_span.timestamp >= child_span_two.timestamp
-    assert root_span.start_timestamp <= child_span_one.start_timestamp
-    assert root_span.start_timestamp <= child_span_two.start_timestamp
+    assert transaction_data.timestamp >= child_span_one.timestamp
+    assert transaction_data.timestamp >= child_span_two.timestamp
+    assert transaction_data.start_timestamp <= child_span_one.start_timestamp
+    assert transaction_data.start_timestamp <= child_span_two.start_timestamp
 
     assert_valid_trace_id(transaction.contexts.trace.trace_id)
     assert_valid_trace_id(child_span_one.trace_id)

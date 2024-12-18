@@ -240,9 +240,16 @@ defmodule SentryTest do
     setup do
       transaction =
         Sentry.Transaction.new(%{
+          span_id: "root-span",
           transaction: "test-transaction",
-          start_timestamp: System.system_time(:second),
-          timestamp: System.system_time(:second)
+          spans: [
+            %Sentry.Span{
+              span_id: "root-span",
+              trace_id: "trace-id",
+              start_timestamp: 1_234_567_891.123_456,
+              timestamp: 1_234_567_891.123_456
+            }
+          ]
         })
 
       {:ok, transaction: transaction}

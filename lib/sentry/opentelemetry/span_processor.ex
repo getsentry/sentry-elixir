@@ -1,6 +1,11 @@
 defmodule Sentry.OpenTelemetry.SpanProcessor do
   @moduledoc false
 
+  require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+  require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
+  require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+  require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+
   @behaviour :otel_span_processor
 
   require Logger
@@ -23,10 +28,9 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     SpanStorage.update_span(span_record)
 
     if span_record.parent_span_id == nil do
-      root_span = SpanStorage.get_root_span(span_record.span_id)
-      child_spans = SpanStorage.get_child_spans(span_record.span_id)
-
-      transaction = build_transaction(root_span, child_spans)
+      root_span_record = SpanStorage.get_root_span(span_record.span_id)
+      child_span_records = SpanStorage.get_child_spans(span_record.span_id)
+      transaction = build_transaction(root_span_record, child_span_records)
 
       result =
         case Sentry.send_transaction(transaction) do
@@ -54,350 +58,104 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     :ok
   end
 
-  defp build_transaction(%SpanRecord{origin: :undefined} = root_span, child_spans) do
+  defp build_transaction(root_span_record, child_span_records) do
+    root_span = build_span(root_span_record)
+    child_spans = Enum.map(child_span_records, &build_span(&1))
+
     Transaction.new(%{
-      transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
+      span_id: root_span.span_id,
+      transaction: root_span_record.name,
+      transaction_info: %{source: :custom},
       contexts: %{
-        trace: build_trace_context(root_span)
+        trace: build_trace_context(root_span_record),
+        otel: build_otel_context(root_span_record)
       },
-      spans: [build_span(root_span) | Enum.map(child_spans, &build_span(&1))]
+      spans: [root_span | child_spans]
     })
   end
 
-  defp build_transaction(%SpanRecord{origin: "opentelemetry_ecto"} = root_span, child_spans) do
-    Transaction.new(%{
-      transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
-      transaction_info: %{
-        source: "component"
-      },
-      contexts: %{
-        trace: build_trace_context(root_span)
-      },
-      data: root_span.attributes,
-      measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1))
-    })
-  end
-
-  defp build_transaction(
-         %SpanRecord{attributes: attributes, origin: "opentelemetry_phoenix"} = root_span,
-         child_spans
-       )
-       when map_size(attributes) > 0 do
-    Transaction.new(%{
-      transaction: "#{attributes["phoenix.plug"]}##{attributes["phoenix.action"]}",
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
-      transaction_info: %{
-        source: "view"
-      },
-      contexts: %{
-        trace: build_trace_context(root_span)
-      },
-      request: %{
-        url: url_from_attributes(attributes),
-        method: attributes["http.method"],
-        headers: %{
-          "User-Agent" => attributes["http.user_agent"]
-        },
-        env: %{
-          "SERVER_NAME" => attributes["net.host.name"],
-          "SERVER_PORT" => attributes["net.host.port"]
-        }
-      },
-      data: %{
-        "http.response.status_code" => attributes["http.status_code"],
-        "method" => attributes["http.method"],
-        "path" => attributes["http.target"],
-        "params" => %{
-          "controller" => attributes["phoenix.plug"],
-          "action" => attributes["phoenix.action"]
-        }
-      },
-      measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1))
-    })
-  end
-
-  defp build_transaction(
-         %SpanRecord{attributes: attributes, origin: "opentelemetry_phoenix"} = root_span,
-         child_spans
-       )
-       when map_size(attributes) == 0 do
-    Transaction.new(%{
-      transaction: root_span.name,
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
-      transaction_info: %{
-        source: "view"
-      },
-      contexts: %{
-        trace: build_trace_context(root_span)
-      },
-      spans: Enum.map(child_spans, &build_span(&1))
-    })
-  end
-
-  defp build_transaction(
-         %SpanRecord{attributes: attributes, origin: "opentelemetry_bandit"} = root_span,
-         child_spans
-       ) do
-    Transaction.new(%{
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
-      transaction: attributes["http.target"],
-      transaction_info: %{
-        source: "url"
-      },
-      contexts: %{
-        trace: build_trace_context(root_span)
-      },
-      request: %{
-        url: attributes["http.url"],
-        method: attributes["http.method"],
-        headers: %{
-          "User-Agent" => attributes["http.user_agent"]
-        },
-        env: %{
-          "SERVER_NAME" => attributes["net.peer.name"],
-          "SERVER_PORT" => attributes["net.peer.port"]
-        }
-      },
-      measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1))
-    })
-  end
-
-  defp build_transaction(%SpanRecord{origin: "opentelemetry_oban"} = root_span, child_spans) do
-    Transaction.new(%{
-      transaction: root_span.name |> String.split(" ") |> List.first(),
-      start_timestamp: root_span.start_time,
-      timestamp: root_span.end_time,
-      transaction_info: %{
-        source: "task"
-      },
-      contexts: %{
-        trace: build_trace_context(root_span)
-      },
-      measurements: %{},
-      spans: Enum.map(child_spans, &build_span(&1))
-    })
-  end
-
-  defp build_trace_context(
-         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = root_span
-       )
-       when map_size(attributes) > 0 do
-    %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: nil,
-      op: "http.server",
-      origin: root_span.origin,
-      status: status_from_attributes(attributes),
-      data: %{
-        "http.response.status_code" => attributes["http.status_code"]
-      }
-    }
-  end
-
-  defp build_trace_context(
-         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = root_span
-       )
-       when map_size(attributes) == 0 do
-    %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: nil,
-      op: "http.server.live",
-      description: root_span.name,
-      origin: root_span.origin
-    }
-  end
-
-  defp build_trace_context(
-         %SpanRecord{origin: "opentelemetry_ecto", attributes: attributes} = root_span
-       ) do
-    %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: root_span.parent_span_id,
-      op: "db.#{attributes["db.type"]}.ecto",
-      description: attributes["db.statement"] || root_span.name,
-      origin: root_span.origin,
-      data: attributes
-    }
-  end
-
-  defp build_trace_context(
-         %SpanRecord{
-           origin: "opentelemetry_oban",
-           attributes: %{"oban.plugin" => Oban.Stager} = _attributes
-         } = root_span
-       ) do
-    %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: root_span.parent_span_id,
-      op: "queue.process",
-      origin: root_span.origin,
-      data: %{
-        "oban.plugin" => "stager"
-      }
-    }
-  end
-
-  defp build_trace_context(
-         %SpanRecord{origin: "opentelemetry_oban", attributes: attributes} = root_span
-       ) do
-    now = DateTime.utc_now()
-    {:ok, scheduled_at, _} = DateTime.from_iso8601(attributes["oban.job.scheduled_at"])
-
-    latency = DateTime.diff(now, scheduled_at, :millisecond)
+  defp build_trace_context(span_record) do
+    {op, description} = get_op_description(span_record)
 
     %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: root_span.parent_span_id,
-      op: "queue.process",
-      origin: root_span.origin,
-      data: %{
-        id: attributes["oban.job.job_id"],
-        queue: attributes["messaging.destination"],
-        retry_count: attributes["oban.job.attempt"],
-        latency: latency
-      }
-    }
-  end
-
-  defp build_trace_context(%SpanRecord{attributes: attributes} = root_span) do
-    %{
-      trace_id: root_span.trace_id,
-      span_id: root_span.span_id,
-      parent_span_id: nil,
-      op: root_span.name,
-      origin: root_span.origin,
-      data: attributes
-    }
-  end
-
-  defp build_span(
-         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record
-       )
-       when map_size(attributes) == 0 do
-    %Span{
-      op: "http.server.live",
-      description: span_record.name,
-      start_timestamp: span_record.start_time,
-      timestamp: span_record.end_time,
       trace_id: span_record.trace_id,
       span_id: span_record.span_id,
       parent_span_id: span_record.parent_span_id,
-      origin: span_record.origin
-    }
-  end
-
-  defp build_span(
-         %SpanRecord{origin: "opentelemetry_phoenix", attributes: attributes} = span_record
-       ) do
-    %Span{
-      op: "#{attributes["phoenix.plug"]}##{attributes["phoenix.action"]}",
-      start_timestamp: span_record.start_time,
-      timestamp: span_record.end_time,
-      trace_id: span_record.trace_id,
-      span_id: span_record.span_id,
-      parent_span_id: span_record.parent_span_id,
-      description: attributes["http.route"],
-      origin: span_record.origin
-    }
-  end
-
-  defp build_span(%SpanRecord{origin: "phoenix_app"} = span_record) do
-    %Span{
-      trace_id: span_record.trace_id,
-      op: span_record.name,
-      start_timestamp: span_record.start_time,
-      timestamp: span_record.end_time,
-      span_id: span_record.span_id,
-      parent_span_id: span_record.parent_span_id
-    }
-  end
-
-  defp build_span(%SpanRecord{origin: "opentelemetry_bandit"} = span_record) do
-    %Span{
-      trace_id: span_record.trace_id,
-      op: span_record.name,
-      start_timestamp: span_record.start_time,
-      timestamp: span_record.end_time,
-      span_id: span_record.span_id,
-      parent_span_id: span_record.parent_span_id,
-      description: span_record.name,
-      origin: span_record.origin
-    }
-  end
-
-  defp build_span(%SpanRecord{origin: "opentelemetry_ecto", attributes: attributes} = span_record) do
-    %Span{
-      trace_id: span_record.trace_id,
-      span_id: span_record.span_id,
-      parent_span_id: span_record.parent_span_id,
-      op: "db.#{attributes["db.type"]}.ecto",
-      description: attributes["db.statement"] || span_record.name,
+      op: op,
+      description: description,
       origin: span_record.origin,
-      start_timestamp: span_record.start_time,
-      timestamp: span_record.end_time,
-      data: attributes
+      data: span_record.attributes
     }
   end
 
-  defp build_span(%SpanRecord{origin: :undefined, attributes: _attributes} = span_record) do
+  defp build_otel_context(span_record), do: span_record.attributes
+
+  defp get_op_description(%{attributes: %{unquote(to_string(HTTPAttributes.http_request_method())) => http_request_method}} = span_record) do
+    op = "http.#{span_record.kind}"
+    client_address = Map.get(span_record.attributes, to_string(ClientAttributes.client_address()))
+    url_path = Map.get(span_record.attributes, to_string(URLAttributes.url_path()))
+
+    description =
+      to_string(http_request_method) <>
+      (client_address && " from #{client_address}" || "") <>
+      (url_path && " #{url_path}" || "")
+
+    {op, description}
+  end
+
+  defp get_op_description(%{attributes: %{unquote(to_string(DBAttributes.db_system())) => _db_system}} = span_record) do
+    db_query_text = Map.get(span_record.attributes, to_string(DBAttributes.db_statement()))
+
+    {"db", db_query_text}
+  end
+
+  defp get_op_description(span_record) do
+    {span_record.name, span_record.name}
+  end
+
+  defp build_span(span_record) do
+    {op, description} = get_op_description(span_record)
+
     %Span{
-      trace_id: span_record.trace_id,
-      op: span_record.name,
+      op: op,
+      description: description,
       start_timestamp: span_record.start_time,
       timestamp: span_record.end_time,
+      trace_id: span_record.trace_id,
       span_id: span_record.span_id,
       parent_span_id: span_record.parent_span_id,
-      # Add origin to match other span types
-      origin: span_record.origin
+      origin: span_record.origin,
+      data: Map.put(span_record.attributes, "otel.kind", span_record.kind),
+      status: span_status(span_record)
     }
   end
 
-  defp url_from_attributes(attributes) do
-    URI.to_string(%URI{
-      scheme: attributes["http.scheme"],
-      host: attributes["net.host.name"],
-      port: attributes["net.host.port"],
-      path: attributes["http.target"]
-    })
+  defp span_status(%{attributes: %{unquote(to_string(HTTPAttributes.http_response_status_code())) => http_response_status_code}}) do
+    to_status(http_response_status_code)
   end
 
-  defp status_from_attributes(%{"http.status_code" => status_code}) do
-    cond do
-      status_code in 200..299 ->
-        "ok"
+  defp span_status(_span_record), do: nil
 
-      status_code in [400, 401, 403, 404, 409, 429, 499, 500, 501, 503, 504] ->
-        %{
-          400 => "invalid_argument",
-          401 => "unauthenticated",
-          403 => "permission_denied",
-          404 => "not_found",
-          409 => "already_exists",
-          429 => "resource_exhausted",
-          499 => "cancelled",
-          500 => "internal_error",
-          501 => "unimplemented",
-          503 => "unavailable",
-          504 => "deadline_exceeded"
-        }[status_code]
+  # WebSocket upgrade spans doesn't have a HTTP status
+  defp to_status(nil), do: nil
 
-      true ->
-        "unknown_error"
-    end
+  defp to_status(status) when status in 200..299, do: "ok"
+
+  for {status, string} <- %{
+      400 => "invalid_argument",
+      401 => "unauthenticated",
+      403 => "permission_denied",
+      404 => "not_found",
+      409 => "already_exists",
+      429 => "resource_exhausted",
+      499 => "cancelled",
+      500 => "internal_error",
+      501 => "unimplemented",
+      503 => "unavailable",
+      504 => "deadline_exceeded"
+  } do
+    defp to_status(unquote(status)), do: unquote(string)
   end
+
+  defp to_status(_any), do: "unknown_error"
 end
