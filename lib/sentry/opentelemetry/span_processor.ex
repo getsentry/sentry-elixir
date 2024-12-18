@@ -90,21 +90,30 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
 
   defp build_otel_context(span_record), do: span_record.attributes
 
-  defp get_op_description(%{attributes: %{unquote(to_string(HTTPAttributes.http_request_method())) => http_request_method}} = span_record) do
+  defp get_op_description(
+         %{
+           attributes: %{
+             unquote(to_string(HTTPAttributes.http_request_method())) => http_request_method
+           }
+         } = span_record
+       ) do
     op = "http.#{span_record.kind}"
     client_address = Map.get(span_record.attributes, to_string(ClientAttributes.client_address()))
     url_path = Map.get(span_record.attributes, to_string(URLAttributes.url_path()))
 
     description =
       to_string(http_request_method) <>
-      (client_address && " from #{client_address}" || "") <>
-      (url_path && " #{url_path}" || "")
+        ((client_address && " from #{client_address}") || "") <>
+        ((url_path && " #{url_path}") || "")
 
     {op, description}
   end
 
-  defp get_op_description(%{attributes: %{unquote(to_string(DBAttributes.db_system())) => _db_system}} = span_record) do
-    db_query_text = Map.get(span_record.attributes, to_string(DBAttributes.db_statement()))
+  defp get_op_description(
+         %{attributes: %{unquote(to_string(DBAttributes.db_system())) => _db_system}} =
+           span_record
+       ) do
+    db_query_text = Map.get(span_record.attributes, "db.statement")
 
     {"db", db_query_text}
   end
@@ -130,7 +139,12 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     }
   end
 
-  defp span_status(%{attributes: %{unquote(to_string(HTTPAttributes.http_response_status_code())) => http_response_status_code}}) do
+  defp span_status(%{
+         attributes: %{
+           unquote(to_string(HTTPAttributes.http_response_status_code())) =>
+             http_response_status_code
+         }
+       }) do
     to_status(http_response_status_code)
   end
 
@@ -142,18 +156,18 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
   defp to_status(status) when status in 200..299, do: "ok"
 
   for {status, string} <- %{
-      400 => "invalid_argument",
-      401 => "unauthenticated",
-      403 => "permission_denied",
-      404 => "not_found",
-      409 => "already_exists",
-      429 => "resource_exhausted",
-      499 => "cancelled",
-      500 => "internal_error",
-      501 => "unimplemented",
-      503 => "unavailable",
-      504 => "deadline_exceeded"
-  } do
+        400 => "invalid_argument",
+        401 => "unauthenticated",
+        403 => "permission_denied",
+        404 => "not_found",
+        409 => "already_exists",
+        429 => "resource_exhausted",
+        499 => "cancelled",
+        500 => "internal_error",
+        501 => "unimplemented",
+        503 => "unavailable",
+        504 => "deadline_exceeded"
+      } do
     defp to_status(unquote(status)), do: unquote(string)
   end
 
