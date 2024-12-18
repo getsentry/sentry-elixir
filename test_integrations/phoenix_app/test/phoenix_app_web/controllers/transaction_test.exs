@@ -10,6 +10,8 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
   end
 
   test "GET /transaction", %{conn: conn} do
+    # TODO: Wrap this in a transaction that the web server usually
+    # would wrap it in.
     get(conn, ~p"/transaction")
 
     transactions = Sentry.Test.pop_sentry_transactions()
@@ -18,24 +20,19 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     assert [transaction] = transactions
 
-    assert transaction.transaction == "Elixir.PhoenixAppWeb.PageController#transaction"
-    assert transaction.transaction_info == %{source: "view"}
+    assert transaction.transaction == "test_span"
+    assert transaction.transaction_info == %{source: :custom}
 
     trace = transaction.contexts.trace
-    assert trace.origin == "opentelemetry_phoenix"
-    assert trace.op == "http.server"
-    assert trace.data == %{"http.response.status_code" => 200}
-    assert trace.status == "ok"
-
-    assert transaction.request.env == %{"SERVER_NAME" => "www.example.com", "SERVER_PORT" => 80}
-    assert transaction.request.url == "http://www.example.com/transaction"
-    assert transaction.request.method == "GET"
+    assert trace.origin == "phoenix_app"
+    assert trace.op == "test_span"
+    assert trace.data == %{}
 
     assert [span] = transaction.spans
 
     assert span.op == "test_span"
     assert span.trace_id == trace.trace_id
-    assert span.parent_span_id == trace.span_id
+    refute span.parent_span_id
   end
 
   test "GET /users", %{conn: conn} do
@@ -43,29 +40,37 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     transactions = Sentry.Test.pop_sentry_transactions()
 
-    assert length(transactions) == 1
+    assert length(transactions) == 2
 
-    assert [transaction] = transactions
+    assert [mount_transaction, handle_params_transaction] = transactions
 
-    assert transaction.transaction == "Elixir.Phoenix.LiveView.Plug#index"
-    assert transaction.transaction_info == %{source: "view"}
+    assert mount_transaction.transaction == "PhoenixAppWeb.UserLive.Index.mount"
+    assert mount_transaction.transaction_info == %{source: :custom}
 
-    trace = transaction.contexts.trace
+    trace = mount_transaction.contexts.trace
     assert trace.origin == "opentelemetry_phoenix"
-    assert trace.op == "http.server"
-    assert trace.data == %{"http.response.status_code" => 200}
-    assert trace.status == "ok"
+    assert trace.op == "PhoenixAppWeb.UserLive.Index.mount"
+    assert trace.data == %{}
 
-    assert transaction.request.env == %{"SERVER_NAME" => "www.example.com", "SERVER_PORT" => 80}
-    assert transaction.request.url == "http://www.example.com/users"
-    assert transaction.request.method == "GET"
+    assert [span_mount, span_ecto] = mount_transaction.spans
 
-    assert [span_mount, span_handle_params] = transaction.spans
-
-    assert span_mount.op == "http.server.live"
+    assert span_mount.op == "PhoenixAppWeb.UserLive.Index.mount"
     assert span_mount.description == "PhoenixAppWeb.UserLive.Index.mount"
 
-    assert span_handle_params.op == "http.server.live"
+    assert span_ecto.op == "db"
+    assert span_ecto.description == "SELECT u0.\"id\", u0.\"name\", u0.\"age\", u0.\"inserted_at\", u0.\"updated_at\" FROM \"users\" AS u0"
+
+    assert handle_params_transaction.transaction == "PhoenixAppWeb.UserLive.Index.handle_params"
+    assert handle_params_transaction.transaction_info == %{source: :custom}
+
+    trace = handle_params_transaction.contexts.trace
+    assert trace.origin == "opentelemetry_phoenix"
+    assert trace.op == "PhoenixAppWeb.UserLive.Index.handle_params"
+    assert trace.data == %{}
+
+    assert [span_handle_params] = handle_params_transaction.spans
+
+    assert span_handle_params.op == "PhoenixAppWeb.UserLive.Index.handle_params"
     assert span_handle_params.description == "PhoenixAppWeb.UserLive.Index.handle_params"
   end
 end
