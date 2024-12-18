@@ -67,10 +67,12 @@ defmodule PhoenixApp.MixProject do
       {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.4"},
       {:opentelemetry_phoenix, "~> 2.0"},
-      # TODO: Remove when opentelemetry_oban upstream has been updated
-      # from opentelemetry_semantic_conventions 0.2 to 1.0
-      {:opentelemetry_semantic_conventions, "~> 1.27", override: true},
-      {:opentelemetry_oban, "~> 1.1"},
+      {:opentelemetry_semantic_conventions, "~> 1.27"},
+      # TODO: Update once merged
+      {:opentelemetry_oban, "~> 1.1",
+       github: "danschultzer/opentelemetry-erlang-contrib",
+       branch: "oban-v1.27-semantics",
+       sparse: "instrumentation/opentelemetry_oban"},
       {:opentelemetry_ecto, "~> 1.2"},
       {:sentry, path: "../.."},
       {:hackney, "~> 1.18"},
