@@ -41,6 +41,37 @@
     </div>
   </div>
 
+  <div class="mt-8 bg-white shadow sm:rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+      <h3 class="text-base font-semibold leading-6 text-gray-900">Auto Schedule Multiple Jobs</h3>
+
+      <div class="mt-5">
+        <.form for={@auto_form} phx-submit="auto_schedule" class="space-y-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Number of Jobs</label>
+            <div class="mt-1">
+              <input type="number"
+                     name="auto[job_count]"
+                     value="5"
+                     min="1"
+                     max="100"
+                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <p class="mt-2 text-sm text-gray-500">
+              Jobs will be created with random sleep times (500-5000ms), random queues, and random failure states.
+            </p>
+          </div>
+
+          <div>
+            <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+              Auto Schedule Jobs
+            </button>
+          </div>
+        </.form>
+      </div>
+    </div>
+  </div>
+
   <div class="mt-8">
     <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Recent Jobs</h3>
 
