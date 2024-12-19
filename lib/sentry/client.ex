@@ -290,7 +290,7 @@ defmodule Sentry.Client do
       platform: "elixir",
       sdk: %{
         name: "sentry.elixir",
-        version: "10.7.1"
+        version: Application.spec(:sentry, :vsn)
       }
     })
   end
