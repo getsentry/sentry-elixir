@@ -62,10 +62,6 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
     :ok
   end
 
-  # TODO: "Elixir.Oban.Stager process" is an internal span and it produces a lot of noise
-  #       so it makes sense to ignore it - should this be configurable?
-  defp build_transaction(%{name: "Elixir.Oban.Stager process"}, _), do: nil
-
   defp build_transaction(root_span_record, child_span_records) do
     root_span = build_span(root_span_record)
     child_spans = Enum.map(child_span_records, &build_span(&1))

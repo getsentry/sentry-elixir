@@ -17,4 +17,7 @@ end
 
 config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 
+config :opentelemetry,
+  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
+
 config :phoenix, :json_library, Jason
