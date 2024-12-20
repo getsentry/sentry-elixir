@@ -33,20 +33,16 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
       transaction = build_transaction(root_span_record, child_span_records)
 
       result =
-        if transaction do
-          case Sentry.send_transaction(transaction) do
-            {:ok, _id} ->
-              true
+        case Sentry.send_transaction(transaction) do
+          {:ok, _id} ->
+            true
 
-            :ignored ->
-              true
+          :ignored ->
+            true
 
-            {:error, error} ->
-              Logger.error("Failed to send transaction to Sentry: #{inspect(error)}")
-              {:error, :invalid_span}
-          end
-        else
-          true
+          {:error, error} ->
+            Logger.error("Failed to send transaction to Sentry: #{inspect(error)}")
+            {:error, :invalid_span}
         end
 
       :ok = SpanStorage.remove_span(span_record.span_id)
