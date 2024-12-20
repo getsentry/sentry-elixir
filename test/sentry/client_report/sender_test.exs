@@ -46,19 +46,28 @@ defmodule Sentry.ClientReportTest do
 
       assert :ok = Sender.record_discarded_events(:before_send, events, :test_client_report)
 
-      assert :sys.get_state(:test_client_report) == %{{:before_send, "error"} => 2}
+      assert :sys.get_state(:test_client_report) == %{
+               {:before_send, "error"} => 1,
+               {:before_send, "transaction"} => 1
+             }
 
       assert :ok = Sender.record_discarded_events(:before_send, events, :test_client_report)
 
-      assert :sys.get_state(:test_client_report) == %{{:before_send, "error"} => 4}
+      assert :sys.get_state(:test_client_report) == %{
+               {:before_send, "error"} => 2,
+               {:before_send, "transaction"} => 2
+             }
 
       assert :ok = Sender.record_discarded_events(:event_processor, events, :test_client_report)
       assert :ok = Sender.record_discarded_events(:network_error, events, :test_client_report)
 
       assert :sys.get_state(:test_client_report) == %{
-               {:before_send, "error"} => 4,
-               {:event_processor, "error"} => 2,
-               {:network_error, "error"} => 2
+               {:before_send, "error"} => 2,
+               {:before_send, "transaction"} => 2,
+               {:event_processor, "error"} => 1,
+               {:event_processor, "transaction"} => 1,
+               {:network_error, "error"} => 1,
+               {:network_error, "transaction"} => 1
              }
 
       send(Process.whereis(:test_client_report), :send_report)
@@ -70,9 +79,12 @@ defmodule Sentry.ClientReportTest do
                  decode_envelope!(body)
 
         assert client_report["discarded_events"] == [
-                 %{"reason" => "before_send", "category" => "error", "quantity" => 4},
-                 %{"reason" => "event_processor", "category" => "error", "quantity" => 2},
-                 %{"reason" => "network_error", "category" => "error", "quantity" => 2}
+                 %{"category" => "error", "quantity" => 2, "reason" => "before_send"},
+                 %{"category" => "transaction", "quantity" => 2, "reason" => "before_send"},
+                 %{"category" => "error", "quantity" => 1, "reason" => "event_processor"},
+                 %{"category" => "transaction", "quantity" => 1, "reason" => "event_processor"},
+                 %{"category" => "error", "quantity" => 1, "reason" => "network_error"},
+                 %{"category" => "transaction", "quantity" => 1, "reason" => "network_error"}
                ]
 
         assert client_report["timestamp"] =~ ~r/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/

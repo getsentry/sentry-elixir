@@ -72,11 +72,10 @@ defmodule Sentry.Envelope do
         ) ::
           String.t()
   def get_data_category(%Attachment{}), do: "attachment"
+  def get_data_category(%Transaction{}), do: "transaction"
   def get_data_category(%CheckIn{}), do: "monitor"
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
-  # TODO: is this correct?
-  def get_data_category(%Transaction{}), do: "error"
 
   @doc """
   Encodes the envelope into its binary representation.
