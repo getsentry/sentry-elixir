@@ -44,6 +44,14 @@ defmodule Sentry.LoggerHandler do
       If set to `:all`, all metadata will be included.
       """
     ],
+    tags_from_metadata: [
+      type: {:list, :atom},
+      default: [],
+      doc: """
+      Use this to include logger metadata as tags in reports. Metadata under the specified keys
+      in those keys will be added as tags to the event.
+      """
+    ],
     capture_log_messages: [
       type: :boolean,
       default: false,
@@ -220,6 +228,7 @@ defmodule Sentry.LoggerHandler do
     :level,
     :excluded_domains,
     :metadata,
+    :tags_from_metadata,
     :capture_log_messages,
     :rate_limiting,
     :sync_threshold
@@ -321,7 +330,8 @@ defmodule Sentry.LoggerHandler do
             log_level,
             log_meta[:sentry],
             log_meta,
-            config.metadata
+            config.metadata,
+            config.tags_from_metadata
           )
 
         log_unfiltered(log_event, sentry_opts, config)

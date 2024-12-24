@@ -10,18 +10,27 @@ defmodule Sentry.LoggerUtils do
 
   require Logger
 
-  @spec build_sentry_options(Logger.level(), keyword() | nil, map(), [atom()] | :all) ::
+  @spec build_sentry_options(
+          Logger.level(),
+          keyword() | nil,
+          map(),
+          [atom()] | :all,
+          [atom()]
+        ) ::
           keyword()
-  def build_sentry_options(level, sentry_context, meta, allowed_meta) do
+  def build_sentry_options(level, sentry_context, meta, allowed_meta, allowed_tags \\ []) do
     default_extra =
       Map.merge(
         %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level},
         Map.take(meta, [:domain])
       )
 
+    default_tags = logger_metadata(meta, allowed_tags)
+
     (sentry_context || get_sentry_options_from_callers(meta[:callers]) || %{})
     |> Map.new()
     |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
+    |> Map.update(:tags, default_tags, &Map.merge(&1, default_tags))
     |> Map.merge(%{
       event_source: :logger,
       level: elixir_logger_level_to_sentry_level(level),
