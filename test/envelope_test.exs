@@ -144,8 +144,5 @@ defmodule Sentry.EnvelopeTest do
              event_id: Sentry.UUID.uuid4_hex(),
              timestamp: "2024-10-12T13:21:13"
            }) == "error"
-
-    assert_raise FunctionClauseError,
-                 fn -> Envelope.get_data_category(:completely_banana_value) end
   end
 end

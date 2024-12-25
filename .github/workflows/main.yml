@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
-    runs-on: ubuntu-20.04
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -22,18 +22,21 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.17'
-            otp: '27.1'
+          - elixir: '1.18'
+            otp: '27.2'
             lint: true
             dialyzer: true
+            os: ubuntu-latest
 
           # One version before the last supported one.
-          - elixir: '1.16'
+          - elixir: '1.17'
             otp: '26.2'
+            os: ubuntu-22.04
 
           # Oldest supported Elixir/Erlang pair.
           - elixir: '1.13.4-otp-22'
             otp: '22.3.4'
+            os: ubuntu-20.04
 
     steps:
     - name: Check out this repository
