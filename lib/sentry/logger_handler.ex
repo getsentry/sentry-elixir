@@ -49,7 +49,7 @@ defmodule Sentry.LoggerHandler do
       default: [],
       doc: """
       Use this to include logger metadata as tags in reports. Metadata under the specified keys
-      in those keys will be added as tags to the event.
+      in those keys will be added as tags to the event. *Available since v10.9.0*.
       """
     ],
     capture_log_messages: [

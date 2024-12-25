@@ -208,19 +208,18 @@ defmodule Sentry.LoggerHandlerTest do
 
   describe "with logger metadata as tags" do
     @tag handler_config: %{capture_log_messages: true, tags_from_metadata: [:string, :number]}
-    test "includes configured Logger metadata as tags", %{sender_ref: ref} do
+    test "includes configured Logger metadata as tags, but only if strings", %{sender_ref: ref} do
       Logger.metadata(string: "value", number: 42, other: "ignored")
       Logger.error("Testing error")
 
       assert_receive {^ref, event}
-      assert event.tags == %{string: "value", number: 42}
+      assert event.tags == %{string: "value"}
     end
 
     @tag handler_config: %{capture_log_messages: true, tags_from_metadata: []}
     test "does not include Logger metadata as tags when disabled",
          %{sender_ref: ref} do
-      Logger.metadata(string: "value", number: 42)
-      Logger.error("Testing error")
+      Logger.error("Testing error", string: "value", number: 42)
 
       assert_receive {^ref, event}
       assert event.tags == %{}
@@ -229,10 +228,10 @@ defmodule Sentry.LoggerHandlerTest do
     @tag handler_config: %{capture_log_messages: true, tags_from_metadata: [:string, :number]}
     test "merges configured tags with explicitly set tags", %{sender_ref: ref} do
       Logger.metadata(string: "value", number: 42)
-      Logger.error("Testing error", sentry: [tags: %{explicit: "tag"}])
+      Logger.error("Testing error", sentry: [tags: %{explicit: "tag", number: 44}])
 
       assert_receive {^ref, event}
-      assert event.tags == %{string: "value", number: 42, explicit: "tag"}
+      assert event.tags == %{string: "value", number: 44, explicit: "tag"}
     end
   end
 

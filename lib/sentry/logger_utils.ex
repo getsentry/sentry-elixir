@@ -18,14 +18,14 @@ defmodule Sentry.LoggerUtils do
           [atom()]
         ) ::
           keyword()
-  def build_sentry_options(level, sentry_context, meta, allowed_meta, allowed_tags \\ []) do
+  def build_sentry_options(level, sentry_context, meta, allowed_meta, tags_from_metadata) do
     default_extra =
       Map.merge(
         %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level},
         Map.take(meta, [:domain])
       )
 
-    default_tags = logger_metadata(meta, allowed_tags)
+    default_tags = logger_tags_from_metadata(meta, tags_from_metadata)
 
     (sentry_context || get_sentry_options_from_callers(meta[:callers]) || %{})
     |> Map.new()
@@ -86,6 +86,15 @@ defmodule Sentry.LoggerUtils do
 
     # Potentially convert to iodata.
     :maps.map(fn _key, val -> attempt_to_convert_iodata(val) end, meta)
+  end
+
+  defp logger_tags_from_metadata(meta, tags_from_metadata) do
+    for {key, value} <- meta,
+        key in tags_from_metadata,
+        is_binary(value),
+        into: %{} do
+      {key, value}
+    end
   end
 
   defp attempt_to_convert_iodata(list) when is_list(list) do
