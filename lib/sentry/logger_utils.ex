@@ -10,18 +10,27 @@ defmodule Sentry.LoggerUtils do
 
   require Logger
 
-  @spec build_sentry_options(Logger.level(), keyword() | nil, map(), [atom()] | :all) ::
+  @spec build_sentry_options(
+          Logger.level(),
+          keyword() | nil,
+          map(),
+          [atom()] | :all,
+          [atom()]
+        ) ::
           keyword()
-  def build_sentry_options(level, sentry_context, meta, allowed_meta) do
+  def build_sentry_options(level, sentry_context, meta, allowed_meta, tags_from_metadata) do
     default_extra =
       Map.merge(
         %{logger_metadata: logger_metadata(meta, allowed_meta), logger_level: level},
         Map.take(meta, [:domain])
       )
 
+    default_tags = logger_tags_from_metadata(meta, tags_from_metadata)
+
     (sentry_context || get_sentry_options_from_callers(meta[:callers]) || %{})
     |> Map.new()
     |> Map.update(:extra, default_extra, &Map.merge(&1, default_extra))
+    |> Map.update(:tags, default_tags, &Map.merge(&1, default_tags))
     |> Map.merge(%{
       event_source: :logger,
       level: elixir_logger_level_to_sentry_level(level),
@@ -77,6 +86,15 @@ defmodule Sentry.LoggerUtils do
 
     # Potentially convert to iodata.
     :maps.map(fn _key, val -> attempt_to_convert_iodata(val) end, meta)
+  end
+
+  defp logger_tags_from_metadata(meta, tags_from_metadata) do
+    for {key, value} <- meta,
+        key in tags_from_metadata,
+        is_binary(value),
+        into: %{} do
+      {key, value}
+    end
   end
 
   defp attempt_to_convert_iodata(list) when is_list(list) do

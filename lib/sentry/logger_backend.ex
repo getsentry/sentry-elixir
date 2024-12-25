@@ -150,7 +150,14 @@ defmodule Sentry.LoggerBackend do
     # The context in the Logger backend process is not the same as the one in the process
     # that did the logging. This behavior is different than the one in Sentry.LoggerHandler,
     # since Logger handlers run in the caller process.
-    opts = LoggerUtils.build_sentry_options(level, sentry_context, Map.new(meta), state.metadata)
+    opts =
+      LoggerUtils.build_sentry_options(
+        level,
+        sentry_context,
+        Map.new(meta),
+        state.metadata,
+        _tags_from_metadata = []
+      )
 
     case meta[:crash_reason] do
       # If the crash reason is an exception, we want to report the exception itself
