@@ -84,55 +84,31 @@ defmodule Sentry.Test do
   @doc false
   @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Event{} = event) do
-    if Sentry.Config.test_mode?() do
-      dsn_set? = not is_nil(Sentry.Config.dsn())
-      ensure_ownership_server_started()
-
-      case NimbleOwnership.fetch_owner(@server, callers(), @events_key) do
-        {:ok, owner_pid} ->
-          result =
-            NimbleOwnership.get_and_update(@server, owner_pid, @events_key, fn events ->
-              {:collected, (events || []) ++ [event]}
-            end)
-
-          case result do
-            {:ok, :collected} ->
-              :collected
-
-            {:error, error} ->
-              raise ArgumentError, "cannot collect Sentry reports: #{Exception.message(error)}"
-          end
-
-        :error when dsn_set? ->
-          :not_collecting
-
-        # If the :dsn option is not set and we didn't capture the event, it's alright,
-        # we can just swallow it.
-        :error ->
-          :collected
-      end
-    else
-      :not_collecting
-    end
+    maybe_collect(event, @events_key)
   end
 
   # Used internally when reporting a transaction, *before* reporting the actual transaction.
   @doc false
   @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Transaction{} = transaction) do
+    maybe_collect(transaction, @transactions_key)
+  end
+
+  @doc false
+  def maybe_collect(item, collection_key) do
     if Sentry.Config.test_mode?() do
       dsn_set? = not is_nil(Sentry.Config.dsn())
       ensure_ownership_server_started()
 
-      case NimbleOwnership.fetch_owner(@server, callers(), @transactions_key) do
+      case NimbleOwnership.fetch_owner(@server, callers(), collection_key) do
         {:ok, owner_pid} ->
           result =
             NimbleOwnership.get_and_update(
               @server,
               owner_pid,
-              @transactions_key,
-              fn transactions ->
-                {:collected, (transactions || []) ++ [transaction]}
+              collection_key,
+              fn items ->
+                {:collected, (items || []) ++ [item]}
               end
             )
 
@@ -142,13 +118,13 @@ defmodule Sentry.Test do
 
             {:error, error} ->
               raise ArgumentError,
-                    "cannot collect Sentry transactions: #{Exception.message(error)}"
+                    "cannot collect Sentry #{collection_key}: #{Exception.message(error)}"
           end
 
         :error when dsn_set? ->
           :not_collecting
 
-        # If the :dsn option is not set and we didn't capture the transaction, it's alright,
+        # If the :dsn option is not set and we didn't capture the item, it's alright,
         # we can just swallow it.
         :error ->
           :collected
