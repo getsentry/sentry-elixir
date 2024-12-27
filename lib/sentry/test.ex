@@ -77,8 +77,8 @@ defmodule Sentry.Test do
   @moduledoc since: "10.2.0"
 
   @server __MODULE__.OwnershipServer
-  @key :events
-  @transaction_key :transactions
+  @events_key :events
+  @transactions_key :transactions
 
   # Used internally when reporting an event, *before* reporting the actual event.
   @doc false
@@ -88,10 +88,10 @@ defmodule Sentry.Test do
       dsn_set? = not is_nil(Sentry.Config.dsn())
       ensure_ownership_server_started()
 
-      case NimbleOwnership.fetch_owner(@server, callers(), @key) do
+      case NimbleOwnership.fetch_owner(@server, callers(), @events_key) do
         {:ok, owner_pid} ->
           result =
-            NimbleOwnership.get_and_update(@server, owner_pid, @key, fn events ->
+            NimbleOwnership.get_and_update(@server, owner_pid, @events_key, fn events ->
               {:collected, (events || []) ++ [event]}
             end)
 
@@ -124,13 +124,13 @@ defmodule Sentry.Test do
       dsn_set? = not is_nil(Sentry.Config.dsn())
       ensure_ownership_server_started()
 
-      case NimbleOwnership.fetch_owner(@server, callers(), @transaction_key) do
+      case NimbleOwnership.fetch_owner(@server, callers(), @transactions_key) do
         {:ok, owner_pid} ->
           result =
             NimbleOwnership.get_and_update(
               @server,
               owner_pid,
-              @transaction_key,
+              @transactions_key,
               fn transactions ->
                 {:collected, (transactions || []) ++ [transaction]}
               end
@@ -178,8 +178,8 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
-    start_collecting(key: @key)
-    start_collecting(key: @transaction_key)
+    start_collecting(key: @events_key)
+    start_collecting(key: @transactions_key)
   end
 
   @doc """
@@ -221,7 +221,7 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting(keyword()) :: :ok
   def start_collecting(options \\ []) when is_list(options) do
-    key = Keyword.get(options, :key, @key)
+    key = Keyword.get(options, :key, @events_key)
     owner_pid = Keyword.get(options, :owner, self())
     cleanup? = Keyword.get(options, :cleanup, true)
 
@@ -291,7 +291,7 @@ defmodule Sentry.Test do
   @spec allow_sentry_reports(pid(), pid() | (-> pid())) :: :ok
   def allow_sentry_reports(owner_pid, pid_to_allow)
       when is_pid(owner_pid) and (is_pid(pid_to_allow) or is_function(pid_to_allow, 0)) do
-    case NimbleOwnership.allow(@server, owner_pid, pid_to_allow, @key) do
+    case NimbleOwnership.allow(@server, owner_pid, pid_to_allow, @events_key) do
       :ok ->
         :ok
 
@@ -326,7 +326,7 @@ defmodule Sentry.Test do
   def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
     result =
       try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @key, fn
+        NimbleOwnership.get_and_update(@server, owner_pid, @events_key, fn
           nil -> {:not_collecting, []}
           events when is_list(events) -> {events, []}
         end)
@@ -371,7 +371,7 @@ defmodule Sentry.Test do
   def pop_sentry_transactions(owner_pid \\ self()) when is_pid(owner_pid) do
     result =
       try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @transaction_key, fn
+        NimbleOwnership.get_and_update(@server, owner_pid, @transactions_key, fn
           nil -> {:not_collecting, []}
           transactions when is_list(transactions) -> {transactions, []}
         end)
