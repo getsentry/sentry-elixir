@@ -2,7 +2,15 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID, Transaction}
+  alias Sentry.{
+    Attachment,
+    CheckIn,
+    ClientReport,
+    Config,
+    Event,
+    Transaction,
+    UUID
+  }
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
