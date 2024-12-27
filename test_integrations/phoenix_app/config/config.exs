@@ -8,6 +8,7 @@
 import Config
 
 config :phoenix_app,
+  ecto_repos: [PhoenixApp.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configures the endpoint
@@ -59,6 +60,11 @@ config :logger, :console,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
+
+config :opentelemetry,
+  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
