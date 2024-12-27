@@ -15,9 +15,9 @@ defmodule Sentry.Client do
     Event,
     Interfaces,
     LoggerUtils,
-    Transport,
     Options,
-    Transaction
+    Transaction,
+    Transport
   }
 
   require Logger
@@ -109,7 +109,7 @@ defmodule Sentry.Client do
   end
 
   def send_transaction(%Transaction{} = transaction, opts \\ []) do
-    # opts = validate_options!(opts)
+    opts = NimbleOptions.validate!(opts, Options.send_transaction_schema())
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)

@@ -273,6 +273,12 @@ defmodule SentryTest do
       assert {:ok, "340"} = Sentry.send_transaction(transaction)
     end
 
+    test "validates options", %{transaction: transaction} do
+      assert_raise NimbleOptions.ValidationError, fn ->
+        Sentry.send_transaction(transaction, client: "oops")
+      end
+    end
+
     test "ignores transaction when dsn is not configured", %{transaction: transaction} do
       put_test_config(dsn: nil, test_mode: false)
 
