@@ -152,7 +152,7 @@ defmodule Sentry.Config do
       type_doc: "`t:module/0`",
       doc: """
       A module that implements the "standard" Elixir JSON behaviour, that is, exports the
-      `encode/1` and `decode/1` functions. If you use the default, make sure to add
+      `encode!/1` and `decode!/1` functions. If you use the default, make sure to add
       [`:jason`](https://hex.pm/packages/jason) as a dependency of your application.
       """
     ],
@@ -695,19 +695,14 @@ defmodule Sentry.Config do
 
   def __validate_json_library__(mod) when is_atom(mod) do
     try do
-      with {:ok, %{}} <- mod.decode("{}"),
-           {:ok, "{}"} <- mod.encode(%{}) do
-        {:ok, mod}
-      else
-        _ ->
-          {:error,
-           "configured :json_library #{inspect(mod)} does not implement decode/1 and encode/1"}
-      end
+      %{} = mod.decode!("{}")
+      "{}" = mod.encode!(%{})
+      {:ok, mod}
     rescue
       UndefinedFunctionError ->
         {:error,
          """
-         configured :json_library #{inspect(mod)} is not available or does not implement decode/1 and encode/1.
+         configured :json_library #{inspect(mod)} is not available or does not implement decode!/1 and encode!/1.
          Do you need to add #{inspect(mod)} to your mix.exs?
          """}
     end

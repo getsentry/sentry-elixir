@@ -76,19 +76,14 @@ defmodule Sentry.Envelope do
     items_iodata = Enum.map(envelope.items, &item_to_binary(json_library, &1))
 
     {:ok, IO.iodata_to_binary([headers_iodata, items_iodata])}
-  catch
-    {:error, _reason} = error -> error
+  rescue
+    error -> {:error, error}
   end
 
   defp item_to_binary(json_library, %Event{} = event) do
-    case event |> Sentry.Client.render_event() |> json_library.encode() do
-      {:ok, encoded_event} ->
-        header = ~s({"type":"event","length":#{byte_size(encoded_event)}})
-        [header, ?\n, encoded_event, ?\n]
-
-      {:error, _reason} = error ->
-        throw(error)
-    end
+    encoded_event = event |> Sentry.Client.render_event() |> json_library.encode!()
+    header = ~s({"type":"event","length":#{byte_size(encoded_event)}})
+    [header, ?\n, encoded_event, ?\n]
   end
 
   defp item_to_binary(json_library, %Attachment{} = attachment) do
@@ -100,30 +95,20 @@ defmodule Sentry.Envelope do
           into: header,
           do: {Atom.to_string(key), value}
 
-    {:ok, header_iodata} = json_library.encode(header)
+    header_iodata = json_library.encode!(header)
 
     [header_iodata, ?\n, attachment.data, ?\n]
   end
 
   defp item_to_binary(json_library, %CheckIn{} = check_in) do
-    case check_in |> CheckIn.to_map() |> json_library.encode() do
-      {:ok, encoded_check_in} ->
-        header = ~s({"type":"check_in","length":#{byte_size(encoded_check_in)}})
-        [header, ?\n, encoded_check_in, ?\n]
-
-      {:error, _reason} = error ->
-        throw(error)
-    end
+    encoded_check_in = check_in |> CheckIn.to_map() |> json_library.encode!()
+    header = ~s({"type":"check_in","length":#{byte_size(encoded_check_in)}})
+    [header, ?\n, encoded_check_in, ?\n]
   end
 
   defp item_to_binary(json_library, %ClientReport{} = client_report) do
-    case client_report |> Map.from_struct() |> json_library.encode() do
-      {:ok, encoded_client_report} ->
-        header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
-        [header, ?\n, encoded_client_report, ?\n]
-
-      {:error, _reason} = error ->
-        throw(error)
-    end
+    encoded_client_report = client_report |> Map.from_struct() |> json_library.encode!()
+    header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
+    [header, ?\n, encoded_client_report, ?\n]
   end
 end

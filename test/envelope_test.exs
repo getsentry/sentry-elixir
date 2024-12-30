@@ -15,10 +15,10 @@ defmodule Sentry.EnvelopeTest do
       assert {:ok, encoded} = Envelope.to_binary(envelope)
 
       assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
-      assert Jason.decode!(id_line) == %{"event_id" => event.event_id}
-      assert %{"type" => "event", "length" => _} = Jason.decode!(header_line)
+      assert json_library().decode!(id_line) == %{"event_id" => event.event_id}
+      assert %{"type" => "event", "length" => _} = json_library().decode!(header_line)
 
-      assert {:ok, decoded_event} = Jason.decode(event_line)
+      assert {:ok, decoded_event} = json_library().decode(event_line)
       assert decoded_event["event_id"] == event.event_id
       assert decoded_event["breadcrumbs"] == []
       assert decoded_event["environment"] == "test"
@@ -65,29 +65,29 @@ defmodule Sentry.EnvelopeTest do
                "..."
              ] = String.split(encoded, "\n", trim: true)
 
-      assert %{"event_id" => _} = Jason.decode!(id_line)
+      assert %{"event_id" => _} = json_library().decode!(id_line)
 
-      assert Jason.decode!(attachment1_header) == %{
+      assert json_library().decode!(attachment1_header) == %{
                "type" => "attachment",
                "length" => 3,
                "filename" => "example.dat"
              }
 
-      assert Jason.decode!(attachment2_header) == %{
+      assert json_library().decode!(attachment2_header) == %{
                "type" => "attachment",
                "length" => 6,
                "filename" => "example.txt",
                "content_type" => "text/plain"
              }
 
-      assert Jason.decode!(attachment3_header) == %{
+      assert json_library().decode!(attachment3_header) == %{
                "type" => "attachment",
                "length" => 2,
                "filename" => "example.json",
                "content_type" => "application/json"
              }
 
-      assert Jason.decode!(attachment4_header) == %{
+      assert json_library().decode!(attachment4_header) == %{
                "type" => "attachment",
                "length" => 3,
                "filename" => "dump",
@@ -105,10 +105,10 @@ defmodule Sentry.EnvelopeTest do
       assert {:ok, encoded} = Envelope.to_binary(envelope)
 
       assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
-      assert %{"event_id" => _} = Jason.decode!(id_line)
-      assert %{"type" => "check_in", "length" => _} = Jason.decode!(header_line)
+      assert %{"event_id" => _} = json_library().decode!(id_line)
+      assert %{"type" => "check_in", "length" => _} = json_library().decode!(header_line)
 
-      assert {:ok, decoded_check_in} = Jason.decode(event_line)
+      assert {:ok, decoded_check_in} = json_library().decode(event_line)
       assert decoded_check_in["check_in_id"] == check_in_id
       assert decoded_check_in["monitor_slug"] == "test"
       assert decoded_check_in["status"] == "ok"
@@ -128,10 +128,10 @@ defmodule Sentry.EnvelopeTest do
     assert {:ok, encoded} = Envelope.to_binary(envelope)
 
     assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
-    assert %{"event_id" => _} = Jason.decode!(id_line)
-    assert %{"type" => "client_report", "length" => _} = Jason.decode!(header_line)
+    assert %{"event_id" => _} = json_library().decode!(id_line)
+    assert %{"type" => "client_report", "length" => _} = json_library().decode!(header_line)
 
-    assert {:ok, decoded_client_report} = Jason.decode(event_line)
+    assert {:ok, decoded_client_report} = json_library().decode(event_line)
     assert decoded_client_report["timestamp"] == client_report.timestamp
 
     assert decoded_client_report["discarded_events"] == [

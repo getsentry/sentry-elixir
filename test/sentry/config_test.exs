@@ -158,7 +158,7 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":json_library" do
-      assert Config.validate!(json_library: Jason)[:json_library] == Jason
+      assert Config.validate!(json_library: JSON)[:json_library] == JSON
 
       # Default
       assert Config.validate!([])[:json_library] == Jason

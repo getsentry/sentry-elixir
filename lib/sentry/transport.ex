@@ -93,11 +93,10 @@ defmodule Sentry.Transport do
   end
 
   defp request(client, endpoint, headers, body) do
-    with {:ok, 200, _headers, body} <-
-           client_post_and_validate_return_value(client, endpoint, headers, body),
-         {:ok, json} <- Config.json_library().decode(body) do
-      {:ok, Map.get(json, "id")}
-    else
+    case client_post_and_validate_return_value(client, endpoint, headers, body) do
+      {:ok, 200, _headers, body} ->
+        {:ok, body |> Config.json_library().decode!() |> Map.get("id")}
+
       {:ok, 429, headers, _body} ->
         delay_ms =
           with timeout when is_binary(timeout) <-

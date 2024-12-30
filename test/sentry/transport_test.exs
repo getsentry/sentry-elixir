@@ -158,10 +158,10 @@ defmodule Sentry.TransportTest do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       defmodule CrashingJSONLibrary do
-        defdelegate encode(term), to: Jason
+        defdelegate encode!(term), to: json_library()
 
-        def decode("{}"), do: {:ok, %{}}
-        def decode(_body), do: raise("I'm a really bad JSON library")
+        def decode!("{}"), do: %{}
+        def decode!(_body), do: raise("I'm a really bad JSON library")
       end
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -190,7 +190,9 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<invalid JSON>)
       end)
 
-      assert {:request_failure, %Jason.DecodeError{}} =
+      exception = Module.concat(json_library(), DecodeError)
+
+      assert {:error, %^exception{}, _stacktrace} =
                error(fn ->
                  Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [0])
                end)
