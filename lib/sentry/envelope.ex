@@ -2,11 +2,13 @@ defmodule Sentry.Envelope do
   @moduledoc false
   # https://develop.sentry.dev/sdk/envelopes/
 
-  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Config, Event, UUID, Transaction}
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
-          items: [Event.t() | Attachment.t() | CheckIn.t() | ClientReport.t(), ...]
+          items: [
+            Event.t() | Attachment.t() | CheckIn.t() | ClientReport.t() | Transaction.t()
+          ]
         }
 
   @enforce_keys [:event_id, :items]
@@ -47,12 +49,30 @@ defmodule Sentry.Envelope do
   end
 
   @doc """
+  Creates a new envelope containing a transaction with spans.
+  """
+  @spec from_transaction(Sentry.Transaction.t()) :: t()
+  def from_transaction(%Transaction{} = transaction) do
+    %__MODULE__{
+      event_id: transaction.event_id,
+      items: [transaction]
+    }
+  end
+
+  @doc """
   Returns the "data category" of the envelope's contents (to be used in client reports and more).
   """
   @doc since: "10.8.0"
-  @spec get_data_category(Attachment.t() | CheckIn.t() | ClientReport.t() | Event.t()) ::
+  @spec get_data_category(
+          Attachment.t()
+          | CheckIn.t()
+          | ClientReport.t()
+          | Event.t()
+          | Transaction.t()
+        ) ::
           String.t()
   def get_data_category(%Attachment{}), do: "attachment"
+  def get_data_category(%Transaction{}), do: "transaction"
   def get_data_category(%CheckIn{}), do: "monitor"
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
@@ -121,6 +141,17 @@ defmodule Sentry.Envelope do
       {:ok, encoded_client_report} ->
         header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
         [header, ?\n, encoded_client_report, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %Transaction{} = transaction) do
+    case transaction |> Sentry.Client.render_transaction() |> json_library.encode() do
+      {:ok, encoded_transaction} ->
+        header = ~s({"type": "transaction", "length": #{byte_size(encoded_transaction)}})
+        [header, ?\n, encoded_transaction, ?\n]
 
       {:error, _reason} = error ->
         throw(error)
