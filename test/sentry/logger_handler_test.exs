@@ -635,7 +635,8 @@ defmodule Sentry.LoggerHandlerTest do
   end
 
   defp invalid_function do
-    NaiveDateTime.from_erl({}, {}, {})
+    # This needs to be dynamic in order to not warn with Elixir's type system
+    apply(NaiveDateTime, :from_erl, [{}, {}, {}])
   end
 
   defp enable_sasl_reports do

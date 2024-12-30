@@ -234,7 +234,12 @@ defmodule Sentry.ClientTest do
       put_test_config(before_send: {CallbackModuleArithmeticError, :before_send})
 
       try do
-        :rand.uniform() + "1"
+        # This is the equivalent of
+        #
+        #     :rand.uniform() + "1"
+        #
+        # but made dynamic to avoid type warnings.
+        apply(Kernel, :+, [:rand.uniform(), "1"])
       rescue
         exception ->
           event = Event.transform_exception(exception, _opts = [])
