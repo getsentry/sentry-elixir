@@ -6,8 +6,8 @@ You can capture errors in Plug (and Phoenix) applications with `Sentry.PlugConte
 
 If you are using Phoenix:
 
-  1. Add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file
-  1. Add `Sentry.PlugContext` below `Plug.Parsers`
+1. Add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file
+1. Add `Sentry.PlugContext` below `Plug.Parsers`
 
 ```diff
  defmodule MyAppWeb.Endpoint
@@ -51,7 +51,7 @@ defmodule MyAppWeb.ErrorView do
   def render("500.html", _assigns) do
     case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} when is_binary(event_id) ->
-        opts = Jason.encode!(%{eventId: event_id})
+        opts = JSON.encode!(%{eventId: event_id})
 
         ~E"""
           <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
@@ -72,8 +72,8 @@ end
 
 If you are in a non-Phoenix Plug application:
 
-  1. Add `Sentry.PlugCapture` at the top of your Plug application
-  1. Add `Sentry.PlugContext` below `Plug.Parsers` (if it is in your stack)
+1. Add `Sentry.PlugCapture` at the top of your Plug application
+1. Add `Sentry.PlugContext` below `Plug.Parsers` (if it is in your stack)
 
 ```diff
  defmodule MyApp.Router do

@@ -95,7 +95,7 @@ defmodule Sentry.Transport do
   defp request(client, endpoint, headers, body) do
     with {:ok, 200, _headers, body} <-
            client_post_and_validate_return_value(client, endpoint, headers, body),
-         {:ok, json} <- Config.json_library().decode(body) do
+         {:ok, json} <- Sentry.JSON.decode(body) do
       {:ok, Map.get(json, "id")}
     else
       {:ok, 429, headers, _body} ->

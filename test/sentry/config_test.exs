@@ -158,22 +158,30 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":json_library" do
-      assert Config.validate!(json_library: Jason)[:json_library] == Jason
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               assert Config.validate!(json_library: Jason)[:json_library] == Jason
+             end) =~
+               """
+               :json_library option is deprecated. \
+               JSON kernel module is available for Elixir 1.18+.\
+               """
 
       # Default
-      assert Config.validate!([])[:json_library] == Jason
+      assert Config.validate!([])[:json_library] == nil
 
-      assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
-        Config.validate!(json_library: Atom)
-      end
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
+          Config.validate!(json_library: Atom)
+        end
 
-      assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
-        Config.validate!(json_library: nil)
-      end
+        assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
+          Config.validate!(json_library: nil)
+        end
 
-      assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
-        Config.validate!(json_library: "not a module")
-      end
+        assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
+          Config.validate!(json_library: "not a module")
+        end
+      end)
     end
 
     test ":before_send" do

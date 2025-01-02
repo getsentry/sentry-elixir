@@ -148,11 +148,16 @@ defmodule Sentry.Config do
     ],
     json_library: [
       type: {:custom, __MODULE__, :__validate_json_library__, []},
-      default: Jason,
+      deprecated: "JSON kernel module is available for Elixir 1.18+.",
       type_doc: "`t:module/0`",
       doc: """
       A module that implements the "standard" Elixir JSON behaviour, that is, exports the
-      `encode/1` and `decode/1` functions. If you use the default, make sure to add
+      `encode/1` and `decode/1` functions.
+
+      This configuration should be set at compile-time.
+
+      Defaults to `Jason` if `JSON` kernel module is not available. If you use the
+      default configuration with Elixir version lower than 1.18, make sure to add
       [`:jason`](https://hex.pm/packages/jason) as a dependency of your application.
       """
     ],
@@ -569,9 +574,6 @@ defmodule Sentry.Config do
   @spec report_deps?() :: boolean()
   def report_deps?, do: fetch!(:report_deps)
 
-  @spec json_library() :: module()
-  def json_library, do: fetch!(:json_library)
-
   @spec log_level() :: :debug | :info | :warning | :warn | :error
   def log_level, do: fetch!(:log_level)
 
@@ -692,6 +694,8 @@ defmodule Sentry.Config do
   def __validate_json_library__(nil) do
     {:error, "nil is not a valid value for the :json_library option"}
   end
+
+  def __validate_json_library__(JSON = mod), do: {:ok, mod}
 
   def __validate_json_library__(mod) when is_atom(mod) do
     try do

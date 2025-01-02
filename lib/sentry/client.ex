@@ -207,8 +207,6 @@ defmodule Sentry.Client do
 
   @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
-    json_library = Config.json_library()
-
     event
     |> Event.remove_non_payload_keys()
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
@@ -218,9 +216,9 @@ defmodule Sentry.Client do
       Map.from_struct(message)
     end)
     |> update_if_present(:request, &(&1 |> Map.from_struct() |> remove_nils()))
-    |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
-    |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
-    |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
+    |> update_if_present(:extra, &sanitize_non_jsonable_values/1)
+    |> update_if_present(:user, &sanitize_non_jsonable_values/1)
+    |> update_if_present(:tags, &sanitize_non_jsonable_values/1)
     |> update_if_present(:exception, fn list -> Enum.map(list, &render_exception/1) end)
     |> update_if_present(:threads, fn list -> Enum.map(list, &render_thread/1) end)
   end
@@ -255,11 +253,11 @@ defmodule Sentry.Client do
     :maps.filter(fn _key, value -> not is_nil(value) end, map)
   end
 
-  defp sanitize_non_jsonable_values(map, json_library) do
+  defp sanitize_non_jsonable_values(map) do
     # We update the existing map instead of building a new one from scratch
     # due to performance reasons. See the docs for :maps.map/2.
     Enum.reduce(map, map, fn {key, value}, acc ->
-      case sanitize_non_jsonable_value(value, json_library) do
+      case sanitize_non_jsonable_value(value) do
         :unchanged -> acc
         {:changed, value} -> Map.put(acc, key, value)
       end
@@ -267,15 +265,15 @@ defmodule Sentry.Client do
   end
 
   # For performance, skip all the keys that we know for sure are JSON encodable.
-  defp sanitize_non_jsonable_value(value, _json_library)
+  defp sanitize_non_jsonable_value(value)
        when is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value) do
     :unchanged
   end
 
-  defp sanitize_non_jsonable_value(value, json_library) when is_list(value) do
+  defp sanitize_non_jsonable_value(value) when is_list(value) do
     {mapped, changed?} =
       Enum.map_reduce(value, _changed? = false, fn value, changed? ->
-        case sanitize_non_jsonable_value(value, json_library) do
+        case sanitize_non_jsonable_value(value) do
           :unchanged -> {value, changed?}
           {:changed, value} -> {value, true}
         end
@@ -288,14 +286,14 @@ defmodule Sentry.Client do
     end
   end
 
-  defp sanitize_non_jsonable_value(value, json_library)
+  defp sanitize_non_jsonable_value(value)
        when is_map(value) and not is_struct(value) do
-    {:changed, sanitize_non_jsonable_values(value, json_library)}
+    {:changed, sanitize_non_jsonable_values(value)}
   end
 
-  defp sanitize_non_jsonable_value(value, json_library) do
+  defp sanitize_non_jsonable_value(value) do
     try do
-      json_library.encode(value)
+      Sentry.JSON.encode(value)
     catch
       _type, _reason -> {:changed, inspect(value)}
     else

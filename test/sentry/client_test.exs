@@ -65,25 +65,6 @@ defmodule Sentry.ClientTest do
       assert rendered.tags.tokens == inspect(MapSet.new([1]))
     end
 
-    test "works if the JSON library crashes" do
-      defmodule RaisingJSONClient do
-        def encode(:crash), do: raise("Oops")
-        def encode(term), do: Jason.encode(term)
-
-        def decode(term), do: Jason.decode(term)
-      end
-
-      put_test_config(json_library: RaisingJSONClient)
-
-      event = Event.create_event(message: "Something went wrong", extra: %{crasher: :crash})
-
-      assert %{} = rendered = Client.render_event(event)
-      assert rendered.extra.crasher == ":crash"
-    after
-      :code.delete(RaisingJSONClient)
-      :code.purge(RaisingJSONClient)
-    end
-
     test "renders stacktrace for threads" do
       event =
         Event.create_event(
@@ -332,22 +313,6 @@ defmodule Sentry.ClientTest do
         Client.send_event(event, result: :sync, request_retries: [])
 
       assert error.reason == {:request_failure, :econnrefused}
-    end
-
-    test "logs an error when unable to encode JSON" do
-      defmodule BadJSONClient do
-        def encode(term) when term == %{}, do: {:ok, "{}"}
-        def encode(_term), do: {:error, :im_just_bad}
-
-        def decode(term), do: Jason.decode(term)
-      end
-
-      put_test_config(json_library: BadJSONClient)
-      event = Event.create_event(message: "Something went wrong")
-
-      assert capture_log(fn ->
-               Client.send_event(event, result: :sync)
-             end) =~ "the Sentry SDK could not encode the event to JSON: :im_just_bad"
     end
 
     test "uses the async sender pool when :result is :none", %{bypass: bypass} do

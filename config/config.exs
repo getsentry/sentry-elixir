@@ -15,4 +15,4 @@ if config_env() == :test do
   config :logger, backends: []
 end
 
-config :phoenix, :json_library, Jason
+config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)

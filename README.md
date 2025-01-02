@@ -18,7 +18,9 @@ This is the official Sentry SDK for [Sentry].
 
 ### Install
 
-To use Sentry in your project, add it as a dependency in your `mix.exs` file. Sentry does not install a JSON library nor HTTP client by itself. Sentry will default to trying to use [Jason] for JSON serialization and [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
+To use Sentry in your project, add it as a dependency in your `mix.exs` file. 
+
+Sentry does not install a JSON library nor HTTP client by itself. Sentry will default to trying to use [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
 
 ```elixir
 defp deps do
@@ -26,10 +28,31 @@ defp deps do
     # ...
 
     {:sentry, "~> 10.0"},
-    {:jason, "~> 1.4"},
     {:hackney, "~> 1.19"}
   ]
 end
+```
+
+For Elixir 1.18+, `JSON` kernel module will be used by default to serialize JSON data.
+
+For Elixir lower than 1.18, Sentry will default to trying to use [Jason] for JSON serialization. To use it, do:
+
+```elixir
+defp deps do
+  [
+    # ...
+
+    {:sentry, "~> 10.0"},
+    {:jason, "~> 1.4"}
+  ]
+end
+```
+
+To use `Jason` or other JSON library for Elixir 1.18+, it is required to define it as a compile-time configuration:
+
+```elixir
+# config.exs
+config :sentry, json_library: Jason
 ```
 
 ### Configuration

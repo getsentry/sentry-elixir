@@ -61,20 +61,6 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
             ]} = Process.info(self(), :messages)
   end
 
-  # This is not really a regression test, but something like was reported in
-  # https://github.com/getsentry/sentry-elixir/issues/760. Fixed by adding
-  # "loadpaths" and "compile" to the dependencies of this Mix task.
-  test "supports custom configured :json_library" do
-    defmodule Sentry.ExampleJSON do
-      defdelegate encode(term), to: Jason
-      defdelegate decode(term), to: Jason
-    end
-
-    put_test_config(json_library: Sentry.ExampleJSON)
-
-    assert :ok = Mix.Task.rerun("sentry.package_source_code")
-  end
-
   test "supports --no-compile and --no-deps-check" do
     assert :ok = Mix.Task.rerun("sentry.package_source_code", ["--no-compile", "--no-deps-check"])
   end
