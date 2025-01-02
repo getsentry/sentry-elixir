@@ -67,10 +67,10 @@ defmodule Sentry.ClientTest do
 
     test "works if the JSON library crashes" do
       defmodule RaisingJSONClient do
-        def encode!(:crash), do: raise("Oops")
-        def encode!(term), do: json_library().encode!(term)
+        def encode(:crash), do: raise("Oops")
+        def encode(term), do: Jason.encode(term)
 
-        def decode!(term), do: json_library().decode!(term)
+        def decode(term), do: Jason.decode(term)
       end
 
       put_test_config(json_library: RaisingJSONClient)
@@ -336,10 +336,10 @@ defmodule Sentry.ClientTest do
 
     test "logs an error when unable to encode JSON" do
       defmodule BadJSONClient do
-        def encode!(term) when term == %{}, do: "{}"
-        def encode!(_term), do: raise("im_just_bad")
+        def encode(term) when term == %{}, do: {:ok, "{}"}
+        def encode(_term), do: {:error, :im_just_bad}
 
-        def decode!(term), do: json_library().decode!(term)
+        def decode(term), do: Jason.decode(term)
       end
 
       put_test_config(json_library: BadJSONClient)
@@ -347,7 +347,7 @@ defmodule Sentry.ClientTest do
 
       assert capture_log(fn ->
                Client.send_event(event, result: :sync)
-             end) =~ "the Sentry SDK could not encode the event to JSON: im_just_bad"
+             end) =~ "the Sentry SDK could not encode the event to JSON: :im_just_bad"
     end
 
     test "uses the async sender pool when :result is :none", %{bypass: bypass} do

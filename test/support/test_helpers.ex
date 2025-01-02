@@ -3,9 +3,6 @@ defmodule Sentry.TestHelpers do
 
   alias Sentry.Config
 
-  @spec json_library :: module()
-  def json_library, do: Config.json_library()
-
   @spec put_test_config(keyword()) :: :ok
   def put_test_config(config) when is_list(config) do
     all_original_config = all_config()
@@ -49,7 +46,7 @@ defmodule Sentry.TestHelpers do
   @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
   def decode_envelope!(binary) do
     [id_line | rest] = String.split(binary, "\n")
-    %{"event_id" => _} = json_library().decode!(id_line)
+    {:ok, %{"event_id" => _}} = Config.json_library().decode(id_line)
     decode_envelope_items(rest)
   end
 
@@ -58,8 +55,8 @@ defmodule Sentry.TestHelpers do
     |> Enum.chunk_every(2)
     |> Enum.flat_map(fn
       [header, item] ->
-        header = json_library().decode!(header)
-        item = json_library().decode!(item)
+        {:ok, header} = Config.json_library().decode(header)
+        {:ok, item} = Config.json_library().decode(item)
         [{header, item}]
 
       [""] ->

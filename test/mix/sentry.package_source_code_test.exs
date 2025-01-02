@@ -66,8 +66,8 @@ defmodule Mix.Tasks.Sentry.PackageSourceCodeTest do
   # "loadpaths" and "compile" to the dependencies of this Mix task.
   test "supports custom configured :json_library" do
     defmodule Sentry.ExampleJSON do
-      defdelegate encode!(term), to: json_library()
-      defdelegate decode!(term), to: json_library()
+      defdelegate encode(term), to: Jason
+      defdelegate decode(term), to: Jason
     end
 
     put_test_config(json_library: Sentry.ExampleJSON)
