@@ -5,10 +5,7 @@ defmodule Sentry.Transaction do
 
   @enforce_keys [:event_id, :span_id, :spans]
 
-  defstruct [
-    :event_id,
-    :environment,
-    :span_id,
+  defstruct @enforce_keys ++ [
     :transaction,
     :transaction_info,
     :contexts,
