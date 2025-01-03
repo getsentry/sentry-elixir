@@ -267,4 +267,47 @@ defmodule Sentry.Interfaces do
       :stacktrace
     ]
   end
+
+  defmodule Span do
+    @moduledoc """
+    The struct for the **span** interface.
+
+    See <https://develop.sentry.dev/sdk/event-payloads/spans>.
+    """
+
+    @moduledoc since: "11.0.0"
+
+    @typedoc since: "11.0.0"
+    @type t() :: %__MODULE__{
+            trace_id: String.t(),
+            span_id: String.t(),
+            start_timestamp: String.t(),
+            timestamp: String.t(),
+            parent_span_id: String.t(),
+            description: String.t(),
+            op: String.t(),
+            status: String.t(),
+            tags: map(),
+            data: map(),
+            origin: String.t()
+          }
+
+    @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
+
+    defstruct @enforce_keys ++
+                [
+                  :parent_span_id,
+                  :description,
+                  :op,
+                  :status,
+                  :tags,
+                  :data,
+                  :origin
+                ]
+
+    @doc false
+    def to_map(%__MODULE__{} = span) do
+      Map.from_struct(span)
+    end
+  end
 end

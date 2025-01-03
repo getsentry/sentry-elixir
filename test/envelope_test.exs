@@ -118,7 +118,7 @@ defmodule Sentry.EnvelopeTest do
       put_test_config(environment_name: "test")
 
       root_span =
-        %Sentry.Span{
+        %Sentry.Interfaces.Span{
           start_timestamp: 1_588_601_261.481_961,
           timestamp: 1_588_601_261.488_901,
           description: "GET /sockjs-node/info",
@@ -137,7 +137,7 @@ defmodule Sentry.EnvelopeTest do
 
       child_spans =
         [
-          %Sentry.Span{
+          %Sentry.Interfaces.Span{
             start_timestamp: 1_588_601_261.535_386,
             timestamp: 1_588_601_261.544_196,
             description: "Vue <App>",
