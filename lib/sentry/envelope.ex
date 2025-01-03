@@ -159,7 +159,7 @@ defmodule Sentry.Envelope do
   defp item_to_binary(json_library, %Transaction{} = transaction) do
     case transaction |> Sentry.Client.render_transaction() |> json_library.encode() do
       {:ok, encoded_transaction} ->
-        header = ~s({"type": "transaction", "length": #{byte_size(encoded_transaction)}})
+        header = ~s({"type":"transaction","length":#{byte_size(encoded_transaction)}})
         [header, ?\n, encoded_transaction, ?\n]
 
       {:error, _reason} = error ->
