@@ -49,21 +49,18 @@ defmodule Sentry.Transaction do
 end
 
 defmodule Sentry.Span do
-  @enforce_keys ~w(span_id trace_id start_timestamp timestamp)a
+  @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
 
-  defstruct [
-    :trace_id,
-    :span_id,
-    :parent_span_id,
-    :start_timestamp,
-    :timestamp,
-    :description,
-    :op,
-    :status,
-    :tags,
-    :data,
-    :origin
-  ]
+  defstruct @enforce_keys ++
+              [
+                :parent_span_id,
+                :description,
+                :op,
+                :status,
+                :tags,
+                :data,
+                :origin
+              ]
 
   # Used to then encode the returned map to JSON.
   @doc false
