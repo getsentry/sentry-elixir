@@ -196,9 +196,9 @@ defmodule Sentry.TransportTest do
                end)
 
       if Version.match?(System.version(), "~> 1.18") do
-        assert %JSON.DecodeError{} = error
+        assert error.__struct__ == JSON.DecodeError
       else
-        assert %Jason.DecodeError{} = error
+        assert error.__struct__ == Jason.DecodeError
       end
 
       assert_received {:request, ^ref}
