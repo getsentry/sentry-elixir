@@ -2,7 +2,7 @@ defmodule Sentry.JSON do
   @moduledoc false
 
   @default_library if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
-  @library Application.compile_env(:sentry, :json_library) || @default_library
+  @library Application.compile_env(:sentry, :json_library, @default_library)
 
   @spec decode(String.t()) :: {:ok, term()} | {:error, term()}
   if @library == JSON do
