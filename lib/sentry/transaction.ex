@@ -49,6 +49,8 @@ defmodule Sentry.Transaction do
 end
 
 defmodule Sentry.Span do
+  @moduledoc false
+
   @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
 
   defstruct @enforce_keys ++
