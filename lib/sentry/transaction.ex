@@ -3,7 +3,7 @@ defmodule Sentry.Transaction do
 
   alias Sentry.{Config, UUID}
 
-  @enforce_keys ~w(event_id span_id spans)a
+  @enforce_keys [:event_id, :span_id, :spans]
 
   defstruct [
     :event_id,
