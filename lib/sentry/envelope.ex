@@ -60,7 +60,7 @@ defmodule Sentry.Envelope do
   @doc """
   Creates a new envelope containing a transaction with spans.
   """
-  @spec from_transaction(Sentry.Transaction.t()) :: t()
+  @spec from_transaction(Transaction.t()) :: t()
   def from_transaction(%Transaction{} = transaction) do
     %__MODULE__{
       event_id: transaction.event_id,
