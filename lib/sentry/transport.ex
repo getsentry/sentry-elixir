@@ -125,7 +125,7 @@ defmodule Sentry.Transport do
   defp client_post_and_validate_return_value(client, endpoint, headers, body) do
     case client.post(endpoint, headers, body) do
       {:ok, status, resp_headers, resp_body}
-      when is_integer(status) and status in 200..599 and is_list(resp_headers) and
+      when is_integer(status) and status in 200..599 and
              is_binary(resp_body) ->
         {:ok, status, resp_headers, resp_body}
 
@@ -152,8 +152,8 @@ defmodule Sentry.Transport do
       |> Enum.map_join(", ", fn {name, value} -> "#{name}=#{value}" end)
 
     auth_headers = [
-      {"User-Agent", @sentry_client},
-      {"X-Sentry-Auth", "Sentry " <> auth_query}
+      {"user-agent", @sentry_client},
+      {"x-sentry-auth", "Sentry " <> auth_query}
     ]
 
     {dsn.endpoint_uri, auth_headers}

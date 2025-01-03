@@ -26,6 +26,8 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     type: :string
   ]
 
+  @requirements ["app.start"]
+
   @impl true
   def run(args) when is_list(args) do
     {opts, args} = OptionParser.parse!(args, strict: @switches)

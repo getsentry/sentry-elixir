@@ -322,6 +322,14 @@ defmodule Sentry.Config do
       connections to keep in the pool. Only applied if `:client` is set to
       `Sentry.HackneyClient`.
       """
+    ],
+    req_opts: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Options to be passed to `Req`. Only
+      applied if `:client` is set to `Sentry.ReqClient`.
+      """
     ]
   ]
 
@@ -558,6 +566,9 @@ defmodule Sentry.Config do
 
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
+
+  @spec req_opts() :: keyword()
+  def req_opts, do: fetch!(:req_opts)
 
   @spec before_send() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
   def before_send, do: get(:before_send)

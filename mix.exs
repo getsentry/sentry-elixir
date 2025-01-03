@@ -51,7 +51,7 @@ defmodule Sentry.Mixfile do
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn, Sentry.ClientReport],
-          HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
+          HTTP: [Sentry.HTTPClient, Sentry.HackneyClient, Sentry.ReqClient],
           Interfaces: [~r/^Sentry\.Interfaces/],
           Testing: [Sentry.Test]
         ],
