@@ -243,7 +243,7 @@ defmodule SentryTest do
           span_id: "root-span",
           transaction: "test-transaction",
           spans: [
-            %Sentry.Span{
+            %Sentry.Interfaces.Span{
               span_id: "root-span",
               trace_id: "trace-id",
               start_timestamp: 1_234_567_891.123_456,
