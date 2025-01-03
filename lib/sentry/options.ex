@@ -194,9 +194,7 @@ defmodule Sentry.Options do
 
   @create_event_opts_schema NimbleOptions.new!(@create_event_opts_schema_as_keyword)
 
-  @send_transaction_opts_schema_as_keyword Keyword.merge(@common_opts_schema_as_keyword, [])
-
-  @send_transaction_opts_schema NimbleOptions.new!(@send_transaction_opts_schema_as_keyword)
+  @send_transaction_opts_schema NimbleOptions.new!(@common_opts_schema_as_keyword)
 
   @spec send_event_schema() :: NimbleOptions.t()
   def send_event_schema do
