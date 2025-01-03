@@ -1,7 +1,25 @@
 defmodule Sentry.Transaction do
-  @type t() :: %__MODULE__{}
+  @moduledoc """
+  The struct for the **transaction** interface.
 
-  alias Sentry.{Config, UUID}
+  See <https://develop.sentry.dev/sdk/event-payloads/transactions>.
+  """
+
+  @moduledoc since: "11.0.0"
+
+  @typedoc since: "11.0.0"
+
+  @type t() :: %__MODULE__{
+          event_id: String.t(),
+          environment: String.t(),
+          transaction: String.t(),
+          transaction_info: map(),
+          contexts: map(),
+          measurements: map(),
+          type: String.t()
+        }
+
+  alias Sentry.{Config, UUID, Interfaces.Span}
 
   @enforce_keys [:event_id, :span_id, :spans, :environment]
 
@@ -24,7 +42,6 @@ defmodule Sentry.Transaction do
     )
   end
 
-  # Used to then encode the returned map to JSON.
   @doc false
   def to_map(%__MODULE__{} = transaction) do
     transaction_attrs =
@@ -41,32 +58,9 @@ defmodule Sentry.Transaction do
     {[root_span], child_spans} = Enum.split_with(transaction.spans, &is_nil(&1.parent_span_id))
 
     root_span
-    |> Sentry.Span.to_map()
-    |> Map.put(:spans, Enum.map(child_spans, &Sentry.Span.to_map/1))
+    |> Span.to_map()
+    |> Map.put(:spans, Enum.map(child_spans, &Span.to_map/1))
     |> Map.drop([:description])
     |> Map.merge(transaction_attrs)
-  end
-end
-
-defmodule Sentry.Span do
-  @moduledoc false
-
-  @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
-
-  defstruct @enforce_keys ++
-              [
-                :parent_span_id,
-                :description,
-                :op,
-                :status,
-                :tags,
-                :data,
-                :origin
-              ]
-
-  # Used to then encode the returned map to JSON.
-  @doc false
-  def to_map(%__MODULE__{} = span) do
-    Map.from_struct(span)
   end
 end

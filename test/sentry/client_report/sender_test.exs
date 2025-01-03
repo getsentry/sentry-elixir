@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.{Event, Transaction, Span}
+  alias Sentry.{Event, Transaction, Interfaces.Span}
 
   setup do
     original_retries =
