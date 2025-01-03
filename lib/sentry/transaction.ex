@@ -5,14 +5,14 @@ defmodule Sentry.Transaction do
 
   @enforce_keys [:event_id, :span_id, :spans]
 
-  defstruct @enforce_keys ++ [
-    :transaction,
-    :transaction_info,
-    :contexts,
-    :measurements,
-    :spans,
-    type: "transaction"
-  ]
+  defstruct @enforce_keys ++
+              [
+                :transaction,
+                :transaction_info,
+                :contexts,
+                :measurements,
+                type: "transaction"
+              ]
 
   def new(attrs) do
     struct!(
