@@ -3,13 +3,13 @@ defmodule Sentry.TestHelpers do
 
   @spec decode!(String.t()) :: term()
   def decode!(binary) do
-    assert {:ok, data} = Sentry.JSON.decode(binary)
+    assert {:ok, data} = Sentry.JSON.decode(binary, Sentry.Config.json_library())
     data
   end
 
   @spec decode!(term()) :: String.t()
   def encode!(data) do
-    assert {:ok, binary} = Sentry.JSON.encode(data)
+    assert {:ok, binary} = Sentry.JSON.encode(data, Sentry.Config.json_library())
     binary
   end
 
