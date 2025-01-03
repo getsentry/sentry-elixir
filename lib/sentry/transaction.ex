@@ -14,6 +14,7 @@ defmodule Sentry.Transaction do
                 type: "transaction"
               ]
 
+  @doc false
   def new(attrs) do
     struct!(
       __MODULE__,
