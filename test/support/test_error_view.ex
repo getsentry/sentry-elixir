@@ -3,12 +3,14 @@ defmodule Sentry.ErrorView do
 
   import Phoenix.HTML, only: [raw: 1]
 
+  alias Sentry.TestHelpers
+
   def render(_, _) do
     case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} ->
         opts =
           %{title: "Testing", eventId: event_id}
-          |> Jason.encode!()
+          |> TestHelpers.encode!()
 
         assigns = %{opts: opts}
 

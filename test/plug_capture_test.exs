@@ -29,7 +29,9 @@ defmodule Sentry.PlugCaptureTest do
     use Phoenix.Endpoint, otp_app: :sentry
     use Plug.Debugger, otp_app: :sentry
 
-    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: Jason
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
     plug Sentry.PlugContext
     plug PhoenixRouter
   end
@@ -45,7 +47,9 @@ defmodule Sentry.PlugCaptureTest do
     use Phoenix.Endpoint, otp_app: :sentry
     use Plug.Debugger, otp_app: :sentry
 
-    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: Jason
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
     plug Sentry.PlugContext
     plug PhoenixRouter
   end

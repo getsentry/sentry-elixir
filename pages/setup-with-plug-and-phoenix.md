@@ -51,7 +51,7 @@ defmodule MyAppWeb.ErrorView do
   def render("500.html", _assigns) do
     case Sentry.get_last_event_id_and_source() do
       {event_id, :plug} when is_binary(event_id) ->
-        opts = Jason.encode!(%{eventId: event_id})
+        opts = JSON.encode!(%{eventId: event_id})
 
         ~E"""
           <script src="https://browser.sentry-cdn.com/5.9.1/bundle.min.js" integrity="sha384-/x1aHz0nKRd6zVUazsV6CbQvjJvr6zQL2CHbQZf3yoLkezyEtZUpqUNnOLW9Nt3v" crossorigin="anonymous"></script>
