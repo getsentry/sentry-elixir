@@ -1,7 +1,17 @@
 defmodule Sentry.TestHelpers do
   import ExUnit.Assertions
 
-  alias Sentry.Config
+  @spec decode!(String.t()) :: term()
+  def decode!(binary) do
+    assert {:ok, data} = Sentry.JSON.decode(binary, Sentry.Config.json_library())
+    data
+  end
+
+  @spec decode!(term()) :: String.t()
+  def encode!(data) do
+    assert {:ok, binary} = Sentry.JSON.encode(data, Sentry.Config.json_library())
+    binary
+  end
 
   @spec put_test_config(keyword()) :: :ok
   def put_test_config(config) when is_list(config) do
@@ -46,7 +56,7 @@ defmodule Sentry.TestHelpers do
   @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
   def decode_envelope!(binary) do
     [id_line | rest] = String.split(binary, "\n")
-    {:ok, %{"event_id" => _}} = Config.json_library().decode(id_line)
+    %{"event_id" => _} = decode!(id_line)
     decode_envelope_items(rest)
   end
 
@@ -54,13 +64,9 @@ defmodule Sentry.TestHelpers do
     items
     |> Enum.chunk_every(2)
     |> Enum.flat_map(fn
-      [header, item] ->
-        {:ok, header} = Config.json_library().decode(header)
-        {:ok, item} = Config.json_library().decode(item)
-        [{header, item}]
+      [header, item] ->[{decode!(header), decode!(item)}]
 
-      [""] ->
-        []
+      [""] ->[]
     end)
   end
 end

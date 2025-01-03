@@ -190,10 +190,16 @@ defmodule Sentry.TransportTest do
         Plug.Conn.resp(conn, 200, ~s<invalid JSON>)
       end)
 
-      assert {:request_failure, %Jason.DecodeError{}} =
+      assert {:request_failure, error} =
                error(fn ->
                  Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [0])
                end)
+
+      if Version.match?(System.version(), "~> 1.18") do
+        assert %JSON.DecodeError{} = error
+      else
+        assert %Jason.DecodeError{} = error
+      end
 
       assert_received {:request, ^ref}
       assert_received {:request, ^ref}

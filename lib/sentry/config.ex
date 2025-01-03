@@ -146,14 +146,20 @@ defmodule Sentry.Config do
       environment variable is set, it will be used as the default value.
       """
     ],
+    # TODO: deprecate this once we require Elixir 1.18+, when we can force users to use
+    # the JSON module.
     json_library: [
       type: {:custom, __MODULE__, :__validate_json_library__, []},
-      default: Jason,
       type_doc: "`t:module/0`",
+      default: if(Code.ensure_loaded?(JSON), do: JSON, else: Jason),
       doc: """
       A module that implements the "standard" Elixir JSON behaviour, that is, exports the
-      `encode/1` and `decode/1` functions. If you use the default, make sure to add
-      [`:jason`](https://hex.pm/packages/jason) as a dependency of your application.
+      `encode/1` and `decode/1` functions.
+
+      Defaults to `Jason` if the `JSON` kernel module is not available (it was introduced
+      in Elixir 1.18.0). If you use the default configuration with Elixir version lower than
+      1.18, this option will default to `Jason`, but you will have to add
+      [`:jason`](https://hexa.pm/packages/jason) as a dependency of your application.
       """
     ],
     send_client_reports: [
@@ -692,6 +698,8 @@ defmodule Sentry.Config do
   def __validate_json_library__(nil) do
     {:error, "nil is not a valid value for the :json_library option"}
   end
+
+  def __validate_json_library__(JSON), do: {:ok, JSON}
 
   def __validate_json_library__(mod) when is_atom(mod) do
     try do
