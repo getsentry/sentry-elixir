@@ -10,36 +10,37 @@ defmodule Sentry.Transaction do
   alias Sentry.{Config, UUID, Interfaces.Span, Interfaces.SDK}
 
   @typedoc since: "11.0.0"
-  @type t() :: %{
-          # Required
-          required(:event_id) => <<_::256>>,
-          required(:start_timestamp) => String.t() | number(),
-          required(:timestamp) => String.t() | number(),
-          required(:platform) => :elixir,
-          required(:contexts) => %{
-            required(:trace) => %{
-              required(:trace_id) => String.t(),
-              required(:span_id) => String.t(),
-              optional(:parent_span_id) => String.t(),
-              optional(:op) => String.t(),
-              optional(:description) => String.t(),
-              optional(:status) => String.t()
-            }
-          },
+  @type t() ::
+          %__MODULE__{
+            # Required
+            event_id: <<_::256>>,
+            start_timestamp: String.t() | number(),
+            timestamp: String.t() | number(),
+            platform: :elixir,
+            contexts: %{
+              required(:trace) => %{
+                required(:trace_id) => String.t(),
+                required(:span_id) => String.t(),
+                optional(:parent_span_id) => String.t(),
+                optional(:op) => String.t(),
+                optional(:description) => String.t(),
+                optional(:status) => String.t()
+              }
+            },
 
-          # Optional
-          optional(:environment) => String.t(),
-          optional(:transaction) => String.t(),
-          optional(:transaction_info) => map(),
-          optional(:measurements) => map(),
-          optional(:type) => String.t(),
-          optional(:tags) => map(),
-          optional(:data) => map(),
+            # Optional
+            environment: String.t(),
+            transaction: String.t(),
+            transaction_info: map(),
+            measurements: map(),
+            type: String.t(),
+            tags: map(),
+            data: map(),
 
-          # Interfaces
-          optional(:spans) => [Span.t()],
-          optional(:sdk) => SDK.t()
-        }
+            # Interfaces
+            spans: [Span.t()],
+            sdk: SDK.t()
+          }
 
   @enforce_keys [:event_id, :span_id, :start_timestamp, :timestamp]
 
