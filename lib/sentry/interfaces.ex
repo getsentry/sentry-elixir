@@ -306,7 +306,7 @@ defmodule Sentry.Interfaces do
                 ]
 
     @doc false
-    def to_map(%__MODULE__{} = span) do
+    def to_payload(%__MODULE__{} = span) do
       Map.from_struct(span)
     end
   end

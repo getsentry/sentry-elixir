@@ -239,9 +239,14 @@ defmodule SentryTest do
   describe "send_transaction/2" do
     setup do
       transaction =
-        Sentry.Transaction.new(%{
-          span_id: "root-span",
+        create_transaction(%{
           transaction: "test-transaction",
+          contexts: %{
+            trace: %{
+              trace_id: "trace-id",
+              span_id: "root-span"
+            }
+          },
           spans: [
             %Sentry.Interfaces.Span{
               span_id: "root-span",
