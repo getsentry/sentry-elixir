@@ -20,7 +20,7 @@ This is the official Sentry SDK for [Sentry].
 
 To use Sentry in your project, add it as a dependency in your `mix.exs` file.
 
-Sentry does not install a JSON library nor a HTTP client by itself. Sentry will default to the [built-in `JSON`](https://hexdocs.pm/elixir/JSON.html) for JSON and [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
+Sentry does not install a JSON library nor an HTTP client by itself. Sentry will default to the [built-in `JSON`](https://hexdocs.pm/elixir/JSON.html) for JSON and [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
 
 ```elixir
 defp deps do
