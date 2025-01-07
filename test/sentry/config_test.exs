@@ -161,7 +161,11 @@ defmodule Sentry.ConfigTest do
       assert Config.validate!(json_library: Jason)[:json_library] == Jason
 
       # Default
-      assert Config.validate!([])[:json_library] == Jason
+      if Version.match?(System.version(), "~> 1.18") do
+        assert Config.validate!([])[:json_library] == JSON
+      else
+        assert Config.validate!([])[:json_library] == Jason
+      end
 
       assert_raise ArgumentError, ~r/invalid value for :json_library option/, fn ->
         Config.validate!(json_library: Atom)

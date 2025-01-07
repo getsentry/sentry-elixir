@@ -81,7 +81,7 @@ defmodule Sentry.Envelope do
   end
 
   defp item_to_binary(json_library, %Event{} = event) do
-    case event |> Sentry.Client.render_event() |> json_library.encode() do
+    case event |> Sentry.Client.render_event() |> Sentry.JSON.encode(json_library) do
       {:ok, encoded_event} ->
         header = ~s({"type":"event","length":#{byte_size(encoded_event)}})
         [header, ?\n, encoded_event, ?\n]
@@ -100,13 +100,13 @@ defmodule Sentry.Envelope do
           into: header,
           do: {Atom.to_string(key), value}
 
-    {:ok, header_iodata} = json_library.encode(header)
+    {:ok, header_iodata} = Sentry.JSON.encode(header, json_library)
 
     [header_iodata, ?\n, attachment.data, ?\n]
   end
 
   defp item_to_binary(json_library, %CheckIn{} = check_in) do
-    case check_in |> CheckIn.to_map() |> json_library.encode() do
+    case check_in |> CheckIn.to_map() |> Sentry.JSON.encode(json_library) do
       {:ok, encoded_check_in} ->
         header = ~s({"type":"check_in","length":#{byte_size(encoded_check_in)}})
         [header, ?\n, encoded_check_in, ?\n]
@@ -117,7 +117,7 @@ defmodule Sentry.Envelope do
   end
 
   defp item_to_binary(json_library, %ClientReport{} = client_report) do
-    case client_report |> Map.from_struct() |> json_library.encode() do
+    case client_report |> Map.from_struct() |> Sentry.JSON.encode(json_library) do
       {:ok, encoded_client_report} ->
         header = ~s({"type":"client_report","length":#{byte_size(encoded_client_report)}})
         [header, ?\n, encoded_client_report, ?\n]
