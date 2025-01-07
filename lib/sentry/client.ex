@@ -285,7 +285,7 @@ defmodule Sentry.Client do
   @spec render_transaction(%Transaction{}) :: map()
   def render_transaction(%Transaction{} = transaction) do
     transaction
-    |> Transaction.to_map()
+    |> Transaction.to_payload()
     |> Map.merge(%{
       platform: "elixir",
       sdk: %{

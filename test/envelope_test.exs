@@ -117,24 +117,6 @@ defmodule Sentry.EnvelopeTest do
     test "works with transactions" do
       put_test_config(environment_name: "test")
 
-      root_span =
-        %Sentry.Interfaces.Span{
-          start_timestamp: 1_588_601_261.481_961,
-          timestamp: 1_588_601_261.488_901,
-          description: "GET /sockjs-node/info",
-          op: "http",
-          span_id: "b01b9f6349558cd1",
-          parent_span_id: nil,
-          trace_id: "1e57b752bc6e4544bbaa246cd1d05dee",
-          tags: %{"http.status_code" => "200"},
-          data: %{
-            "url" => "http://localhost:8080/sockjs-node/info?t=1588601703755",
-            "status_code" => 200,
-            "type" => "xhr",
-            "method" => "GET"
-          }
-        }
-
       child_spans =
         [
           %Sentry.Interfaces.Span{
@@ -149,9 +131,25 @@ defmodule Sentry.EnvelopeTest do
         ]
 
       transaction =
-        Sentry.Transaction.new(%{
-          span_id: root_span.span_id,
-          spans: [root_span | child_spans],
+        create_transaction(%{
+          start_timestamp: 1_588_601_261.481_961,
+          timestamp: 1_588_601_261.488_901,
+          contexts: %{
+            trace: %{
+              trace_id: "1e57b752bc6e4544bbaa246cd1d05dee",
+              span_id: "b01b9f6349558cd1",
+              description: "GET /sockjs-node/info",
+              op: "http"
+            }
+          },
+          tags: %{"http.status_code" => "200"},
+          data: %{
+            "url" => "http://localhost:8080/sockjs-node/info?t=1588601703755",
+            "status_code" => 200,
+            "type" => "xhr",
+            "method" => "GET"
+          },
+          spans: child_spans,
           transaction: "test-transaction"
         })
 
@@ -163,8 +161,8 @@ defmodule Sentry.EnvelopeTest do
 
       assert {:ok, decoded_transaction} = Jason.decode(transaction_line)
       assert decoded_transaction["type"] == "transaction"
-      assert decoded_transaction["start_timestamp"] == root_span.start_timestamp
-      assert decoded_transaction["timestamp"] == root_span.timestamp
+      assert decoded_transaction["start_timestamp"] == transaction.start_timestamp
+      assert decoded_transaction["timestamp"] == transaction.timestamp
 
       assert [span] = decoded_transaction["spans"]
 

@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.{Event, Transaction, Interfaces.Span}
+  alias Sentry.Event
 
   setup do
     original_retries =
@@ -30,16 +30,15 @@ defmodule Sentry.ClientReportTest do
           event_id: Sentry.UUID.uuid4_hex(),
           timestamp: "2024-10-12T13:21:13"
         },
-        Transaction.new(%{
-          span_id: @span_id,
+        create_transaction(%{
           transaction: "test-transaction",
           spans: [
-            %Span{
+            create_span(%{
               span_id: @span_id,
               trace_id: Sentry.UUID.uuid4_hex(),
               start_timestamp: "2024-10-12T13:21:13",
               timestamp: "2024-10-12T13:21:13"
-            }
+            })
           ]
         })
       ]
