@@ -13,7 +13,7 @@ defmodule Sentry.Transaction do
   @type t() ::
           %__MODULE__{
             # Required
-            event_id: <<_::256>>,
+            event_id: UUID.t(),
             start_timestamp: String.t() | number(),
             timestamp: String.t() | number(),
             platform: :elixir,
