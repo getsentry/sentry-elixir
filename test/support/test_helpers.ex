@@ -1,13 +1,16 @@
 defmodule Sentry.TestHelpers do
   import ExUnit.Assertions
 
+  alias Sentry.Interfaces.Span
+  alias Sentry.Transaction
+
   @spec decode!(String.t()) :: term()
   def decode!(binary) do
     assert {:ok, data} = Sentry.JSON.decode(binary, Sentry.Config.json_library())
     data
   end
 
-  @spec decode!(term()) :: String.t()
+  @spec encode!(term()) :: String.t()
   def encode!(data) do
     assert {:ok, binary} = Sentry.JSON.encode(data, Sentry.Config.json_library())
     binary
@@ -58,6 +61,40 @@ defmodule Sentry.TestHelpers do
     [id_line | rest] = String.split(binary, "\n")
     %{"event_id" => _} = decode!(id_line)
     decode_envelope_items(rest)
+  end
+
+  def create_span(attrs \\ %{}) do
+    Map.merge(
+      %Span{
+        trace_id: "trace-312",
+        span_id: "span-123",
+        start_timestamp: "2025-01-01T00:00:00Z",
+        timestamp: "2025-01-02T02:03:00Z"
+      },
+      attrs
+    )
+  end
+
+  def create_transaction(attrs \\ %{}) do
+    Transaction.new(
+      Map.merge(
+        %{
+          span_id: "parent-312",
+          start_timestamp: "2025-01-01T00:00:00Z",
+          timestamp: "2025-01-02T02:03:00Z",
+          contexts: %{
+            trace: %{
+              trace_id: "trace-312",
+              span_id: "parent-312"
+            }
+          },
+          spans: [
+            create_span(%{parent_span_id: "parent-312"})
+          ]
+        },
+        attrs
+      )
+    )
   end
 
   defp decode_envelope_items(items) do

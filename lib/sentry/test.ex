@@ -77,35 +77,54 @@ defmodule Sentry.Test do
   @moduledoc since: "10.2.0"
 
   @server __MODULE__.OwnershipServer
-  @key :events
+  @events_key :events
+  @transactions_key :transactions
 
   # Used internally when reporting an event, *before* reporting the actual event.
   @doc false
   @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Event{} = event) do
+    maybe_collect(event, @events_key)
+  end
+
+  # Used internally when reporting a transaction, *before* reporting the actual transaction.
+  @doc false
+  @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
+  def maybe_collect(%Sentry.Transaction{} = transaction) do
+    maybe_collect(transaction, @transactions_key)
+  end
+
+  @doc false
+  def maybe_collect(item, collection_key) do
     if Sentry.Config.test_mode?() do
       dsn_set? = not is_nil(Sentry.Config.dsn())
       ensure_ownership_server_started()
 
-      case NimbleOwnership.fetch_owner(@server, callers(), @key) do
+      case NimbleOwnership.fetch_owner(@server, callers(), collection_key) do
         {:ok, owner_pid} ->
           result =
-            NimbleOwnership.get_and_update(@server, owner_pid, @key, fn events ->
-              {:collected, (events || []) ++ [event]}
-            end)
+            NimbleOwnership.get_and_update(
+              @server,
+              owner_pid,
+              collection_key,
+              fn items ->
+                {:collected, (items || []) ++ [item]}
+              end
+            )
 
           case result do
             {:ok, :collected} ->
               :collected
 
             {:error, error} ->
-              raise ArgumentError, "cannot collect Sentry reports: #{Exception.message(error)}"
+              raise ArgumentError,
+                    "cannot collect Sentry #{collection_key}: #{Exception.message(error)}"
           end
 
         :error when dsn_set? ->
           :not_collecting
 
-        # If the :dsn option is not set and we didn't capture the event, it's alright,
+        # If the :dsn option is not set and we didn't capture the item, it's alright,
         # we can just swallow it.
         :error ->
           :collected
@@ -135,7 +154,8 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
-    start_collecting()
+    start_collecting(key: @events_key)
+    start_collecting(key: @transactions_key)
   end
 
   @doc """
@@ -177,6 +197,7 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting(keyword()) :: :ok
   def start_collecting(options \\ []) when is_list(options) do
+    key = Keyword.get(options, :key, @events_key)
     owner_pid = Keyword.get(options, :owner, self())
     cleanup? = Keyword.get(options, :cleanup, true)
 
@@ -190,7 +211,7 @@ defmodule Sentry.Test do
     # Make sure the ownership server is started (this is idempotent).
     ensure_ownership_server_started()
 
-    case NimbleOwnership.fetch_owner(@server, callers, @key) do
+    case NimbleOwnership.fetch_owner(@server, callers, key) do
       # No-op
       {tag, ^owner_pid} when tag in [:ok, :shared_owner] ->
         :ok
@@ -207,7 +228,7 @@ defmodule Sentry.Test do
     end
 
     {:ok, _} =
-      NimbleOwnership.get_and_update(@server, self(), @key, fn events ->
+      NimbleOwnership.get_and_update(@server, self(), key, fn events ->
         {:ignored, events || []}
       end)
 
@@ -246,7 +267,7 @@ defmodule Sentry.Test do
   @spec allow_sentry_reports(pid(), pid() | (-> pid())) :: :ok
   def allow_sentry_reports(owner_pid, pid_to_allow)
       when is_pid(owner_pid) and (is_pid(pid_to_allow) or is_function(pid_to_allow, 0)) do
-    case NimbleOwnership.allow(@server, owner_pid, pid_to_allow, @key) do
+    case NimbleOwnership.allow(@server, owner_pid, pid_to_allow, @events_key) do
       :ok ->
         :ok
 
@@ -281,7 +302,7 @@ defmodule Sentry.Test do
   def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
     result =
       try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @key, fn
+        NimbleOwnership.get_and_update(@server, owner_pid, @events_key, fn
           nil -> {:not_collecting, []}
           events when is_list(events) -> {events, []}
         end)
@@ -299,6 +320,51 @@ defmodule Sentry.Test do
 
       {:error, error} when is_exception(error) ->
         raise ArgumentError, "cannot pop Sentry reports: #{Exception.message(error)}"
+    end
+  end
+
+  @doc """
+  Pops all the collected transactions from the current process.
+
+  This function returns a list of all the transactions that have been collected from the current
+  process and all the processes that were allowed through it. If the current process
+  is not collecting transactions, this function raises an error.
+
+  After this function returns, the current process will still be collecting transactions, but
+  the collected transactions will be reset to `[]`.
+
+  ## Examples
+
+      iex> Sentry.Test.start_collecting_sentry_reports()
+      :ok
+      iex> Sentry.send_transaction(Sentry.Transaction.new(%{span_id: "123", start_timestamp: "2024-10-12T13:21:13", timestamp: "2024-10-12T13:21:13", spans: []}))
+      {:ok, ""}
+      iex> [%Sentry.Transaction{}] = Sentry.Test.pop_sentry_transactions()
+
+  """
+  @doc since: "10.2.0"
+  @spec pop_sentry_transactions(pid()) :: [Sentry.Transaction.t()]
+  def pop_sentry_transactions(owner_pid \\ self()) when is_pid(owner_pid) do
+    result =
+      try do
+        NimbleOwnership.get_and_update(@server, owner_pid, @transactions_key, fn
+          nil -> {:not_collecting, []}
+          transactions when is_list(transactions) -> {transactions, []}
+        end)
+      catch
+        :exit, {:noproc, _} ->
+          raise ArgumentError, "not collecting reported transactions from #{inspect(owner_pid)}"
+      end
+
+    case result do
+      {:ok, :not_collecting} ->
+        raise ArgumentError, "not collecting reported transactions from #{inspect(owner_pid)}"
+
+      {:ok, transactions} ->
+        transactions
+
+      {:error, error} when is_exception(error) ->
+        raise ArgumentError, "cannot pop Sentry transactions: #{Exception.message(error)}"
     end
   end
 

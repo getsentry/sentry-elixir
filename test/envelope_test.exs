@@ -113,6 +113,62 @@ defmodule Sentry.EnvelopeTest do
       assert decoded_check_in["monitor_slug"] == "test"
       assert decoded_check_in["status"] == "ok"
     end
+
+    test "works with transactions" do
+      put_test_config(environment_name: "test")
+
+      child_spans =
+        [
+          %Sentry.Interfaces.Span{
+            start_timestamp: 1_588_601_261.535_386,
+            timestamp: 1_588_601_261.544_196,
+            description: "Vue <App>",
+            op: "update",
+            span_id: "b980d4dec78d7344",
+            parent_span_id: "9312d0d18bf51736",
+            trace_id: "1e57b752bc6e4544bbaa246cd1d05dee"
+          }
+        ]
+
+      transaction =
+        create_transaction(%{
+          start_timestamp: 1_588_601_261.481_961,
+          timestamp: 1_588_601_261.488_901,
+          contexts: %{
+            trace: %{
+              trace_id: "1e57b752bc6e4544bbaa246cd1d05dee",
+              span_id: "b01b9f6349558cd1",
+              description: "GET /sockjs-node/info",
+              op: "http"
+            }
+          },
+          tags: %{"http.status_code" => "200"},
+          data: %{
+            "url" => "http://localhost:8080/sockjs-node/info?t=1588601703755",
+            "status_code" => 200,
+            "type" => "xhr",
+            "method" => "GET"
+          },
+          spans: child_spans,
+          transaction: "test-transaction"
+        })
+
+      envelope = Envelope.from_transaction(transaction)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [_id_line, _header_line, transaction_line] = String.split(encoded, "\n", trim: true)
+
+      assert {:ok, decoded_transaction} = Jason.decode(transaction_line)
+      assert decoded_transaction["type"] == "transaction"
+      assert decoded_transaction["start_timestamp"] == transaction.start_timestamp
+      assert decoded_transaction["timestamp"] == transaction.timestamp
+
+      assert [span] = decoded_transaction["spans"]
+
+      assert span["start_timestamp"] == List.first(child_spans).start_timestamp
+      assert span["timestamp"] == List.first(child_spans).timestamp
+    end
   end
 
   test "works with client reports" do
