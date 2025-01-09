@@ -87,6 +87,15 @@ defmodule Sentry.LoggerHandler do
       want to use sync mode, set this option to `0`. This option effectively implements
       **overload protection**.
       """
+    ],
+    discard_threshold: [
+      type: :non_neg_integer,
+      default: 500,
+      doc: """
+      *since v10.8.2* - The number of queued events after which this handler will start
+      to discard events. If you don't want to discard, set this option to `0`. This option
+      effectively implements **load shedding**.
+      """
     ]
   ]
 
@@ -231,7 +240,8 @@ defmodule Sentry.LoggerHandler do
     :tags_from_metadata,
     :capture_log_messages,
     :rate_limiting,
-    :sync_threshold
+    :sync_threshold,
+    :discard_threshold
   ]
 
   ## Logger handler callbacks
@@ -317,6 +327,10 @@ defmodule Sentry.LoggerHandler do
         :ok
 
       config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
+        :ok
+
+      config.discard_threshold > 0 &&
+          SenderPool.get_queued_events_counter() >= config.discard_threshold ->
         :ok
 
       true ->
