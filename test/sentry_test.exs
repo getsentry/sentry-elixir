@@ -171,7 +171,8 @@ defmodule SentryTest do
                  "max_runtime" => 30,
                  "failure_issue_threshold" => 2,
                  "recovery_threshold" => 2,
-                 "timezone" => "America/Los_Angeles"
+                 "timezone" => "America/Los_Angeles",
+                 "owner" => "user:john@example.com"
                }
 
         Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
@@ -191,7 +192,8 @@ defmodule SentryTest do
                    max_runtime: 30,
                    failure_issue_threshold: 2,
                    recovery_threshold: 2,
-                   timezone: "America/Los_Angeles"
+                   timezone: "America/Los_Angeles",
+                   owner: "user:john@example.com"
                  ]
                )
     end
