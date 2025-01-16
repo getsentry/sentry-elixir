@@ -31,5 +31,25 @@ defmodule Sentry.DedupeTest do
       assert Dedupe.insert(event) == :new
       assert Dedupe.insert(event) == :existing
     end
+
+    test "takes extra into account" do
+      extra1 = %{"info" => "This is extra info"}
+      extra2 = %{"info" => "And this is extra info as well"}
+
+      base_event = %Event{
+        message: "Something went wrong",
+        timestamp: System.system_time(:millisecond),
+        event_id: Sentry.UUID.uuid4_hex()
+      }
+
+      assert Dedupe.insert(%{base_event | extra: extra1}) == :new
+      assert Dedupe.insert(%{base_event | extra: extra1}) == :existing
+
+      assert Dedupe.insert(%{base_event | extra: extra2}) == :new
+      assert Dedupe.insert(%{base_event | extra: extra2}) == :existing
+
+      assert Dedupe.insert(%{base_event | extra: extra1}) == :existing
+      assert Dedupe.insert(%{base_event | extra: extra2}) == :existing
+    end
   end
 end
