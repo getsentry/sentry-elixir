@@ -393,18 +393,12 @@ defmodule Sentry.ClientTest do
         |> Tuple.duplicate(2),
         Event.create_event(message: "Dedupes by message and stacktrace", stacktrace: stacktrace)
         |> Tuple.duplicate(2),
-        {
-          Event.create_event(
-            message: "Same message but diff extra",
-            user: %{id: 1},
-            request: %{method: :GET}
-          ),
-          Event.create_event(
-            message: "Same message but diff extra",
-            user: %{id: 2},
-            request: %{method: :POST}
-          )
-        }
+        Event.create_event(
+          message: "Dedupes by context",
+          user: %{id: 1},
+          request: %{method: :GET}
+        )
+        |> Tuple.duplicate(2)
       ]
 
       for {event, dup_event} <- events do
