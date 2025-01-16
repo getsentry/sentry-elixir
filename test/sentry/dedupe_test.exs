@@ -32,24 +32,27 @@ defmodule Sentry.DedupeTest do
       assert Dedupe.insert(event) == :existing
     end
 
-    test "takes extra into account" do
-      extra1 = %{"info" => "This is extra info"}
-      extra2 = %{"info" => "And this is extra info as well"}
+    for key <- Map.keys(Sentry.Context.get_all()) do
+      test "takes .#{key} context into account" do
+        event = fn value ->
+          base_event = %Event{
+            message: "Something went wrong",
+            timestamp: System.system_time(:millisecond),
+            event_id: Sentry.UUID.uuid4_hex()
+          }
 
-      base_event = %Event{
-        message: "Something went wrong",
-        timestamp: System.system_time(:millisecond),
-        event_id: Sentry.UUID.uuid4_hex()
-      }
+          Map.replace!(base_event, unquote(key), value)
+        end
 
-      assert Dedupe.insert(%{base_event | extra: extra1}) == :new
-      assert Dedupe.insert(%{base_event | extra: extra1}) == :existing
+        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :new
+        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :existing
 
-      assert Dedupe.insert(%{base_event | extra: extra2}) == :new
-      assert Dedupe.insert(%{base_event | extra: extra2}) == :existing
+        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :new
+        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :existing
 
-      assert Dedupe.insert(%{base_event | extra: extra1}) == :existing
-      assert Dedupe.insert(%{base_event | extra: extra2}) == :existing
+        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :existing
+        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :existing
+      end
     end
   end
 end
