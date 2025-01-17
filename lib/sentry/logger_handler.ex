@@ -375,6 +375,16 @@ defmodule Sentry.LoggerHandler do
       %{format: ~c"Ranch listener ~p" ++ _, args: args} ->
         capture_from_ranch_error(args, sentry_opts, config)
 
+      # Handles errors which may occur on < 1.15 when there are crashes during
+      # initialization of some processes.
+      %{label: {_lib, _reason}, report: report} when is_list(report) ->
+        error = Enum.find(report, fn {name, _value} -> name == :error_info end)
+        {_, exception, stacktrace} = error
+
+        sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
+
+        capture(:exception, exception, sentry_opts, config)
+
       _ ->
         capture(:message, inspect(report), sentry_opts, config)
     end
