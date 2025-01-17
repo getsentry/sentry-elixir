@@ -34,14 +34,13 @@ defmodule Sentry.DedupeTest do
 
     for key <- Map.keys(Sentry.Context.get_all()) do
       test "takes .#{key} context into account" do
-        event = fn value ->
-          base_event = %Event{
-            message: "Something went wrong",
-            timestamp: System.system_time(:millisecond),
-            event_id: Sentry.UUID.uuid4_hex()
+        event = fn ctx ->
+          %Event{
+            :message => "Something went wrong",
+            :timestamp => System.system_time(:millisecond),
+            :event_id => Sentry.UUID.uuid4_hex(),
+            unquote(key) => ctx
           }
-
-          Map.replace!(base_event, unquote(key), value)
         end
 
         assert Dedupe.insert(event.(%{"ctx" => "1"})) == :new
