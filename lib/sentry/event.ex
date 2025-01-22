@@ -484,7 +484,13 @@ defmodule Sentry.Event do
       event.exception,
       event.message,
       event.level,
-      event.fingerprint
+      event.fingerprint,
+      event.user,
+      event.tags,
+      event.extra,
+      event.breadcrumbs,
+      event.request,
+      event.attachments
     ])
   end
 
