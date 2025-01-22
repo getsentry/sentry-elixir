@@ -33,8 +33,8 @@ defmodule Sentry.DedupeTest do
     end
 
     for key <- Map.keys(Sentry.Context.get_all()) do
-      test "takes .#{key} context into account" do
-        event = fn ctx ->
+      test "takes #{inspect(key)} context into account" do
+        create_event = fn ctx ->
           %Event{
             :message => "Something went wrong",
             :timestamp => System.system_time(:millisecond),
@@ -43,14 +43,14 @@ defmodule Sentry.DedupeTest do
           }
         end
 
-        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :new
-        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :existing
+        assert Dedupe.insert(create_event.(%{"ctx" => "1"})) == :new
+        assert Dedupe.insert(create_event.(%{"ctx" => "1"})) == :existing
 
-        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :new
-        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :existing
+        assert Dedupe.insert(create_event.(%{"ctx" => "2"})) == :new
+        assert Dedupe.insert(create_event.(%{"ctx" => "2"})) == :existing
 
-        assert Dedupe.insert(event.(%{"ctx" => "1"})) == :existing
-        assert Dedupe.insert(event.(%{"ctx" => "2"})) == :existing
+        assert Dedupe.insert(create_event.(%{"ctx" => "1"})) == :existing
+        assert Dedupe.insert(create_event.(%{"ctx" => "2"})) == :existing
       end
     end
   end
