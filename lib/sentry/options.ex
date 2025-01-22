@@ -1,7 +1,7 @@
 defmodule Sentry.Options do
   @moduledoc false
 
-  @common_opts_schema_as_keyword [
+  @send_event_opts_schema_as_keyword [
     result: [
       type: {:in, [:sync, :none]},
       doc: """
@@ -30,6 +30,22 @@ defmodule Sentry.Options do
       this call. See the module documentation. *Available since v10.0.0*.
       """
     ],
+    before_send: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_event_callback/0`",
+      doc: """
+      Same as the global `:before_send` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
+      """
+    ],
+    after_send_event: [
+      type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:after_send_event_callback/0`",
+      doc: """
+      Same as the global `:after_send_event` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
+      """
+    ],
 
     # Private options, only used in testing.
     request_retries: [
@@ -37,25 +53,6 @@ defmodule Sentry.Options do
       doc: false
     ]
   ]
-
-  @send_event_opts_schema_as_keyword Keyword.merge(@common_opts_schema_as_keyword,
-                                       before_send: [
-                                         type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
-                                         type_doc: "`t:before_send_event_callback/0`",
-                                         doc: """
-                                         Same as the global `:before_send` configuration, but
-                                         applied only to this call. See the module documentation. *Available since v10.0.0*.
-                                         """
-                                       ],
-                                       after_send_event: [
-                                         type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
-                                         type_doc: "`t:after_send_event_callback/0`",
-                                         doc: """
-                                         Same as the global `:after_send_event` configuration, but
-                                         applied only to this call. See the module documentation. *Available since v10.0.0*.
-                                         """
-                                       ]
-                                     )
 
   @create_event_opts_schema_as_keyword [
     exception: [
@@ -194,8 +191,6 @@ defmodule Sentry.Options do
 
   @create_event_opts_schema NimbleOptions.new!(@create_event_opts_schema_as_keyword)
 
-  @send_transaction_opts_schema NimbleOptions.new!(@common_opts_schema_as_keyword)
-
   @spec send_event_schema() :: NimbleOptions.t()
   def send_event_schema do
     @send_event_opts_schema
@@ -213,7 +208,7 @@ defmodule Sentry.Options do
 
   @spec send_transaction_schema() :: NimbleOptions.t()
   def send_transaction_schema do
-    @send_transaction_opts_schema
+    @send_event_opts_schema
   end
 
   @spec docs_for(atom()) :: String.t()

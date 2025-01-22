@@ -304,5 +304,30 @@ defmodule SentryTest do
     test "sends client report when sample_rate is 0.0", %{transaction: transaction} do
       assert :unsampled = Sentry.send_transaction(transaction, sample_rate: 0.0)
     end
+
+    test "supports before_send option", %{bypass: bypass, transaction: transaction} do
+      # Exclude transaction
+      assert :excluded =
+               Sentry.send_transaction(transaction, before_send: fn _transaction -> false end)
+
+      # Modify transaction
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        assert [{headers, transaction_body}] = decode_envelope!(body)
+        assert headers["type"] == "transaction"
+        assert transaction_body["transaction"] == "modified-transaction"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} =
+               Sentry.send_transaction(
+                 transaction,
+                 before_send: fn transaction ->
+                   %{transaction | transaction: "modified-transaction"}
+                 end
+               )
+    end
   end
 end

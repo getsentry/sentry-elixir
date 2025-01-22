@@ -114,13 +114,15 @@ defmodule Sentry.Client do
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
+    before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
 
     request_retries =
       Keyword.get_lazy(opts, :request_retries, fn ->
         Application.get_env(:sentry, :request_retries, Transport.default_retries())
       end)
 
-    with :ok <- sample_event(sample_rate) do
+    with :ok <- sample_event(sample_rate),
+         {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
       case encode_and_send(transaction, result_type, client, request_retries) do
         {:ok, id} ->
           {:ok, id}
@@ -132,6 +134,9 @@ defmodule Sentry.Client do
       :unsampled ->
         ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
         :unsampled
+
+      :excluded ->
+        :excluded
     end
   end
 
