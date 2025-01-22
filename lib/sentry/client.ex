@@ -100,8 +100,7 @@ defmodule Sentry.Client do
     client = Config.client()
 
     # This is a "private" option, only really used in testing.
-    request_retries =
-      Application.get_env(:sentry, :request_retries, Transport.default_retries())
+    request_retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
 
     client_report
     |> Envelope.from_client_report()
@@ -115,6 +114,7 @@ defmodule Sentry.Client do
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
     sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
     before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
+    after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
 
     request_retries =
       Keyword.get_lazy(opts, :request_retries, fn ->
@@ -123,13 +123,9 @@ defmodule Sentry.Client do
 
     with :ok <- sample_event(sample_rate),
          {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
-      case encode_and_send(transaction, result_type, client, request_retries) do
-        {:ok, id} ->
-          {:ok, id}
-
-        {:error, %ClientError{} = error} ->
-          {:error, error}
-      end
+      send_result = encode_and_send(transaction, result_type, client, request_retries)
+      _ignored = maybe_call_after_send(transaction, send_result, after_send_event)
+      send_result
     else
       :unsampled ->
         ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
@@ -194,7 +190,7 @@ defmodule Sentry.Client do
     """
   end
 
-  defp maybe_call_after_send(%Event{} = event, result, callback) do
+  defp maybe_call_after_send(event, result, callback) do
     message = ":after_send_event must be an anonymous function or a {module, function} tuple"
 
     case callback do

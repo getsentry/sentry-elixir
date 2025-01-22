@@ -329,5 +329,23 @@ defmodule SentryTest do
                  end
                )
     end
+
+    test "supports after_send_event option", %{bypass: bypass, transaction: transaction} do
+      parent = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} =
+               Sentry.send_transaction(
+                 transaction,
+                 after_send_event: fn transaction, {:ok, id} ->
+                   send(parent, {:after_send, transaction.transaction, id})
+                 end
+               )
+
+      assert_receive {:after_send, "test-transaction", "340"}
+    end
   end
 end
