@@ -289,5 +289,20 @@ defmodule SentryTest do
 
       assert :ignored = Sentry.send_transaction(transaction)
     end
+
+    test "respects sample_rate option", %{bypass: bypass, transaction: transaction} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, _transaction_body}] = decode_envelope!(body)
+        assert headers["type"] == "transaction"
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Sentry.send_transaction(transaction, sample_rate: 1.0)
+    end
+
+    test "sends client report when sample_rate is 0.0", %{transaction: transaction} do
+      assert :unsampled = Sentry.send_transaction(transaction, sample_rate: 0.0)
+    end
   end
 end

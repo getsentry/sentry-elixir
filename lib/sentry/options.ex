@@ -23,6 +23,13 @@ defmodule Sentry.Options do
       applied only to this call. See the module documentation. *Available since v10.0.0*.
       """
     ],
+    sample_rate: [
+      type: :float,
+      doc: """
+      Same as the global `:sample_rate` configuration, but applied only to
+      this call. See the module documentation. *Available since v10.0.0*.
+      """
+    ],
 
     # Private options, only used in testing.
     request_retries: [
@@ -32,13 +39,6 @@ defmodule Sentry.Options do
   ]
 
   @send_event_opts_schema_as_keyword Keyword.merge(@common_opts_schema_as_keyword,
-                                       sample_rate: [
-                                         type: :float,
-                                         doc: """
-                                         Same as the global `:sample_rate` configuration, but applied only to
-                                         this call. See the module documentation. *Available since v10.0.0*.
-                                         """
-                                       ],
                                        before_send: [
                                          type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
                                          type_doc: "`t:before_send_event_callback/0`",
