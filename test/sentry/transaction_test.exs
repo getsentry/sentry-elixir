@@ -6,12 +6,11 @@ defmodule Sentry.TransactionTest do
   import Sentry.TestHelpers
 
   describe "to_payload/1" do
-    setup do
-      {:ok, %{transaction: create_transaction()}}
-    end
-
-    test "returns a map representation of the transaction", %{transaction: transaction} do
+    test "returns a map representation of the transaction" do
+      transaction = create_transaction()
       transaction_payload = Transaction.to_payload(transaction)
+
+      assert transaction_payload.type == "transaction"
 
       [child_span] = transaction_payload[:spans]
 
