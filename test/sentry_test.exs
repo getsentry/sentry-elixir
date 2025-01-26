@@ -235,4 +235,117 @@ defmodule SentryTest do
       assert Sentry.get_dsn() == random_dsn
     end
   end
+
+  describe "send_transaction/2" do
+    setup do
+      transaction =
+        create_transaction(%{
+          transaction: "test-transaction",
+          contexts: %{
+            trace: %{
+              trace_id: "trace-id",
+              span_id: "root-span"
+            }
+          },
+          spans: [
+            %Sentry.Interfaces.Span{
+              span_id: "root-span",
+              trace_id: "trace-id",
+              start_timestamp: 1_234_567_891.123_456,
+              timestamp: 1_234_567_891.123_456
+            }
+          ]
+        })
+
+      {:ok, transaction: transaction}
+    end
+
+    test "sends transaction to Sentry when configured properly", %{
+      bypass: bypass,
+      transaction: transaction
+    } do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, transaction_body}] = decode_envelope!(body)
+
+        assert headers["type"] == "transaction"
+        assert Map.has_key?(headers, "length")
+        assert transaction_body["transaction"] == "test-transaction"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Sentry.send_transaction(transaction)
+    end
+
+    test "validates options", %{transaction: transaction} do
+      assert_raise NimbleOptions.ValidationError, fn ->
+        Sentry.send_transaction(transaction, client: "oops")
+      end
+    end
+
+    test "ignores transaction when dsn is not configured", %{transaction: transaction} do
+      put_test_config(dsn: nil, test_mode: false)
+
+      assert :ignored = Sentry.send_transaction(transaction)
+    end
+
+    test "respects sample_rate option", %{bypass: bypass, transaction: transaction} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{headers, _transaction_body}] = decode_envelope!(body)
+        assert headers["type"] == "transaction"
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Sentry.send_transaction(transaction, sample_rate: 1.0)
+    end
+
+    test "sends client report when sample_rate is 0.0", %{transaction: transaction} do
+      assert :unsampled = Sentry.send_transaction(transaction, sample_rate: 0.0)
+    end
+
+    test "supports before_send option", %{bypass: bypass, transaction: transaction} do
+      # Exclude transaction
+      assert :excluded =
+               Sentry.send_transaction(transaction, before_send: fn _transaction -> false end)
+
+      # Modify transaction
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        assert [{headers, transaction_body}] = decode_envelope!(body)
+        assert headers["type"] == "transaction"
+        assert transaction_body["transaction"] == "modified-transaction"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} =
+               Sentry.send_transaction(
+                 transaction,
+                 before_send: fn transaction ->
+                   %{transaction | transaction: "modified-transaction"}
+                 end
+               )
+    end
+
+    test "supports after_send_event option", %{bypass: bypass, transaction: transaction} do
+      parent = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} =
+               Sentry.send_transaction(
+                 transaction,
+                 after_send_event: fn transaction, {:ok, id} ->
+                   send(parent, {:after_send, transaction.transaction, id})
+                 end
+               )
+
+      assert_receive {:after_send, "test-transaction", "340"}
+    end
+  end
 end

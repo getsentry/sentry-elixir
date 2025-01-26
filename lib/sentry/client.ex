@@ -15,8 +15,9 @@ defmodule Sentry.Client do
     Event,
     Interfaces,
     LoggerUtils,
-    Transport,
-    Options
+    Options,
+    Transaction,
+    Transport
   }
 
   require Logger
@@ -99,12 +100,40 @@ defmodule Sentry.Client do
     client = Config.client()
 
     # This is a "private" option, only really used in testing.
-    request_retries =
-      Application.get_env(:sentry, :request_retries, Transport.default_retries())
+    request_retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
 
     client_report
     |> Envelope.from_client_report()
     |> Transport.encode_and_post_envelope(client, request_retries)
+  end
+
+  def send_transaction(%Transaction{} = transaction, opts \\ []) do
+    opts = NimbleOptions.validate!(opts, Options.send_transaction_schema())
+
+    result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
+    client = Keyword.get_lazy(opts, :client, &Config.client/0)
+    sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
+    before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
+    after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
+
+    request_retries =
+      Keyword.get_lazy(opts, :request_retries, fn ->
+        Application.get_env(:sentry, :request_retries, Transport.default_retries())
+      end)
+
+    with :ok <- sample_event(sample_rate),
+         {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
+      send_result = encode_and_send(transaction, result_type, client, request_retries)
+      _ignored = maybe_call_after_send(transaction, send_result, after_send_event)
+      send_result
+    else
+      :unsampled ->
+        ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
+        :unsampled
+
+      :excluded ->
+        :excluded
+    end
   end
 
   defp sample_event(sample_rate) do
@@ -161,7 +190,7 @@ defmodule Sentry.Client do
     """
   end
 
-  defp maybe_call_after_send(%Event{} = event, result, callback) do
+  defp maybe_call_after_send(event, result, callback) do
     message = ":after_send_event must be an anonymous function or a {module, function} tuple"
 
     case callback do
@@ -205,6 +234,42 @@ defmodule Sentry.Client do
     end
   end
 
+  defp encode_and_send(
+         %Transaction{} = transaction,
+         _result_type = :sync,
+         client,
+         request_retries
+       ) do
+    case Sentry.Test.maybe_collect(transaction) do
+      :collected ->
+        {:ok, ""}
+
+      :not_collecting ->
+        send_result =
+          transaction
+          |> Envelope.from_transaction()
+          |> Transport.encode_and_post_envelope(client, request_retries)
+
+        send_result
+    end
+  end
+
+  defp encode_and_send(
+         %Transaction{} = transaction,
+         _result_type = :none,
+         client,
+         _request_retries
+       ) do
+    case Sentry.Test.maybe_collect(transaction) do
+      :collected ->
+        {:ok, ""}
+
+      :not_collecting ->
+        :ok = Transport.Sender.send_async(client, transaction)
+        {:ok, ""}
+    end
+  end
+
   @spec render_event(Event.t()) :: map()
   def render_event(%Event{} = event) do
     json_library = Config.json_library()
@@ -223,6 +288,19 @@ defmodule Sentry.Client do
     |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:exception, fn list -> Enum.map(list, &render_exception/1) end)
     |> update_if_present(:threads, fn list -> Enum.map(list, &render_thread/1) end)
+  end
+
+  @spec render_transaction(%Transaction{}) :: map()
+  def render_transaction(%Transaction{} = transaction) do
+    transaction
+    |> Transaction.to_payload()
+    |> Map.merge(%{
+      platform: "elixir",
+      sdk: %{
+        name: "sentry.elixir",
+        version: Application.spec(:sentry, :vsn)
+      }
+    })
   end
 
   defp render_exception(%Interfaces.Exception{} = exception) do

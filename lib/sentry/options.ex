@@ -15,6 +15,14 @@ defmodule Sentry.Options do
         call ends up being successful or not.
       """
     ],
+    client: [
+      type: :atom,
+      type_doc: "`t:module/0`",
+      doc: """
+      Same as the global `:client` configuration, but
+      applied only to this call. See the module documentation. *Available since v10.0.0*.
+      """
+    ],
     sample_rate: [
       type: :float,
       doc: """
@@ -35,14 +43,6 @@ defmodule Sentry.Options do
       type_doc: "`t:after_send_event_callback/0`",
       doc: """
       Same as the global `:after_send_event` configuration, but
-      applied only to this call. See the module documentation. *Available since v10.0.0*.
-      """
-    ],
-    client: [
-      type: :atom,
-      type_doc: "`t:module/0`",
-      doc: """
-      Same as the global `:client` configuration, but
       applied only to this call. See the module documentation. *Available since v10.0.0*.
       """
     ],
@@ -204,6 +204,11 @@ defmodule Sentry.Options do
   @spec create_event_schema() :: NimbleOptions.t()
   def create_event_schema do
     @create_event_opts_schema
+  end
+
+  @spec send_transaction_schema() :: NimbleOptions.t()
+  def send_transaction_schema do
+    @send_event_opts_schema
   end
 
   @spec docs_for(atom()) :: String.t()

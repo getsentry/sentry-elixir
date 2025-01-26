@@ -362,6 +362,28 @@ defmodule Sentry do
     end
   end
 
+  def send_transaction(transaction, options \\ []) do
+    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    included_envs = Config.included_environments()
+
+    cond do
+      Config.test_mode?() ->
+        Client.send_transaction(transaction, options)
+
+      !Config.dsn() ->
+        # We still validate options even if we're not sending the event. This aims at catching
+        # configuration issues during development instead of only when deploying to production.
+        _options = NimbleOptions.validate!(options, Options.send_event_schema())
+        :ignored
+
+      included_envs == :all or to_string(Config.environment_name()) in included_envs ->
+        Client.send_transaction(transaction, options)
+
+      true ->
+        :ignored
+    end
+  end
+
   @doc """
   Captures a check-in built with the given `options`.
 
