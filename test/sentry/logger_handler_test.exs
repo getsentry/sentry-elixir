@@ -604,6 +604,7 @@ defmodule Sentry.LoggerHandlerTest do
   describe "discard threshold" do
     @tag handler_config: %{
            discard_threshold: 2,
+           sync_threshold: nil,
            capture_log_messages: true
          },
          send_request: true
@@ -623,6 +624,27 @@ defmodule Sentry.LoggerHandlerTest do
       Logger.error("Fourth")
       assert_receive {^ref, %{message: %{formatted: "Fourth"}}}
     end
+  end
+
+  @tag handler_config: %{
+         sync_threshold: 2
+       }
+  test "cannot set discard_threshold and sync_threshold" do
+    assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+    assert {:error,
+            {:callback_crashed,
+             {:error,
+              %ArgumentError{
+                message:
+                  "`sync_threshold` and `discard_threshold` cannot be used together, one of them must be `nil`"
+              },
+              _}}} =
+             :logger.update_handler_config(
+               @handler_name,
+               :config,
+               Map.put(config, :discard_threshold, 1)
+             )
   end
 
   defp register_delay do
