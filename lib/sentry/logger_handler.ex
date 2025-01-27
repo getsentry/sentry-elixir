@@ -97,7 +97,7 @@ defmodule Sentry.LoggerHandler do
       doc: """
       The number of queued events after which this handler will start
       to **discard** events. This option effectively implements **load shedding**.
-      
+
       *Available since v10.8.2*.
 
       `:discard_threshold` and `:sync_threshold` cannot be used together. To disable this option,
