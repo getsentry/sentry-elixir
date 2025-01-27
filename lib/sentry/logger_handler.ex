@@ -87,7 +87,7 @@ defmodule Sentry.LoggerHandler do
       want to use sync mode, set this option to `0`. This option effectively implements
       **overload protection**.
 
-      `sync_threshold` and `discard_threshold` cannot be used together. To disable this option,
+      `:sync_threshold` and `:discard_threshold` cannot be used together. To disable this option,
       set it to `nil`.
       """
     ],
@@ -95,10 +95,12 @@ defmodule Sentry.LoggerHandler do
       type: {:or, [nil, :non_neg_integer]},
       default: nil,
       doc: """
-      *since v10.8.2* - The number of queued events after which this handler will start
-      to discard events. This option effectively implements **load shedding**.
+      The number of queued events after which this handler will start
+      to **discard** events. This option effectively implements **load shedding**.
+      
+      *Available since v10.8.2*.
 
-      `discard_threshold` and `sync_threshold` cannot be used together. To disable this option,
+      `:discard_threshold` and `:sync_threshold` cannot be used together. To disable this option,
       set it to `nil`.
       """
     ]
@@ -420,7 +422,7 @@ defmodule Sentry.LoggerHandler do
 
     if config.sync_threshold && config.discard_threshold do
       raise ArgumentError,
-            "`sync_threshold` and `discard_threshold` cannot be used together, one of them must be `nil`"
+            ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
     else
       config
     end
