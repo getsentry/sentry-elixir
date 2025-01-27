@@ -67,11 +67,13 @@ defmodule Sentry.OpenTelemetry.SpanProcessor do
       span_id: root_span.span_id,
       transaction: transaction_name(root_span_record),
       transaction_info: %{source: :custom},
+      start_timestamp: root_span_record.start_time,
+      timestamp: root_span_record.end_time,
       contexts: %{
         trace: build_trace_context(root_span_record),
         otel: build_otel_context(root_span_record)
       },
-      spans: [root_span | child_spans]
+      spans: child_spans
     })
   end
 
