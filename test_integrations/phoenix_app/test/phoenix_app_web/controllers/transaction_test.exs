@@ -28,11 +28,7 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert trace.op == "test_span"
     assert trace.data == %{}
 
-    assert [span] = transaction.spans
-
-    assert span.op == "test_span"
-    assert span.trace_id == trace.trace_id
-    refute span.parent_span_id
+    assert [] = transaction.spans
   end
 
   test "GET /users", %{conn: conn} do
@@ -52,10 +48,7 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert trace.op == "PhoenixAppWeb.UserLive.Index.mount"
     assert trace.data == %{}
 
-    assert [span_mount, span_ecto] = mount_transaction.spans
-
-    assert span_mount.op == "PhoenixAppWeb.UserLive.Index.mount"
-    assert span_mount.description == "PhoenixAppWeb.UserLive.Index.mount"
+    assert [span_ecto] = mount_transaction.spans
 
     assert span_ecto.op == "db"
     assert span_ecto.description == "SELECT u0.\"id\", u0.\"name\", u0.\"age\", u0.\"inserted_at\", u0.\"updated_at\" FROM \"users\" AS u0"
@@ -67,10 +60,6 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert trace.origin == "opentelemetry_phoenix"
     assert trace.op == "PhoenixAppWeb.UserLive.Index.handle_params"
     assert trace.data == %{}
-
-    assert [span_handle_params] = handle_params_transaction.spans
-
-    assert span_handle_params.op == "PhoenixAppWeb.UserLive.Index.handle_params"
-    assert span_handle_params.description == "PhoenixAppWeb.UserLive.Index.handle_params"
+    assert [] = handle_params_transaction.spans
   end
 end
