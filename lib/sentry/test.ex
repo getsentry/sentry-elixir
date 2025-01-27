@@ -134,6 +134,48 @@ defmodule Sentry.Test do
     end
   end
 
+  # Used internally when reporting a transaction, *before* reporting the actual transaction.
+  @doc false
+  @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
+  def maybe_collect(%Sentry.Transaction{} = transaction) do
+    if Sentry.Config.test_mode?() do
+      dsn_set? = not is_nil(Sentry.Config.dsn())
+      ensure_ownership_server_started()
+
+      case NimbleOwnership.fetch_owner(@server, callers(), @transaction_key) do
+        {:ok, owner_pid} ->
+          result =
+            NimbleOwnership.get_and_update(
+              @server,
+              owner_pid,
+              @transaction_key,
+              fn transactions ->
+                {:collected, (transactions || []) ++ [transaction]}
+              end
+            )
+
+          case result do
+            {:ok, :collected} ->
+              :collected
+
+            {:error, error} ->
+              raise ArgumentError,
+                    "cannot collect Sentry transactions: #{Exception.message(error)}"
+          end
+
+        :error when dsn_set? ->
+          :not_collecting
+
+        # If the :dsn option is not set and we didn't capture the transaction, it's alright,
+        # we can just swallow it.
+        :error ->
+          :collected
+      end
+    else
+      :not_collecting
+    end
+  end
+
   @doc """
   Starts collecting events from the current process.
 
