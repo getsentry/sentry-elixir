@@ -107,6 +107,11 @@ defmodule Sentry.Client do
     |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
+  @spec send_transaction(Transaction.t(), keyword()) ::
+          {:ok, transaction_id :: String.t()}
+          | {:error, ClientError.t()}
+          | :unsampled
+          | :excluded
   def send_transaction(%Transaction{} = transaction, opts \\ []) do
     opts = NimbleOptions.validate!(opts, Options.send_transaction_schema())
 
@@ -190,12 +195,12 @@ defmodule Sentry.Client do
     """
   end
 
-  defp maybe_call_after_send(event, result, callback) do
+  defp maybe_call_after_send(event_or_transaction, result, callback) do
     message = ":after_send_event must be an anonymous function or a {module, function} tuple"
 
     case callback do
-      function when is_function(function, 2) -> function.(event, result)
-      {module, function} -> apply(module, function, [event, result])
+      function when is_function(function, 2) -> function.(event_or_transaction, result)
+      {module, function} -> apply(module, function, [event_or_transaction, result])
       nil -> nil
       _ -> raise ArgumentError, message
     end
@@ -294,13 +299,7 @@ defmodule Sentry.Client do
   def render_transaction(%Transaction{} = transaction) do
     transaction
     |> Transaction.to_payload()
-    |> Map.merge(%{
-      platform: "elixir",
-      sdk: %{
-        name: "sentry.elixir",
-        version: Application.spec(:sentry, :vsn)
-      }
-    })
+    |> update_if_present(:sdk, &Map.from_struct/1)
   end
 
   defp render_exception(%Interfaces.Exception{} = exception) do

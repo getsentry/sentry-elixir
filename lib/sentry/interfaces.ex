@@ -272,24 +272,26 @@ defmodule Sentry.Interfaces do
     @moduledoc """
     The struct for the **span** interface.
 
-    See <https://develop.sentry.dev/sdk/event-payloads/spans>.
+    See <https://develop.sentry.dev/sdk/data-model/event-payloads/span/>.
     """
 
     @moduledoc since: "11.0.0"
 
     @typedoc since: "11.0.0"
     @type t() :: %__MODULE__{
-            trace_id: String.t(),
-            span_id: String.t(),
-            start_timestamp: String.t(),
-            timestamp: String.t(),
-            parent_span_id: String.t(),
-            description: String.t(),
-            op: String.t(),
-            status: String.t(),
-            tags: map(),
-            data: map(),
-            origin: String.t()
+            trace_id: <<_::256>>,
+            span_id: <<_::128>>,
+            start_timestamp: String.t() | number(),
+            timestamp: String.t() | number(),
+
+            # Optional
+            parent_span_id: <<_::128>> | nil,
+            description: String.t() | nil,
+            op: String.t() | nil,
+            status: String.t() | nil,
+            tags: %{optional(String.t()) => term()} | nil,
+            data: %{optional(String.t()) => term()} | nil,
+            origin: String.t() | nil
           }
 
     @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
@@ -304,10 +306,5 @@ defmodule Sentry.Interfaces do
                   :data,
                   :origin
                 ]
-
-    @doc false
-    def to_payload(%__MODULE__{} = span) do
-      Map.from_struct(span)
-    end
   end
 end
