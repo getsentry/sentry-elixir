@@ -601,14 +601,82 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
-  defp register_before_send(_context) do
+  describe "discard threshold" do
+    @tag handler_config: %{
+           discard_threshold: 2,
+           sync_threshold: nil,
+           capture_log_messages: true
+         },
+         send_request: true
+    test "discards logged messages", %{sender_ref: ref} do
+      register_delay()
+
+      Logger.error("First")
+      assert_receive {^ref, %{message: %{formatted: "First"}}}
+
+      Logger.error("Second")
+      assert_receive {^ref, %{message: %{formatted: "Second"}}}
+
+      Logger.error("Third")
+      refute_receive {^ref, _event}, 100
+
+      Process.sleep(300)
+      Logger.error("Fourth")
+      assert_receive {^ref, %{message: %{formatted: "Fourth"}}}
+    end
+  end
+
+  @tag handler_config: %{
+         sync_threshold: 2
+       }
+  test "cannot set discard_threshold and sync_threshold" do
+    assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+
+    assert {:error,
+            {:callback_crashed,
+             {:error,
+              %ArgumentError{
+                message:
+                  ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
+              },
+              _}}} =
+             :logger.update_handler_config(
+               @handler_name,
+               :config,
+               Map.put(config, :discard_threshold, 1)
+             )
+  end
+
+  defp register_delay do
+    bypass = Bypass.open()
+
+    put_test_config(
+      dsn: "http://public:secret@localhost:#{bypass.port}/1",
+      dedup_events: false,
+      hackney_opts: [recv_timeout: 500, pool: :sentry_pool]
+    )
+
+    Bypass.expect(bypass, fn conn ->
+      assert conn.request_path == "/api/1/envelope/"
+      assert conn.method == "POST"
+      Process.sleep(150)
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+  end
+
+  defp register_before_send(context) do
     pid = self()
     ref = make_ref()
 
     put_test_config(
       before_send: fn event ->
         send(pid, {ref, event})
-        false
+
+        if Map.get(context, :send_request, false) do
+          event
+        else
+          false
+        end
       end,
       dsn: "http://public:secret@localhost:9392/1"
     )

@@ -76,7 +76,7 @@ defmodule Sentry.LoggerHandler do
       default: nil
     ],
     sync_threshold: [
-      type: :non_neg_integer,
+      type: {:or, [nil, :non_neg_integer]},
       default: 100,
       doc: """
       *since v10.6.0* - The number of queued events after which this handler switches
@@ -86,6 +86,22 @@ defmodule Sentry.LoggerHandler do
       where it starts using `result: :sync` to block until the event is sent. If you always
       want to use sync mode, set this option to `0`. This option effectively implements
       **overload protection**.
+
+      `:sync_threshold` and `:discard_threshold` cannot be used together. To disable this option,
+      set it to `nil`.
+      """
+    ],
+    discard_threshold: [
+      type: {:or, [nil, :non_neg_integer]},
+      default: nil,
+      doc: """
+      The number of queued events after which this handler will start
+      to **discard** events. This option effectively implements **load shedding**.
+
+      *Available since v10.8.2*.
+
+      `:discard_threshold` and `:sync_threshold` cannot be used together. To disable this option,
+      set it to `nil`.
       """
     ]
   ]
@@ -231,7 +247,8 @@ defmodule Sentry.LoggerHandler do
     :tags_from_metadata,
     :capture_log_messages,
     :rate_limiting,
-    :sync_threshold
+    :sync_threshold,
+    :discard_threshold
   ]
 
   ## Logger handler callbacks
@@ -317,6 +334,10 @@ defmodule Sentry.LoggerHandler do
         :ok
 
       config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
+        :ok
+
+      config.discard_threshold &&
+          SenderPool.get_queued_events_counter() >= config.discard_threshold ->
         :ok
 
       true ->
@@ -407,7 +428,14 @@ defmodule Sentry.LoggerHandler do
       |> Map.to_list()
       |> NimbleOptions.validate!(@options_schema)
 
-    struct!(existing_config, validated_config)
+    config = struct!(existing_config, validated_config)
+
+    if config.sync_threshold && config.discard_threshold do
+      raise ArgumentError,
+            ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
+    else
+      config
+    end
   end
 
   defp log_from_crash_reason(
@@ -642,7 +670,8 @@ defmodule Sentry.LoggerHandler do
 
     defp capture(unquote(function), exception_or_message, sentry_opts, %__MODULE__{} = config) do
       sentry_opts =
-        if SenderPool.get_queued_events_counter() >= config.sync_threshold do
+        if config.sync_threshold &&
+             SenderPool.get_queued_events_counter() >= config.sync_threshold do
           Keyword.put(sentry_opts, :result, :sync)
         else
           sentry_opts
