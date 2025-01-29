@@ -19,6 +19,13 @@ defmodule Sentry.CheckIn do
 
   alias Sentry.{Config, Interfaces, UUID}
 
+  @doc """
+  The `sentry_check_in_configuration/1` function is called to set a specific config per check-in job.
+  See the `monitor_config` type to see the available configuration options
+
+  """
+  @callback sentry_check_in_configuration(options_to_merge :: term()) :: monitor_config()
+
   @typedoc """
   The possible status of the check-in.
   """
@@ -50,18 +57,23 @@ defmodule Sentry.CheckIn do
           duration: float() | nil,
           release: String.t() | nil,
           environment: String.t() | nil,
-          monitor_config:
-            nil
-            | %{
-                required(:schedule) => monitor_config_schedule(),
-                optional(:checkin_margin) => number(),
-                optional(:max_runtime) => number(),
-                optional(:failure_issue_threshold) => number(),
-                optional(:recovery_threshold) => number(),
-                optional(:timezone) => String.t()
-              },
+          monitor_config: monitor_config(),
           contexts: Interfaces.context()
         }
+  @typedoc """
+  The type for the monitor_config.
+  """
+
+  @type monitor_config() ::
+    nil
+    | %{
+        required(:schedule) => monitor_config_schedule(),
+        optional(:checkin_margin) => number(),
+        optional(:max_runtime) => number(),
+        optional(:failure_issue_threshold) => number(),
+        optional(:recovery_threshold) => number(),
+        optional(:timezone) => String.t()
+      }
 
   @enforce_keys [
     :check_in_id,
