@@ -388,6 +388,14 @@ defmodule Sentry.Config do
       The number of lines of source code
       before and after the line that caused the exception to report.
       """
+    ],
+    otp_apps: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:atom/0`",
+      doc: """
+      A list of OTP apps that will be used to populate the `in_app_module_allow_list` option.
+      """
     ]
   ]
 
@@ -574,6 +582,9 @@ defmodule Sentry.Config do
 
   @spec report_deps?() :: boolean()
   def report_deps?, do: fetch!(:report_deps)
+
+  @spec otp_apps() :: [atom()]
+  def otp_apps, do: fetch!(:otp_apps)
 
   @spec json_library() :: module()
   def json_library, do: fetch!(:json_library)

@@ -136,6 +136,7 @@ defmodule Sentry.Mixfile do
 
   defp run_integration_tests_if_supported(args) do
     if Version.match?(System.version(), ">= 1.16.0") do
+      run_integration_tests("umbrella", args)
       run_integration_tests("phoenix_app", args)
     else
       Mix.shell().info("Skipping integration tests for Elixir versions < 1.16")
