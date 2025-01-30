@@ -18,6 +18,7 @@ defmodule Umbrella.MixProject do
   defp deps do
     [
       {:hackney, "~> 1.18"},
+      {:jason, "~> 1.4"},
       {:sentry, path: "../.."}
     ]
   end
