@@ -389,7 +389,7 @@ defmodule Sentry.Config do
       before and after the line that caused the exception to report.
       """
     ],
-    otp_apps: [
+    in_app_otp_apps: [
       type: {:list, :atom},
       default: [],
       type_doc: "list of `t:atom/0`",
@@ -583,8 +583,8 @@ defmodule Sentry.Config do
   @spec report_deps?() :: boolean()
   def report_deps?, do: fetch!(:report_deps)
 
-  @spec otp_apps() :: [atom()]
-  def otp_apps, do: fetch!(:otp_apps)
+  @spec in_app_otp_apps() :: [atom()]
+  def in_app_otp_apps, do: fetch!(:in_app_otp_apps)
 
   @spec json_library() :: module()
   def json_library, do: fetch!(:json_library)

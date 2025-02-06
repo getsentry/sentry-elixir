@@ -24,4 +24,4 @@ config :sentry,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
   send_result: :sync,
-  otp_apps: [:public, :admin]
+  in_app_otp_apps: [:public, :admin]

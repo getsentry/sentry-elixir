@@ -78,7 +78,7 @@ defmodule Sentry.Application do
   end
 
   defp resolve_in_app_module_allow_list do
-    Enum.flat_map(Config.otp_apps(), fn app ->
+    Enum.flat_map(Config.in_app_otp_apps(), fn app ->
       case :application.get_key(app, :modules) do
         {:ok, modules} -> modules
         _ -> []
