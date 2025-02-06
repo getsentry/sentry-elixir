@@ -394,7 +394,13 @@ defmodule Sentry.Config do
       default: [],
       type_doc: "list of `t:atom/0`",
       doc: """
-      A list of OTP apps that will be used to populate the `in_app_module_allow_list` option.
+      A list of OTP application names that will be used to populate additional modules for the
+      `:in_app_module_allow_list` option. List your application (or the applications in your
+      umbrella project) for them to show as "in-app" in stacktraces in Sentry. We recommend using
+      this option over `:in_app_module_allow_list`, unless you need more control over the exact
+      modules to consider as "in-app".
+
+      *Available since v10.9.0*.
       """
     ]
   ]
