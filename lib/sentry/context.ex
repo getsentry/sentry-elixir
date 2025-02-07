@@ -424,7 +424,7 @@ defmodule Sentry.Context do
       get_sentry_context()
       |> Map.update(@breadcrumbs_key, [map], fn breadcrumbs ->
         breadcrumbs = [map | breadcrumbs]
-        Enum.take(breadcrumbs, -1 * Sentry.Config.max_breadcrumbs())
+        Enum.take(breadcrumbs, 1 * Sentry.Config.max_breadcrumbs())
       end)
 
     :logger.update_process_metadata(%{@logger_metadata_key => sentry_metadata})
