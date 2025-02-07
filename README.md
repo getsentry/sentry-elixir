@@ -27,8 +27,8 @@ defp deps do
   [
     # ...
 
-    {:sentry, "~> 10.0"},
-    {:hackney, "~> 1.19"}
+    {:sentry, "~> 10.8.1"},
+    {:hackney, "~> 1.20"}
   ]
 end
 ```
@@ -40,7 +40,7 @@ end
 > defp deps do
 >   [
 >     # ...
->     {:sentry, "~> 10.0"},
+>     {:sentry, "~> 10.8.1"},
 >     {:jason, "~> 1.4"}
 >   ]
 > end
@@ -61,17 +61,47 @@ config :sentry,
 
 ### Usage
 
-This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add the handler when your application starts:
+This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add the [Sentry.LoggerHandler](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html) to your production configuration:
 
-```diff
-  def start(_type, _args) do
-+   :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
-
-    # ...
-  end
+```elixir
+# config/prod.exs
+config :my_app, :logger, [
+  {:handler, :my_sentry_handler, Sentry.LoggerHandler, %{
+    # Logs all messages with level `:error` and above to Sentry.
+    # Remove or set `capture_log_messages` to `false` if you only want to report crashes.
+    config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+  }}
+]
 ```
 
-The handler can also be configured to capture `Logger` metadata. See the documentation [here](https://hexdocs.pm/sentry/Sentry.LoggerBackend.html).
+And then add your logger when your application starts:
+
+```elixir
+# lib/my_app/application.ex
+def start(_type, _args) do
+  Logger.add_handlers(:my_app)
+
+  # ...
+end
+```
+
+Alternatively, you can skip the `:logger` configuration and add the handler directly
+to your application's `c:Application.start/2` callback:
+
+```elixir
+# lib/my_app/application.ex
+def start(_type, _args) do
+  :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
+    config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+  })
+
+  # ...
+end
+```
+
+See all logger configuration options [here](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html).
+
+#### Capture exceptions manually
 
 Sometimes you want to capture specific exceptions manually. To do so, use [`Sentry.capture_exception/2`](https://hexdocs.pm/sentry/Sentry.html#capture_exception/2).
 
