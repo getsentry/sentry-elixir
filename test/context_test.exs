@@ -39,6 +39,16 @@ defmodule Sentry.ContextTest do
     assert first_breadcrumb.timestamp <= second_breadcrumb.timestamp
   end
 
+  test "retains most recent breadcrumbs when exceeding max" do
+    put_test_config(max_breadcrumbs: 3)
+
+    for x <- 1..10, do: Context.add_breadcrumb(message: x)
+
+    event = Event.create_event([])
+
+    assert event.breadcrumbs |> Enum.map(& &1.message) == [8, 9, 10]
+  end
+
   test "storing user context appears when generating event" do
     Context.set_user_context(%{id: "345"})
 
