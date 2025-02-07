@@ -67,11 +67,17 @@ This library comes with a [`:logger` handler][logger-handlers] to capture error 
 # config/prod.exs
 config :my_app, :logger, [
   {:handler, :my_sentry_handler, Sentry.LoggerHandler, %{
-    # Logs all messages with level `:error` and above to Sentry.
-    # Remove or set `capture_log_messages` to `false` if you only want to report crashes.
-    config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+    config: %{
+      metadata: [:file, :line],
+      rate_limiting: [max_events: 10, interval: _1_second = 1_000],
+      # Logs all messages with level `:error` and above to Sentry.
+      # Remove `capture_log_messages` and `level` if you only want to report crashes.
+      capture_log_messages: true,
+      level: :error
+    }
   }}
 ]
+
 ```
 
 And then add your logger when your application starts:
@@ -92,7 +98,12 @@ to your application's `c:Application.start/2` callback:
 # lib/my_app/application.ex
 def start(_type, _args) do
   :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
-    config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+    config: %{
+      metadata: [:file, :line],
+      rate_limiting: [max_events: 10, interval: _1_second = 1_000],
+      capture_log_messages: true,
+      level: :error
+    }
   })
 
   # ...
