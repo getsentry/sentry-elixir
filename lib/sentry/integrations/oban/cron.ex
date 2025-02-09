@@ -113,13 +113,7 @@ defmodule Sentry.Integrations.Oban.Cron do
           monitor_config: monitor_config_opts
         ]
 
-        try do
-          resolve_custom_opts(opts, job)
-        rescue
-          x ->
-            IO.inspect(x)
-            reraise x, __STACKTRACE__
-        end
+        resolve_custom_opts(opts, job)
     end
   end
 
@@ -130,7 +124,7 @@ defmodule Sentry.Integrations.Oban.Cron do
     ArgumentError -> opts
   else
     worker ->
-      if Code.loaded?(worker) do
+      if Code.ensure_loaded?(worker) do
         resolve_custom_opts(opts, worker, job)
       else
         opts

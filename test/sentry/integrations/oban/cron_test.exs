@@ -307,7 +307,6 @@ defmodule Sentry.Integrations.Oban.CronTest do
     Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [{_headers, check_in_body}] = decode_envelope!(body)
-      IO.inspect(check_in_body)
 
       assert check_in_body["monitor_slug"] == "this-is-a-custom-slug-123"
       assert check_in_body["monitor_config"]["schedule"]["type"] == "interval"
