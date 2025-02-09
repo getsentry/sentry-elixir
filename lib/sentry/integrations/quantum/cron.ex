@@ -70,7 +70,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
         check_in_id: id,
         # This is already a binary.
         monitor_slug: "quantum-#{slugify(job.name)}",
-        monitor_config: [schedule: schedule_opts, timezone: timezone_to_string(job.timezone)]
+        monitor_config: [schedule: schedule_opts, timezone: timezone_to_string(job)]
       ]
     else
       nil
@@ -97,9 +97,10 @@ defmodule Sentry.Integrations.Quantum.Cron do
     |> Kernel./(1000)
   end
 
-  defp timezone_to_string(:utc), do: "Etc/UTC"
-  defp timezone_to_string(nil), do: "Etc/UTC"
-  defp timezone_to_string(timezone), do: timezone
+  defp timezone_to_string(%{timezone: :utc}), do: "Etc/UTC"
+  defp timezone_to_string(%{timezone: nil}), do: "Etc/UTC"
+  defp timezone_to_string(%{timezone: timezone}), do: timezone
+  defp timezone_to_string(_job_without_timezone_key_for_some_reason), do: "Etc/UTC"
 
   defp slugify(job_name) when is_reference(job_name) do
     Logger.error(
