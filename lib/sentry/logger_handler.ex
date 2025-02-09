@@ -79,7 +79,7 @@ defmodule Sentry.LoggerHandler do
       type: {:or, [nil, :non_neg_integer]},
       default: 100,
       doc: """
-      *since v10.6.0* - The number of queued events after which this handler switches
+      (*since v10.6.0*) The number of queued events after which this handler switches
       to *sync mode*. Generally, this handler sends messages to Sentry **asynchronously**,
       equivalent to using `result: :none` in `Sentry.send_event/2`. However, if the number
       of queued events exceeds this threshold, the handler will switch to *sync mode*,
@@ -87,21 +87,21 @@ defmodule Sentry.LoggerHandler do
       want to use sync mode, set this option to `0`. This option effectively implements
       **overload protection**.
 
-      `:sync_threshold` and `:discard_threshold` cannot be used together. To disable this option,
-      set it to `nil`.
+      If you would rather *drop events* to shed load instead, use the `:discard_threshold` option.
+      `:sync_threshold` and `:discard_threshold` cannot be used together. The default behavior
+      of the handler is to switch to sync mode, so to disable this option and discard events
+      instead set `:sync_threshold` to `nil` and set `:discard_threshold` instead.
       """
     ],
     discard_threshold: [
       type: {:or, [nil, :non_neg_integer]},
       default: nil,
       doc: """
-      The number of queued events after which this handler will start
+      (*since v10.9.0*) The number of queued events after which this handler will start
       to **discard** events. This option effectively implements **load shedding**.
 
-      *Available since v10.8.2*.
-
-      `:discard_threshold` and `:sync_threshold` cannot be used together. To disable this option,
-      set it to `nil`.
+      `:discard_threshold` and `:sync_threshold` cannot be used together. If you set this option,
+      set `:sync_threshold` to `nil`.
       """
     ]
   ]
@@ -336,6 +336,7 @@ defmodule Sentry.LoggerHandler do
       config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
         :ok
 
+      # Discard event.
       config.discard_threshold &&
           SenderPool.get_queued_events_counter() >= config.discard_threshold ->
         :ok
