@@ -10,6 +10,11 @@ defmodule Sentry.Application do
     config = Config.validate!()
     :ok = Config.persist(config)
 
+    Config.put_config(
+      :in_app_module_allow_list,
+      Config.in_app_module_allow_list() ++ resolve_in_app_module_allow_list()
+    )
+
     http_client = Keyword.fetch!(config, :client)
 
     maybe_http_client_spec =
@@ -70,5 +75,14 @@ defmodule Sentry.Application do
     if config[:quantum][:cron][:enabled] do
       Sentry.Integrations.Quantum.Cron.attach_telemetry_handler()
     end
+  end
+
+  defp resolve_in_app_module_allow_list do
+    Enum.flat_map(Config.in_app_otp_apps(), fn app ->
+      case :application.get_key(app, :modules) do
+        {:ok, modules} -> modules
+        _ -> []
+      end
+    end)
   end
 end

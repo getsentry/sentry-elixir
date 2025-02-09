@@ -388,6 +388,20 @@ defmodule Sentry.Config do
       The number of lines of source code
       before and after the line that caused the exception to report.
       """
+    ],
+    in_app_otp_apps: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:atom/0`",
+      doc: """
+      A list of OTP application names that will be used to populate additional modules for the
+      `:in_app_module_allow_list` option. List your application (or the applications in your
+      umbrella project) for them to show as "in-app" in stacktraces in Sentry. We recommend using
+      this option over `:in_app_module_allow_list`, unless you need more control over the exact
+      modules to consider as "in-app".
+
+      *Available since v10.9.0*.
+      """
     ]
   ]
 
@@ -574,6 +588,9 @@ defmodule Sentry.Config do
 
   @spec report_deps?() :: boolean()
   def report_deps?, do: fetch!(:report_deps)
+
+  @spec in_app_otp_apps() :: [atom()]
+  def in_app_otp_apps, do: fetch!(:in_app_otp_apps)
 
   @spec json_library() :: module()
   def json_library, do: fetch!(:json_library)
