@@ -19,19 +19,6 @@ defmodule Sentry.CheckIn do
 
   alias Sentry.{Config, Interfaces, UUID}
 
-  @doc """
-  Integrations can call this function on the appropriate modules to customize
-  the configuration options for the check-in.
-
-  Options returned by this function overwrite any option inferred by the specific
-  integration for the check in.
-  """
-  @doc since: "10.9.0"
-  @callback sentry_check_in_configuration(per_integration_term :: term()) :: [option_to_merge]
-            when option_to_merge:
-                   {:monitor_config, monitor_config()}
-                   | {:monitor_slug, String.t()}
-
   @typedoc """
   The possible status of the check-in.
   """
@@ -63,21 +50,17 @@ defmodule Sentry.CheckIn do
           duration: float() | nil,
           release: String.t() | nil,
           environment: String.t() | nil,
-          monitor_config: monitor_config() | nil,
+          monitor_config:
+            nil
+            | %{
+                required(:schedule) => monitor_config_schedule(),
+                optional(:checkin_margin) => number(),
+                optional(:max_runtime) => number(),
+                optional(:failure_issue_threshold) => number(),
+                optional(:recovery_threshold) => number(),
+                optional(:timezone) => String.t()
+              },
           contexts: Interfaces.context()
-        }
-
-  @typedoc """
-  Options for configuring a monitor check-in.
-  """
-  @typedoc since: "10.9.0"
-  @type monitor_config() :: %{
-          required(:schedule) => monitor_config_schedule(),
-          optional(:checkin_margin) => number(),
-          optional(:max_runtime) => number(),
-          optional(:failure_issue_threshold) => number(),
-          optional(:recovery_threshold) => number(),
-          optional(:timezone) => String.t()
         }
 
   @enforce_keys [
@@ -159,11 +142,6 @@ defmodule Sentry.CheckIn do
 
   @create_check_in_opts_schema NimbleOptions.new!(create_check_in_opts_schema)
 
-  @custom_opts_schema create_check_in_opts_schema
-                      |> Keyword.take([:monitor_config, :monitor_slug])
-                      |> put_in([:monitor_slug, :required], false)
-                      |> NimbleOptions.new!()
-
   @doc """
   Creates a new check-in struct with the given options.
 
@@ -215,29 +193,5 @@ defmodule Sentry.CheckIn do
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = check_in) do
     Map.from_struct(check_in)
-  end
-
-  @doc false
-  def __resolve_custom_options__(options, mod, per_integration_term) do
-    custom_opts =
-      if function_exported?(mod, :sentry_check_in_configuration, 1) do
-        mod.sentry_check_in_configuration(per_integration_term)
-      else
-        []
-      end
-
-    custom_opts = NimbleOptions.validate!(custom_opts, @custom_opts_schema)
-
-    deep_merge_keyword(options, custom_opts)
-  end
-
-  defp deep_merge_keyword(left, right) do
-    Keyword.merge(left, right, fn _key, left_val, right_val ->
-      if Keyword.keyword?(left_val) and Keyword.keyword?(right_val) do
-        deep_merge_keyword(left_val, right_val)
-      else
-        right_val
-      end
-    end)
   end
 end

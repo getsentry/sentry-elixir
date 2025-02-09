@@ -321,12 +321,12 @@ defmodule Sentry.Integrations.Oban.CronTest do
     defmodule WorkerWithCustomOptions do
       use Oban.Worker
 
-      @behaviour Sentry.CheckIn
+      @behaviour Sentry.Integrations.Oban.Cron
 
       @impl Oban.Worker
       def perform(_job), do: :ok
 
-      @impl Sentry.CheckIn
+      @impl Sentry.Integrations.Oban.Cron
       def sentry_check_in_configuration(job) do
         [
           monitor_slug: "this-is-a-custom-slug-#{job.id}",
