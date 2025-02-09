@@ -67,7 +67,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
                "schedule" => %{
                  "type" => "crontab",
                  "value" => "0 0 * * * *"
-               }
+               },
+               "timezone" => "Etc/UTC"
              }
 
       send(test_pid, {ref, :done})
@@ -108,7 +109,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
                "schedule" => %{
                  "type" => "crontab",
                  "value" => "0 0 * * * *"
-               }
+               },
+               "timezone" => "Europe/Rome"
              }
 
       send(test_pid, {ref, :done})
@@ -122,7 +124,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       job:
         Scheduler.new_job(
           name: :test_job,
-          schedule: Crontab.CronExpression.Parser.parse!("@daily")
+          schedule: Crontab.CronExpression.Parser.parse!("@daily"),
+          timezone: "Europe/Rome"
         ),
       telemetry_span_context: ref
     })
@@ -151,7 +154,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
                "schedule" => %{
                  "type" => "crontab",
                  "value" => "0 0 * * * *"
-               }
+               },
+               "timezone" => "Etc/UTC"
              }
 
       send(test_pid, {ref, :done})
