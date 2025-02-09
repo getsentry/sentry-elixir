@@ -27,7 +27,7 @@ defp deps do
   [
     # ...
 
-    {:sentry, "~> 10.8.1"},
+    {:sentry, "~> 10.8"},
     {:hackney, "~> 1.20"}
   ]
 end
@@ -61,7 +61,7 @@ config :sentry,
 
 ### Usage
 
-This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add the [Sentry.LoggerHandler](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html) to your production configuration:
+This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add [`Sentry.LoggerHandler`](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html) to your production configuration:
 
 ```elixir
 # config/prod.exs
@@ -71,7 +71,7 @@ config :my_app, :logger, [
       metadata: [:file, :line],
       rate_limiting: [max_events: 10, interval: _1_second = 1_000],
       # Logs all messages with level `:error` and above to Sentry.
-      # Remove `capture_log_messages` and `level` if you only want to report crashes.
+      # Remove :capture_log_messages and :level if you only want to report crashes.
       capture_log_messages: true,
       level: :error
     }
@@ -92,7 +92,7 @@ end
 ```
 
 Alternatively, you can skip the `:logger` configuration and add the handler directly
-to your application's `c:Application.start/2` callback:
+to your application's `start/2` callback:
 
 ```elixir
 # lib/my_app/application.ex
