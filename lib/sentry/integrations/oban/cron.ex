@@ -113,7 +113,13 @@ defmodule Sentry.Integrations.Oban.Cron do
           monitor_config: monitor_config_opts
         ]
 
-        resolve_custom_opts(opts, job)
+        try do
+          resolve_custom_opts(opts, job)
+        rescue
+          x ->
+            IO.inspect(x)
+            reraise x, __STACKTRACE__
+        end
     end
   end
 
