@@ -1,5 +1,6 @@
 defmodule Sentry.Integrations.Oban.Cron do
   @moduledoc false
+  alias Sentry.CheckIn
   alias Sentry.Integrations.CheckInIDMappings
 
   @events [
@@ -87,13 +88,33 @@ defmodule Sentry.Integrations.Oban.Cron do
       monitor_config_opts ->
         id = CheckInIDMappings.lookup_or_insert_new(job.id)
 
-        [
+        opts = [
           check_in_id: id,
           # This is already a binary.
           monitor_slug: monitor_slug,
           monitor_config: monitor_config_opts
         ]
+
+        resolve_custom_opts(opts, job)
     end
+  end
+
+  defp resolve_custom_opts(opts, %{worker: worker} = job)
+       when is_struct(job, Oban.Job) and is_binary(worker) do
+    job.worker |> String.split(".") |> Module.safe_concat()
+  rescue
+    ArgumentError -> opts
+  else
+    worker ->
+      if Code.loaded?(worker) do
+        CheckIn.__resolve_custom_options__(opts, worker, job)
+      else
+        opts
+      end
+  end
+
+  defp resolve_custom_opts(opts, _job) do
+    opts
   end
 
   defp schedule_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do

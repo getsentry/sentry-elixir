@@ -41,7 +41,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
       Bypass.down(bypass)
 
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
-        job: %Oban.Job{meta: %{"cron" => true, "cron_expr" => "@reboot"}}
+        job: %Oban.Job{
+          worker: "Sentry.MyWorker",
+          meta: %{"cron" => true, "cron_expr" => "@reboot"}
+        }
       })
     end
 
@@ -49,7 +52,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       Bypass.down(bypass)
 
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
-        job: %Oban.Job{meta: %{"cron" => true, "cron_expr" => 123}}
+        job: %Oban.Job{worker: "Sentry.MyWorker", meta: %{"cron" => true, "cron_expr" => 123}}
       })
     end
   end
@@ -290,6 +293,53 @@ defmodule Sentry.Integrations.Oban.CronTest do
         worker: "Sentry.ClientWorker",
         id: 123,
         args: %{"client" => client_name},
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      }
+    })
+
+    assert_receive {^ref, :done}, 1000
+  end
+
+  @tag :focus
+  test "custom options", %{bypass: bypass} do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert [{_headers, check_in_body}] = decode_envelope!(body)
+
+      assert check_in_body["monitor_slug"] == "this-is-a-custom-slug-123"
+      assert check_in_body["monitor_config"]["schedule"]["type"] == "interval"
+      assert check_in_body["monitor_config"]["timezone"] == "Europe/Rome"
+
+      send(test_pid, {ref, :done})
+
+      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
+    end)
+
+    defmodule WorkerWithCustomOptions do
+      use Oban.Worker
+
+      @behaviour Sentry.CheckIn
+
+      @impl Oban.Worker
+      def perform(_job), do: :ok
+
+      @impl Sentry.CheckIn
+      def sentry_check_in_configuration(job) do
+        [
+          monitor_slug: "this-is-a-custom-slug-#{job.id}",
+          monitor_config: [timezone: "Europe/Rome"]
+        ]
+      end
+    end
+
+    :telemetry.execute([:oban, :job, :start], %{}, %{
+      job: %Oban.Job{
+        worker: inspect(WorkerWithCustomOptions),
+        id: 123,
+        args: %{},
         meta: %{"cron" => true, "cron_expr" => "@daily"}
       }
     })
