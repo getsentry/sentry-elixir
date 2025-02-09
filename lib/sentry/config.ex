@@ -221,19 +221,6 @@ defmodule Sentry.Config do
       send an event due to an API failure or other reasons.
       """
     ],
-    in_app_module_allow_list: [
-      type: {:list, :atom},
-      default: [],
-      type_doc: "list of `t:module/0`",
-      doc: """
-      A list of modules that is used
-      to distinguish among stacktrace frames that belong to your app and ones that are
-      part of libraries or core Elixir. This is used to better display the significant part
-      of stacktraces. The logic is "greedy", so if your app's root module is `MyApp` and
-      you configure this option to `[MyApp]`, `MyApp` as well as any submodules
-      (like `MyApp.Submodule`) would be considered part of your app. Defaults to `[]`.
-      """
-    ],
     filter: [
       type: :atom,
       type_doc: "`t:module/0`",
@@ -401,6 +388,22 @@ defmodule Sentry.Config do
       modules to consider as "in-app".
 
       *Available since v10.9.0*.
+      """
+    ],
+    in_app_module_allow_list: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:module/0`",
+      doc: """
+      A list of modules that is used
+      to distinguish among stacktrace frames that belong to your app and ones that are
+      part of libraries or core Elixir. This is used to better display the significant part
+      of stacktraces. The logic is "greedy", so if your app's root module is `MyApp` and
+      you configure this option to `[MyApp]`, `MyApp` as well as any submodules
+      (like `MyApp.Submodule`) would be considered part of your app.
+
+      Usually, the `:in_app_otp_apps` option should be preferred as it's
+      simpler to work with.
       """
     ]
   ]
