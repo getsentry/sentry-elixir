@@ -4,14 +4,14 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  @spec attach() :: :ok
-  def attach do
+  @spec attach_telemetry_handler(keyword()) :: :ok
+  def attach_telemetry_handler(config) do
     _ =
       :telemetry.attach(
         __MODULE__,
         [:oban, :job, :exception],
         &__MODULE__.handle_event/4,
-        :no_config
+        config
       )
 
     :ok
@@ -21,9 +21,24 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           [atom(), ...],
           term(),
           %{required(:job) => struct(), optional(term()) => term()},
-          :no_config
+          keyword()
         ) :: :ok
-  def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
+  def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, config) do
+    if should_report?(job, config) do
+      do_report(job)
+    else
+      :ok
+    end
+  end
+
+  defp should_report?(job, config) do
+    case Keyword.get(config, :skip_retries) do
+      true -> job.attempt == job.max_attempts
+      _ -> true
+    end
+  end
+
+  defp do_report(job) do
     %{reason: reason, stacktrace: stacktrace} = job.unsaved_error
 
     stacktrace =
@@ -39,15 +54,13 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         [inspect(reason)]
       end
 
-    opts =
-      [
-        stacktrace: stacktrace,
-        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-        fingerprint: [inspect(job.worker)] ++ fingerprint_opts,
-        extra:
-          Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
-        integration_meta: %{oban: %{job: job}}
-      ]
+    opts = [
+      stacktrace: stacktrace,
+      tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+      fingerprint: [inspect(job.worker)] ++ fingerprint_opts,
+      extra: Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
+      integration_meta: %{oban: %{job: job}}
+    ]
 
     _ =
       if is_exception(reason) do
