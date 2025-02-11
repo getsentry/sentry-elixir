@@ -79,8 +79,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
                  "type" => "interval",
                  "unit" => "day",
                  "value" => 1
-               },
-               "timezone" => "Europe/Rome"
+               }
              }
 
       send(test_pid, {ref, :done})
@@ -92,7 +91,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
         id: 123,
-        meta: %{"cron" => true, "cron_expr" => "@daily", "cron_tz" => "Europe/Rome"}
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
       }
     })
 
@@ -304,7 +303,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     assert_receive {^ref, :done}, 1000
   end
 
-  test "custom options", %{bypass: bypass} do
+  test "custom options overide job metadata", %{bypass: bypass} do
     test_pid = self()
     ref = make_ref()
 

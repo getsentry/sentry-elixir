@@ -39,7 +39,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   def handle_event(
         [:oban, :job, event],
         measurements,
-        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr, "cron_tz" => _timezone}}} =
+        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} =
           metadata,
         config
       )
@@ -89,7 +89,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
-    monitor_config_opts = Sentry.Config.integrations()
+    monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
     monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
 
     monitor_slug =
@@ -172,12 +172,12 @@ defmodule Sentry.Integrations.Oban.Cron do
     end
   end
 
-  defp timezone_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do
-    if meta["cron_tz"] do
-      [timezone: meta["cron_tz"]]
-    else
-      []
-    end
+  defp maybe_put_timezone_option(opts, %{meta: %{"cron_tz" => tz}}) do
+    Keyword.put(opts, :timezone, tz)
+  end
+
+  defp maybe_put_timezone_option(opts, _job) do
+    opts
   end
 
   defp duration_in_seconds(%{duration: duration} = _measurements) do
