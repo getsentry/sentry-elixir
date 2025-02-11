@@ -39,8 +39,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   def handle_event(
         [:oban, :job, event],
         measurements,
-        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} =
-          metadata,
+        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} = metadata,
         config
       )
       when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
@@ -172,7 +171,7 @@ defmodule Sentry.Integrations.Oban.Cron do
     end
   end
 
-  defp maybe_put_timezone_option(opts, %{meta: %{"cron_tz" => tz}}) do
+  defp maybe_put_timezone_option(opts, %{meta: %{"cron_tz" => tz}} = _job) do
     Keyword.put(opts, :timezone, tz)
   end
 

@@ -77,8 +77,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
       assert check_in_body["monitor_config"] == %{
                "schedule" => %{
                  "type" => "interval",
-                 "unit" => "day",
-                 "value" => 1
+                 "value" => 1,
+                 "unit" => "day"
                }
              }
 
