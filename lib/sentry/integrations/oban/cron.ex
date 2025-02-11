@@ -89,6 +89,7 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
     monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
+    monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
 
     monitor_slug =
       case config[:monitor_slug_generator] do
@@ -168,6 +169,14 @@ defmodule Sentry.Integrations.Oban.Cron do
       cron_expr when is_binary(cron_expr) -> [schedule: [type: :crontab, value: cron_expr]]
       _other -> []
     end
+  end
+
+  defp maybe_put_timezone_option(opts, %{meta: %{"cron_tz" => tz}} = _job) do
+    Keyword.put(opts, :timezone, tz)
+  end
+
+  defp maybe_put_timezone_option(opts, _job) do
+    opts
   end
 
   defp duration_in_seconds(%{duration: duration} = _measurements) do
