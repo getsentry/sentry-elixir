@@ -39,7 +39,8 @@ defmodule Sentry.Integrations.Oban.Cron do
   def handle_event(
         [:oban, :job, event],
         measurements,
-        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr}}} = metadata,
+        %{job: %mod{meta: %{"cron" => true, "cron_expr" => cron_expr, "cron_tz" => _timezone}}} =
+          metadata,
         config
       )
       when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
@@ -88,7 +89,8 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
-    monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
+    monitor_config_opts =
+      Keyword.merge(Sentry.Config.integrations()[:monitor_config_defaults], timezone_opts(job))
 
     monitor_slug =
       case config[:monitor_slug_generator] do
@@ -167,6 +169,14 @@ defmodule Sentry.Integrations.Oban.Cron do
       "@reboot" -> []
       cron_expr when is_binary(cron_expr) -> [schedule: [type: :crontab, value: cron_expr]]
       _other -> []
+    end
+  end
+
+  defp timezone_opts(%{meta: meta} = job) when is_struct(job, Oban.Job) do
+    if meta["cron_tz"] do
+      [timezone: meta["cron_tz"]]
+    else
+      []
     end
   end
 

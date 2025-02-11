@@ -77,9 +77,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
       assert check_in_body["monitor_config"] == %{
                "schedule" => %{
                  "type" => "interval",
-                 "value" => 1,
-                 "unit" => "day"
-               }
+                 "unit" => "day",
+                 "value" => 1
+               },
+               "timezone" => "Europe/Rome"
              }
 
       send(test_pid, {ref, :done})
@@ -91,7 +92,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
         id: 123,
-        meta: %{"cron" => true, "cron_expr" => "@daily"}
+        meta: %{"cron" => true, "cron_expr" => "@daily", "cron_tz" => "Europe/Rome"}
       }
     })
 
@@ -135,7 +136,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
                    "type" => "interval",
                    "value" => 1,
                    "unit" => unquote(expected_unit)
-                 }
+                 },
+                 "timezone" => "Europe/Rome"
                }
 
         send(test_pid, {ref, :done})
@@ -150,7 +152,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
         job: %Oban.Job{
           worker: "Sentry.MyWorker",
           id: 942,
-          meta: %{"cron" => true, "cron_expr" => unquote(frequency)}
+          meta: %{"cron" => true, "cron_expr" => unquote(frequency), "cron_tz" => "Europe/Rome"}
         }
       })
 
@@ -179,7 +181,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
                "schedule" => %{
                  "type" => "crontab",
                  "value" => "* 1 1 1 1"
-               }
+               },
+               "timezone" => "Europe/Rome"
              }
 
       send(test_pid, {ref, :done})
@@ -194,7 +197,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
         id: 942,
-        meta: %{"cron" => true, "cron_expr" => "* 1 1 1 1"}
+        meta: %{"cron" => true, "cron_expr" => "* 1 1 1 1", "cron_tz" => "Europe/Rome"}
       }
     })
 
@@ -226,7 +229,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
                "schedule" => %{
                  "type" => "crontab",
                  "value" => "* 1 1 1 1"
-               }
+               },
+               "timezone" => "Europe/Rome"
              }
 
       send(test_pid, {ref, :done})
@@ -239,7 +243,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
         id: 942,
-        meta: %{"cron" => true, "cron_expr" => "* 1 1 1 1"}
+        meta: %{"cron" => true, "cron_expr" => "* 1 1 1 1", "cron_tz" => "Europe/Rome"}
       }
     })
 
@@ -265,7 +269,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
         id: 123,
-        meta: %{"cron" => true, "cron_expr" => "@daily"}
+        meta: %{"cron" => true, "cron_expr" => "@daily", "cron_tz" => "Europe/Rome"}
       }
     })
 
@@ -293,7 +297,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
         worker: "Sentry.ClientWorker",
         id: 123,
         args: %{"client" => client_name},
-        meta: %{"cron" => true, "cron_expr" => "@daily"}
+        meta: %{"cron" => true, "cron_expr" => "@daily", "cron_tz" => "Europe/Rome"}
       }
     })
 
@@ -339,7 +343,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
         worker: inspect(WorkerWithCustomOptions),
         id: 123,
         args: %{},
-        meta: %{"cron" => true, "cron_expr" => "@daily"}
+        meta: %{"cron" => true, "cron_expr" => "@daily", "cron_tz" => "America/Chicago"}
       }
     })
 
