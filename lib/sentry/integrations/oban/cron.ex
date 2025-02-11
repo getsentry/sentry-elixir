@@ -89,8 +89,8 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
-    monitor_config_opts =
-      Keyword.merge(Sentry.Config.integrations()[:monitor_config_defaults], timezone_opts(job))
+    monitor_config_opts = Sentry.Config.integrations()
+    monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
 
     monitor_slug =
       case config[:monitor_slug_generator] do
