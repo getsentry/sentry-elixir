@@ -69,7 +69,11 @@ defmodule Sentry.TransportTest do
 
       Bypass.down(bypass)
 
-      assert {:error, {:request_failure, %Mint.TransportError{reason: :econnrefused}}} =
+      assert {:error,
+              %Sentry.ClientError{
+                reason: {:request_failure, %Mint.TransportError{reason: :econnrefused}},
+                http_response: nil
+              }} =
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
