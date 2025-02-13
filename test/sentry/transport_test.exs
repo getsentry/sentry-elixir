@@ -246,12 +246,12 @@ defmodule Sentry.TransportTest do
 
       assert :too_many_retries =
                error(fn ->
-                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+                 Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
                end)
 
       log =
         capture_log(fn ->
-          Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+          Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
         end)
 
       assert log =~ "[warning]"
