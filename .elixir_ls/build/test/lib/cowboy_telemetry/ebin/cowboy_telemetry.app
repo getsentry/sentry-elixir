@@ -1,0 +1,10 @@
+{application,cowboy_telemetry,
+             [{description,"Telemetry instrumentation for Cowboy"},
+              {vsn,"0.4.0"},
+              {registered,[]},
+              {applications,[kernel,stdlib,telemetry]},
+              {env,[]},
+              {modules,[cowboy_telemetry_h]},
+              {licenses,["Apache 2.0"]},
+              {links,[{"Github",
+                       "https://github.com/beam-telemetry/cowboy_telemetry"}]}]}.
