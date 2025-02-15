@@ -30,7 +30,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job},
-                 :no_config
+                 []
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
@@ -69,7 +69,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job},
-                 :no_config
+                 []
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
@@ -92,6 +92,46 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
       assert event.tags.oban_queue == "default"
       assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
+    end
+
+    test "with skip_retries: true, only reports final attempt failures" do
+      job =
+        %{"id" => "123", "entity" => "user", "type" => "delete"}
+        |> MyWorker.new()
+        |> Ecto.Changeset.apply_action!(:validate)
+        |> Map.replace!(:unsaved_error, %{
+          reason: %RuntimeError{message: "oops"},
+          kind: :error,
+          stacktrace: []
+        })
+
+      Sentry.Test.start_collecting()
+
+      job_attempt_1 = Map.merge(job, %{attempt: 1, max_attempts: 3})
+
+      assert :ok =
+               ErrorReporter.handle_event(
+                 [:oban, :job, :exception],
+                 %{},
+                 %{job: job_attempt_1},
+                 skip_retries: true
+               )
+
+      assert [] = Sentry.Test.pop_sentry_reports()
+
+      job_attempt_3 = Map.merge(job, %{attempt: 3, max_attempts: 3})
+
+      assert :ok =
+               ErrorReporter.handle_event(
+                 [:oban, :job, :exception],
+                 %{},
+                 %{job: job_attempt_3},
+                 skip_retries: true
+               )
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert event.original_exception == %RuntimeError{message: "oops"}
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
     end
   end
