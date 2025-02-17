@@ -181,6 +181,7 @@ defmodule Sentry.LoggerHandlerTest do
       refute_received {^ref, _event}, 100
     end
 
+    @tag handler_config: %{capture_log_messages: true}
     test "support structured logs map", %{sender_ref: ref} do
       Logger.error(%{foo: "bar"})
 
@@ -194,6 +195,7 @@ defmodule Sentry.LoggerHandlerTest do
       defstruct [:bar]
     end
 
+    @tag handler_config: %{capture_log_messages: true}
     test "support structured logs struct", %{sender_ref: ref} do
       Logger.error(%Foo{})
 
