@@ -123,6 +123,42 @@ defmodule Sentry.LoggerHandlerTest do
   describe "with Bandit" do
   end
 
+  describe "with capture_log_messages: false" do
+    @tag handler_config: %{capture_log_messages: false}
+    test "doesn't send error messages by default", %{sender_ref: ref} do
+      Logger.error("Testing error")
+
+      refute_received {^ref, _event}, 100
+    end
+
+    @tag handler_config: %{capture_log_messages: false}
+    test "doesn't send structured logs keyword", %{sender_ref: ref} do
+      Logger.error(foo: "bar")
+
+      refute_received {^ref, _event}, 100
+    end
+
+    @tag handler_config: %{capture_log_messages: false}
+    test "doesn't send structured logs map", %{sender_ref: ref} do
+      Logger.error(%{foo: "bar"})
+
+      refute_received {^ref, _event}, 100
+    end
+
+    @tag handler_config: %{capture_log_messages: false}
+    test "still captures crashes", %{sender_ref: ref} do
+      pid = start_supervised!(TestGenServer, restart: :temporary)
+      run_and_catch_exit(pid, fn -> Keyword.fetch!([], :foo) end)
+
+      assert_receive {^ref, event}
+      assert %KeyError{} = event.original_exception
+      assert [exception] = event.exception
+      assert exception.type == "KeyError"
+      assert exception.value == "key :foo not found in: []"
+      assert Enum.find(exception.stacktrace.frames, &(&1.function =~ "Keyword.fetch!/2"))
+    end
+  end
+
   describe "with capture_log_messages: true" do
     @tag handler_config: %{capture_log_messages: true}
     test "sends error messages by default", %{sender_ref: ref} do
