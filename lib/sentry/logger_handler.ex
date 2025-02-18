@@ -341,11 +341,6 @@ defmodule Sentry.LoggerHandler do
           SenderPool.get_queued_events_counter() >= config.discard_threshold ->
         :ok
 
-      # If it's a crash we want to always capture it. Otherwise we only capture if
-      # `capture_log_messages` is set to true.
-      !log_meta[:crash_reason] && !config.capture_log_messages ->
-        :ok
-
       true ->
         # Logger handlers run in the process that logs, so we already read all the
         # necessary Sentry context from the process dictionary (when creating the event).
@@ -413,7 +408,11 @@ defmodule Sentry.LoggerHandler do
         capture(:exception, exception, sentry_opts, config)
 
       _ ->
-        capture(:message, inspect(report), sentry_opts, config)
+        if config.capture_log_messages do
+          capture(:message, inspect(report), sentry_opts, config)
+        else
+          :ok
+        end
     end
   end
 
