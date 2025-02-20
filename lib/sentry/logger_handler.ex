@@ -408,7 +408,11 @@ defmodule Sentry.LoggerHandler do
         capture(:exception, exception, sentry_opts, config)
 
       _ ->
-        capture(:message, inspect(report), sentry_opts, config)
+        if config.capture_log_messages do
+          capture(:message, inspect(report), sentry_opts, config)
+        else
+          :ok
+        end
     end
   end
 
