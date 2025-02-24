@@ -2,25 +2,21 @@
 
 ## 10.9.0
 
-### Various fixes & improvements
+This release adds a bunch of new features and fixes a few papercut bugs.
 
-- Ensure log messages are not captured with capture_log_messages false (#865) by @joladev
-- Add timezone to Oban Integration (#862) by @savhappy
-- Retain newest breadcrumbs (instead of oldest) (#858) by @dajinchu
-- Add timezone to Quantum check-ins (#860) by @whatyouhide
-- Support per-module custom options for check ins (#833) by @savhappy
-- Reword some option documentation (#859) by @whatyouhide
-- Add :discard_threshold option to logger handler (#849) by @ananthakumaran
-- Add :in_app_otp_apps option (#854) by @solnic
-- Update README with Sentry.LoggerHandler configuration (#856) by @PJUllrich
-- Clean up transactions docs and code (#852) by @whatyouhide
-- Add support for sending transactions (#842) by @solnic
-- Fix log formatting under 1.14 (#851) by @solnic
-- Use more fields when hashing events for deduplication (#850) by @ruslandoga
-- Allow the usage of JSON for Elixir 1.18+ (#845) by @whatyouhide
-- Test on the latest Erlang/Elixir in CI (#841) by @whatyouhide
-- Add :tags_from_metadata option to Sentry.LoggerHandler (#840) by @icehaunter
-- fix duplicate inline (#839) by @ruslandoga
+### New features
+
+- Add `:tags_from_metadata` option to `Sentry.LoggerHandler`. Use this to better structure reports that come from logs (#840 by @icehaunter).
+- Add `:discard_threshold` option to `Sentry.LoggerHandler` to implement load shedding when the logger gets overloaded.
+- If you want to use Elixir 1.18's new `JSON` module, now you can (#845).
+- Add `:in_app_otp_apps` configuration option. This should replace `:in_app_module_allow_list` for most use cases, making configuration simpler (#854 by @solnic).
+- Add support for per-module custom options for check ins. This means you can now configure single Oban (or Quantum) jobs with per-worker options such as timezones and more (#833 by @savhappy).
+
+### Bug fixes
+
+- We now deduplicate identical events significantly less, reducing the risk of not reporting events that are not duplicates.
+- When dropping breadcrumbs (because of the limit being reached), we now retain *newest* breadcrumbs instead of older ones (#858 by @dajinchu).
+- Ensure log messages are not captured with `:capture_log_messages` is `false` (#865 by @joladev).
 
 ## 10.8.1
 
