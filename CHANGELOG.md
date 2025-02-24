@@ -1,5 +1,27 @@
 # Changelog
 
+## 10.9.0
+
+### Various fixes & improvements
+
+- Ensure log messages are not captured with capture_log_messages false (#865) by @joladev
+- Add timezone to Oban Integration (#862) by @savhappy
+- Retain newest breadcrumbs (instead of oldest) (#858) by @dajinchu
+- Add timezone to Quantum check-ins (#860) by @whatyouhide
+- Support per-module custom options for check ins (#833) by @savhappy
+- Reword some option documentation (#859) by @whatyouhide
+- Add :discard_threshold option to logger handler (#849) by @ananthakumaran
+- Add :in_app_otp_apps option (#854) by @solnic
+- Update README with Sentry.LoggerHandler configuration (#856) by @PJUllrich
+- Clean up transactions docs and code (#852) by @whatyouhide
+- Add support for sending transactions (#842) by @solnic
+- Fix log formatting under 1.14 (#851) by @solnic
+- Use more fields when hashing events for deduplication (#850) by @ruslandoga
+- Allow the usage of JSON for Elixir 1.18+ (#845) by @whatyouhide
+- Test on the latest Erlang/Elixir in CI (#841) by @whatyouhide
+- Add :tags_from_metadata option to Sentry.LoggerHandler (#840) by @icehaunter
+- fix duplicate inline (#839) by @ruslandoga
+
 ## 10.8.1
 
 ### Various fixes & improvements
