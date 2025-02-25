@@ -198,7 +198,8 @@ defmodule Sentry.Config do
       """
     ],
     extra: [
-      type: {:map, :any, :any},
+      type: {:map, :atom, :any},
+      type_doc: "`t:Sentry.Context.extra/0`",
       default: %{},
       doc: """
       A map of extra data to be sent with every event.
