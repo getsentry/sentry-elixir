@@ -97,12 +97,12 @@ defmodule Sentry.EventTest do
     test "includes the config defaults" do
       put_test_config(
         tags: %{"test-tag" => "test-value"},
-        extra: %{"some-data" => "with-a-value"}
+        extra: %{"some-data": "with-a-value"}
       )
 
       assert %Event{} = event = Event.create_event([])
       assert event.tags == %{"test-tag" => "test-value"}
-      assert event.extra == %{"some-data" => "with-a-value"}
+      assert event.extra == %{"some-data": "with-a-value"}
     end
 
     test "fills in passed-in options" do
@@ -163,9 +163,9 @@ defmodule Sentry.EventTest do
           "overriden-by-options" => "config"
         },
         extra: %{
-          "not-overriden" => "config",
-          "overriden-by-context" => "config",
-          "overriden-by-options" => "config"
+          "not-overriden": "config",
+          "overriden-by-context": "config",
+          "overriden-by-options": "config"
         }
       )
 
@@ -175,15 +175,15 @@ defmodule Sentry.EventTest do
       })
 
       Sentry.Context.set_extra_context(%{
-        "overriden-by-context" => "context",
-        "overriden-by-options" => "context"
+        "overriden-by-context": "context",
+        "overriden-by-options": "context"
       })
 
       assert %Event{} =
                event =
                Event.create_event(
                  tags: %{"overriden-by-options" => "options"},
-                 extra: %{"overriden-by-options" => "options"}
+                 extra: %{"overriden-by-options": "options"}
                )
 
       assert event.tags == %{
@@ -193,9 +193,9 @@ defmodule Sentry.EventTest do
              }
 
       assert event.extra == %{
-               "not-overriden" => "config",
-               "overriden-by-context" => "context",
-               "overriden-by-options" => "options"
+               "not-overriden": "config",
+               "overriden-by-context": "context",
+               "overriden-by-options": "options"
              }
     end
 
