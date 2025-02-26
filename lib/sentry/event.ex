@@ -200,7 +200,11 @@ defmodule Sentry.Event do
       attachments: attachments_context
     } = Sentry.Context.get_all()
 
-    extra = Map.merge(extra_context, Keyword.fetch!(opts, :extra))
+    extra =
+      Config.extra()
+      |> Map.merge(extra_context)
+      |> Map.merge(Keyword.fetch!(opts, :extra))
+
     user = Map.merge(user_context, Keyword.fetch!(opts, :user))
     request = Map.merge(request_context, Keyword.fetch!(opts, :request))
 

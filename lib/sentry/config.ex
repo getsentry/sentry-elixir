@@ -197,6 +197,14 @@ defmodule Sentry.Config do
       A map of tags to be sent with every event.
       """
     ],
+    extra: [
+      type: {:map, :atom, :any},
+      type_doc: "`t:Sentry.Context.extra/0`",
+      default: %{},
+      doc: """
+      A map of extra data to be sent with every event.
+      """
+    ],
     max_breadcrumbs: [
       type: :non_neg_integer,
       default: 100,
@@ -545,6 +553,9 @@ defmodule Sentry.Config do
 
   @spec tags() :: map()
   def tags, do: fetch!(:tags)
+
+  @spec extra() :: map()
+  def extra, do: fetch!(:extra)
 
   @spec release() :: String.t() | nil
   def release, do: get(:release)
