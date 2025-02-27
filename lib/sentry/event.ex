@@ -284,7 +284,11 @@ defmodule Sentry.Event do
     {iodata, _params} =
       Enum.reduce(parts, {"", params}, fn
         "%s", {acc, [param | rest_params]} ->
-          {[acc, to_string(param)], rest_params}
+          cond do
+            is_binary(param) and String.printable?(param) -> {[acc, param], rest_params}
+            is_binary(param) -> {[acc, inspect(param)], rest_params}
+            true -> {[acc, to_string(param)], rest_params}
+          end
 
         "%s", {acc, []} ->
           {[acc, "%s"], []}
