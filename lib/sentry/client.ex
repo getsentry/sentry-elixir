@@ -283,14 +283,12 @@ defmodule Sentry.Client do
     |> Event.remove_non_payload_keys()
     |> update_if_present(:breadcrumbs, fn bcs -> Enum.map(bcs, &Map.from_struct/1) end)
     |> update_if_present(:sdk, &Map.from_struct/1)
-    |> update_if_present(:message, fn message ->
-      message = update_in(message.formatted, &String.slice(&1, 0, @max_message_length))
-      Map.from_struct(message)
-    end)
+    |> update_if_present(:message, &sanitize_message(&1, json_library))
     |> update_if_present(:request, &(&1 |> Map.from_struct() |> remove_nils()))
     |> update_if_present(:extra, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:user, &sanitize_non_jsonable_values(&1, json_library))
     |> update_if_present(:tags, &sanitize_non_jsonable_values(&1, json_library))
+    |> update_if_present(:fingerprint, &sanitize_non_jsonable_values_in_list(&1, json_library))
     |> update_if_present(:exception, fn list -> Enum.map(list, &render_exception/1) end)
     |> update_if_present(:threads, fn list -> Enum.map(list, &render_thread/1) end)
   end
@@ -332,6 +330,23 @@ defmodule Sentry.Client do
     :maps.filter(fn _key, value -> not is_nil(value) end, map)
   end
 
+  defp sanitize_message(%Interfaces.Message{} = message, json_library) do
+    message = update_in(message.formatted, &String.slice(&1, 0, @max_message_length))
+
+    message
+    |> Map.from_struct()
+    |> sanitize_non_jsonable_values(json_library)
+  end
+
+  defp sanitize_non_jsonable_values_in_list(list, json_library) when is_list(list) do
+    Enum.map(list, fn elem ->
+      case sanitize_non_jsonable_value(elem, json_library) do
+        :unchanged -> elem
+        {:changed, value} -> value
+      end
+    end)
+  end
+
   defp sanitize_non_jsonable_values(map, json_library) do
     # We update the existing map instead of building a new one from scratch
     # due to performance reasons. See the docs for :maps.map/2.
@@ -344,8 +359,11 @@ defmodule Sentry.Client do
   end
 
   # For performance, skip all the keys that we know for sure are JSON encodable.
+  # Binaries are a little nasty: something like <<1, 2, 3>> can be encoded in JSON,
+  # but other non-printable binaries can't. That's why we skip them here and we
+  # let them fall through to when we try to JSON-encode and inspect if that fails.
   defp sanitize_non_jsonable_value(value, _json_library)
-       when is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value) do
+       when is_number(value) or is_boolean(value) or is_nil(value) do
     :unchanged
   end
 

@@ -30,6 +30,26 @@ defmodule Sentry.ClientTest do
       assert Client.render_event(event).message.formatted == String.duplicate("a", max_length)
     end
 
+    test "sanitizes non-JSON-encodable messages without interpolation" do
+      event = Event.create_event(message: <<133, 248, 45>>)
+
+      assert Client.render_event(event).message == %{
+               message: nil,
+               params: nil,
+               formatted: "<<133, 248, 45>>"
+             }
+    end
+
+    test "sanitizes non-JSON-encodable messages with interpolation" do
+      event = Event.create_event(message: "Invalid: %s", interpolation_parameters: [<<133>>])
+
+      assert Client.render_event(event).message == %{
+               message: "Invalid: %s",
+               params: ["<<133>>"],
+               formatted: "Invalid: <<133>>"
+             }
+    end
+
     test "safely inspects terms that cannot be converted to JSON" do
       event =
         Event.create_event(
@@ -44,7 +64,8 @@ defmodule Sentry.ClientTest do
             map: %{bool: false}
           },
           user: %{id: "valid-ID", email: {"user", "@example.com"}},
-          tags: %{valid: "yes", tokens: MapSet.new([1])}
+          tags: %{valid: "yes", tokens: MapSet.new([1])},
+          fingerprint: [<<133>>]
         )
 
       rendered = Client.render_event(event)
@@ -63,6 +84,8 @@ defmodule Sentry.ClientTest do
 
       assert rendered.tags.valid == "yes"
       assert rendered.tags.tokens == inspect(MapSet.new([1]))
+
+      assert rendered.fingerprint == [~s(<<133>>)]
     end
 
     test "works if the JSON library crashes" do
