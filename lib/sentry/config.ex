@@ -324,35 +324,38 @@ defmodule Sentry.Config do
       `Sentry.FinchClient`.
       """
     ],
-    hackney_opts: [
-      type: :keyword_list,
-      deprecated: "Use Finch instead as default client.",
-      default: [pool: :sentry_pool],
-      doc: """
-      Options to be passed to `hackney`. Only
-      applied if `:client` is set to `Sentry.HackneyClient`.
-      """
-    ],
-    hackney_pool_timeout: [
-      type: :timeout,
-      deprecated: "Use Finch instead as default client.",
-      default: 5000,
-      doc: """
-      The maximum time to wait for a
-      connection to become available. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
-      """
-    ],
-    hackney_pool_max_connections: [
-      type: :pos_integer,
-      deprecated: "Use Finch instead as default client.",
-      default: 50,
-      doc: """
-      The maximum number of
-      connections to keep in the pool. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
-      """
-    ]
+    hackney_opts:
+      [
+        type: :keyword_list,
+        default: [pool: :sentry_pool],
+        doc: """
+        Options to be passed to `hackney`. Only
+        applied if `:client` is set to `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+    hackney_pool_timeout:
+      [
+        type: :timeout,
+        default: 5000,
+        doc: """
+        The maximum time to wait for a
+        connection to become available. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+    hackney_pool_max_connections:
+      [
+        type: :pos_integer,
+        default: 50,
+        doc: """
+        The maximum number of
+        connections to keep in the pool. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."])
   ]
 
   source_code_context_opts_schema = [
