@@ -26,39 +26,61 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
     %{reason: reason, stacktrace: stacktrace} = job.unsaved_error
 
+    if report?(reason) do
+      report(job, reason, stacktrace)
+    else
+      :ok
+    end
+  end
+
+  defp report(job, reason, stacktrace) do
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
         _ -> stacktrace
       end
 
-    fingerprint_opts =
-      if is_exception(reason) do
-        [inspect(reason.__struct__), Exception.message(reason)]
-      else
-        [inspect(reason)]
-      end
-
     opts =
       [
         stacktrace: stacktrace,
         tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
-        fingerprint: [job.worker] ++ fingerprint_opts,
+        fingerprint: [job.worker, "{{ default }}"],
         extra:
           Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
         integration_meta: %{oban: %{job: job}}
       ]
 
     _ =
-      if is_exception(reason) do
-        Sentry.capture_exception(reason, opts)
-      else
-        Sentry.capture_message(
-          "Oban job #{job.worker} errored out: %s",
-          opts ++ [interpolation_parameters: [inspect(reason)]]
-        )
+      case maybe_unwrap_exception(reason) do
+        exception when is_exception(exception) ->
+          Sentry.capture_exception(exception, opts)
+
+        _other ->
+          Sentry.capture_message(
+            "Oban job #{job.worker} errored out: %s",
+            opts ++ [interpolation_parameters: [inspect(reason)]]
+          )
       end
 
     :ok
+  end
+
+  # Oban.PerformError also wraps {:discard, _} and {:cancel, _} tuples, but those are
+  # not *errors* and should not be reported to Sentry automatically.
+  defp report?(%{reason: {type, _reason}} = error) when is_exception(error, Oban.PerformError) do
+    type == :error
+  end
+
+  defp report?(_error) do
+    true
+  end
+
+  defp maybe_unwrap_exception(%{reason: {:error, error}} = perform_error)
+       when is_exception(perform_error, Oban.PerformError) and is_exception(error) do
+    error
+  end
+
+  defp maybe_unwrap_exception(reason) do
+    reason
   end
 end
