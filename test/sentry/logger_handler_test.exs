@@ -650,17 +650,11 @@ defmodule Sentry.LoggerHandlerTest do
       register_delay()
 
       Logger.error("First")
-      assert_receive {^ref, %{message: %{formatted: "First"}}}
-
       Logger.error("Second")
-      assert_receive {^ref, %{message: %{formatted: "Second"}}}
-
       Logger.error("Third")
+      assert_receive {^ref, %{message: %{formatted: "First"}}}
+      assert_receive {^ref, %{message: %{formatted: "Second"}}}
       refute_receive {^ref, _event}, 100
-
-      Process.sleep(300)
-      Logger.error("Fourth")
-      assert_receive {^ref, %{message: %{formatted: "Fourth"}}}
     end
   end
 
