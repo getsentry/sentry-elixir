@@ -36,7 +36,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   end
 
   test "sends captured root spans as transactions" do
-    put_test_config(environment_name: "test")
+    put_test_config(environment_name: "test", tracing: true)
 
     Sentry.Test.start_collecting_sentry_reports()
 
@@ -55,7 +55,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   end
 
   test "sends captured spans as transactions with child spans" do
-    put_test_config(environment_name: "test")
+    put_test_config(environment_name: "test", tracing: true)
 
     Sentry.Test.start_collecting_sentry_reports()
 
@@ -92,7 +92,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   end
 
   test "removes span records from storage after sending a transaction" do
-    put_test_config(environment_name: "test")
+    put_test_config(environment_name: "test", tracing: true)
 
     Sentry.Test.start_collecting_sentry_reports()
 

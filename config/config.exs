@@ -10,7 +10,8 @@ if config_env() == :test do
     send_result: :sync,
     send_max_attempts: 1,
     dedup_events: false,
-    test_mode: true
+    test_mode: true,
+    tracing: true
 
   config :logger, backends: []
 
