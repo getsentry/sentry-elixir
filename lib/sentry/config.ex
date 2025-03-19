@@ -125,6 +125,17 @@ defmodule Sentry.Config do
       be used as the value for this option.
       """
     ],
+    tracing: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable tracing functionality based on OpenTelemetry. When enabled,
+      the Sentry SDK will use OpenTelemetry to collect and report distributed tracing
+      data to Sentry.
+
+      This feature requires `opentelemetry` package and its integrations with Bandit, Phoenix or Ecto.
+      """
+    ],
     included_environments: [
       type: {:or, [{:in, [:all]}, {:list, {:or, [:atom, :string]}}]},
       deprecated: "Use :dsn to control whether to send events to Sentry.",
@@ -626,6 +637,9 @@ defmodule Sentry.Config do
 
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)
+
+  @spec tracing?() :: boolean()
+  def tracing?, do: fetch!(:tracing)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
