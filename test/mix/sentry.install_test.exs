@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     + |  use Sentry.PlugCapture
     """)
     |> assert_has_patch("lib/test_web/endpoint.ex", """
-    + |  use Sentry.PlugContext
+    + |  plug Sentry.PlugContext
     """)
     |> assert_has_patch("lib/test/application.ex", """
     + |    :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{

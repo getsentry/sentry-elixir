@@ -160,7 +160,7 @@ if Code.ensure_loaded?(Igniter) do
                [2, 1],
                &Igniter.Code.Function.argument_equals?(&1, 0, Plug.Parsers)
              ) do
-        Igniter.Code.Common.add_code(zipper, "use Sentry.PlugContext", placement: :after)
+        Igniter.Code.Common.add_code(zipper, "plug Sentry.PlugContext", placement: :after)
       else
         _ ->
           {:ok, zipper}
