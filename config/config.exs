@@ -13,11 +13,11 @@ if config_env() == :test do
     test_mode: true
 
   config :logger, backends: []
+
+  config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
+
+  config :opentelemetry,
+    sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
 end
 
 config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
-
-config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
-
-config :opentelemetry,
-  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
