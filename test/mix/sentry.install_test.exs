@@ -20,9 +20,28 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     + |  plug Sentry.PlugContext
     """)
     |> assert_has_patch("lib/test/application.ex", """
-    + |    :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
+    + |    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
     + |      config: %{metadata: [:file, :line]}
     + |    })
+    """)
+  end
+
+  test "installation is idempotent" do
+    phx_test_project()
+    |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
+    |> apply_igniter!()
+    |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
+    |> assert_unchanged()
+  end
+
+  test "installation will reset your dsn for you, however" do
+    phx_test_project()
+    |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
+    |> apply_igniter!()
+    |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn2"])
+    |> assert_has_patch("config/prod.exs", """
+    - |  dsn: "test_dsn",
+    + |  dsn: "test_dsn2",
     """)
   end
 end

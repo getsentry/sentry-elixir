@@ -13,6 +13,10 @@ defmodule Mix.Tasks.Sentry.Install.Docs do
     """
     #{short_doc()}
 
+    This installer is built with, and requires, igniter to be used. Igniter is a tool 
+    for biulding package installers. For information on how to add igniter to your 
+    project, see the documentation https://hexdocs.pm/igniter/readme.html#installation.
+
     ## Example
 
     ```bash
@@ -51,16 +55,6 @@ if Code.ensure_loaded?(Igniter) do
     def igniter(igniter) do
       app_name = Igniter.Project.Application.app_name(igniter)
 
-      mix_env_code =
-        quote do
-          Mix.env()
-        end
-
-      cwd_code =
-        quote do
-          [File.cwd!()]
-        end
-
       # Do your work here and return an updated igniter
       igniter
       |> Igniter.Project.Config.configure(
@@ -85,7 +79,7 @@ if Code.ensure_loaded?(Igniter) do
         "prod.exs",
         app_name,
         [:root_source_code_paths],
-        {:code, quote(do: [File.cwd!()]}
+        {:code, quote(do: [File.cwd!()])}
       )
       |> configure_phoenix()
       |> add_logger_handler()
@@ -106,7 +100,14 @@ if Code.ensure_loaded?(Igniter) do
 
       Igniter.Project.Module.find_and_update_module(igniter, app_module, fn zipper ->
         with {:ok, zipper} <- Igniter.Code.Function.move_to_def(zipper, :start, 2),
-             {:ok, zipper} <- Igniter.Code.Common.move_to_do_block(zipper) do
+             {:ok, zipper} <- Igniter.Code.Common.move_to_do_block(zipper),
+             :error <-
+               Igniter.Code.Function.move_to_function_call_in_current_scope(
+                 zipper,
+                 {:logger, :add_handler},
+                 [2, 3, 4],
+                 &Igniter.Code.Function.argument_equals?(&1, 1, Sentry.LoggerHandler)
+               ) do
           code =
             """
             :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
@@ -149,26 +150,34 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_plug_capture(zipper) do
-      with {:ok, zipper} <- Igniter.Code.Module.move_to_use(zipper, Phoenix.Endpoint) do
+      with :error <- Igniter.Code.Module.move_to_use(zipper, Sentry.PlugCapture),
+           {:ok, zipper} <- Igniter.Code.Module.move_to_use(zipper, Phoenix.Endpoint) do
         Igniter.Code.Common.add_code(zipper, "use Sentry.PlugCapture", placement: :before)
       else
         _ ->
-          {:ok, zipper}
+          zipper
       end
     end
 
     defp add_plug_context(zipper) do
-      with {:ok, zipper} <-
+      with :error <-
              Igniter.Code.Function.move_to_function_call_in_current_scope(
                zipper,
                :plug,
-               [2, 1],
+               [1, 2],
+               &Igniter.Code.Function.argument_equals?(&1, 0, Sentry.PlugContext)
+             ),
+           {:ok, zipper} <-
+             Igniter.Code.Function.move_to_function_call_in_current_scope(
+               zipper,
+               :plug,
+               [1, 2],
                &Igniter.Code.Function.argument_equals?(&1, 0, Plug.Parsers)
              ) do
         Igniter.Code.Common.add_code(zipper, "plug Sentry.PlugContext", placement: :after)
       else
         _ ->
-          {:ok, zipper}
+          zipper
       end
     end
   end
