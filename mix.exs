@@ -73,7 +73,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry.Application, []},
-      extra_applications: [:logger],
+      extra_applications: extra_applications(Mix.env()),
       registered: [
         Sentry.Dedupe,
         Sentry.Transport.SenderRegistry,
@@ -82,13 +82,16 @@ defmodule Sentry.Mixfile do
     ]
   end
 
+  defp extra_applications(:test), do: [:logger, :opentelemetry]
+  defp extra_applications(_other), do: [:logger]
+
   defp elixirc_paths(:test), do: ["test/support"] ++ elixirc_paths(:dev)
   defp elixirc_paths(_other), do: ["lib"]
 
   defp test_paths(nil), do: ["test"]
   defp test_paths(integration), do: ["test_integrations/#{integration}/test"]
 
-  defp deps do
+  defp deps() do
     [
       {:nimble_options, "~> 1.0"},
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
@@ -111,7 +114,11 @@ defmodule Sentry.Mixfile do
       # Required by Phoenix.LiveView's testing
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
-      {:quantum, "~> 3.0", only: [:test]}
+      {:quantum, "~> 3.0", only: [:test]},
+      {:opentelemetry, "~> 1.5", optional: true},
+      {:opentelemetry_api, "~> 1.4", optional: true},
+      {:opentelemetry_exporter, "~> 1.0", optional: true},
+      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true}
     ]
   end
 

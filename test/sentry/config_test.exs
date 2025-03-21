@@ -157,6 +157,15 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":tracing" do
+      assert Config.validate!(tracing: true)[:tracing] == true
+      assert Config.validate!([])[:tracing] == false
+
+      assert_raise ArgumentError, ~r/invalid value for :tracing option/, fn ->
+        Config.validate!(tracing: "not_a_boolean")
+      end
+    end
+
     test ":json_library" do
       assert Config.validate!(json_library: Jason)[:json_library] == Jason
 

@@ -55,7 +55,12 @@ defmodule PhoenixApp.MixProject do
       {:bypass, "~> 2.1", only: :test},
       {:hackney, "~> 1.18", only: :test},
 
-      {:sentry, path: "../.."}
+      {:sentry, path: "../.."},
+
+      {:opentelemetry, "~> 1.5", optional: true},
+      {:opentelemetry_api, "~> 1.4", optional: true},
+      {:opentelemetry_exporter, "~> 1.0", optional: true},
+      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true}
     ]
   end
 
