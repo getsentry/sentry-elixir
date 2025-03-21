@@ -23,17 +23,20 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           %{required(:job) => struct(), optional(term()) => term()},
           :no_config
         ) :: :ok
-  def handle_event([:oban, :job, :exception], _measurements, %{job: job} = _metadata, :no_config) do
-    %{reason: reason, stacktrace: stacktrace} = job.unsaved_error
-
+  def handle_event(
+        [:oban, :job, :exception],
+        _measurements,
+        %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
+        :no_config
+      ) do
     if report?(reason) do
-      report(job, reason, stacktrace)
+      report(job, kind, reason, stacktrace)
     else
       :ok
     end
   end
 
-  defp report(job, reason, stacktrace) do
+  defp report(job, kind, reason, stacktrace) do
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
@@ -51,15 +54,19 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       ]
 
     _ =
-      case maybe_unwrap_exception(reason) do
+      case maybe_unwrap_exception(kind, reason, stacktrace) do
         exception when is_exception(exception) ->
           Sentry.capture_exception(exception, opts)
 
         _other ->
-          Sentry.capture_message(
-            "Oban job #{job.worker} errored out: %s",
-            opts ++ [interpolation_parameters: [inspect(reason)]]
-          )
+          message =
+            case kind do
+              :exit -> "Oban job #{job.worker} exited: %s"
+              :throw -> "Oban job #{job.worker} exited with an uncaught throw: %s"
+              _other -> "Oban job #{job.worker} errored out: %s"
+            end
+
+          Sentry.capture_message(message, opts ++ [interpolation_parameters: [inspect(reason)]])
       end
 
     :ok
@@ -75,12 +82,16 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
     true
   end
 
-  defp maybe_unwrap_exception(%{reason: {:error, error}} = perform_error)
+  defp maybe_unwrap_exception(
+         :error = _kind,
+         %{reason: {:error, error}} = perform_error,
+         _stacktrace
+       )
        when is_exception(perform_error, Oban.PerformError) and is_exception(error) do
     error
   end
 
-  defp maybe_unwrap_exception(reason) do
-    reason
+  defp maybe_unwrap_exception(kind, reason, stacktrace) do
+    Exception.normalize(kind, reason, stacktrace)
   end
 end

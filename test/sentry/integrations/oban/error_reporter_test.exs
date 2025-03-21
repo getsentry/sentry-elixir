@@ -69,7 +69,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.fingerprint == [@worker_as_string, "{{ default }}"]
     end
 
-    test "reports non-exception errors to Sentry" do
+    test "reports normalized non-exception errors to Sentry" do
       Sentry.Test.start_collecting()
 
       emit_telemetry_for_failed_job(:error, :undef, [])
@@ -77,15 +77,62 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert [event] = Sentry.Test.pop_sentry_reports()
       assert %{job: %Oban.Job{}} = event.integration_meta.oban
 
-      assert event.message == %Sentry.Interfaces.Message{
-               formatted: "Oban job #{@worker_as_string} errored out: :undef",
-               message: "Oban job #{@worker_as_string} errored out: %s",
-               params: [":undef"]
-             }
+      assert event.message == nil
 
-      assert [%Sentry.Interfaces.Thread{stacktrace: %{frames: [stacktrace]}}] = event.threads
+      assert [%{stacktrace: %{frames: [stacktrace]}} = exception] = event.exception
+
+      assert exception.type == "UndefinedFunctionError"
+      assert exception.value == "function #{@worker_as_string}.process/1 is undefined or private"
+      assert exception.mechanism.handled == true
       assert stacktrace.module == MyWorker
       assert stacktrace.function == "#{@worker_as_string}.process/1"
+
+      assert event.tags.oban_queue == "default"
+      assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == @worker_as_string
+
+      assert event.fingerprint == [@worker_as_string, "{{ default }}"]
+    end
+
+    test "reports exits to Sentry" do
+      Sentry.Test.start_collecting()
+
+      emit_telemetry_for_failed_job(:exit, :oops, [])
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert %{job: %Oban.Job{}} = event.integration_meta.oban
+
+      assert event.message == %Sentry.Interfaces.Message{
+               message: "Oban job #{@worker_as_string} exited: %s",
+               params: [":oops"],
+               formatted: "Oban job #{@worker_as_string} exited: :oops"
+             }
+
+      assert event.exception == []
+
+      assert event.tags.oban_queue == "default"
+      assert event.tags.oban_state == "available"
+      assert event.tags.oban_worker == @worker_as_string
+
+      assert event.fingerprint == [@worker_as_string, "{{ default }}"]
+    end
+
+    test "reports throws to Sentry" do
+      Sentry.Test.start_collecting()
+
+      emit_telemetry_for_failed_job(:throw, :this_was_not_caught, [])
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert %{job: %Oban.Job{}} = event.integration_meta.oban
+
+      assert event.message == %Sentry.Interfaces.Message{
+               message: "Oban job #{@worker_as_string} exited with an uncaught throw: %s",
+               params: [":this_was_not_caught"],
+               formatted:
+                 "Oban job #{@worker_as_string} exited with an uncaught throw: :this_was_not_caught"
+             }
+
+      assert event.exception == []
 
       assert event.tags.oban_queue == "default"
       assert event.tags.oban_state == "available"
@@ -116,13 +163,12 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       %{"id" => "123", "entity" => "user", "type" => "delete"}
       |> MyWorker.new()
       |> Ecto.Changeset.apply_action!(:validate)
-      |> Map.replace!(:unsaved_error, %{kind: kind, reason: reason, stacktrace: stacktrace})
 
     assert :ok =
              ErrorReporter.handle_event(
                [:oban, :job, :exception],
                %{},
-               %{job: job},
+               %{job: job, kind: kind, reason: reason, stacktrace: stacktrace},
                :no_config
              )
 
