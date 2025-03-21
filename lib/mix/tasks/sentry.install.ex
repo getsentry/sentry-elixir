@@ -21,7 +21,8 @@ defmodule Mix.Tasks.Sentry.Install.Docs do
 
     ## Options
 
-    * `--dsn` - Your sentry `dsn`
+      * `--dsn` - Your Sentry DSN.
+
     """
   end
 end
