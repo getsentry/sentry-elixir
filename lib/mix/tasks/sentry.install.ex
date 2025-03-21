@@ -91,8 +91,12 @@ if Code.ensure_loaded?(Igniter) do
       |> Igniter.add_notice("""
       Sentry: 
 
-        Add a call to mix sentry.package_source_code in your release script to 
-        make sure the stacktraces you receive are complete.
+        Add a call to
+        
+          mix sentry.package_source_code
+          
+        in your release script to make sure the stacktraces you receive
+        are correctly categorized.
       """)
     end
 
