@@ -104,7 +104,7 @@ if Code.ensure_loaded?(Igniter) do
              {:ok, zipper} <- Igniter.Code.Common.move_to_do_block(zipper) do
           code =
             """
-            :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
+            :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
               config: %{metadata: [:file, :line]}
             })
             """
