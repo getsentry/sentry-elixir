@@ -72,7 +72,7 @@ if Code.ensure_loaded?(Igniter) do
         "prod.exs",
         app_name,
         [:environment_name],
-        {:code, mix_env_code}
+        {:code, quote(do: Mix.env())}
       )
       |> Igniter.Project.Config.configure(
         "prod.exs",
