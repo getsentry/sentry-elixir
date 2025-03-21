@@ -46,7 +46,6 @@ if Code.ensure_loaded?(Igniter) do
         adds_deps: [{:jason, "~> 1.2"}, {:hackney, "~> 1.8"}],
         example: __MODULE__.Docs.example(),
         schema: [dsn: :string],
-        # Default values for the options in the `schema`
         defaults: [dsn: "<your_dsn>"]
       }
     end
@@ -55,7 +54,6 @@ if Code.ensure_loaded?(Igniter) do
     def igniter(igniter) do
       app_name = Igniter.Project.Application.app_name(igniter)
 
-      # Do your work here and return an updated igniter
       igniter
       |> Igniter.Project.Config.configure(
         "prod.exs",
