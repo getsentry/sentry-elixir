@@ -84,7 +84,7 @@ if Code.ensure_loaded?(Igniter) do
         "prod.exs",
         app_name,
         [:root_source_code_paths],
-        {:code, cwd_code}
+        {:code, quote(do: [File.cwd!()]}
       )
       |> configure_phoenix()
       |> add_logger_handler()
