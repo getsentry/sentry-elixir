@@ -68,8 +68,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     stored_at = System.system_time(:second)
 
     if span_data.parent_span_id == nil do
-      case :ets.lookup(@table, {:root_span, span_data.span_id}) do
-        [] ->
+      case get_root_span(span_data.span_id) do
+        nil ->
           insert_root_span(span_data, stored_at)
 
         _ ->
