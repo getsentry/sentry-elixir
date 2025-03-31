@@ -1,5 +1,5 @@
 defmodule Sentry.Opentelemetry.SamplerTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   alias Sentry.OpenTelemetry.Sampler
 
