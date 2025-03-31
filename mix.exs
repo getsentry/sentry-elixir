@@ -91,7 +91,7 @@ defmodule Sentry.Mixfile do
   defp test_paths(nil), do: ["test"]
   defp test_paths(integration), do: ["test_integrations/#{integration}/test"]
 
-  defp deps() do
+  defp deps do
     [
       {:nimble_options, "~> 1.0"},
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
