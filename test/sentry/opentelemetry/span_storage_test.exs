@@ -4,16 +4,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
   alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
 
   setup do
-    if :ets.whereis(:span_storage) != :undefined do
-      :ets.delete_all_objects(:span_storage)
-    else
-      start_supervised!(SpanStorage)
-    end
-
     on_exit(fn ->
-      if :ets.whereis(:span_storage) != :undefined do
-        :ets.delete_all_objects(:span_storage)
-      end
+      :ets.delete_all_objects(:span_storage)
     end)
 
     :ok
