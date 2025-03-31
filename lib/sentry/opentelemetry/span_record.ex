@@ -10,7 +10,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
 
     defstruct @fields ++ [:origin]
 
-    def new(otel_span) do
+    def new(span() = otel_span) do
       otel_attrs = span(otel_span)
 
       {:attributes, _, _, _, attributes} = otel_attrs[:attributes]
