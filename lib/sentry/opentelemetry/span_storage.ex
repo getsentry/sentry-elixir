@@ -64,28 +64,30 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     |> Enum.map(fn {_parent_id, {span, _stored_at}} -> span end)
   end
 
-  def update_span(span_data) do
+  def update_span(%{parent_span_id: nil} = span_data) do
     stored_at = System.system_time(:second)
 
-    if span_data.parent_span_id == nil do
-      case get_root_span(span_data.span_id) do
-        nil ->
-          insert_root_span(span_data, stored_at)
+    case get_root_span(span_data.span_id) do
+      nil ->
+        insert_root_span(span_data, stored_at)
 
-        _ ->
-          :ets.delete(@table, {:root_span, span_data.span_id})
-          insert_root_span(span_data, stored_at)
-      end
-    else
-      existing_spans = :ets.lookup(@table, span_data.parent_span_id)
-
-      Enum.each(existing_spans, fn {parent_id, {span, stored_at}} ->
-        if span.span_id == span_data.span_id do
-          :ets.delete_object(@table, {parent_id, {span, stored_at}})
-          :ets.insert(@table, {span_data.parent_span_id, {span_data, stored_at}})
-        end
-      end)
+      _ ->
+        :ets.delete(@table, {:root_span, span_data.span_id})
+        insert_root_span(span_data, stored_at)
     end
+
+    :ok
+  end
+
+  def update_span(%{parent_span_id: parent_span_id} = span_data) do
+    existing_spans = :ets.lookup(@table, parent_span_id)
+
+    Enum.each(existing_spans, fn {parent_id, {span, stored_at}} ->
+      if span.span_id == span_data.span_id do
+        :ets.delete_object(@table, {parent_id, {span, stored_at}})
+        :ets.insert(@table, {parent_span_id, {span_data, stored_at}})
+      end
+    end)
 
     :ok
   end
