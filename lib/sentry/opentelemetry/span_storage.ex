@@ -2,6 +2,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   @moduledoc false
   use GenServer
 
+  defstruct [:cleanup_interval]
+
   @table :span_storage
   @cleanup_interval :timer.minutes(5)
   @span_ttl :timer.minutes(30)
@@ -22,7 +24,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     cleanup_interval = Keyword.get(opts, :cleanup_interval, @cleanup_interval)
     schedule_cleanup(cleanup_interval)
 
-    {:ok, %{cleanup_interval: cleanup_interval}}
+    {:ok, %__MODULE__{cleanup_interval: cleanup_interval}}
   end
 
   def store_span(span_data) when span_data.parent_span_id == nil do
