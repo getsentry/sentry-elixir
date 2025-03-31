@@ -124,16 +124,9 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     end)
 
     :ets.match_object(@table, {:_, {:_, :_}})
-    |> Enum.each(fn {parent_id, {_span, stored_at}} = object ->
-      cond do
-        not is_nil(get_root_span(parent_id)) and stored_at < cutoff_time ->
-          :ets.delete_object(@table, object)
-
-        is_nil(get_root_span(parent_id)) and stored_at < cutoff_time ->
-          :ets.delete_object(@table, object)
-
-        true ->
-          :ok
+    |> Enum.each(fn {_parent_id, {_span, stored_at}} = object ->
+      if stored_at < cutoff_time do
+        :ets.delete_object(@table, object)
       end
     end)
   end
