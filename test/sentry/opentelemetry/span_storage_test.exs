@@ -57,7 +57,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       SpanStorage.store_span(root_span)
       assert root_span == SpanStorage.get_root_span("abc123")
 
-      SpanStorage.remove_span("abc123")
+      SpanStorage.remove_root_span("abc123")
       assert nil == SpanStorage.get_root_span("abc123")
     end
 
@@ -90,7 +90,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert root_span == SpanStorage.get_root_span("root123")
       assert length(SpanStorage.get_child_spans("root123")) == 2
 
-      SpanStorage.remove_span("root123")
+      SpanStorage.remove_root_span("root123")
 
       assert nil == SpanStorage.get_root_span("root123")
       assert [] == SpanStorage.get_child_spans("root123")
@@ -201,7 +201,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     assert child_span1 in children
     assert child_span2 in children
 
-    SpanStorage.remove_span("root123")
+    SpanStorage.remove_root_span("root123")
     SpanStorage.remove_child_spans("root123")
 
     assert nil == SpanStorage.get_root_span("root123")
