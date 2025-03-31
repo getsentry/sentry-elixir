@@ -7,10 +7,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   setup do
     on_exit(fn ->
-      # Only try to clean up tables if they exist
-      if :ets.whereis(:span_storage) != :undefined do
-        :ets.delete_all_objects(:span_storage)
-      end
+      :ets.delete_all_objects(:span_storage)
     end)
 
     :ok
