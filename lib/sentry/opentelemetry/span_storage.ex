@@ -7,7 +7,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   @span_ttl :timer.minutes(30)
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []) do
+  def start_link(opts) when is_list(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, name: name)
   end
