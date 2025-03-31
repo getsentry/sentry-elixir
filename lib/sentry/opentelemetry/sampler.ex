@@ -2,6 +2,8 @@ if Code.ensure_loaded?(:otel_sampler) do
   defmodule Sentry.OpenTelemetry.Sampler do
     @moduledoc false
 
+    @behaviour :otel_sampler
+
     def setup(config) do
       config
     end
