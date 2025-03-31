@@ -90,7 +90,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     :ok
   end
 
-  def remove_span(span_id) do
+  def remove_root_span(span_id) do
     case get_root_span(span_id) do
       nil ->
         :ok
@@ -117,7 +117,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     :ets.match_object(@table, {{:root_span, :_}, :_, :_})
     |> Enum.each(fn {{:root_span, span_id}, _span, stored_at} ->
       if stored_at < cutoff_time do
-        remove_span(span_id)
+        remove_root_span(span_id)
       end
     end)
 

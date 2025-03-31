@@ -47,7 +47,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
               {:error, :invalid_span}
           end
 
-        :ok = SpanStorage.remove_span(span_record.span_id)
+        :ok = SpanStorage.remove_root_span(span_record.span_id)
 
         result
       else
