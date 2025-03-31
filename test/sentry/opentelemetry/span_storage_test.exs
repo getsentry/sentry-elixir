@@ -1,5 +1,5 @@
 defmodule Sentry.OpenTelemetry.SpanStorageTest do
-  use ExUnit.Case, async: false
+  use Sentry.Case, async: false
 
   alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
 
