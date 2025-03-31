@@ -227,7 +227,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       }
 
       old_time = System.system_time(:second) - :timer.minutes(31)
-      :ets.insert(:span_storage, {{:root_span, "stale_root"}, {root_span, old_time}})
+
+      :ets.insert(:span_storage, {{:root_span, "stale_root"}, root_span, old_time})
       :ets.insert(:span_storage, {"stale_root", {child_span, old_time}})
 
       fresh_root_span = %SpanRecord{
