@@ -27,6 +27,13 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     {:ok, %__MODULE__{cleanup_interval: cleanup_interval}}
   end
 
+  @impl true
+  def handle_info(:cleanup_stale_spans, state) do
+    cleanup_stale_spans()
+    schedule_cleanup(state.cleanup_interval)
+    {:noreply, state}
+  end
+
   def store_span(span_data) when span_data.parent_span_id == nil do
     stored_at = System.system_time(:second)
 
@@ -93,13 +100,6 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   def remove_child_spans(parent_span_id) do
     :ets.delete(@table, parent_span_id)
     :ok
-  end
-
-  @impl true
-  def handle_info(:cleanup_stale_spans, state) do
-    cleanup_stale_spans()
-    schedule_cleanup(state.cleanup_interval)
-    {:noreply, state}
   end
 
   defp schedule_cleanup(interval) do
