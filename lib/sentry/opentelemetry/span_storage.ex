@@ -38,7 +38,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     stored_at = System.system_time(:second)
 
     case :ets.lookup(@table, {:root_span, span_data.span_id}) do
-      [] -> :ets.insert(@table, {{:root_span, span_data.span_id}, {span_data, stored_at}})
+      [] -> :ets.insert(@table, {{:root_span, span_data.span_id}, span_data, stored_at})
       _ -> :ok
     end
   end
@@ -50,7 +50,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
 
   def get_root_span(span_id) do
     case :ets.lookup(@table, {:root_span, span_id}) do
-      [{{:root_span, ^span_id}, {span, _stored_at}}] -> span
+      [{{:root_span, ^span_id}, span, _stored_at}] -> span
       [] -> nil
     end
   end
@@ -66,11 +66,11 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     if span_data.parent_span_id == nil do
       case :ets.lookup(@table, {:root_span, span_data.span_id}) do
         [] ->
-          :ets.insert(@table, {{:root_span, span_data.span_id}, {span_data, stored_at}})
+          :ets.insert(@table, {{:root_span, span_data.span_id}, span_data, stored_at})
 
         _ ->
           :ets.delete(@table, {:root_span, span_data.span_id})
-          :ets.insert(@table, {{:root_span, span_data.span_id}, {span_data, stored_at}})
+          :ets.insert(@table, {{:root_span, span_data.span_id}, span_data, stored_at})
       end
     else
       existing_spans = :ets.lookup(@table, span_data.parent_span_id)
@@ -110,8 +110,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     now = System.system_time(:second)
     cutoff_time = now - @span_ttl
 
-    :ets.match_object(@table, {{:root_span, :_}, {:_, :_}})
-    |> Enum.each(fn {{:root_span, span_id}, {_span, stored_at}} ->
+    :ets.match_object(@table, {{:root_span, :_}, :_, :_})
+    |> Enum.each(fn {{:root_span, span_id}, _span, stored_at} ->
       if stored_at < cutoff_time do
         remove_span(span_id)
       end
