@@ -133,7 +133,7 @@ defmodule Sentry.Config do
       the Sentry SDK will use OpenTelemetry to collect and report distributed tracing
       data to Sentry.
 
-      This feature requires `opentelemetry` package and its integrations with Bandit, Phoenix or Ecto.
+      This feature requires `opentelemetry` package and you can optionally use integrations with Bandit, Phoenix or Ecto.
       """
     ],
     included_environments: [
