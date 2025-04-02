@@ -18,9 +18,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     table_name = Keyword.get(opts, :table_name, default_table_name())
     cleanup_interval = Keyword.get(opts, :cleanup_interval, @cleanup_interval)
 
-    if :ets.whereis(table_name) == :undefined do
-      :ets.new(table_name, [:named_table, :public, :bag])
-    end
+    _ = :ets.new(table_name, [:named_table, :public, :bag])
 
     schedule_cleanup(cleanup_interval)
 
