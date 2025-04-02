@@ -1,17 +1,9 @@
 defmodule Sentry.Opentelemetry.SpanProcessorTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.SpanStorage
-
-  setup do
-    on_exit(fn ->
-      :ets.delete_all_objects(:span_storage)
-    end)
-
-    :ok
-  end
 
   defmodule TestEndpoint do
     require OpenTelemetry.Tracer, as: Tracer
@@ -32,6 +24,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
   end
 
+  @tag span_storage: true
   test "sends captured root spans as transactions" do
     put_test_config(environment_name: "test", tracing: true)
 
@@ -51,6 +44,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert length(transaction.spans) == 0
   end
 
+  @tag span_storage: true
   test "sends captured spans as transactions with child spans" do
     put_test_config(environment_name: "test", tracing: true)
 
@@ -88,7 +82,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert_valid_trace_id(child_span_two.trace_id)
   end
 
-  test "removes span records from storage after sending a transaction" do
+  @tag span_storage: true
+  test "removes span records from storage after sending a transaction", %{table_name: table_name} do
     put_test_config(environment_name: "test", tracing: true)
 
     Sentry.Test.start_collecting_sentry_reports()
@@ -97,8 +92,13 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
-    assert nil == SpanStorage.get_root_span(transaction.contexts.trace.span_id)
-    assert [] == SpanStorage.get_child_spans(transaction.contexts.trace.span_id)
+    assert nil ==
+             SpanStorage.get_root_span(transaction.contexts.trace.span_id, table_name: table_name)
+
+    assert [] ==
+             SpanStorage.get_child_spans(transaction.contexts.trace.span_id,
+               table_name: table_name
+             )
   end
 
   defp assert_valid_iso8601(timestamp) do
