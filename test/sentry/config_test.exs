@@ -157,12 +157,12 @@ defmodule Sentry.ConfigTest do
       end
     end
 
-    test ":tracing" do
-      assert Config.validate!(tracing: true)[:tracing] == true
-      assert Config.validate!([])[:tracing] == false
+    test ":traces_sample_rate" do
+      assert Config.validate!(traces_sample_rate: 1.0)[:traces_sample_rate] == 1.0
+      assert Config.validate!([])[:traces_sample_rate] == 0.0
 
-      assert_raise ArgumentError, ~r/invalid value for :tracing option/, fn ->
-        Config.validate!(tracing: "not_a_boolean")
+      assert_raise ArgumentError, ~r/invalid value for :traces_sample_rate option/, fn ->
+        Config.validate!(traces_sample_rate: 2.0)
       end
     end
 
