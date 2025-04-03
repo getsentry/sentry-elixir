@@ -11,7 +11,7 @@ if config_env() == :test do
     send_max_attempts: 1,
     dedup_events: false,
     test_mode: true,
-    tracing: true
+    traces_sample_rate: 1.0
 
   config :logger, backends: []
 

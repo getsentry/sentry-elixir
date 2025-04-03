@@ -125,13 +125,14 @@ defmodule Sentry.Config do
       be used as the value for this option.
       """
     ],
-    tracing: [
-      type: :boolean,
-      default: false,
+    traces_sample_rate: [
+      type: {:custom, __MODULE__, :__validate_traces_sample_rate__, []},
+      default: 0.0,
       doc: """
-      Whether to enable tracing functionality based on OpenTelemetry. When enabled,
-      the Sentry SDK will use OpenTelemetry to collect and report distributed tracing
-      data to Sentry.
+      The sample rate for transaction events. A value between 0.0 and 1.0 (inclusive).
+      A value of 0.0 means no transactions will be sampled, while 1.0 means all transactions
+      will be sampled. This value is also used to determine if tracing is enabled - if it's
+      greater than 0, tracing is enabled.
 
       This feature requires `opentelemetry` package and you can optionally use integrations with Bandit, Phoenix or Ecto.
       """
@@ -601,6 +602,9 @@ defmodule Sentry.Config do
   @spec sample_rate() :: float()
   def sample_rate, do: fetch!(:sample_rate)
 
+  @spec traces_sample_rate() :: float()
+  def traces_sample_rate, do: fetch!(:traces_sample_rate)
+
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
 
@@ -639,7 +643,7 @@ defmodule Sentry.Config do
   def integrations, do: fetch!(:integrations)
 
   @spec tracing?() :: boolean()
-  def tracing?, do: fetch!(:tracing)
+  def tracing?, do: fetch!(:traces_sample_rate) > 0.0
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
@@ -737,6 +741,15 @@ defmodule Sentry.Config do
     else
       {:error,
        "expected :sample_rate to be a float between 0.0 and 1.0 (included), got: #{inspect(float)}"}
+    end
+  end
+
+  def __validate_traces_sample_rate__(float) do
+    if is_float(float) and float >= 0.0 and float <= 1.0 do
+      {:ok, float}
+    else
+      {:error,
+       "expected :traces_sample_rate to be a float between 0.0 and 1.0 (included), got: #{inspect(float)}"}
     end
   end
 
