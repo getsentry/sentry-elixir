@@ -18,7 +18,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     table_name = Keyword.get(opts, :table_name, default_table_name())
     cleanup_interval = Keyword.get(opts, :cleanup_interval, @cleanup_interval)
 
-    _ = :ets.new(table_name, [:named_table, :public, :bag])
+    _ = :ets.new(table_name, [:named_table, :public, :ordered_set])
 
     schedule_cleanup(cleanup_interval)
 
@@ -39,16 +39,16 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     table_name = Keyword.get(opts, :table_name, default_table_name())
     stored_at = System.system_time(:second)
 
-    case :ets.lookup(table_name, {:root_span, span_data.span_id}) do
-      [] -> insert_root_span(span_data, stored_at, table_name)
-      _ -> :ok
-    end
+    :ets.insert(table_name, {{:root_span, span_data.span_id}, span_data, stored_at})
   end
 
   def store_span(span_data, opts) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
+
     stored_at = System.system_time(:second)
-    _ = :ets.insert(table_name, {span_data.parent_span_id, {span_data, stored_at}})
+    key = {:child_span, span_data.parent_span_id, span_data.span_id}
+
+    :ets.insert(table_name, {key, span_data, stored_at})
   end
 
   def get_root_span(span_id, opts \\ []) do
@@ -67,58 +67,52 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   def get_child_spans(parent_span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
 
-    :ets.lookup(table_name, parent_span_id)
-    |> Enum.map(fn {_parent_id, {span, _stored_at}} -> span end)
+    :ets.match_object(table_name, {{:child_span, parent_span_id, :_}, :_, :_})
+    |> Enum.map(fn {_key, span_data, _stored_at} -> span_data end)
+    |> Enum.sort_by(& &1.start_time)
   end
 
   def update_span(span_data, opts \\ [])
 
   def update_span(%{parent_span_id: nil} = span_data, opts) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
+
     stored_at = System.system_time(:second)
+    key = {:root_span, span_data.span_id}
 
-    case get_root_span(span_data.span_id, table_name: table_name) do
-      nil ->
-        insert_root_span(span_data, stored_at, table_name)
-
-      _ ->
-        :ets.delete(table_name, {:root_span, span_data.span_id})
-        insert_root_span(span_data, stored_at, table_name)
-    end
+    :ets.update_element(table_name, key, [{2, span_data}, {3, stored_at}])
 
     :ok
   end
 
   def update_span(%{parent_span_id: parent_span_id} = span_data, opts) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
-    existing_spans = :ets.lookup(table_name, parent_span_id)
 
-    Enum.each(existing_spans, fn {parent_id, {span, stored_at}} ->
-      if span.span_id == span_data.span_id do
-        :ets.delete_object(table_name, {parent_id, {span, stored_at}})
-        :ets.insert(table_name, {parent_span_id, {span_data, stored_at}})
-      end
-    end)
+    stored_at = System.system_time(:second)
+    key = {:child_span, parent_span_id, span_data.span_id}
+
+    :ets.update_element(table_name, key, [{2, span_data}, {3, stored_at}])
 
     :ok
   end
 
   def remove_root_span(span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
+    key = {:root_span, span_id}
 
-    case get_root_span(span_id, opts) do
-      nil ->
-        :ok
+    :ets.select_delete(table_name, [{{key, :_, :_}, [], [true]}])
+    remove_child_spans(span_id, table_name: table_name)
 
-      _root_span ->
-        :ets.delete(table_name, {:root_span, span_id})
-        remove_child_spans(span_id, table_name: table_name)
-    end
+    :ok
   end
 
   def remove_child_spans(parent_span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
-    :ets.delete(table_name, parent_span_id)
+
+    :ets.select_delete(table_name, [
+      {{{:child_span, parent_span_id, :_}, :_, :_}, [], [true]}
+    ])
+
     :ok
   end
 
@@ -130,23 +124,21 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     now = System.system_time(:second)
     cutoff_time = now - @span_ttl
 
-    # Check root spans
-    root_spans = :ets.match_object(table_name, {{:root_span, :_}, :_, :_})
+    root_match_spec = [
+      {{{:root_span, :"$1"}, :_, :"$2"}, [{:<, :"$2", cutoff_time}], [:"$1"]}
+    ]
 
-    Enum.each(root_spans, fn {{:root_span, span_id}, _span, stored_at} ->
-      if stored_at < cutoff_time do
-        remove_root_span(span_id, table_name: table_name)
-      end
+    expired_root_spans = :ets.select(table_name, root_match_spec)
+
+    Enum.each(expired_root_spans, fn span_id ->
+      remove_root_span(span_id, table_name: table_name)
     end)
 
-    # Check child spans
-    child_spans = :ets.match_object(table_name, {:_, {:_, :_}})
+    child_match_spec = [
+      {{{:child_span, :_, :_}, :_, :"$1"}, [{:<, :"$1", cutoff_time}], [true]}
+    ]
 
-    Enum.each(child_spans, fn {_parent_id, {_span, stored_at}} = object ->
-      if stored_at < cutoff_time do
-        :ets.delete_object(table_name, object)
-      end
-    end)
+    :ets.select_delete(table_name, child_match_spec)
   end
 
   defp default_table_name do
