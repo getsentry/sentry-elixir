@@ -2,12 +2,13 @@ if Code.ensure_loaded?(OpenTelemetry) do
   defmodule Sentry.OpenTelemetry.SpanProcessor do
     @moduledoc false
 
+    @behaviour :otel_span_processor
+
     require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
     require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
     require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
     require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
-    @behaviour :otel_span_processor
 
     require Logger
 
