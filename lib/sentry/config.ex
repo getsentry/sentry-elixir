@@ -129,12 +129,12 @@ defmodule Sentry.Config do
       type: {:custom, __MODULE__, :__validate_traces_sample_rate__, []},
       default: 0.0,
       doc: """
-      The sample rate for transaction events. A value between 0.0 and 1.0 (inclusive).
-      A value of 0.0 means no transactions will be sampled, while 1.0 means all transactions
+      The sample rate for transaction events. A value between `0.0` and `1.0` (inclusive).
+      A value of `0.0` means no transactions will be sampled, while `1.0` means all transactions
       will be sampled. This value is also used to determine if tracing is enabled - if it's
-      greater than 0, tracing is enabled.
+      greater than `0`, tracing is enabled.
 
-      This feature requires `opentelemetry` package and you can optionally use integrations with Bandit, Phoenix or Ecto.
+      This feature requires `opentelemetry` package.
       """
     ],
     included_environments: [
