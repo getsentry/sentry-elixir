@@ -93,5 +93,31 @@ defmodule Sentry.CheckInTest do
         )
       end
     end
+
+    test "works with a monitor config including owner" do
+      assert %CheckIn{
+               check_in_id: check_in_id,
+               monitor_slug: "my-slug",
+               status: :ok,
+               environment: "test",
+               monitor_config: %{
+                 schedule: %{
+                   type: :crontab,
+                   value: "0 * * * *"
+                 },
+                 owner: "team:my-cool-team"
+               }
+             } =
+               CheckIn.new(
+                 status: :ok,
+                 monitor_slug: "my-slug",
+                 monitor_config: [
+                   schedule: [type: :crontab, value: "0 * * * *"],
+                   owner: "team:my-cool-team"
+                 ]
+               )
+
+      assert is_binary(check_in_id) and byte_size(check_in_id) > 0
+    end
   end
 end
