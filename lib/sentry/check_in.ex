@@ -41,7 +41,24 @@ defmodule Sentry.CheckIn do
             }
 
   @typedoc """
+  The type for the monitor_config that can be part of the checking
+
+  - `:owner` is available since v10.10.0.
+  """
+  @type monitor_config() :: %{
+          required(:schedule) => monitor_config_schedule(),
+          optional(:checkin_margin) => number(),
+          optional(:max_runtime) => number(),
+          optional(:failure_issue_threshold) => number(),
+          optional(:recovery_threshold) => number(),
+          optional(:timezone) => String.t(),
+          optional(:owner) => String.t()
+        }
+
+  @typedoc """
   The type for the check-in struct.
+
+  - `monitor_config.owner` is available since v10.10.0.
   """
   @type t() :: %__MODULE__{
           check_in_id: String.t(),
@@ -50,17 +67,7 @@ defmodule Sentry.CheckIn do
           duration: float() | nil,
           release: String.t() | nil,
           environment: String.t() | nil,
-          monitor_config:
-            nil
-            | %{
-                required(:schedule) => monitor_config_schedule(),
-                optional(:checkin_margin) => number(),
-                optional(:max_runtime) => number(),
-                optional(:failure_issue_threshold) => number(),
-                optional(:recovery_threshold) => number(),
-                optional(:timezone) => String.t(),
-                optional(:owner) => String.t()
-              },
+          monitor_config: nil | monitor_config(),
           contexts: Interfaces.context()
         }
 
