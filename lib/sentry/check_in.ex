@@ -42,9 +42,8 @@ defmodule Sentry.CheckIn do
 
   @typedoc """
   The type for the monitor_config that can be part of the checking
-
-  - `:owner` is available since v10.10.0.
   """
+  @typedoc since: "10.10.0"
   @type monitor_config() :: %{
           required(:schedule) => monitor_config_schedule(),
           optional(:checkin_margin) => number(),
@@ -58,7 +57,7 @@ defmodule Sentry.CheckIn do
   @typedoc """
   The type for the check-in struct.
 
-  - `monitor_config.owner` is available since v10.10.0.
+  `:owner` within `:monitor_config` is available since v10.10.0.
   """
   @type t() :: %__MODULE__{
           check_in_id: String.t(),
