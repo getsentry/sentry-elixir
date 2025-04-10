@@ -42,7 +42,7 @@ defmodule Sentry.LoggerBackend do
   to `[]`. If set to `:all`, all metadata will be included. `:all` is available
   since v9.0.0 of this library.
 
-  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels
+  * `:level` - The minimum [Logger level](https://hexdocs.pm/logger/Logger.html#module-levels)
     to send events for. Defaults to `:error`.
 
   * `:capture_log_messages` - When `true`, this module will send all Logger
