@@ -4,6 +4,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
 
   defstruct [:cleanup_interval, :table_name]
 
+  alias Sentry.OpenTelemetry.SpanRecord
+
   @cleanup_interval :timer.minutes(5)
   @span_ttl :timer.minutes(30)
 
@@ -33,6 +35,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     {:noreply, state}
   end
 
+  @spec store_span(SpanRecord.t(), keyword()) :: :ok
   def store_span(span_data, opts \\ [])
 
   def store_span(span_data, opts) when span_data.parent_span_id == nil do
@@ -51,6 +54,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     :ets.insert(table_name, {key, span_data, stored_at})
   end
 
+  @spec get_root_span(String.t(), keyword()) :: SpanRecord.t() | nil
   def get_root_span(span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
 
@@ -60,10 +64,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     end
   end
 
-  def insert_root_span(span_data, stored_at, table_name) do
-    :ets.insert(table_name, {{:root_span, span_data.span_id}, span_data, stored_at})
-  end
-
+  @spec get_child_spans(String.t(), keyword()) :: [SpanRecord.t()]
   def get_child_spans(parent_span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
 
@@ -72,6 +73,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     |> Enum.sort_by(& &1.start_time)
   end
 
+  @spec update_span(SpanRecord.t(), keyword()) :: :ok
   def update_span(span_data, opts \\ [])
 
   def update_span(%{parent_span_id: nil} = span_data, opts) do
@@ -96,6 +98,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     :ok
   end
 
+  @spec remove_root_span(String.t(), keyword()) :: :ok
   def remove_root_span(span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
     key = {:root_span, span_id}
@@ -106,7 +109,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     :ok
   end
 
-  def remove_child_spans(parent_span_id, opts \\ []) do
+  @spec remove_child_spans(String.t(), keyword()) :: :ok
+  def remove_child_spans(parent_span_id, opts) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
 
     :ets.select_delete(table_name, [
