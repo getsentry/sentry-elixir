@@ -35,7 +35,7 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
     {:noreply, state}
   end
 
-  @spec store_span(SpanRecord.t(), keyword()) :: :ok
+  @spec store_span(SpanRecord.t(), keyword()) :: true
   def store_span(span_data, opts \\ [])
 
   def store_span(span_data, opts) when span_data.parent_span_id == nil do
