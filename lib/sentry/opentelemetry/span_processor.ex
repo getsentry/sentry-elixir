@@ -15,12 +15,9 @@ if Code.ensure_loaded?(OpenTelemetry) do
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
 
+    # This can be a no-op since we can postpone inserting the span into storage until on_end
     @impl true
     def on_start(_ctx, otel_span, _config) do
-      span_record = SpanRecord.new(otel_span)
-
-      SpanStorage.store_span(span_record)
-
       otel_span
     end
 
@@ -28,12 +25,11 @@ if Code.ensure_loaded?(OpenTelemetry) do
     def on_end(otel_span, _config) do
       span_record = SpanRecord.new(otel_span)
 
-      SpanStorage.update_span(span_record)
+      SpanStorage.store_span(span_record)
 
       if span_record.parent_span_id == nil do
-        root_span_record = SpanStorage.get_root_span(span_record.span_id)
         child_span_records = SpanStorage.get_child_spans(span_record.span_id)
-        transaction = build_transaction(root_span_record, child_span_records)
+        transaction = build_transaction(span_record, child_span_records)
 
         result =
           case Sentry.send_transaction(transaction) do
