@@ -34,7 +34,7 @@ jobs:
             os: ubuntu-22.04
 
           # Oldest supported Elixir/Erlang pair.
-          - elixir: "1.13.4-otp-22"
+          - elixir: "1.13"
             otp: "22.3"
             os: ubuntu-22.04
 
@@ -47,7 +47,6 @@ jobs:
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
-          version-type: strict
 
       - name: Cache downloaded dependencies
         uses: actions/cache@v4
