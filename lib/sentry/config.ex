@@ -131,7 +131,7 @@ defmodule Sentry.Config do
       doc: """
       The sample rate for transaction events. A value between `0.0` and `1.0` (inclusive).
       A value of `0.0` means no transactions will be sampled, while `1.0` means all transactions
-      will be sampled. This value is also used to determine if tracing is enabled - if it's
+      will be sampled. This value is also used to determine if tracing is enabled: if it's
       greater than `0`, tracing is enabled.
 
       This feature requires `opentelemetry` package.
