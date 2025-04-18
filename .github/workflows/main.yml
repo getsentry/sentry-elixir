@@ -35,7 +35,7 @@ jobs:
 
           # Oldest supported Elixir/Erlang pair.
           - elixir: "1.13"
-            otp: "22.3"
+            otp: "25.3"
             os: ubuntu-22.04
 
     steps:
