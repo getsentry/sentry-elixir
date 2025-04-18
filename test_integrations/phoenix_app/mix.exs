@@ -57,10 +57,10 @@ defmodule PhoenixApp.MixProject do
 
       {:sentry, path: "../.."},
 
-      {:opentelemetry, "~> 1.5", optional: true},
-      {:opentelemetry_api, "~> 1.4", optional: true},
-      {:opentelemetry_exporter, "~> 1.0", optional: true},
-      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true}
+      {:opentelemetry, "~> 1.5"},
+      {:opentelemetry_api, "~> 1.4"},
+      {:opentelemetry_exporter, "~> 1.0"},
+      {:opentelemetry_semantic_conventions, "~> 1.27"}
     ]
   end
 
