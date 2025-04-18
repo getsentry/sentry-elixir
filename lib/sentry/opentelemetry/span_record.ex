@@ -2,6 +2,8 @@ if Code.ensure_loaded?(OpenTelemetry) do
   defmodule Sentry.OpenTelemetry.SpanRecord do
     @moduledoc false
 
+    @type t :: %__MODULE__{}
+
     require Record
     require OpenTelemetry
 
