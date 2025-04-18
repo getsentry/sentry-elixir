@@ -1,5 +1,5 @@
 defmodule Sentry.Opentelemetry.SpanProcessorTest do
-  use Sentry.Case, async: true
+  use Sentry.Case, async: false
 
   import Sentry.TestHelpers
 
