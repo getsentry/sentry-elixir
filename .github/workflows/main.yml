@@ -22,109 +22,109 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.18'
-            otp: '27.2'
+          - elixir: "1.18"
+            otp: "27.2"
             lint: true
             dialyzer: true
             os: ubuntu-latest
 
           # One version before the last supported one.
-          - elixir: '1.17'
-            otp: '26.2'
+          - elixir: "1.17"
+            otp: "26.2"
             os: ubuntu-22.04
 
           # Oldest supported Elixir/Erlang pair.
-          - elixir: '1.13.4-otp-22'
-            otp: '22.3.4'
-            os: ubuntu-20.04
+          - elixir: "1.13"
+            otp: "25.3"
+            os: ubuntu-22.04
 
     steps:
-    - name: Check out this repository
-      uses: actions/checkout@v4
+      - name: Check out this repository
+        uses: actions/checkout@v4
 
-    - name: Setup Elixir and Erlang
-      uses: erlef/setup-beam@v1
-      with:
-        elixir-version: ${{ matrix.elixir }}
-        otp-version: ${{ matrix.otp }}
+      - name: Setup Elixir and Erlang
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
-    - name: Cache downloaded dependencies
-      uses: actions/cache@v4
-      id: mix-downloaded-deps-cache
-      with:
-        path: |
-          deps
-          test_integrations/phoenix_app/deps
-        key: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix.lock') }}
+      - name: Cache downloaded dependencies
+        uses: actions/cache@v4
+        id: mix-downloaded-deps-cache
+        with:
+          path: |
+            deps
+            test_integrations/phoenix_app/deps
+          key: |
+            ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix.lock') }}
 
-    - name: Download Mix dependencies
-      if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
-      run: |
-        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
-          mix deps.get --check-locked
-        else
-          mix deps.get
-        fi
-
-        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
-          cd test_integrations/phoenix_app
-
-          if [ ${{ matrix.lint }} == 'true' ]; then
+      - name: Download Mix dependencies
+        if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
+        run: |
+          if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
             mix deps.get --check-locked
           else
             mix deps.get
           fi
-        fi
 
-    # We need to manually restore and then save, so that we can save the "_build" directory
-    # *without* the Elixir compiled code in it.
-    - name: Cache compiled Elixir code
-      uses: actions/cache@v4
-      id: mix-cache
-      with:
-        path: |
-          _build
-          test_integrations/phoenix_app/_build
-        key: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
+          if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
+            cd test_integrations/phoenix_app
 
-    - name: Compile Elixir code (with --warnings-as-errors)
-      if: matrix.lint
-      run: |
-        mix compile --warnings-as-errors
-        cd test_integrations/phoenix_app
-        mix compile --warnings-as-errors
+            if [ ${{ matrix.lint }} == 'true' ]; then
+              mix deps.get --check-locked
+            else
+              mix deps.get
+            fi
+          fi
 
-    - name: Check formatting
-      if: matrix.lint
-      run: mix format --check-formatted
+      # We need to manually restore and then save, so that we can save the "_build" directory
+      # *without* the Elixir compiled code in it.
+      - name: Cache compiled Elixir code
+        uses: actions/cache@v4
+        id: mix-cache
+        with:
+          path: |
+            _build
+            test_integrations/phoenix_app/_build
+          key: |
+            ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
 
-    - name: Run tests
-      run: mix test
+      - name: Compile Elixir code (with --warnings-as-errors)
+        if: matrix.lint
+        run: |
+          mix compile --warnings-as-errors
+          cd test_integrations/phoenix_app
+          mix compile --warnings-as-errors
 
-    - name: Run integration tests
-      run: mix test.integrations
+      - name: Check formatting
+        if: matrix.lint
+        run: mix format --check-formatted
 
-    - name: Cache Dialyzer PLT
-      uses: actions/cache@v4
-      if: matrix.dialyzer
-      id: plt-cache
-      with:
-        path: plts
-        key: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('**/mix.lock')) }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-
+      - name: Run tests
+        run: mix test
 
-    - name: Create PLTs
-      if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.dialyzer
-      run: |
-        mkdir -p plts
-        mix dialyzer --plt
+      - name: Run integration tests
+        run: mix test.integrations
 
-    - name: Run dialyzer
-      if: matrix.dialyzer
-      run: mix dialyzer --no-check
+      - name: Cache Dialyzer PLT
+        uses: actions/cache@v4
+        if: matrix.dialyzer
+        id: plt-cache
+        with:
+          path: plts
+          key: |
+            ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-${{ hashFiles(format('**/mix.lock')) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-plts-
+
+      - name: Create PLTs
+        if: steps.plt-cache.outputs.cache-hit != 'true' && matrix.dialyzer
+        run: |
+          mkdir -p plts
+          mix dialyzer --plt
+
+      - name: Run dialyzer
+        if: matrix.dialyzer
+        run: mix dialyzer --no-check
