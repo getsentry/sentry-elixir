@@ -33,10 +33,11 @@ jobs:
             otp: '26.2'
             os: ubuntu-22.04
 
-          # Oldest supported Elixir/Erlang pair.
-          - elixir: '1.13.4-otp-22'
-            otp: '22.3.4'
-            os: ubuntu-20.04
+          # Oldest supported Elixir/Erlang pair that's tested;
+          # However, official support goes back to OTP 22.x
+          - elixir: '1.13'
+            otp: '25.3'
+            os: ubuntu-22.04
 
     steps:
     - name: Check out this repository
@@ -61,13 +62,13 @@ jobs:
     - name: Download Mix dependencies
       if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
       run: |
-        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
+        if [ ${{ matrix.elixir }} != '1.13' ]; then
           mix deps.get --check-locked
         else
           mix deps.get
         fi
 
-        if [ ${{ matrix.elixir }} != '1.13.4-otp-22' ]; then
+        if [ ${{ matrix.elixir }} != '1.13' ]; then
           cd test_integrations/phoenix_app
 
           if [ ${{ matrix.lint }} == 'true' ]; then
