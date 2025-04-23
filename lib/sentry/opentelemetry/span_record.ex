@@ -8,12 +8,12 @@ if Code.ensure_loaded?(OpenTelemetry) do
     require OpenTelemetry
 
     @fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
-    Record.defrecordp(:span, @fields)
+    Record.defrecordp(:otel_span, @fields)
 
     defstruct @fields ++ [:origin]
 
-    def new(span() = otel_span) do
-      otel_attrs = span(otel_span)
+    def new(otel_span() = otel_span) do
+      otel_attrs = otel_span(otel_span)
 
       {:attributes, _, _, _, attributes} = otel_attrs[:attributes]
 
