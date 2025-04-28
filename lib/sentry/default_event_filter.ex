@@ -5,7 +5,7 @@ defmodule Sentry.DefaultEventFilter do
     Plug.Conn.InvalidQueryError,
     Plug.Parsers.BadEncodingError,
     Plug.Parsers.ParseError,
-    Plug.Parsers.RequestTooLarge,
+    Plug.Parsers.RequestTooLargeError,
     Plug.Parsers.UnsupportedMediaTypeError,
     Plug.Static.InvalidPathError
   ]
