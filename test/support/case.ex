@@ -22,7 +22,7 @@ defmodule Sentry.Case do
   end
 
   defp setup_span_storage(opts) do
-    uid = :rand.uniform(1000000)
+    uid = System.unique_integer([:positive])
     server_name = :"test_span_storage_#{uid}"
     table_name = :"test_span_storage_table_#{uid}"
 
