@@ -360,6 +360,16 @@ defmodule Sentry.LoggerHandler do
     end
   end
 
+  # Elixir 1.19 puts string translation inside the report instead of replacing
+  # it completely. We switch it back for compatibility with existing code.
+  defp log_unfiltered(
+         %{msg: {:report, %{elixir_translation: unicode_chardata}}} = log_event,
+         sentry_opts,
+         %__MODULE__{} = config
+       ) do
+    log_unfiltered(%{log_event | msg: {:string, unicode_chardata}}, sentry_opts, config)
+  end
+
   # A string was logged. We check for the :crash_reason metadata and try to build a sensible
   # report from there, otherwise we use the logged string directly.
   defp log_unfiltered(
