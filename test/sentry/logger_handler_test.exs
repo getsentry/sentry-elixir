@@ -154,7 +154,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert %KeyError{} = event.original_exception
       assert [exception] = event.exception
       assert exception.type == "KeyError"
-      assert exception.value == "key :foo not found in: []"
+      assert exception.value =~ ~r"key :foo not found in:\s+\[\]"
       assert Enum.find(exception.stacktrace.frames, &(&1.function =~ "Keyword.fetch!/2"))
     end
   end
@@ -286,7 +286,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert %KeyError{} = event.original_exception
       assert [exception] = event.exception
       assert exception.type == "KeyError"
-      assert exception.value == "key :foo not found in: []"
+      assert exception.value =~ ~r"key :foo not found in:\s+\[\]"
       assert Enum.find(exception.stacktrace.frames, &(&1.function =~ "Keyword.fetch!/2"))
     end
 
