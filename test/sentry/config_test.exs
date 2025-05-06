@@ -157,6 +157,15 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":traces_sample_rate" do
+      assert Config.validate!(traces_sample_rate: 1.0)[:traces_sample_rate] == 1.0
+      assert Config.validate!([])[:traces_sample_rate] == 0.0
+
+      assert_raise ArgumentError, ~r/invalid value for :traces_sample_rate option/, fn ->
+        Config.validate!(traces_sample_rate: 2.0)
+      end
+    end
+
     test ":json_library" do
       assert Config.validate!(json_library: Jason)[:json_library] == Jason
 
