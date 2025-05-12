@@ -16,12 +16,12 @@ if Code.ensure_loaded?(OpenTelemetry) do
     alias Sentry.Interfaces.Span
 
     # This can be a no-op since we can postpone inserting the span into storage until on_end
-    @impl true
+    @impl :otel_span_processor
     def on_start(_ctx, otel_span, _config) do
       otel_span
     end
 
-    @impl true
+    @impl :otel_span_processor
     def on_end(otel_span, _config) do
       span_record = SpanRecord.new(otel_span)
 
@@ -52,7 +52,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
       end
     end
 
-    @impl true
+    @impl :otel_span_processor
     def force_flush(_config) do
       :ok
     end
