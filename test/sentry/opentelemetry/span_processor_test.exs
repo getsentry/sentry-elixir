@@ -10,7 +10,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     def instrumented_function do
       Tracer.with_span "instrumented_function" do
-        :timer.sleep(100)
+        Process.sleep(100)
 
         child_instrumented_function("one")
         child_instrumented_function("two")
@@ -19,7 +19,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     def child_instrumented_function(name) do
       Tracer.with_span "child_instrumented_function_#{name}" do
-        :timer.sleep(140)
+        Process.sleep(140)
       end
     end
   end
