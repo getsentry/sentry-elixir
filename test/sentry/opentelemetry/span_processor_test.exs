@@ -92,8 +92,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
-    assert nil ==
-             SpanStorage.get_root_span(transaction.contexts.trace.span_id, table_name: table_name)
+    assert SpanStorage.get_root_span(transaction.contexts.trace.span_id, table_name: table_name) ==
+             nil
 
     assert [] ==
              SpanStorage.get_child_spans(transaction.contexts.trace.span_id,

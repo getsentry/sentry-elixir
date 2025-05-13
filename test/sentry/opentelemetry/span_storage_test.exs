@@ -53,7 +53,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert root_span == SpanStorage.get_root_span("abc123", table_name: table_name)
 
       SpanStorage.remove_root_span("abc123", table_name: table_name)
-      assert nil == SpanStorage.get_root_span("abc123", table_name: table_name)
+      assert SpanStorage.get_root_span("abc123", table_name: table_name) == nil
     end
 
     @tag span_storage: true
@@ -88,8 +88,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       SpanStorage.remove_root_span("root123", table_name: table_name)
 
-      assert nil == SpanStorage.get_root_span("root123", table_name: table_name)
-      assert [] == SpanStorage.get_child_spans("root123", table_name: table_name)
+      assert SpanStorage.get_root_span("root123", table_name: table_name) == nil
+      assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
     end
   end
 
@@ -204,8 +204,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     SpanStorage.remove_root_span("root123", table_name: table_name)
     SpanStorage.remove_child_spans("root123", table_name: table_name)
 
-    assert nil == SpanStorage.get_root_span("root123", table_name: table_name)
-    assert [] == SpanStorage.get_child_spans("root123", table_name: table_name)
+    assert SpanStorage.get_root_span("root123", table_name: table_name) == nil
+    assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
   end
 
   describe "stale span cleanup" do
@@ -241,8 +241,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       Process.sleep(200)
 
-      assert nil == SpanStorage.get_root_span("stale_root", table_name: table_name)
-      assert [] == SpanStorage.get_child_spans("stale_root", table_name: table_name)
+      assert SpanStorage.get_root_span("stale_root", table_name: table_name) == nil
+      assert SpanStorage.get_child_spans("stale_root", table_name: table_name) == []
 
       assert SpanStorage.get_root_span("fresh_root", table_name: table_name)
     end
@@ -297,8 +297,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       Process.sleep(200)
 
-      assert nil == SpanStorage.get_root_span("root123", table_name: table_name)
-      assert [] == SpanStorage.get_child_spans("root123", table_name: table_name)
+      assert SpanStorage.get_root_span("root123", table_name: table_name) == nil
+      assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
     end
 
     @tag span_storage: [cleanup_interval: 100]
@@ -459,7 +459,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       Process.sleep(200)
 
-      assert nil == SpanStorage.get_root_span("too_old", table_name: table_name)
+      assert SpanStorage.get_root_span("too_old", table_name: table_name) == nil
       assert not is_nil(SpanStorage.get_root_span("just_fresh", table_name: table_name))
       assert not is_nil(SpanStorage.get_root_span("middle_aged", table_name: table_name))
       assert not is_nil(SpanStorage.get_root_span("fresh", table_name: table_name))
