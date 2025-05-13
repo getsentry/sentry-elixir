@@ -134,7 +134,9 @@ defmodule Sentry.Config do
       will be sampled. This value is also used to determine if tracing is enabled: if it's
       greater than `0`, tracing is enabled.
 
-      This feature requires `opentelemetry` package.
+      Tracing requires OpenTelemetry packages to work. See [the
+      OpenTelemetry setup documentation](https://opentelemetry.io/docs/languages/erlang/getting-started/)
+      for guides on how to set it up.
       """
     ],
     included_environments: [
