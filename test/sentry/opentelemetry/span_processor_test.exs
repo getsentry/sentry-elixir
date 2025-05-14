@@ -115,7 +115,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   defp assert_valid_trace_id(trace_id) do
     assert is_binary(trace_id), "Expected trace_id to be a string"
-    assert String.length(trace_id) == 32, "Expected trace_id to be 32 characters long #{trace_id}"
+    assert byte_size(trace_id) == 32, "Expected trace_id to be 32 characters long #{trace_id}"
 
     assert String.match?(trace_id, ~r/^[a-f0-9]{32}$/),
            "Expected trace_id to be a lowercase hex string"
