@@ -12,12 +12,13 @@ defmodule Sentry.Integrations.Telemetry do
   @doc false
   @spec attach() :: :ok
   def attach do
-    :telemetry.attach(
-      "#{inspect(__MODULE__)}-telemetry-failures",
-      @failure_event,
-      &handle_event/4,
-      :no_config
-    )
+    _ =
+      :telemetry.attach(
+        "#{inspect(__MODULE__)}-telemetry-failures",
+        @failure_event,
+        &handle_event/4,
+        :no_config
+      )
 
     :ok
   end
@@ -40,20 +41,21 @@ defmodule Sentry.Integrations.Telemetry do
       }
     ]
 
-    case {metadata[:kind], metadata[:reason]} do
-      {:error, reason} ->
-        exception = Exception.normalize(:error, reason, stacktrace)
-        _ = Sentry.capture_exception(exception, options)
+    _ =
+      case {metadata[:kind], metadata[:reason]} do
+        {:error, reason} ->
+          exception = Exception.normalize(:error, reason, stacktrace)
+          Sentry.capture_exception(exception, options)
 
-      {kind, reason} ->
-        options =
-          Keyword.merge(options,
-            extra: %{kind: inspect(kind), reason: inspect(reason)},
-            interpolation_parameters: [inspect(metadata[:handler_id])]
-          )
+        {kind, reason} ->
+          options =
+            Keyword.merge(options,
+              extra: %{kind: inspect(kind), reason: inspect(reason)},
+              interpolation_parameters: [inspect(metadata[:handler_id])]
+            )
 
-        _ = Sentry.capture_message("Telemetry handler %s failed", options)
-    end
+          Sentry.capture_message("Telemetry handler %s failed", options)
+      end
 
     :ok
   end
