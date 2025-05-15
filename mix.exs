@@ -35,6 +35,7 @@ defmodule Sentry.Mixfile do
           "pages/setup-with-plug-and-phoenix.md",
           "pages/oban-integration.md",
           "pages/quantum-integration.md",
+          "pages/telemetry-integration.md",
           "pages/upgrade-8.x.md",
           "pages/upgrade-9.x.md",
           "pages/upgrade-10.x.md"
@@ -43,7 +44,8 @@ defmodule Sentry.Mixfile do
           Integrations: [
             "pages/setup-with-plug-and-phoenix.md",
             "pages/oban-integration.md",
-            "pages/quantum-integration.md"
+            "pages/quantum-integration.md",
+            "pages/telemetry-integration.md"
           ],
           "Upgrade Guides": [~r{^pages/upgrade}]
         ],
