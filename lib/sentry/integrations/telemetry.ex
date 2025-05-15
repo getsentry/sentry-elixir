@@ -43,7 +43,7 @@ defmodule Sentry.Integrations.Telemetry do
     case {metadata[:kind], metadata[:reason]} do
       {:error, reason} ->
         exception = Exception.normalize(:error, reason, stacktrace)
-        Sentry.capture_exception(exception, options)
+        _ = Sentry.capture_exception(exception, options)
 
       {kind, reason} ->
         options =
@@ -52,7 +52,7 @@ defmodule Sentry.Integrations.Telemetry do
             interpolation_parameters: [inspect(metadata[:handler_id])]
           )
 
-        Sentry.capture_message("Telemetry handler %s failed", options)
+        _ = Sentry.capture_message("Telemetry handler %s failed", options)
     end
 
     :ok
