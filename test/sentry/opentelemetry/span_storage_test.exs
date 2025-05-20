@@ -225,7 +225,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
         name: "stale_child_span"
       }
 
-      old_time = System.system_time(:second) - :timer.minutes(31)
+      old_time = DateTime.utc_now() |> DateTime.add(-31, :minute) |> DateTime.to_unix()
 
       :ets.insert(table_name, {{:root_span, "stale_root"}, root_span, old_time})
       :ets.insert(table_name, {{:child_span, "stale_root", "stale_child"}, child_span, old_time})
@@ -256,7 +256,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
         name: "stale_child_span"
       }
 
-      old_time = System.system_time(:second) - :timer.minutes(31)
+      old_time = DateTime.utc_now() |> DateTime.add(-31, :minute) |> DateTime.to_unix()
       :ets.insert(table_name, {"non_existent_parent", {child_span, old_time}})
 
       Process.sleep(200)
@@ -289,7 +289,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
         name: "fresh_child_span"
       }
 
-      old_time = System.system_time(:second) - :timer.minutes(31)
+      old_time = DateTime.utc_now() |> DateTime.add(-31, :minute) |> DateTime.to_unix()
       :ets.insert(table_name, {{:root_span, "root123"}, root_span, old_time})
 
       :ets.insert(table_name, {"root123", {old_child, old_time}})
@@ -333,7 +333,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       SpanStorage.store_span(root_span, table_name: table_name)
 
-      old_time = System.system_time(:second) - :timer.minutes(31)
+      old_time = DateTime.utc_now() |> DateTime.add(-31, :minute) |> DateTime.to_unix()
       :ets.insert(table_name, {"root123", {old_child1, old_time}})
       :ets.insert(table_name, {"root123", {old_child2, old_time}})
 
@@ -437,7 +437,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     @tag span_storage: [cleanup_interval: 100]
     test "cleanup respects span TTL precisely", %{table_name: table_name} do
       now = System.system_time(:second)
-      ttl = :timer.minutes(30)
+      ttl = 1800
 
       spans = [
         {now - ttl - 1, "too_old"},

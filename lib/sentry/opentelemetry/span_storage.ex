@@ -7,7 +7,8 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   alias Sentry.OpenTelemetry.SpanRecord
 
   @cleanup_interval :timer.minutes(5)
-  @span_ttl :timer.minutes(30)
+
+  @span_ttl 30 * 60
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) when is_list(opts) do
