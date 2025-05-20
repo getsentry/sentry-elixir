@@ -75,24 +75,16 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   end
 
   @spec update_span(SpanRecord.t(), keyword()) :: :ok
-  def update_span(span_data, opts \\ [])
-
-  def update_span(%{parent_span_id: nil} = span_data, opts) do
+  def update_span(%{parent_span_id: parent_span_id} = span_data, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
-
     stored_at = System.system_time(:second)
-    key = {:root_span, span_data.span_id}
 
-    :ets.update_element(table_name, key, [{2, span_data}, {3, stored_at}])
-
-    :ok
-  end
-
-  def update_span(%{parent_span_id: parent_span_id} = span_data, opts) do
-    table_name = Keyword.get(opts, :table_name, default_table_name())
-
-    stored_at = System.system_time(:second)
-    key = {:child_span, parent_span_id, span_data.span_id}
+    key =
+      if parent_span_id == nil do
+        {:root_span, span_data.span_id}
+      else
+        {:child_span, parent_span_id, span_data.span_id}
+      end
 
     :ets.update_element(table_name, key, [{2, span_data}, {3, stored_at}])
 
