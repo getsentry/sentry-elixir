@@ -37,22 +37,17 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   end
 
   @spec store_span(SpanRecord.t(), keyword()) :: true
-  def store_span(span_data, opts \\ [])
-
-  def store_span(span_data, opts) when span_data.parent_span_id == nil do
+  def store_span(span_data, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
     stored_at = System.system_time(:second)
 
-    :ets.insert(table_name, {{:root_span, span_data.span_id}, span_data, stored_at})
-  end
+    if span_data.parent_span_id == nil do
+      :ets.insert(table_name, {{:root_span, span_data.span_id}, span_data, stored_at})
+    else
+      key = {:child_span, span_data.parent_span_id, span_data.span_id}
 
-  def store_span(span_data, opts) do
-    table_name = Keyword.get(opts, :table_name, default_table_name())
-
-    stored_at = System.system_time(:second)
-    key = {:child_span, span_data.parent_span_id, span_data.span_id}
-
-    :ets.insert(table_name, {key, span_data, stored_at})
+      :ets.insert(table_name, {key, span_data, stored_at})
+    end
   end
 
   @spec get_root_span(String.t(), keyword()) :: SpanRecord.t() | nil
