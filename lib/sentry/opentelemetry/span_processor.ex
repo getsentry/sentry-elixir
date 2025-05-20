@@ -68,8 +68,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
         start_timestamp: root_span_record.start_time,
         timestamp: root_span_record.end_time,
         contexts: %{
-          trace: build_trace_context(root_span_record),
-          otel: build_otel_context(root_span_record)
+          trace: build_trace_context(root_span_record)
         },
         spans: child_spans
       })
@@ -97,8 +96,6 @@ if Code.ensure_loaded?(OpenTelemetry) do
         data: span_record.attributes
       }
     end
-
-    defp build_otel_context(span_record), do: span_record.attributes
 
     defp get_op_description(
            %{
