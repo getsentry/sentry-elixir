@@ -97,6 +97,24 @@ defmodule Sentry.Config do
           ]
         ]
       ]
+    ],
+    telemetry: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Telemetry](https://hexdocs.pm/telemetry) integration.
+      *Available since v10.10.0*.
+      """,
+      keys: [
+        report_handler_failures: [
+          type: :boolean,
+          default: false,
+          doc: """
+          Whether to report failures (to Sentry) that happen in telemetry handlers. These failures
+          result in the handlers being detached, so capturing them in Sentry can be useful
+          to detect and fix these issues as soon as possible.
+          """
+        ]
+      ]
     ]
   ]
 
