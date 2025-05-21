@@ -93,15 +93,11 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":source_code_exclude_patterns" do
-      assert Config.validate!(source_code_exclude_patterns: [])[:source_code_exclude_patterns] ==
-               []
+      assert Config.validate!([])[:source_code_exclude_patterns] == nil
 
-      assert Config.validate!([])[:source_code_exclude_patterns] == [
-               ~r"/_build/",
-               ~r"/deps/",
-               ~r"/priv/",
-               ~r"/test/"
-             ]
+      regex = ~r/foo/
+      config = [source_code_exclude_patterns: [regex]]
+      assert Config.validate!(config)[:source_code_exclude_patterns] == [regex]
 
       message = ~r/invalid list in :source_code_exclude_patterns option/
 
