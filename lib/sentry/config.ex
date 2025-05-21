@@ -374,7 +374,6 @@ defmodule Sentry.Config do
       type:
         {:list,
          {:custom, __MODULE__, :__validate_struct__, [:source_code_exclude_patterns, Regex]}},
-      default: [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"],
       type_doc: "list of `t:Regex.t/0`",
       doc: """
       A list of regular expressions used to determine which files to

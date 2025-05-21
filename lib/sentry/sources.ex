@@ -105,7 +105,13 @@ defmodule Sentry.Sources do
     config = Sentry.Config.validate!(config)
 
     path_pattern = Keyword.fetch!(config, :source_code_path_pattern)
-    exclude_patterns = Keyword.fetch!(config, :source_code_exclude_patterns)
+
+    exclude_patterns =
+      Keyword.get(
+        config,
+        :source_code_exclude_patterns,
+        [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"]
+      )
 
     config
     |> Keyword.fetch!(:root_source_code_paths)
