@@ -32,11 +32,12 @@ defmodule Sentry.Integrations.Telemetry do
         ) :: :ok
   def handle_event(@failure_event, _measurements, %{} = metadata, :no_config) do
     stacktrace = metadata[:stacktrace] || []
+    handler_id = stringified_handler_id(metadata[:handler_id])
 
     options = [
       stacktrace: stacktrace,
       tags: %{
-        telemetry_handler_id: stringified_handler_id(metadata[:handler_id]),
+        telemetry_handler_id: handler_id,
         event_name: inspect(metadata[:event_name])
       }
     ]
@@ -51,7 +52,7 @@ defmodule Sentry.Integrations.Telemetry do
           options =
             Keyword.merge(options,
               extra: %{kind: inspect(kind), reason: inspect(reason)},
-              interpolation_parameters: [inspect(metadata[:handler_id])]
+              interpolation_parameters: [handler_id]
             )
 
           Sentry.capture_message("Telemetry handler %s failed", options)

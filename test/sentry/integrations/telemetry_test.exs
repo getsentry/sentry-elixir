@@ -43,7 +43,7 @@ defmodule Sentry.Integrations.TelemetryTest do
         assert [event] = Sentry.Test.pop_sentry_reports()
 
         assert event.message.message == "Telemetry handler %s failed"
-        assert event.message.formatted == ~s(Telemetry handler "my_handler" failed)
+        assert event.message.formatted == "Telemetry handler my_handler failed"
 
         assert event.tags == %{
                  telemetry_handler_id: "my_handler",
