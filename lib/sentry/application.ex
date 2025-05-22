@@ -26,13 +26,6 @@ defmodule Sentry.Application do
 
     integrations_config = Config.integrations()
 
-    maybe_span_storage =
-      if Config.tracing?() do
-        [Sentry.OpenTelemetry.SpanStorage]
-      else
-        []
-      end
-
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
@@ -46,7 +39,6 @@ defmodule Sentry.Application do
          ]}
       ] ++
         maybe_http_client_spec ++
-        maybe_span_storage ++
         [Sentry.Transport.SenderPool]
 
     cache_loaded_applications()

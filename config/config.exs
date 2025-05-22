@@ -10,15 +10,9 @@ if config_env() == :test do
     send_result: :sync,
     send_max_attempts: 1,
     dedup_events: false,
-    test_mode: true,
-    traces_sample_rate: 1.0
+    test_mode: true
 
   config :logger, backends: []
-
-  config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
-
-  config :opentelemetry,
-    sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
 end
 
 config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
