@@ -493,8 +493,9 @@ defmodule Sentry.Config do
                      hook_opts_schema
                    ])
 
-  @opts_schema NimbleOptions.new!(@raw_opts_schema)
   @valid_keys Keyword.keys(@raw_opts_schema)
+
+  defp opts_schema do: NimbleOptions.new!(@raw_opts_schema)
 
   @spec validate!() :: keyword()
   def validate! do
@@ -512,7 +513,7 @@ defmodule Sentry.Config do
       |> fill_in_from_env(:release, "SENTRY_RELEASE")
       |> fill_in_from_env(:environment_name, "SENTRY_ENVIRONMENT")
 
-    case NimbleOptions.validate(config_opts, @opts_schema) do
+    case NimbleOptions.validate(config_opts, opts_schema()) do
       {:ok, opts} ->
         opts
         |> normalize_included_environments()
