@@ -495,7 +495,7 @@ defmodule Sentry.Config do
 
   @valid_keys Keyword.keys(@raw_opts_schema)
 
-  defp opts_schema do: NimbleOptions.new!(@raw_opts_schema)
+  defp opts_schema, do: NimbleOptions.new!(@raw_opts_schema)
 
   @spec validate!() :: keyword()
   def validate! do
