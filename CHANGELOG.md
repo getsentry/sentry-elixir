@@ -1,5 +1,25 @@
 # Changelog
 
+## 10.10.0
+
+This release adds Telemetry crash reporting, fixes compatibility with Erlang/OTP 28, and includes several bug fixes.
+
+### New features
+
+- Add Telemetry integration for capturing Telemetry crash events in Sentry (#887 by @whatyouhide)
+- Add `:owner` option for check-ins, providing more control over cron monitoring (#879 by @Miradorn)
+
+### Bug fixes
+
+- Fix regexes on Erlang/OTP 28 (#889 by @josevalim)
+- Fix ignored exception in the default filter by correcting `Plug.Parsers.RequestTooLarge` reference (#884 by @mbaleczny)
+- Fix hyperlink tag in `Sentry.LoggerBackend` moduledoc (#880 by @bjacquet)
+- Remain compatible with new translation format to be introduced in Elixir 1.19 (#885 by @martosaur)
+
+### Various improvements
+
+- Update OTP and OS in CI (#882 by @solnic)
+
 ## 10.9.0
 
 This release adds a bunch of new features and fixes a few papercut bugs.
