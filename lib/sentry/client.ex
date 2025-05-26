@@ -117,7 +117,7 @@ defmodule Sentry.Client do
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
-    sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.sample_rate/0)
+    sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.traces_sample_rate/0)
     before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
     after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
 
