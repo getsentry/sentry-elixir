@@ -1,7 +1,7 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
-  @version "10.9.0"
+  @version "10.10.0"
   @source_url "https://github.com/getsentry/sentry-elixir"
 
   def project do
@@ -75,7 +75,7 @@ defmodule Sentry.Mixfile do
   def application do
     [
       mod: {Sentry.Application, []},
-      extra_applications: extra_applications(Mix.env()),
+      extra_applications: [:logger],
       registered: [
         Sentry.Dedupe,
         Sentry.Transport.SenderRegistry,
@@ -83,9 +83,6 @@ defmodule Sentry.Mixfile do
       ]
     ]
   end
-
-  defp extra_applications(:test), do: [:logger, :opentelemetry]
-  defp extra_applications(_other), do: [:logger]
 
   defp elixirc_paths(:test), do: ["test/support"] ++ elixirc_paths(:dev)
   defp elixirc_paths(_other), do: ["lib"]
@@ -116,11 +113,7 @@ defmodule Sentry.Mixfile do
       # Required by Phoenix.LiveView's testing
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
-      {:quantum, "~> 3.0", only: [:test]},
-      {:opentelemetry, "~> 1.5", optional: true},
-      {:opentelemetry_api, "~> 1.4", optional: true},
-      {:opentelemetry_exporter, "~> 1.0", optional: true},
-      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true}
+      {:quantum, "~> 3.0", only: [:test]}
     ]
   end
 

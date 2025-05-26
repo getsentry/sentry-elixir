@@ -30,5 +30,3 @@ config :sentry,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
   send_result: :sync
-
-config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
