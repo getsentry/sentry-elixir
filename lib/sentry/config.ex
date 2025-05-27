@@ -316,7 +316,7 @@ defmodule Sentry.Config do
       The maximum number of attempts to send an event to Sentry.
       """
     ],
-    finch_opts: [
+    finch_pool_opts: [
       type: :keyword_list,
       default: [size: 50, conn_max_idle_time: 5000],
       doc: """
@@ -326,32 +326,48 @@ defmodule Sentry.Config do
       for available options.
       """
     ],
-    hackney_opts: [
+    finch_request_opts: [
       type: :keyword_list,
-      default: [pool: :sentry_pool],
+      default: [receive_timeout: 50],
       doc: """
-      Options to be passed to `hackney`. Only
-      applied if `:client` is set to `Sentry.HackneyClient`.
+      Request options to be passed to `Finch.request/4`. These options control
+      individual request behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/Finch.html#request/4)
+      for available options.
       """
     ],
-    hackney_pool_timeout: [
-      type: :timeout,
-      default: 5000,
-      doc: """
-      The maximum time to wait for a
-      connection to become available. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
-      """
-    ],
-    hackney_pool_max_connections: [
-      type: :pos_integer,
-      default: 50,
-      doc: """
-      The maximum number of
-      connections to keep in the pool. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
-      """
-    ]
+    hackney_opts:
+      [
+        type: :keyword_list,
+        default: [pool: :sentry_pool],
+        doc: """
+        Options to be passed to `hackney`. Only
+        applied if `:client` is set to `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+    hackney_pool_timeout:
+      [
+        type: :timeout,
+        default: 5000,
+        doc: """
+        The maximum time to wait for a
+        connection to become available. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+    hackney_pool_max_connections:
+      [
+        type: :pos_integer,
+        default: 50,
+        doc: """
+        The maximum number of
+        connections to keep in the pool. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."])
   ]
 
   source_code_context_opts_schema = [
@@ -617,8 +633,11 @@ defmodule Sentry.Config do
   @spec sample_rate() :: float()
   def sample_rate, do: fetch!(:sample_rate)
 
-  @spec finch_opts() :: keyword()
-  def finch_opts, do: fetch!(:finch_opts)
+  @spec finch_pool_opts() :: keyword()
+  def finch_pool_opts, do: fetch!(:finch_pool_opts)
+
+  @spec finch_request_opts() :: keyword()
+  def finch_request_opts, do: fetch!(:finch_request_opts)
 
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
