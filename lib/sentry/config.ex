@@ -328,7 +328,7 @@ defmodule Sentry.Config do
     ],
     finch_request_opts: [
       type: :keyword_list,
-      default: [receive_timeout: 50],
+      default: [receive_timeout: 5000],
       doc: """
       Request options to be passed to `Finch.request/4`. These options control
       individual request behavior. Only applied if `:client` is set to
