@@ -12,9 +12,9 @@ defmodule Sentry.PlugContext do
 
       plug Sentry.PlugContext
 
-  However, this module is generally intended to be used with `Sentry.PlugCapture`:
-  this plug will add context metadata to the request, while `Sentry.PlugCapture` will
-  capture raised exceptions and errors and report them to Sentry with the added metadata.
+  This plug will add context metadata to the request, which will be added to
+  reported errors that happen during plug execution. Note that for Cowboy
+  applications, you will also need to use `Sentry.PlugCapture`.
 
   ### Scrubbing `POST` Body Params
 

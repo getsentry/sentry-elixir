@@ -1,10 +1,16 @@
 defmodule Sentry.PlugCapture do
   @moduledoc """
-  Provides basic functionality to capture and send errors occurring within
-  Plug applications, including Phoenix.
+  Ensures proper error reporting for Plug applications that use Cowboy.
 
   It is intended for usage with `Sentry.PlugContext`, which adds relevant request
   metadata to the Sentry context before errors are captured.
+
+  > #### Cowboy only {: .info}
+  >
+  > Note that `Sentry.PlugCapture` is only recommended for Cowboy applications.
+  For applications running on Bandit, which is the default in Phoenix,
+  `Sentry.PlugContext` should be enough, and using `Sentry.PlugCapture` might
+  result in duplicate errors.
 
   ## Usage
 
@@ -69,7 +75,6 @@ defmodule Sentry.PlugCapture do
       * scrubs sensitive body params just like `Sentry.PlugContext.default_body_scrubber/1`
 
   """
-
   defmacro __using__(opts) do
     quote do
       opts = unquote(opts)

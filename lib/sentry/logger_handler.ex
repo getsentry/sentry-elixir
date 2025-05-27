@@ -26,7 +26,7 @@ defmodule Sentry.LoggerHandler do
     ],
     excluded_domains: [
       type: {:list, :atom},
-      default: [:cowboy, :bandit],
+      default: [:cowboy],
       type_doc: "list of `t:atom/0`",
       doc: """
       Any messages with a domain in the configured list will not be sent. The default is so as

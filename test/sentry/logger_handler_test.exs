@@ -110,7 +110,7 @@ defmodule Sentry.LoggerHandlerTest do
     end
 
     @tag handler_config: %{excluded_domains: []}
-    test "sends two errors when a Plug process crashes if bandit domain is not excluded",
+    test "sends two errors when a Plug process crashes if PlugCapture is used and :bandit not excluded",
          %{sender_ref: ref} do
       start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
 
