@@ -2,7 +2,7 @@ defmodule Sentry.HTTPClient do
   @moduledoc """
   A behaviour for HTTP clients that Sentry can use.
 
-  The default HTTP client is `Sentry.HackneyClient`.
+  The default HTTP client is `Sentry.FinchClient`.
 
   To configure a different HTTP client, implement the `Sentry.HTTPClient` behaviour and
   change the `:client` configuration:

@@ -23,10 +23,7 @@ defmodule Sentry.FinchClient do
       Finch.child_spec(
         name: __MODULE__,
         pools: %{
-          :default => [
-            size: Sentry.Config.max_finch_connections(),
-            conn_max_idle_time: Sentry.Config.finch_timeout()
-          ]
+          :default => Sentry.Config.finch_opts()
         }
       )
     else
