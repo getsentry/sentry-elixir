@@ -23,7 +23,7 @@ defmodule Sentry.FinchClient do
       Finch.child_spec(
         name: __MODULE__,
         pools: %{
-          :default => Sentry.Config.finch_opts()
+          :default => Sentry.Config.finch_pool_opts()
         }
       )
     else
@@ -39,7 +39,7 @@ defmodule Sentry.FinchClient do
   def post(url, headers, body) do
     request = Finch.build(:post, url, headers, body)
 
-    case Finch.request(request, __MODULE__) do
+    case Finch.request(request, __MODULE__, Sentry.Config.finch_request_opts()) do
       {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
         {:ok, status, headers, body}
 

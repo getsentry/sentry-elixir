@@ -366,7 +366,7 @@ defmodule Sentry.Config do
       The maximum number of attempts to send an event to Sentry.
       """
     ],
-    finch_opts: [
+    finch_pool_opts: [
       type: :keyword_list,
       default: [size: 50, conn_max_idle_time: 5000],
       doc: """
