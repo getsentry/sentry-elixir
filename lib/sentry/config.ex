@@ -352,11 +352,11 @@ defmodule Sentry.Config do
     client: [
       type: :atom,
       type_doc: "`t:module/0`",
-      default: Sentry.HackneyClient,
+      default: Sentry.FinchClient,
       doc: """
       A module that implements the `Sentry.HTTPClient`
-      behaviour. Defaults to `Sentry.HackneyClient`, which uses
-      [hackney](https://github.com/benoitc/hackney) as the HTTP client.
+      behaviour. Defaults to `Sentry.FinchClient`, which uses
+      [Finch](https://github.com/sneako/finch) as the HTTP client.
       """
     ],
     send_max_attempts: [
@@ -364,6 +364,16 @@ defmodule Sentry.Config do
       default: 4,
       doc: """
       The maximum number of attempts to send an event to Sentry.
+      """
+    ],
+    finch_opts: [
+      type: :keyword_list,
+      default: [size: 50, conn_max_idle_time: 5000],
+      doc: """
+      Pool options to be passed to `Finch.start_link/1`. These options control
+      the connection pool behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/Finch.html#start_link/1)
+      for available options.
       """
     ],
     hackney_opts: [
@@ -667,6 +677,9 @@ defmodule Sentry.Config do
 
   @spec traces_sampler() :: traces_sampler_function() | nil
   def traces_sampler, do: get(:traces_sampler)
+
+  @spec finch_opts() :: keyword()
+  def finch_opts, do: fetch!(:finch_opts)
 
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
