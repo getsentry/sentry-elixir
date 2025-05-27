@@ -44,6 +44,10 @@ jobs:
             otp: '25.3'
             os: ubuntu-22.04
 
+          - elixir: 'main'
+            otp: 'master'
+            os: ubuntu-22.04
+
     steps:
     - name: Check out this repository
       uses: actions/checkout@v4
