@@ -1,6 +1,7 @@
 defmodule Sentry.PlugContextTest do
   use Sentry.Case, async: false
-  use Plug.Test
+  import Plug.Conn
+  import Plug.Test
 
   setup do
     %{conn: conn(:get, "/test?hello=world")}

@@ -117,6 +117,7 @@ defmodule Sentry.LoggerHandlerTest do
       :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
 
       assert_receive {^ref, _event}, 1000
+      assert_receive {^ref, _event}, 1000
     end
   end
 
