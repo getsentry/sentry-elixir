@@ -13,7 +13,7 @@ defmodule Sentry.PlugContext do
       plug Sentry.PlugContext
 
   This plug will add context metadata to the request, which will be added to
-  reported errors that happen during plug execution. Note that for Cowboy
+  reported errors that happen during plug execution. For Cowboy
   applications, you will also need to use `Sentry.PlugCapture`.
 
   ### Scrubbing `POST` Body Params
