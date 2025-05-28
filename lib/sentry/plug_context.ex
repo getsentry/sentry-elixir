@@ -155,7 +155,6 @@ defmodule Sentry.PlugContext do
 
   @default_scrubbed_param_keys ["password", "passwd", "secret"]
   @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
-  @credit_card_regex ~r/^(?:\d[ -]*?){13,16}$/
   @scrubbed_value "*********"
   @default_plug_request_id_header "x-request-id"
 
@@ -277,7 +276,7 @@ defmodule Sentry.PlugContext do
       value =
         cond do
           key in scrubbed_keys -> @scrubbed_value
-          is_binary(value) and value =~ @credit_card_regex -> @scrubbed_value
+          is_binary(value) and value =~ credit_card_regex() -> @scrubbed_value
           is_struct(value) -> value |> Map.from_struct() |> scrub_map(scrubbed_keys)
           is_map(value) -> scrub_map(value, scrubbed_keys)
           is_list(value) -> scrub_list(value, scrubbed_keys)
@@ -298,4 +297,6 @@ defmodule Sentry.PlugContext do
       end
     end)
   end
+
+  defp credit_card_regex, do: ~r/^(?:\d[ -]*?){13,16}$/
 end

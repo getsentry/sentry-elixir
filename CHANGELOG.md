@@ -1,3 +1,7 @@
+## Unreleased
+
+- Tweak credit card regex handling for OTP-28 ([#898](https://github.com/getsentry/sentry-elixir/pull/898))
+
 # Changelog
 
 ## 10.10.0
