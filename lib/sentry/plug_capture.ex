@@ -5,12 +5,12 @@ defmodule Sentry.PlugCapture do
   It is intended for usage with `Sentry.PlugContext`, which adds relevant request
   metadata to the Sentry context before errors are captured.
 
-  > #### Cowboy only {: .info}
+  > #### Only for Cowboy {: .info}
   >
-  > Note that `Sentry.PlugCapture` is only recommended for Cowboy applications.
-  For applications running on Bandit, which is the default in Phoenix,
-  `Sentry.PlugContext` should be enough, and using `Sentry.PlugCapture` might
-  result in duplicate errors.
+  > `Sentry.PlugCapture` is only recommended for Cowboy applications.
+  > For applications running on Bandit, which is the most recent default webserver
+  > in Phoenix, `Sentry.PlugContext` should be enough, and using `Sentry.PlugCapture`
+  > might result in duplicate errors.
 
   ## Usage
 
