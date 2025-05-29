@@ -357,6 +357,7 @@ defmodule Sentry.Config do
       A module that implements the `Sentry.HTTPClient`
       behaviour. Defaults to `Sentry.FinchClient`, which uses
       [Finch](https://github.com/sneako/finch) as the HTTP client.
+      *The default changed from Hackney to Finch in v10.11.0*.
       """
     ],
     send_max_attempts: [
@@ -368,11 +369,11 @@ defmodule Sentry.Config do
     ],
     finch_pool_opts: [
       type: :keyword_list,
-      default: [size: 50, conn_max_idle_time: 5000],
+      default: [size: 50],
       doc: """
       Pool options to be passed to `Finch.start_link/1`. These options control
       the connection pool behavior. Only applied if `:client` is set to
-      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/Finch.html#start_link/1)
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#start_link/1)
       for available options.
       """
     ],
@@ -382,7 +383,7 @@ defmodule Sentry.Config do
       doc: """
       Request options to be passed to `Finch.request/4`. These options control
       individual request behavior. Only applied if `:client` is set to
-      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/Finch.html#request/4)
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#request/4)
       for available options.
       """
     ],
@@ -395,7 +396,10 @@ defmodule Sentry.Config do
         applied if `:client` is set to `Sentry.HackneyClient`.
         """
       ] ++
-        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        ),
     hackney_pool_timeout:
       [
         type: :timeout,
@@ -406,7 +410,10 @@ defmodule Sentry.Config do
         `Sentry.HackneyClient`.
         """
       ] ++
-        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."]),
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        ),
     hackney_pool_max_connections:
       [
         type: :pos_integer,
@@ -417,7 +424,10 @@ defmodule Sentry.Config do
         `Sentry.HackneyClient`.
         """
       ] ++
-        if(Mix.env() == :test, do: [], else: [deprecated: "Use Finch instead as default client."])
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        )
   ]
 
   source_code_context_opts_schema = [
