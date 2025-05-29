@@ -3,15 +3,19 @@ defmodule Sentry.FinchClient do
 
   @moduledoc """
   The built-in HTTP client.
+
   This client implements the `Sentry.HTTPClient` behaviour.
   It's based on the [Finch](https://github.com/sneako/finch) Elixir HTTP client,
   which is an *optional dependency* of this library. If you wish to use another
   HTTP client, you'll have to implement your own `Sentry.HTTPClient`. See the
   documentation for `Sentry.HTTPClient` for more information.
   Finch is built on top of [NimblePool](https://github.com/dashbitco/nimble_pool). If you need to set other pool configuration options,
-  see "Pool Configuration Options" in the Finch documentation for details on the possible map values.
+  see ["Pool Configuration Options"](https://hexdocs.pm/finch/Finch.html#start_link/1-pool-configuration-options)
+  in the Finch documentation for details on the possible map values.
   [finch configuration options](https://hexdocs.pm/finch/Finch.html#start_link/1-pool-configuration-options)
   """
+  @moduledoc since: "10.11.0"
+
   @impl true
   def child_spec do
     if Code.ensure_loaded?(Finch) do
