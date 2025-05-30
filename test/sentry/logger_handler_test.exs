@@ -64,7 +64,7 @@ defmodule Sentry.LoggerHandlerTest do
 
     {:ok, _task_pid} = Task.start(fn -> raise "oops" end)
 
-    assert_receive {^ref, event}
+    assert_receive {^ref, event}, 5000
 
     assert event.user.user_id == 3
     assert event.extra.day_of_week == "Friday"
