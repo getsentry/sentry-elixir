@@ -112,7 +112,7 @@ if Code.ensure_loaded?(Igniter) do
             })
             """
 
-          {:ok, Igniter.Code.Common.add_code(zipper, code, placement: :prepend)}
+          {:ok, Igniter.Code.Common.add_code(zipper, code, placement: :before)}
         else
           _ -> {:ok, zipper}
         end
