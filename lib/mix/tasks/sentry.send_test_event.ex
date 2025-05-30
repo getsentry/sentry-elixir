@@ -67,7 +67,7 @@ defmodule Mix.Tasks.Sentry.SendTestEvent do
     end
 
     Mix.shell().info("current environment_name: #{inspect(to_string(Config.environment_name()))}")
-    Mix.shell().info("hackney_opts: #{inspect(Config.hackney_opts())}\n")
+    Mix.shell().info("Finch pool options: #{inspect(Config.finch_pool_opts(), pretty: true)}\n")
   end
 
   defp send_event(opts) do
