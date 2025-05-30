@@ -33,7 +33,7 @@ defmodule Sentry.LoggerBackend do
   ## Configuration
 
   * `:excluded_domains` - Any messages with a domain in the configured
-  list will not be sent. Defaults to `[:cowboy, :bandit]` to avoid double reporting
+  list will not be sent. Defaults to `[:cowboy]` to avoid double reporting
   events from `Sentry.PlugCapture`.
 
   * `:metadata` - To include non-Sentry Logger metadata in reports, the
@@ -72,7 +72,7 @@ defmodule Sentry.LoggerBackend do
 
   defstruct level: :error,
             metadata: [],
-            excluded_domains: [:cowboy, :bandit],
+            excluded_domains: [:cowboy],
             capture_log_messages: false
 
   ## Callbacks

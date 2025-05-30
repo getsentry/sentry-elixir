@@ -1,17 +1,15 @@
 # Setup with Plug and Phoenix
 
-You can capture errors in Plug (and Phoenix) applications with `Sentry.PlugContext` and `Sentry.PlugCapture`. `Sentry.PlugContext` adds contextual metadata from the current request which is then included in errors that are captured and reported by `Sentry.PlugCapture`.
+You can enrich errors in Plug (and Phoenix) applications with `Sentry.PlugContext`. `Sentry.PlugContext` adds contextual metadata from the current request which is then included in errors.
 
 ## For Phoenix Applications
 
 If you are using Phoenix:
 
-  1. Add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file
   1. Add `Sentry.PlugContext` below `Plug.Parsers`
 
 ```diff
  defmodule MyAppWeb.Endpoint
-+  use Sentry.PlugCapture
    use Phoenix.Endpoint, otp_app: :my_app
 
    # ...
@@ -22,6 +20,16 @@ If you are using Phoenix:
      json_decoder: Phoenix.json_library()
 
 +  plug Sentry.PlugContext
+```
+
+  1. If you're using Cowboy, also add `Sentry.PlugCapture` above the `use Phoenix.Endpoint` line in your endpoint file
+  
+```diff
+ defmodule MyAppWeb.Endpoint
++  use Sentry.PlugCapture
+   use Phoenix.Endpoint, otp_app: :my_app
+
+   # ...
 ```
 
 If you're also using [Phoenix LiveView](https://github.com/phoenixframework/phoenix_live_view), consider also setting up your LiveViews to use the `Sentry.LiveViewHook` hook:
@@ -72,13 +80,11 @@ end
 
 If you are in a non-Phoenix Plug application:
 
-  1. Add `Sentry.PlugCapture` at the top of your Plug application
   1. Add `Sentry.PlugContext` below `Plug.Parsers` (if it is in your stack)
 
 ```diff
  defmodule MyApp.Router do
    use Plug.Router
-+  use Sentry.PlugCapture
 
    # ...
 
@@ -86,4 +92,14 @@ If you are in a non-Phoenix Plug application:
      parsers: [:urlencoded, :multipart]
 
 +  plug Sentry.PlugContext
+```
+
+  1. If you're using Cowboy, add `Sentry.PlugCapture` at the top of your Plug application
+
+```diff
+ defmodule MyApp.Router do
+   use Plug.Router
++  use Sentry.PlugCapture
+
+   # ...
 ```

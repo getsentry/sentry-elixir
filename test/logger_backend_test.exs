@@ -143,7 +143,7 @@ defmodule Sentry.LoggerBackendTest do
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
   end
 
-  test "sends two errors when a Plug process crashes if bandit domain is not excluded" do
+  test "sends two errors when a Plug process crashes if PlugCapture is used and :bandit not excluded" do
     Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
 
     ref = register_before_send()
