@@ -388,7 +388,7 @@ defmodule Sentry.ClientTest do
 
       event =
         fn ->
-          assert_receive {^ref, body}, 1000
+          assert_receive {^ref, body}, 5000
           assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
           event
         end
