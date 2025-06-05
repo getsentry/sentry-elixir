@@ -136,6 +136,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     test "drops entire trace when root span is not sampled" do
       put_test_config(environment_name: "test", traces_sample_rate: 0.0)
 
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
       Sentry.Test.start_collecting_sentry_reports()
 
       Enum.each(1..5, fn _ ->
@@ -143,6 +146,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
       assert [] = Sentry.Test.pop_sentry_transactions()
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
 
     @tag span_storage: true
@@ -165,6 +170,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     test "child spans inherit parent sampling decision" do
       put_test_config(environment_name: "test", traces_sample_rate: 0.5)
 
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
       Sentry.Test.start_collecting_sentry_reports()
 
       Enum.each(1..10, fn _ ->
@@ -180,6 +188,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         assert transaction.contexts.trace.trace_id == child_span_one.trace_id
         assert transaction.contexts.trace.trace_id == child_span_two.trace_id
       end)
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
 
     @tag span_storage: true
@@ -239,6 +249,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     test "concurrent traces maintain independent sampling decisions" do
       put_test_config(environment_name: "test", traces_sample_rate: 0.5)
 
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
       Sentry.Test.start_collecting_sentry_reports()
 
       tasks =
@@ -266,6 +279,8 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       assert length(transactions) >= 5
       assert length(transactions) <= 20
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
 
     @tag span_storage: true

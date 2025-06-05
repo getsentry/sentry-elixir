@@ -3,6 +3,7 @@ if Code.ensure_loaded?(:otel_sampler) do
     @moduledoc false
 
     alias OpenTelemetry.{Span, Tracer}
+    alias Sentry.{ClientReport, Transaction}
 
     @behaviour :otel_sampler
 
@@ -30,19 +31,30 @@ if Code.ensure_loaded?(:otel_sampler) do
           _attributes,
           config
         ) do
-      if span_name in config[:drop] do
-        {:drop, [], []}
-      else
-        sample_rate = Sentry.Config.traces_sample_rate()
+      result =
+        if span_name in config[:drop] do
+          {:drop, [], []}
+        else
+          sample_rate = Sentry.Config.traces_sample_rate()
 
-        case get_parent_sampling_decision(ctx, trace_id) do
-          {:inherit, parent_sampled, tracestate} ->
-            decision = if parent_sampled, do: :record_and_sample, else: :drop
-            {decision, [], tracestate}
+          case get_parent_sampling_decision(ctx, trace_id) do
+            {:inherit, parent_sampled, tracestate} ->
+              decision = if parent_sampled, do: :record_and_sample, else: :drop
 
-          :no_parent ->
-            make_sampling_decision(sample_rate)
+              {decision, [], tracestate}
+
+            :no_parent ->
+              make_sampling_decision(sample_rate)
+          end
         end
+
+      case result do
+        {:drop, _, _} ->
+          record_discarded_transaction(ctx)
+          result
+
+        _ ->
+          result
       end
     end
 
@@ -106,6 +118,23 @@ if Code.ensure_loaded?(:otel_sampler) do
         {^key, value} -> value
         nil -> nil
       end
+    end
+
+    defp record_discarded_transaction(ctx) do
+      span_id =
+        case Tracer.current_span_ctx(ctx) do
+          :undefined -> Sentry.UUID.uuid4_hex()
+          span_ctx -> Span.span_id(span_ctx)
+        end
+
+      transaction =
+        Transaction.new(%{
+          span_id: span_id,
+          start_timestamp: System.system_time(:second),
+          timestamp: System.system_time(:second)
+        })
+
+      ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
     end
   end
 end
