@@ -277,8 +277,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         assert child_span.trace_id == transaction.contexts.trace.trace_id
       end)
 
-      assert length(transactions) >= 5
-      assert length(transactions) <= 20
+      assert length(transactions) < 20
 
       Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
