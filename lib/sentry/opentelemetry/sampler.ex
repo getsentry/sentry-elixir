@@ -24,7 +24,7 @@ if Code.ensure_loaded?(:otel_sampler) do
     @impl true
     def should_sample(
           ctx,
-          trace_id,
+          _trace_id,
           _links,
           span_name,
           _span_kind,
@@ -37,13 +37,13 @@ if Code.ensure_loaded?(:otel_sampler) do
         else
           sample_rate = Sentry.Config.traces_sample_rate()
 
-          case get_parent_sampling_decision(ctx, trace_id) do
-            {:inherit, parent_sampled, tracestate} ->
-              decision = if parent_sampled, do: :record_and_sample, else: :drop
+          case get_trace_sampling_decision(ctx) do
+            {:inherit, trace_sampled, tracestate} ->
+              decision = if trace_sampled, do: :record_and_sample, else: :drop
 
               {decision, [], tracestate}
 
-            :no_parent ->
+            :no_trace ->
               make_sampling_decision(sample_rate)
           end
         end
@@ -58,25 +58,24 @@ if Code.ensure_loaded?(:otel_sampler) do
       end
     end
 
-    defp get_parent_sampling_decision(ctx, trace_id) do
+    defp get_trace_sampling_decision(ctx) do
       case Tracer.current_span_ctx(ctx) do
         :undefined ->
-          :no_parent
+          :no_trace
 
         span_ctx ->
-          parent_trace_id = Span.trace_id(span_ctx)
+          tracestate = Span.tracestate(span_ctx)
+          trace_sampled = get_tracestate_value(tracestate, @sentry_sampled_key)
 
-          if parent_trace_id == trace_id do
-            tracestate = Span.tracestate(span_ctx)
-            parent_sampled = get_tracestate_value(tracestate, @sentry_sampled_key)
+          case trace_sampled do
+            "true" ->
+              {:inherit, true, tracestate}
 
-            case parent_sampled do
-              "true" -> {:inherit, true, tracestate}
-              "false" -> {:inherit, false, tracestate}
-              nil -> :no_parent
-            end
-          else
-            :no_parent
+            "false" ->
+              {:inherit, false, tracestate}
+
+            nil ->
+              :no_trace
           end
       end
     end

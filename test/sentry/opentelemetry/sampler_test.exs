@@ -131,14 +131,149 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     end
   end
 
-  describe "parent span inheritance" do
-    test "inherits sampling decision from parent span with same trace_id" do
+  describe "trace-level sampling consistency" do
+    defp create_span_context_with_tracestate(trace_id, tracestate) do
+      {
+        :span_ctx,
+        trace_id,
+        123_456_789,
+        1,
+        tracestate,
+        true,
+        false,
+        true,
+        nil
+      }
+    end
+
+    test "all spans in trace inherit sampling decision to drop when trace was not sampled" do
+      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
+
+      trace_id = 12_345_678_901_234_567_890_123_456_789_012
+
+      trace_tracestate = [
+        {"sentry-sample_rate", "1.0"},
+        {"sentry-sample_rand", "0.5"},
+        {"sentry-sampled", "false"}
+      ]
+
+      existing_span_ctx = create_span_context_with_tracestate(trace_id, trace_tracestate)
+
+      ctx = :otel_ctx.new()
+      ctx_with_span = :otel_tracer.set_current_span(ctx, existing_span_ctx)
+      token = :otel_ctx.attach(ctx_with_span)
+
+      try do
+        result =
+          Sampler.should_sample(ctx_with_span, trace_id, nil, "new span in trace", nil, nil,
+            drop: []
+          )
+
+        assert {:drop, [], returned_tracestate} = result
+        assert returned_tracestate == trace_tracestate
+
+        Process.sleep(10)
+
+        state = :sys.get_state(ClientReport.Sender)
+        assert state == %{{:sample_rate, "transaction"} => 1}
+      after
+        :otel_ctx.detach(token)
+      end
+    end
+
+    test "all spans in trace inherit sampling decision to sample when trace was sampled" do
+      trace_id = 12_345_678_901_234_567_890_123_456_789_012
+
+      # Simulate existing trace context with sample decision
+      trace_tracestate = [
+        {"sentry-sample_rate", "1.0"},
+        {"sentry-sample_rand", "0.5"},
+        {"sentry-sampled", "true"}
+      ]
+
+      existing_span_ctx = create_span_context_with_tracestate(trace_id, trace_tracestate)
+
+      ctx = :otel_ctx.new()
+      ctx_with_span = :otel_tracer.set_current_span(ctx, existing_span_ctx)
+      token = :otel_ctx.attach(ctx_with_span)
+
+      try do
+        result =
+          Sampler.should_sample(ctx_with_span, trace_id, nil, "new span in trace", nil, nil,
+            drop: []
+          )
+
+        assert {:record_and_sample, [], returned_tracestate} = result
+        assert returned_tracestate == trace_tracestate
+      after
+        :otel_ctx.detach(token)
+      end
+    end
+
+    test "makes new sampling decision when no existing trace context" do
       Sentry.Config.put_config(:traces_sample_rate, 1.0)
 
       test_ctx = create_test_span_context()
 
       assert {:record_and_sample, [], _tracestate} =
-               Sampler.should_sample(test_ctx, 123, nil, "test span", nil, nil, drop: [])
+               Sampler.should_sample(test_ctx, 123, nil, "root span", nil, nil, drop: [])
+    end
+
+    test "makes new sampling decision when tracestate has no sentry sampling info" do
+      trace_id = 12_345_678_901_234_567_890_123_456_789_012
+
+      non_sentry_tracestate = [
+        {"other-system", "some-value"}
+      ]
+
+      existing_span_ctx = create_span_context_with_tracestate(trace_id, non_sentry_tracestate)
+
+      ctx = :otel_ctx.new()
+      ctx_with_span = :otel_tracer.set_current_span(ctx, existing_span_ctx)
+      token = :otel_ctx.attach(ctx_with_span)
+
+      try do
+        Sentry.Config.put_config(:traces_sample_rate, 1.0)
+
+        result =
+          Sampler.should_sample(ctx_with_span, trace_id, nil, "span in external trace", nil, nil,
+            drop: []
+          )
+
+        assert {:record_and_sample, [], new_tracestate} = result
+        assert {"sentry-sampled", "true"} in new_tracestate
+      after
+        :otel_ctx.detach(token)
+      end
+    end
+
+    test "trace_id parameter is now irrelevant for inheritance decisions" do
+      trace_id = 12_345_678_901_234_567_890_123_456_789_012
+      different_trace_id = 98_765_432_109_876_543_210_987_654_321_098
+
+      trace_tracestate = [
+        {"sentry-sample_rate", "1.0"},
+        {"sentry-sample_rand", "0.5"},
+        {"sentry-sampled", "false"}
+      ]
+
+      existing_span_ctx = create_span_context_with_tracestate(trace_id, trace_tracestate)
+
+      ctx = :otel_ctx.new()
+      ctx_with_span = :otel_tracer.set_current_span(ctx, existing_span_ctx)
+      token = :otel_ctx.attach(ctx_with_span)
+
+      try do
+        result =
+          Sampler.should_sample(ctx_with_span, different_trace_id, nil, "span", nil, nil,
+            drop: []
+          )
+
+        assert {:drop, [], returned_tracestate} = result
+        assert returned_tracestate == trace_tracestate
+      after
+        :otel_ctx.detach(token)
+      end
     end
   end
 
