@@ -110,14 +110,12 @@ defmodule Sentry.Client do
   @spec send_transaction(Transaction.t(), keyword()) ::
           {:ok, transaction_id :: String.t()}
           | {:error, ClientError.t()}
-          | :unsampled
           | :excluded
   def send_transaction(%Transaction{} = transaction, opts \\ []) do
     opts = NimbleOptions.validate!(opts, Options.send_transaction_schema())
 
     result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
-    sample_rate = Keyword.get_lazy(opts, :sample_rate, &Config.traces_sample_rate/0)
     before_send = Keyword.get_lazy(opts, :before_send, &Config.before_send/0)
     after_send_event = Keyword.get_lazy(opts, :after_send_event, &Config.after_send_event/0)
 
@@ -126,16 +124,11 @@ defmodule Sentry.Client do
         Application.get_env(:sentry, :request_retries, Transport.default_retries())
       end)
 
-    with :ok <- sample_event(sample_rate),
-         {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
+    with {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
       send_result = encode_and_send(transaction, result_type, client, request_retries)
       _ignored = maybe_call_after_send(transaction, send_result, after_send_event)
       send_result
     else
-      :unsampled ->
-        ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
-        :unsampled
-
       :excluded ->
         :excluded
     end
