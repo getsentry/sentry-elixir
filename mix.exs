@@ -102,6 +102,7 @@ defmodule Sentry.Mixfile do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, "~> 1.6", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
+      {:igniter, "~> 0.5", optional: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
