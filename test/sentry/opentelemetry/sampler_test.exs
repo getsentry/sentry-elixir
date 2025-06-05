@@ -39,8 +39,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                  drop: ["Elixir.Oban.Stager process"]
                )
 
-      Process.sleep(10)
-
       state = :sys.get_state(ClientReport.Sender)
       assert state == %{{:sample_rate, "transaction"} => 1}
     end
@@ -74,8 +72,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
       assert {"sentry-sample_rate", "0.0"} in tracestate
       assert {"sentry-sampled", "false"} in tracestate
-
-      Process.sleep(10)
 
       state = :sys.get_state(ClientReport.Sender)
       assert state == %{{:sample_rate, "transaction"} => 1}
@@ -123,8 +119,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
         Sampler.should_sample(test_ctx, trace_id, nil, "test span", nil, nil, drop: [])
       end)
 
-      Process.sleep(10)
-
       state = :sys.get_state(ClientReport.Sender)
       discarded_count = Map.get(state, {:sample_rate, "transaction"}, 0)
       assert discarded_count > 0, "Expected some spans to be dropped and recorded"
@@ -171,8 +165,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
         assert {:drop, [], returned_tracestate} = result
         assert returned_tracestate == trace_tracestate
-
-        Process.sleep(10)
 
         state = :sys.get_state(ClientReport.Sender)
         assert state == %{{:sample_rate, "transaction"} => 1}
