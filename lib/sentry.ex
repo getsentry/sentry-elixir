@@ -46,7 +46,7 @@ defmodule Sentry do
   not uncommon for most applications to have a "staging" environment. In order
   to handle this without adding an additional Mix environment, you can set an
   environment variable that determines the release level. By default, Sentry
-  picks up the `SENTRY_ENVIRONMENT` variable (*at runtime, when starging*).
+  picks up the `SENTRY_ENVIRONMENT` variable (*at runtime, when starting*).
   Otherwise, you can read the variable at runtime. Do this only in
   `config/runtime.exs` so that it will work both for local development as well
   as Mix releases.

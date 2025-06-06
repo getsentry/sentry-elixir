@@ -357,7 +357,7 @@ defmodule Sentry.Config do
       default: [],
       type_doc: "list of `t:Path.t/0`",
       doc: """
-      Aa list of paths to the root of
+      A list of paths to the root of
       your application's source code. This is used to determine the relative
       path of files in stack traces. Usually, you'll want to set this to
       `[File.cwd!()]`. For umbrella apps, you should set this to all the application
