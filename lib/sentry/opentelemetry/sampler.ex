@@ -81,23 +81,23 @@ if Code.ensure_loaded?(:otel_sampler) do
     end
 
     defp make_sampling_decision(sample_rate) do
-      cond do
-        sample_rate == 0.0 ->
-          tracestate = build_tracestate(sample_rate, 1.0, false)
-          {:drop, [], tracestate}
+      {sampled, random_value} =
+        cond do
+          sample_rate == 0.0 ->
+            {false, 1.0}
 
-        sample_rate == 1.0 ->
-          tracestate = build_tracestate(sample_rate, 0.0, true)
-          {:record_and_sample, [], tracestate}
+          sample_rate == 1.0 ->
+            {true, 0.0}
 
-        true ->
-          random_value = :rand.uniform()
-          sampled = random_value < sample_rate
+          true ->
+            random_value = :rand.uniform()
+            {random_value < sample_rate, random_value}
+        end
 
-          tracestate = build_tracestate(sample_rate, random_value, sampled)
-          decision = if sampled, do: :record_and_sample, else: :drop
-          {decision, [], tracestate}
-      end
+      tracestate = build_tracestate(sample_rate, random_value, sampled)
+      decision = if sampled, do: :record_and_sample, else: :drop
+
+      {decision, [], tracestate}
     end
 
     defp build_tracestate(sample_rate, random_value, sampled) do
