@@ -154,8 +154,12 @@ defmodule Sentry.ConfigTest do
     end
 
     test ":traces_sample_rate" do
+      assert Config.validate!([])[:traces_sample_rate] == nil
+
+      assert Config.validate!(traces_sample_rate: nil)[:traces_sample_rate] == nil
+      assert Config.validate!(traces_sample_rate: 0.0)[:traces_sample_rate] == 0.0
+      assert Config.validate!(traces_sample_rate: 0.5)[:traces_sample_rate] == 0.5
       assert Config.validate!(traces_sample_rate: 1.0)[:traces_sample_rate] == 1.0
-      assert Config.validate!([])[:traces_sample_rate] == 0.0
 
       assert_raise ArgumentError, ~r/invalid value for :traces_sample_rate option/, fn ->
         Config.validate!(traces_sample_rate: 2.0)
