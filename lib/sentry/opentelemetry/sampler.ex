@@ -3,7 +3,7 @@ if Code.ensure_loaded?(:otel_sampler) do
     @moduledoc false
 
     alias OpenTelemetry.{Span, Tracer}
-    alias Sentry.{ClientReport, Transaction}
+    alias Sentry.ClientReport
 
     @behaviour :otel_sampler
 
@@ -50,7 +50,7 @@ if Code.ensure_loaded?(:otel_sampler) do
 
       case result do
         {:drop, _, _} ->
-          record_discarded_transaction(ctx)
+          record_discarded_transaction()
           result
 
         _ ->
@@ -119,21 +119,8 @@ if Code.ensure_loaded?(:otel_sampler) do
       end
     end
 
-    defp record_discarded_transaction(ctx) do
-      span_id =
-        case Tracer.current_span_ctx(ctx) do
-          :undefined -> Sentry.UUID.uuid4_hex()
-          span_ctx -> Span.span_id(span_ctx)
-        end
-
-      transaction =
-        Transaction.new(%{
-          span_id: span_id,
-          start_timestamp: System.system_time(:second),
-          timestamp: System.system_time(:second)
-        })
-
-      ClientReport.Sender.record_discarded_events(:sample_rate, [transaction])
+    defp record_discarded_transaction() do
+      ClientReport.Sender.record_discarded_events(:sample_rate, "transaction")
     end
   end
 end
