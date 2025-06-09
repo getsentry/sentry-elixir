@@ -1,19 +1,17 @@
 name: 💡 Improvement
-description: Propose an improvement for existing functionality of the SDK
+description: Propose an improvement for existing functionality of the SDK.
 labels: ["Elixir", "Improvement"]
 body:
-  - type: markdown
-    attributes:
-      value: Thanks for taking the time to file a request! Please fill out this form as completely as possible.
   - type: textarea
     id: problem
     attributes:
       label: Problem Statement
-      description: A clear and concise description of what you want and what your use case is.
+      description: What problem could Sentry solve that it doesn't?
       placeholder: |-
         I want to make whirled peas, but Sentry doesn't blend.
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
@@ -22,7 +20,8 @@ body:
       placeholder: |-
         Add a blender to Sentry.
     validations:
-      required: true
+      required: false
+
   - type: markdown
     attributes:
       value: |-
