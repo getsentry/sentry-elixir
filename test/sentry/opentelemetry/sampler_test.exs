@@ -123,6 +123,20 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       discarded_count = Map.get(state, {:sample_rate, "transaction"}, 0)
       assert discarded_count > 0, "Expected some spans to be dropped and recorded"
     end
+
+    test "always drops when sample rate is nil (tracing disabled) and records discarded event" do
+      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
+
+      Sentry.Config.put_config(:traces_sample_rate, nil)
+
+      test_ctx = create_test_span_context()
+
+      assert {:drop, [], []} =
+               Sampler.should_sample(test_ctx, 123, nil, "test span", nil, nil, drop: [])
+
+      state = :sys.get_state(ClientReport.Sender)
+      assert state == %{{:sample_rate, "transaction"} => 1}
+    end
   end
 
   describe "trace-level sampling consistency" do
