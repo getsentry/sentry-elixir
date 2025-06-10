@@ -120,4 +120,195 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert String.match?(trace_id, ~r/^[a-f0-9]{32}$/),
            "Expected trace_id to be a lowercase hex string"
   end
+
+  describe "sampling behavior with root and child spans" do
+    @tag span_storage: true
+    test "drops entire trace when root span is not sampled" do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.0)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      Enum.each(1..5, fn _ ->
+        TestEndpoint.instrumented_function()
+      end)
+
+      assert [] = Sentry.Test.pop_sentry_transactions()
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "samples entire trace when root span is sampled" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      TestEndpoint.instrumented_function()
+
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      assert length(transaction.spans) == 2
+
+      [child_span_one, child_span_two] = transaction.spans
+      assert transaction.contexts.trace.trace_id == child_span_one.trace_id
+      assert transaction.contexts.trace.trace_id == child_span_two.trace_id
+    end
+
+    @tag span_storage: true
+    test "child spans inherit parent sampling decision" do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.5)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      Enum.each(1..10, fn _ ->
+        TestEndpoint.instrumented_function()
+      end)
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      Enum.each(transactions, fn transaction ->
+        assert length(transaction.spans) == 2
+
+        [child_span_one, child_span_two] = transaction.spans
+        assert transaction.contexts.trace.trace_id == child_span_one.trace_id
+        assert transaction.contexts.trace.trace_id == child_span_two.trace_id
+      end)
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "nested child spans maintain sampling consistency" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      require OpenTelemetry.Tracer, as: Tracer
+
+      Tracer.with_span "root_span" do
+        Tracer.with_span "level_1_child" do
+          Tracer.with_span "level_2_child" do
+            Process.sleep(10)
+          end
+
+          Tracer.with_span "level_2_sibling" do
+            Process.sleep(10)
+          end
+        end
+
+        Tracer.with_span "level_1_sibling" do
+          Process.sleep(10)
+        end
+      end
+
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      assert length(transaction.spans) == 2
+
+      trace_id = transaction.contexts.trace.trace_id
+
+      Enum.each(transaction.spans, fn span ->
+        assert span.trace_id == trace_id
+      end)
+
+      span_names = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      expected_names = ["level_1_child", "level_1_sibling"]
+      assert span_names == expected_names
+    end
+
+    @tag span_storage: true
+    test "child-only spans without root are handled correctly" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      TestEndpoint.child_instrumented_function("standalone")
+
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      assert length(transaction.spans) == 0
+      assert transaction.transaction == "child_instrumented_function_standalone"
+    end
+
+    @tag span_storage: true
+    test "concurrent traces maintain independent sampling decisions" do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.5)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      tasks =
+        Enum.map(1..20, fn i ->
+          Task.async(fn ->
+            require OpenTelemetry.Tracer, as: Tracer
+
+            Tracer.with_span "concurrent_root_#{i}" do
+              Tracer.with_span "concurrent_child_#{i}" do
+                Process.sleep(10)
+              end
+            end
+          end)
+        end)
+
+      Enum.each(tasks, &Task.await/1)
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      Enum.each(transactions, fn transaction ->
+        assert length(transaction.spans) == 1
+        [child_span] = transaction.spans
+        assert child_span.trace_id == transaction.contexts.trace.trace_id
+      end)
+
+      assert length(transactions) < 20
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "span processor respects sampler drop configuration" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+
+      Application.put_env(
+        :opentelemetry,
+        :sampler,
+        {Sentry.OpenTelemetry.Sampler, [drop: ["child_instrumented_function_one"]]}
+      )
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      require OpenTelemetry.Tracer, as: Tracer
+
+      Tracer.with_span "root_span" do
+        Tracer.with_span "child_instrumented_function_one" do
+          Process.sleep(10)
+        end
+
+        Tracer.with_span "allowed_child" do
+          Process.sleep(10)
+        end
+      end
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      Enum.each(transactions, fn transaction ->
+        trace_id = transaction.contexts.trace.trace_id
+
+        Enum.each(transaction.spans, fn span ->
+          assert span.trace_id == trace_id
+        end)
+      end)
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+  end
 end

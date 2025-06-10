@@ -39,6 +39,9 @@ if Code.ensure_loaded?(OpenTelemetry) do
             :ignored ->
               true
 
+            :excluded ->
+              true
+
             {:error, error} ->
               Logger.warning("Failed to send transaction to Sentry: #{inspect(error)}")
               {:error, :invalid_span}
