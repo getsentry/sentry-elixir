@@ -24,16 +24,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
   end
 
-  setup do
-    original_rate = Sentry.Config.traces_sample_rate()
-
-    on_exit(fn ->
-      Sentry.Config.put_config(:traces_sample_rate, original_rate)
-    end)
-
-    :ok
-  end
-
   @tag span_storage: true
   test "sends captured root spans as transactions" do
     put_test_config(environment_name: "test", traces_sample_rate: 1.0)

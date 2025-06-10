@@ -1,8 +1,10 @@
 defmodule Sentry.Opentelemetry.SamplerTest do
-  use Sentry.Case, async: true
+  use Sentry.Case, async: false
 
   alias Sentry.OpenTelemetry.Sampler
   alias Sentry.ClientReport
+
+  import Sentry.TestHelpers
 
   defp create_test_span_context(span_id \\ 123_456_789) do
     {
@@ -16,16 +18,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       true,
       nil
     }
-  end
-
-  setup do
-    original_rate = Sentry.Config.traces_sample_rate()
-
-    on_exit(fn ->
-      Sentry.Config.put_config(:traces_sample_rate, original_rate)
-    end)
-
-    :ok
   end
 
   describe "span name dropping" do
@@ -44,7 +36,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     end
 
     test "records and samples spans not in drop list" do
-      Sentry.Config.put_config(:traces_sample_rate, 1.0)
+      put_test_config(traces_sample_rate: 1.0)
 
       test_ctx = create_test_span_context()
 
@@ -63,7 +55,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     test "always drops when sample rate is 0.0 and records discarded event" do
       :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
 
-      Sentry.Config.put_config(:traces_sample_rate, 0.0)
+      put_test_config(traces_sample_rate: 0.0)
 
       test_ctx = create_test_span_context()
 
@@ -78,7 +70,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     end
 
     test "always samples when sample rate is 1.0" do
-      Sentry.Config.put_config(:traces_sample_rate, 1.0)
+      put_test_config(traces_sample_rate: 1.0)
 
       test_ctx = create_test_span_context()
 
@@ -90,7 +82,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     end
 
     test "different trace_ids produce different sampling decisions" do
-      Sentry.Config.put_config(:traces_sample_rate, 0.5)
+      put_test_config(traces_sample_rate: 0.5)
 
       trace_ids = Enum.to_list(1..100)
 
@@ -112,7 +104,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     test "records discarded events when randomly dropped by sample rate" do
       :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
 
-      Sentry.Config.put_config(:traces_sample_rate, 0.001)
+      put_test_config(traces_sample_rate: 0.001)
 
       Enum.each(1..50, fn trace_id ->
         test_ctx = create_test_span_context()
@@ -127,7 +119,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     test "always drops when sample rate is nil (tracing disabled) and records discarded event" do
       :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
 
-      Sentry.Config.put_config(:traces_sample_rate, nil)
+      put_test_config(traces_sample_rate: nil)
 
       test_ctx = create_test_span_context()
 
@@ -217,7 +209,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
     end
 
     test "makes new sampling decision when no existing trace context" do
-      Sentry.Config.put_config(:traces_sample_rate, 1.0)
+      put_test_config(traces_sample_rate: 1.0)
 
       test_ctx = create_test_span_context()
 
@@ -239,7 +231,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       token = :otel_ctx.attach(ctx_with_span)
 
       try do
-        Sentry.Config.put_config(:traces_sample_rate, 1.0)
+        put_test_config(traces_sample_rate: 1.0)
 
         result =
           Sampler.should_sample(ctx_with_span, trace_id, nil, "span in external trace", nil, nil,
@@ -285,7 +277,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
   describe "tracestate management" do
     test "builds tracestate with correct format" do
-      Sentry.Config.put_config(:traces_sample_rate, 0.75)
+      put_test_config(traces_sample_rate: 0.75)
 
       test_ctx = create_test_span_context()
 
