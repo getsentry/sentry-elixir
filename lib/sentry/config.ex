@@ -622,7 +622,7 @@ defmodule Sentry.Config do
   @spec sample_rate() :: float()
   def sample_rate, do: fetch!(:sample_rate)
 
-  @spec traces_sample_rate() :: float()
+  @spec traces_sample_rate() :: nil | float()
   def traces_sample_rate, do: fetch!(:traces_sample_rate)
 
   @spec hackney_opts() :: keyword()
