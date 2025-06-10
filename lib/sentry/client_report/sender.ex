@@ -17,14 +17,21 @@ defmodule Sentry.ClientReport.Sender do
     GenServer.start_link(__MODULE__, nil, name: Keyword.get(opts, :name, __MODULE__))
   end
 
+  def record_discarded_events(reason, info, genserver \\ __MODULE__)
+
+  @spec record_discarded_events(atom(), String.t(), GenServer.server()) :: :ok
+  def record_discarded_events(reason, data_category, genserver)
+      when is_binary(data_category) do
+    GenServer.cast(genserver, {:record_discarded_events, reason, data_category})
+  end
+
   @spec record_discarded_events(atom(), [item], GenServer.server()) :: :ok
         when item:
                Sentry.Attachment.t()
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
-               | Sentry.Transaction.t()
-  def record_discarded_events(reason, event_items, genserver \\ __MODULE__)
+  def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
     # https://develop.sentry.dev/sdk/client-reports/

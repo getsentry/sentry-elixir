@@ -143,6 +143,21 @@ defmodule Sentry.Config do
       be used as the value for this option.
       """
     ],
+    traces_sample_rate: [
+      type: {:custom, __MODULE__, :__validate_traces_sample_rate__, []},
+      default: nil,
+      doc: """
+      The sample rate for transaction events. A value between `0.0` and `1.0` (inclusive).
+      A value of `0.0` means no transactions will be sampled, while `1.0` means all transactions
+      will be sampled.
+
+      This value is also used to determine if tracing is enabled: if it's not `nil`, tracing is enabled.
+
+      Tracing requires OpenTelemetry packages to work. See [the
+      OpenTelemetry setup documentation](https://opentelemetry.io/docs/languages/erlang/getting-started/)
+      for guides on how to set it up.
+      """
+    ],
     included_environments: [
       type: {:or, [{:in, [:all]}, {:list, {:or, [:atom, :string]}}]},
       deprecated: "Use :dsn to control whether to send events to Sentry.",
@@ -607,6 +622,9 @@ defmodule Sentry.Config do
   @spec sample_rate() :: float()
   def sample_rate, do: fetch!(:sample_rate)
 
+  @spec traces_sample_rate() :: nil | float()
+  def traces_sample_rate, do: fetch!(:traces_sample_rate)
+
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
 
@@ -643,6 +661,9 @@ defmodule Sentry.Config do
 
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)
+
+  @spec tracing?() :: boolean()
+  def tracing?, do: not is_nil(fetch!(:traces_sample_rate))
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
@@ -740,6 +761,15 @@ defmodule Sentry.Config do
     else
       {:error,
        "expected :sample_rate to be a float between 0.0 and 1.0 (included), got: #{inspect(float)}"}
+    end
+  end
+
+  def __validate_traces_sample_rate__(value) do
+    if is_nil(value) or (is_float(value) and value >= 0.0 and value <= 1.0) do
+      {:ok, value}
+    else
+      {:error,
+       "expected :traces_sample_rate to be nil or a value between 0.0 and 1.0 (included), got: #{inspect(value)}"}
     end
   end
 
