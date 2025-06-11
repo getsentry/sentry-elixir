@@ -16,7 +16,7 @@ defmodule Sentry.Integrations.Telemetry do
       :telemetry.attach(
         "#{inspect(__MODULE__)}-telemetry-failures",
         @failure_event,
-        &handle_event/4,
+        &__MODULE__.handle_event/4,
         :no_config
       )
 
