@@ -4,6 +4,9 @@ if Code.ensure_loaded?(:otel_sampler) do
 
     alias OpenTelemetry.{Span, Tracer}
     alias Sentry.ClientReport
+    alias SamplingContext
+
+    require Logger
 
     @behaviour :otel_sampler
 
@@ -24,27 +27,47 @@ if Code.ensure_loaded?(:otel_sampler) do
     @impl true
     def should_sample(
           ctx,
-          _trace_id,
+          trace_id,
           _links,
           span_name,
-          _span_kind,
-          _attributes,
+          span_kind,
+          attributes,
           config
         ) do
       result =
         if span_name in config[:drop] do
           {:drop, [], []}
         else
-          sample_rate = Sentry.Config.traces_sample_rate()
+          traces_sampler = Sentry.Config.traces_sampler()
+          traces_sample_rate = Sentry.Config.traces_sample_rate()
 
           case get_trace_sampling_decision(ctx) do
             {:inherit, trace_sampled, tracestate} ->
-              decision = if trace_sampled, do: :record_and_sample, else: :drop
+              if traces_sampler do
+                sampling_context =
+                  build_sampling_context(
+                    trace_sampled,
+                    span_name,
+                    span_kind,
+                    attributes,
+                    trace_id
+                  )
 
-              {decision, [], tracestate}
+                make_sampler_decision(traces_sampler, sampling_context, tracestate)
+              else
+                decision = if trace_sampled, do: :record_and_sample, else: :drop
+                {decision, [], tracestate}
+              end
 
             :no_trace ->
-              make_sampling_decision(sample_rate)
+              if traces_sampler do
+                sampling_context =
+                  build_sampling_context(nil, span_name, span_kind, attributes, trace_id)
+
+                make_sampler_decision(traces_sampler, sampling_context, [])
+              else
+                make_sampling_decision(traces_sample_rate)
+              end
           end
         end
 
@@ -120,6 +143,76 @@ if Code.ensure_loaded?(:otel_sampler) do
         nil -> nil
       end
     end
+
+    defp build_sampling_context(parent_sampled, span_name, _span_kind, attributes, trace_id) do
+      transaction_context = %{
+        name: span_name,
+        op: span_name,
+        trace_id: trace_id,
+        attributes: attributes
+      }
+
+      sampling_context = %SamplingContext{
+        transaction_context: transaction_context,
+        parent_sampled: parent_sampled
+      }
+
+      if attributes && map_size(attributes) > 0 do
+        Map.merge(sampling_context, attributes)
+      else
+        sampling_context
+      end
+    end
+
+    defp make_sampler_decision(traces_sampler, sampling_context, _existing_tracestate) do
+      try do
+        result = call_traces_sampler(traces_sampler, sampling_context)
+        sample_rate = normalize_sampler_result(result)
+
+        cond do
+          sample_rate == 0.0 ->
+            tracestate = build_tracestate(0.0, 1.0, false)
+
+            {:drop, [], tracestate}
+
+          sample_rate == 1.0 ->
+            tracestate = build_tracestate(1.0, 0.0, true)
+
+            {:record_and_sample, [], tracestate}
+
+          is_float(sample_rate) and sample_rate > 0.0 and sample_rate < 1.0 ->
+            random_value = :rand.uniform()
+            sampled = random_value < sample_rate
+            tracestate = build_tracestate(sample_rate, random_value, sampled)
+            decision = if sampled, do: :record_and_sample, else: :drop
+
+            {decision, [], tracestate}
+
+          true ->
+            tracestate = build_tracestate(0.0, 1.0, false)
+
+            {:drop, [], tracestate}
+        end
+      rescue
+        error ->
+          Logger.warning("traces_sampler function failed: #{inspect(error)}")
+
+          tracestate = build_tracestate(0.0, 1.0, false)
+          {:drop, [], tracestate}
+      end
+    end
+
+    defp call_traces_sampler(fun, sampling_context) when is_function(fun, 1) do
+      fun.(sampling_context)
+    end
+
+    defp call_traces_sampler({module, function}, sampling_context) do
+      apply(module, function, [sampling_context])
+    end
+
+    defp normalize_sampler_result(true), do: 1.0
+    defp normalize_sampler_result(false), do: 0.0
+    defp normalize_sampler_result(rate) when is_float(rate), do: rate
 
     defp record_discarded_transaction() do
       ClientReport.Sender.record_discarded_events(:sample_rate, "transaction")
