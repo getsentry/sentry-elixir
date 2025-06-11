@@ -171,10 +171,10 @@ defmodule Sentry.Config do
       type_doc: "`t:traces_sampler_function/0` or `nil`",
       doc: """
       A function that determines the sample rate for transaction events. This function
-      receives a sampling context map and should return a boolean or a float between `0.0` and `1.0`.
+      receives a sampling context struct and should return a boolean or a float between `0.0` and `1.0`.
 
       The sampling context contains:
-      - `:parent_sampled` - boolean indicating if the parent trace was sampled (nil if no parent)
+      - `:parent_sampled` - boolean indicating if the parent trace span was sampled (nil if no parent)
       - `:transaction_context` - map with transaction information (name, op, etc.)
 
       If both `:traces_sampler` and `:traces_sample_rate` are configured, `:traces_sampler` takes precedence.
@@ -182,7 +182,7 @@ defmodule Sentry.Config do
       Example:
       ```elixir
       traces_sampler: fn sampling_context ->
-        case sampling_context[:transaction_context][:op] do
+        case sampling_context.transaction_context.op do
           "http.server" -> 0.1  # Sample 10% of HTTP requests
           "db.query" -> 0.01    # Sample 1% of database queries
           _ -> false            # Don't sample other operations
