@@ -1,5 +1,10 @@
 import Config
 
+# Configure your database
+config :phoenix_app, PhoenixApp.Repo,
+  adapter: Ecto.Adapters.SQLite3,
+  database: "db/dev.sqlite3"
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -73,3 +78,19 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+dsn =
+  if System.get_env("SENTRY_LOCAL"),
+    do: System.get_env("SENTRY_DSN_LOCAL"),
+    else: System.get_env("SENTRY_DSN")
+
+config :sentry,
+  dsn: dsn,
+  environment_name: :dev,
+  enable_source_code_context: true,
+  send_result: :sync
+
+config :phoenix_app, Oban,
+  repo: PhoenixApp.Repo,
+  engine: Oban.Engines.Lite,
+  queues: [default: 10, background: 5]
