@@ -30,7 +30,8 @@ defmodule PhoenixApp.Application do
       # Start Oban
       {Oban, Application.fetch_env!(:phoenix_app, Oban)},
       # Start to serve requests, typically the last entry
-      PhoenixAppWeb.Endpoint
+      PhoenixAppWeb.Endpoint,
+      Sentry.OpenTelemetry.SpanStorage
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

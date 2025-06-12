@@ -71,6 +71,12 @@ if Code.ensure_loaded?(:otel_sampler) do
           end
         end
 
+      # IO.inspect(trace_id)
+      # IO.inspect(ctx)
+      # IO.inspect(span_name)
+      # IO.inspect(attributes)
+      # IO.inspect(result)
+
       case result do
         {:drop, _, _} ->
           record_discarded_transaction()

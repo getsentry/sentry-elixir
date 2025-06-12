@@ -5,7 +5,8 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
   import Sentry.TestHelpers
 
   setup do
-    put_test_config(dsn: "http://public:secret@localhost:8080/1")
+    put_test_config(dsn: "http://public:secret@localhost:8080/1", traces_sample_rate: 1.0)
+
     Sentry.Test.start_collecting_sentry_reports()
 
     :ok
