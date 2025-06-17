@@ -157,11 +157,7 @@ if Code.ensure_loaded?(:otel_sampler) do
         parent_sampled: parent_sampled
       }
 
-      if attributes && map_size(attributes) > 0 do
-        Map.merge(sampling_context, attributes)
-      else
-        sampling_context
-      end
+      sampling_context
     end
 
     defp make_sampler_decision(traces_sampler, sampling_context, _existing_tracestate) do
