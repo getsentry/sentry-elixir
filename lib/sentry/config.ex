@@ -1,6 +1,13 @@
 defmodule Sentry.Config do
   @moduledoc false
 
+  @typedoc """
+  A function that determines the sample rate for transaction events.
+
+  The function receives a sampling context map and should return a boolean or a float between `0.0` and `1.0`.
+  """
+  @type traces_sampler_function :: (map() -> boolean() | float()) | {module(), atom()}
+
   integrations_schema = [
     max_expected_check_in_time: [
       type: :integer,
@@ -156,6 +163,34 @@ defmodule Sentry.Config do
       Tracing requires OpenTelemetry packages to work. See [the
       OpenTelemetry setup documentation](https://opentelemetry.io/docs/languages/erlang/getting-started/)
       for guides on how to set it up.
+      """
+    ],
+    traces_sampler: [
+      type: {:custom, __MODULE__, :__validate_traces_sampler__, []},
+      default: nil,
+      type_doc: "`t:traces_sampler_function/0` or `nil`",
+      doc: """
+      A function that determines the sample rate for transaction events. This function
+      receives a sampling context struct and should return a boolean or a float between `0.0` and `1.0`.
+
+      The sampling context contains:
+      - `:parent_sampled` - boolean indicating if the parent trace span was sampled (nil if no parent)
+      - `:transaction_context` - map with transaction information (name, op, etc.)
+
+      If both `:traces_sampler` and `:traces_sample_rate` are configured, `:traces_sampler` takes precedence.
+
+      Example:
+      ```elixir
+      traces_sampler: fn sampling_context ->
+        case sampling_context.transaction_context.op do
+          "http.server" -> 0.1  # Sample 10% of HTTP requests
+          "db.query" -> 0.01    # Sample 1% of database queries
+          _ -> false            # Don't sample other operations
+        end
+      end
+      ```
+
+      This value is also used to determine if tracing is enabled: if it's not `nil`, tracing is enabled.
       """
     ],
     included_environments: [
@@ -625,6 +660,9 @@ defmodule Sentry.Config do
   @spec traces_sample_rate() :: nil | float()
   def traces_sample_rate, do: fetch!(:traces_sample_rate)
 
+  @spec traces_sampler() :: traces_sampler_function() | nil
+  def traces_sampler, do: get(:traces_sampler)
+
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
 
@@ -663,7 +701,7 @@ defmodule Sentry.Config do
   def integrations, do: fetch!(:integrations)
 
   @spec tracing?() :: boolean()
-  def tracing?, do: not is_nil(fetch!(:traces_sample_rate))
+  def tracing?, do: not is_nil(fetch!(:traces_sample_rate)) or not is_nil(get(:traces_sampler))
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
@@ -771,6 +809,26 @@ defmodule Sentry.Config do
       {:error,
        "expected :traces_sample_rate to be nil or a value between 0.0 and 1.0 (included), got: #{inspect(value)}"}
     end
+  end
+
+  def __validate_traces_sampler__(nil), do: {:ok, nil}
+
+  def __validate_traces_sampler__(fun) when is_function(fun, 1) do
+    {:ok, fun}
+  end
+
+  def __validate_traces_sampler__({module, function})
+      when is_atom(module) and is_atom(function) do
+    if function_exported?(module, function, 1) do
+      {:ok, {module, function}}
+    else
+      {:error, "function #{module}.#{function}/1 is not exported"}
+    end
+  end
+
+  def __validate_traces_sampler__(other) do
+    {:error,
+     "expected :traces_sampler to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
   end
 
   def __validate_json_library__(nil) do
