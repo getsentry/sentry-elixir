@@ -51,7 +51,7 @@ if Code.ensure_loaded?(:otel_sampler) do
                 sampling_context =
                   build_sampling_context(nil, span_name, span_kind, attributes, trace_id)
 
-                make_sampler_decision(traces_sampler, sampling_context, [])
+                make_sampler_decision(traces_sampler, sampling_context)
               else
                 make_sampling_decision(traces_sample_rate)
               end
@@ -147,41 +147,25 @@ if Code.ensure_loaded?(:otel_sampler) do
       sampling_context
     end
 
-    defp make_sampler_decision(traces_sampler, sampling_context, _existing_tracestate) do
+    defp make_sampler_decision(traces_sampler, sampling_context) do
       try do
         result = call_traces_sampler(traces_sampler, sampling_context)
         sample_rate = normalize_sampler_result(result)
 
-        cond do
-          sample_rate == 0.0 ->
-            tracestate = build_tracestate(0.0, 1.0, false)
+        if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
+          make_sampling_decision(sample_rate)
+        else
+          Logger.warning(
+            "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
+          )
 
-            {:drop, [], tracestate}
-
-          sample_rate == 1.0 ->
-            tracestate = build_tracestate(1.0, 0.0, true)
-
-            {:record_and_sample, [], tracestate}
-
-          is_float(sample_rate) and sample_rate > 0.0 and sample_rate < 1.0 ->
-            random_value = :rand.uniform()
-            sampled = random_value < sample_rate
-            tracestate = build_tracestate(sample_rate, random_value, sampled)
-            decision = if sampled, do: :record_and_sample, else: :drop
-
-            {decision, [], tracestate}
-
-          true ->
-            tracestate = build_tracestate(0.0, 1.0, false)
-
-            {:drop, [], tracestate}
+          make_sampling_decision(0.0)
         end
       rescue
         error ->
           Logger.warning("traces_sampler function failed: #{inspect(error)}")
 
-          tracestate = build_tracestate(0.0, 1.0, false)
-          {:drop, [], tracestate}
+          make_sampling_decision(0.0)
       end
     end
 
@@ -195,7 +179,7 @@ if Code.ensure_loaded?(:otel_sampler) do
 
     defp normalize_sampler_result(true), do: 1.0
     defp normalize_sampler_result(false), do: 0.0
-    defp normalize_sampler_result(rate) when is_float(rate), do: rate
+    defp normalize_sampler_result(rate), do: rate
 
     defp record_discarded_transaction() do
       ClientReport.Sender.record_discarded_events(:sample_rate, "transaction")
