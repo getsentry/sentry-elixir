@@ -442,6 +442,31 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
     end
 
+    test "handles invalid traces_sampler return values gracefully" do
+      test_cases = [
+        -0.5,
+        1.5,
+        2.0,
+        "invalid",
+        :invalid,
+        %{invalid: true},
+        [1, 2, 3],
+        nil
+      ]
+
+      Enum.each(test_cases, fn invalid_value ->
+        put_test_config(traces_sampler: fn _ -> invalid_value end)
+
+        test_ctx = create_test_span_context()
+
+        result = Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+
+        assert {:drop, [], tracestate} = result
+        assert {"sentry-sample_rate", "0.0"} in tracestate
+        assert {"sentry-sampled", "false"} in tracestate
+      end)
+    end
+
     test "supports MFA tuple for traces_sampler" do
       defmodule TestSampler do
         def sample(_sampling_context), do: 0.25
