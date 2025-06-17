@@ -3,6 +3,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
   alias Sentry.OpenTelemetry.Sampler
   alias Sentry.ClientReport
+  alias SamplingContext
 
   import Sentry.TestHelpers
 
