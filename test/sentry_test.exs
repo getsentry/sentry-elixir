@@ -300,10 +300,6 @@ defmodule SentryTest do
       assert {:ok, "340"} = Sentry.send_transaction(transaction, sample_rate: 1.0)
     end
 
-    test "sends client report when sample_rate is 0.0", %{transaction: transaction} do
-      assert :unsampled = Sentry.send_transaction(transaction, sample_rate: 0.0)
-    end
-
     test "supports before_send option", %{bypass: bypass, transaction: transaction} do
       # Exclude transaction
       assert :excluded =

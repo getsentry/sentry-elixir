@@ -1,7 +1,43 @@
 ## Unreleased
 
-- Tweak credit card regex handling for OTP-28 ([#898](https://github.com/getsentry/sentry-elixir/pull/898))
+This release comes with a beta support for Traces using OpenTelemetry - please test it out and report any issues you find.
+
+### New features
+
+- Beta support for Traces using OpenTelemetry ([#902](https://github.com/getsentry/sentry-elixir/pull/902))
+
+  To enable Tracing in your Phoenix application, you need to add the following to your `mix.exs`:
+
+  ```elixir
+  def deps do
+    [
+      # ...
+      {:sentry, "~> 11.0.0"},
+      {:opentelemetry, "~> 1.5"},
+      {:opentelemetry_api, "~> 1.4"},
+      {:opentelemetry_exporter, "~> 1.0"},
+      {:opentelemetry_semantic_conventions, "~> 1.27"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      {:opentelemetry_ecto, "~> 1.2"},
+      # ...
+    ]
+  ```
+
+  And then configure Tracing in Sentry and OpenTelemetry in your `config.exs`:
+
+  ```elixir
+  config :sentry,
+    # ...
+    traces_sample_rate: 1.0 # any value between 0 and 1.0 enables tracing
+
+  config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
+  config :opentelemetry, sampler: {Sentry.OpenTelemetry.Sampler, []}
+  ```
 - Add installer (based on Igniter) ([#876](https://github.com/getsentry/sentry-elixir/pull/876))
+
+### Various improvements
+
+- Tweak credit card regex handling for OTP-28 ([#898](https://github.com/getsentry/sentry-elixir/pull/898))
 
 # Changelog
 
