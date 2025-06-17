@@ -374,7 +374,16 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
     end
 
-    test "traces_sampler can override parent sampling decision" do
+    test "child spans inherit parent sampling decision without calling traces_sampler" do
+      {:ok, sampler_call_count} = Agent.start_link(fn -> 0 end)
+
+      sampler_fun = fn _sampling_context ->
+        Agent.update(sampler_call_count, &(&1 + 1))
+        false
+      end
+
+      put_test_config(traces_sampler: sampler_fun)
+
       trace_tracestate = [
         {"sentry-sample_rate", "1.0"},
         {"sentry-sample_rand", "0.5"},
@@ -388,15 +397,40 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       token = :otel_ctx.attach(ctx_with_span)
 
       try do
-        put_test_config(traces_sampler: fn _ -> false end)
-
         result =
           Sampler.should_sample(ctx_with_span, 123, nil, "child span", nil, %{}, drop: [])
 
-        assert {:drop, [], _tracestate} = result
+        assert {:record_and_sample, [], returned_tracestate} = result
+        assert returned_tracestate == trace_tracestate
+
+        call_count = Agent.get(sampler_call_count, & &1)
+        assert call_count == 0
       after
         :otel_ctx.detach(token)
+        Agent.stop(sampler_call_count)
       end
+    end
+
+    test "traces_sampler is only called for root spans" do
+      {:ok, sampler_call_count} = Agent.start_link(fn -> 0 end)
+
+      sampler_fun = fn _sampling_context ->
+        Agent.update(sampler_call_count, &(&1 + 1))
+        true
+      end
+
+      put_test_config(traces_sampler: sampler_fun)
+
+      test_ctx = create_test_span_context()
+
+      result = Sampler.should_sample(test_ctx, 123, nil, "root span", nil, %{}, drop: [])
+
+      assert {:record_and_sample, [], _tracestate} = result
+
+      call_count = Agent.get(sampler_call_count, & &1)
+      assert call_count == 1
+
+      Agent.stop(sampler_call_count)
     end
 
     test "handles traces_sampler errors gracefully" do

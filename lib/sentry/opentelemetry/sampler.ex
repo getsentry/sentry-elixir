@@ -43,21 +43,8 @@ if Code.ensure_loaded?(:otel_sampler) do
 
           case get_trace_sampling_decision(ctx) do
             {:inherit, trace_sampled, tracestate} ->
-              if traces_sampler do
-                sampling_context =
-                  build_sampling_context(
-                    trace_sampled,
-                    span_name,
-                    span_kind,
-                    attributes,
-                    trace_id
-                  )
-
-                make_sampler_decision(traces_sampler, sampling_context, tracestate)
-              else
-                decision = if trace_sampled, do: :record_and_sample, else: :drop
-                {decision, [], tracestate}
-              end
+              decision = if trace_sampled, do: :record_and_sample, else: :drop
+              {decision, [], tracestate}
 
             :no_trace ->
               if traces_sampler do
