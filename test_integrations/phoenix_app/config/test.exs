@@ -1,5 +1,11 @@
 import Config
 
+# Configure your database
+config :phoenix_app, PhoenixApp.Repo,
+  adapter: Ecto.Adapters.SQLite3,
+  pool: Ecto.Adapters.SQL.Sandbox,
+  database: "db/test.sqlite3"
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :phoenix_app, PhoenixAppWeb.Endpoint,
@@ -24,11 +30,17 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sentry,
-  dsn: "http://public:secret@localhost:8080/1",
-  environment_name: Mix.env(),
+  dsn: nil,
+  environment_name: :dev,
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
-  send_result: :sync
+  send_result: :sync,
+  traces_sample_rate: 1.0
 
 config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
+
+config :phoenix_app, Oban,
+  repo: PhoenixApp.Repo,
+  engine: Oban.Engines.Lite,
+  queues: [default: 10, background: 5]
