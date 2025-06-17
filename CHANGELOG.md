@@ -1,4 +1,4 @@
-## Unreleased
+## 11.0.0
 
 This release comes with a beta support for Traces using OpenTelemetry - please test it out and report any issues you find.
 
