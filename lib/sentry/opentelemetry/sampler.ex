@@ -35,7 +35,7 @@ if Code.ensure_loaded?(:otel_sampler) do
           config
         ) do
       result =
-        if span_name in config[:drop] do
+        if config[:drop] && span_name in config[:drop] do
           {:drop, [], []}
         else
           traces_sampler = Sentry.Config.traces_sampler()
