@@ -50,6 +50,26 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       assert {"sentry-sample_rate", "1.0"} in tracestate
       assert {"sentry-sampled", "true"} in tracestate
     end
+
+    test "records and samples spans when drop list is nil" do
+      put_test_config(traces_sample_rate: 1.0)
+      test_ctx = create_test_span_context()
+
+      assert {:record_and_sample, [], tracestate} =
+               Sampler.should_sample(
+                 test_ctx,
+                 123,
+                 nil,
+                 "Elixir.Oban.Worker process",
+                 nil,
+                 nil,
+                 []
+               )
+
+      assert is_list(tracestate)
+      assert {"sentry-sample_rate", "1.0"} in tracestate
+      assert {"sentry-sampled", "true"} in tracestate
+    end
   end
 
   describe "sampling based on traces_sample_rate" do
