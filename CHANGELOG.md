@@ -1,3 +1,9 @@
+## 11.0.1
+
+#### Various improvements
+
+- `Sentry.OpenTelemetry.Sampler` now works with an empty config ([#915](https://github.com/getsentry/sentry-elixir/pull/915))
+
 ## 11.0.0
 
 This release comes with a beta support for Traces using OpenTelemetry - please test it out and report any issues you find.
