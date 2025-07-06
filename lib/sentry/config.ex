@@ -704,8 +704,11 @@ defmodule Sentry.Config do
   @spec traces_sampler() :: traces_sampler_function() | nil
   def traces_sampler, do: get(:traces_sampler)
 
-  @spec finch_opts() :: keyword()
-  def finch_opts, do: fetch!(:finch_opts)
+  @spec finch_pool_opts() :: keyword()
+  def finch_pool_opts, do: fetch!(:finch_pool_opts)
+
+  @spec finch_request_opts() :: keyword()
+  def finch_request_opts, do: fetch!(:finch_request_opts)
 
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)
