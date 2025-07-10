@@ -129,12 +129,14 @@ defmodule Sentry do
   `MyModule` could look like this:
 
       defmodule MyModule do
+        @spec before_send(Sentry.Event.t()) :: Sentry.Event.t()
         def before_send(event) do
           metadata = Map.new(Logger.metadata())
           %Sentry.Event{event | extra: Map.merge(event.extra, metadata)}
         end
 
-        def after_send_event(event, result) do
+        @spec after_send(Sentry.Event.t(), {:ok, String.t()} | {:error, any()}) :: any()
+        def after_send(event, result) do
           case result do
             {:ok, id} ->
               Logger.info("Successfully sent event!")
@@ -144,6 +146,8 @@ defmodule Sentry do
           end
         end
       end
+
+  If the `before_send` callback returns `nil` or `false`, the event is not reported.
 
   ## Reporting Source Code
 
