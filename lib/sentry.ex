@@ -124,7 +124,7 @@ defmodule Sentry do
 
       config :sentry,
         before_send: {MyModule, :before_send},
-        after_send_event: {MyModule, :after_send_event}
+        after_send_event: {MyModule, :after_send}
 
   `MyModule` could look like this:
 
@@ -135,8 +135,8 @@ defmodule Sentry do
           %Sentry.Event{event | extra: Map.merge(event.extra, metadata)}
         end
 
-        @spec after_send_event(Sentry.Event.t(), {:ok, String.t()} | {:error, any()}) :: any()
-        def after_send_event(event, result) do
+        @spec after_send(Sentry.Event.t(), {:ok, String.t()} | {:error, any()}) :: any()
+        def after_send(event, result) do
           case result do
             {:ok, id} ->
               Logger.info("Successfully sent event!")
