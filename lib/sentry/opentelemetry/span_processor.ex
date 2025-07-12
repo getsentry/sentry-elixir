@@ -15,19 +15,22 @@ if Code.ensure_loaded?(OpenTelemetry) do
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
 
-    # This can be a no-op since we can postpone inserting the span into storage until on_end
+        # This can be a no-op since we can postpone inserting the span into storage until on_end
     @impl :otel_span_processor
     def on_start(_ctx, otel_span, _config) do
       otel_span
     end
 
-    @impl :otel_span_processor
+        @impl :otel_span_processor
     def on_end(otel_span, _config) do
       span_record = SpanRecord.new(otel_span)
 
       SpanStorage.store_span(span_record)
 
-      if span_record.parent_span_id == nil do
+      # Check if this is a root span (no parent) or a transaction root (HTTP request span)
+      is_transaction_root = span_record.parent_span_id == nil or is_http_request_span?(span_record)
+
+      if is_transaction_root do
         child_span_records = SpanStorage.get_child_spans(span_record.span_id)
         transaction = build_transaction(span_record, child_span_records)
 
@@ -60,7 +63,20 @@ if Code.ensure_loaded?(OpenTelemetry) do
       :ok
     end
 
-    defp build_transaction(root_span_record, child_span_records) do
+    # Helper function to detect if a span represents an HTTP request that should be treated as a transaction root
+    defp is_http_request_span?(%{attributes: attributes, name: name}) do
+      # Check if this is an HTTP request span (has HTTP method and is likely a server span)
+      has_http_method = Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
+      has_http_route = Map.has_key?(attributes, "http.route")
+      has_url_path = Map.has_key?(attributes, to_string(URLAttributes.url_path()))
+
+      # Check if the name looks like an HTTP endpoint
+      name_looks_like_http = String.contains?(name, ["/", "POST", "GET", "PUT", "DELETE", "PATCH"])
+
+      (has_http_method and (has_http_route or has_url_path)) or name_looks_like_http
+    end
+
+        defp build_transaction(root_span_record, child_span_records) do
       root_span = build_span(root_span_record)
       child_spans = Enum.map(child_span_records, &build_span(&1))
 
@@ -77,7 +93,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
       })
     end
 
-    defp transaction_name(
+        defp transaction_name(
            %{attributes: %{unquote(to_string(MessagingAttributes.messaging_system())) => :oban}} =
              span_record
          ) do

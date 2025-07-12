@@ -234,6 +234,72 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       assert length(transaction.spans) == 0
       assert transaction.transaction == "child_instrumented_function_standalone"
     end
+    
+    @tag span_storage: true
+    test "treats HTTP request spans as transaction roots even with external parents" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Simulate an HTTP request span with external parent (like from browser tracing)
+      require OpenTelemetry.Tracer, as: Tracer
+      require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+      require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+
+      # Create a span with HTTP attributes and an external parent span ID
+      external_parent_span_id = "b943d7459127970c"
+      
+      # Start a span that simulates an HTTP request from an external trace
+      Tracer.with_span "POST /api/v1alpha", %{
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/v1alpha",
+          "http.route" => "/api/v1alpha",
+          "server.address" => "localhost",
+          "server.port" => 4000
+        },
+        parent: {:span_context, :undefined, external_parent_span_id, :undefined, :undefined, :undefined, :undefined, :undefined, :undefined, :undefined}
+      } do
+        # Simulate child spans (database queries, etc.) with proper DB attributes
+        Tracer.with_span "matrix_data.repo.query", %{
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "SELECT * FROM users"
+          }
+        } do
+          Process.sleep(10)
+        end
+        
+        Tracer.with_span "matrix_data.repo.query:agents", %{
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO agents (...) VALUES (...)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction root despite having an external parent
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      # Verify transaction properties
+      assert transaction.transaction == "POST /api/v1alpha"
+      assert transaction.transaction_info == %{source: :custom}
+      assert length(transaction.spans) == 2
+
+      # Verify child spans are properly included - they should have "db" operation
+      span_names = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      expected_names = ["db", "db"]
+      assert span_names == expected_names
+
+      # Verify all spans share the same trace ID
+      trace_id = transaction.contexts.trace.trace_id
+      Enum.each(transaction.spans, fn span ->
+        assert span.trace_id == trace_id
+      end)
+    end
+    
 
     @tag span_storage: true
     test "concurrent traces maintain independent sampling decisions" do
