@@ -64,8 +64,20 @@ defmodule Sentry.OpenTelemetry.SpanStorage do
   def get_child_spans(parent_span_id, opts \\ []) do
     table_name = Keyword.get(opts, :table_name, default_table_name())
 
-    :ets.match_object(table_name, {{:child_span, parent_span_id, :_}, :_, :_})
-    |> Enum.map(fn {_key, span_data, _stored_at} -> span_data end)
+    get_all_descendants(parent_span_id, table_name)
+  end
+
+  defp get_all_descendants(parent_span_id, table_name) do
+    direct_children =
+      :ets.match_object(table_name, {{:child_span, parent_span_id, :_}, :_, :_})
+      |> Enum.map(fn {_key, span_data, _stored_at} -> span_data end)
+
+    nested_descendants =
+      Enum.flat_map(direct_children, fn child ->
+        get_all_descendants(child.span_id, table_name)
+      end)
+
+    (direct_children ++ nested_descendants)
     |> Enum.sort_by(& &1.start_time)
   end
 
