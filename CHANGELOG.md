@@ -4,6 +4,10 @@
 
 - Deeply nested spans are handled now when building up traces in `SpanProcessor` ([#924](https://github.com/getsentry/sentry-elixir/pull/924))
 
+#### Various improvements
+
+- Span's attributes no longer include `db.url: "ecto:"` entries as they are now filtered out ([#925](https://github.com/getsentry/sentry-elixir/pull/925))
+
 ## 11.0.1
 
 #### Various improvements
