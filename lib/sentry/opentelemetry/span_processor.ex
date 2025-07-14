@@ -96,7 +96,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
         op: op,
         description: description,
         origin: span_record.origin,
-        data: span_record.attributes
+        data: filter_attributes(span_record.attributes)
       }
     end
 
@@ -145,6 +145,8 @@ if Code.ensure_loaded?(OpenTelemetry) do
     defp build_span(span_record) do
       {op, description} = get_op_description(span_record)
 
+      filtered_attributes = filter_attributes(span_record.attributes)
+
       %Span{
         op: op,
         description: description,
@@ -154,7 +156,7 @@ if Code.ensure_loaded?(OpenTelemetry) do
         span_id: span_record.span_id,
         parent_span_id: span_record.parent_span_id,
         origin: span_record.origin,
-        data: Map.put(span_record.attributes, "otel.kind", span_record.kind),
+        data: Map.put(filtered_attributes, "otel.kind", span_record.kind),
         status: span_status(span_record)
       }
     end
@@ -192,5 +194,18 @@ if Code.ensure_loaded?(OpenTelemetry) do
     end
 
     defp to_status(_any), do: "unknown_error"
+
+    defp filter_attributes(attributes) do
+      attributes
+      |> Enum.reject(fn {key, value} ->
+        case {key, value} do
+          {"db.url", "ecto:"} -> true
+          {"db.url", nil} -> true
+          {"db.url", ""} -> true
+          _ -> false
+        end
+      end)
+      |> Map.new()
+    end
   end
 end
