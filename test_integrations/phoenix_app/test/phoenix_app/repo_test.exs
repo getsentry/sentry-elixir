@@ -21,8 +21,17 @@ defmodule PhoenixApp.RepoTest do
     assert [transaction] = transactions
 
     assert transaction.transaction_info == %{source: :custom}
+
     assert transaction.contexts.trace.op == "db"
-    assert String.starts_with?(transaction.contexts.trace.description, "SELECT")
+
     assert transaction.contexts.trace.data["db.system"] == :sqlite
+    assert transaction.contexts.trace.data["db.type"] == :sql
+    assert transaction.contexts.trace.data["db.instance"] == "db/test.sqlite3"
+    assert transaction.contexts.trace.data["db.name"] == "db/test.sqlite3"
+
+    assert String.starts_with?(transaction.contexts.trace.description, "SELECT")
+    assert String.starts_with?(transaction.contexts.trace.data["db.statement"], "SELECT")
+
+    refute Map.has_key?(transaction.contexts.trace.data, "db.url")
   end
 end
