@@ -434,6 +434,206 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     end
   end
 
+  describe "nested span hierarchies" do
+    @tag span_storage: true
+    test "retrieves grand-children spans correctly", %{table_name: table_name} do
+      root_span = %SpanRecord{
+        span_id: "root123",
+        parent_span_id: nil,
+        trace_id: "trace123",
+        name: "root_span",
+        start_time: 1000,
+        end_time: 2000
+      }
+
+      child1_span = %SpanRecord{
+        span_id: "child1",
+        parent_span_id: "root123",
+        trace_id: "trace123",
+        name: "child_span_1",
+        start_time: 1100,
+        end_time: 1900
+      }
+
+      child2_span = %SpanRecord{
+        span_id: "child2",
+        parent_span_id: "root123",
+        trace_id: "trace123",
+        name: "child_span_2",
+        start_time: 1200,
+        end_time: 1800
+      }
+
+      grandchild1_span = %SpanRecord{
+        span_id: "grandchild1",
+        parent_span_id: "child1",
+        trace_id: "trace123",
+        name: "grandchild_span_1",
+        start_time: 1150,
+        end_time: 1250
+      }
+
+      grandchild2_span = %SpanRecord{
+        span_id: "grandchild2",
+        parent_span_id: "child1",
+        trace_id: "trace123",
+        name: "grandchild_span_2",
+        start_time: 1300,
+        end_time: 1400
+      }
+
+      grandchild3_span = %SpanRecord{
+        span_id: "grandchild3",
+        parent_span_id: "child2",
+        trace_id: "trace123",
+        name: "grandchild_span_3",
+        start_time: 1250,
+        end_time: 1350
+      }
+
+      SpanStorage.store_span(root_span, table_name: table_name)
+      SpanStorage.store_span(child1_span, table_name: table_name)
+      SpanStorage.store_span(child2_span, table_name: table_name)
+      SpanStorage.store_span(grandchild1_span, table_name: table_name)
+      SpanStorage.store_span(grandchild2_span, table_name: table_name)
+      SpanStorage.store_span(grandchild3_span, table_name: table_name)
+
+      all_descendants = SpanStorage.get_child_spans("root123", table_name: table_name)
+
+      assert length(all_descendants) == 5
+
+      span_ids = Enum.map(all_descendants, & &1.span_id)
+      assert "child1" in span_ids
+      assert "child2" in span_ids
+      assert "grandchild1" in span_ids
+      assert "grandchild2" in span_ids
+      assert "grandchild3" in span_ids
+
+      start_times = Enum.map(all_descendants, & &1.start_time)
+      assert start_times == Enum.sort(start_times)
+    end
+
+    @tag span_storage: true
+    test "retrieves deep nested hierarchies correctly", %{table_name: table_name} do
+      spans = [
+        %SpanRecord{
+          span_id: "root",
+          parent_span_id: nil,
+          trace_id: "trace123",
+          name: "root_span",
+          start_time: 1000,
+          end_time: 2000
+        },
+        %SpanRecord{
+          span_id: "child",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "child_span",
+          start_time: 1100,
+          end_time: 1900
+        },
+        %SpanRecord{
+          span_id: "grandchild",
+          parent_span_id: "child",
+          trace_id: "trace123",
+          name: "grandchild_span",
+          start_time: 1200,
+          end_time: 1800
+        },
+        %SpanRecord{
+          span_id: "great_grandchild",
+          parent_span_id: "grandchild",
+          trace_id: "trace123",
+          name: "great_grandchild_span",
+          start_time: 1300,
+          end_time: 1700
+        }
+      ]
+
+      Enum.each(spans, &SpanStorage.store_span(&1, table_name: table_name))
+
+      all_descendants = SpanStorage.get_child_spans("root", table_name: table_name)
+      assert length(all_descendants) == 3
+
+      span_ids = Enum.map(all_descendants, & &1.span_id)
+      assert "child" in span_ids
+      assert "grandchild" in span_ids
+      assert "great_grandchild" in span_ids
+
+      child_descendants = SpanStorage.get_child_spans("child", table_name: table_name)
+      assert length(child_descendants) == 2
+
+      child_span_ids = Enum.map(child_descendants, & &1.span_id)
+      assert "grandchild" in child_span_ids
+      assert "great_grandchild" in child_span_ids
+
+      grandchild_descendants = SpanStorage.get_child_spans("grandchild", table_name: table_name)
+      assert length(grandchild_descendants) == 1
+      assert hd(grandchild_descendants).span_id == "great_grandchild"
+    end
+
+    @tag span_storage: true
+    test "handles multiple disconnected subtrees correctly", %{table_name: table_name} do
+      spans = [
+        %SpanRecord{
+          span_id: "branch1",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "branch1_span",
+          start_time: 1100,
+          end_time: 1500
+        },
+        %SpanRecord{
+          span_id: "leaf1",
+          parent_span_id: "branch1",
+          trace_id: "trace123",
+          name: "leaf1_span",
+          start_time: 1150,
+          end_time: 1250
+        },
+        %SpanRecord{
+          span_id: "leaf2",
+          parent_span_id: "branch1",
+          trace_id: "trace123",
+          name: "leaf2_span",
+          start_time: 1300,
+          end_time: 1400
+        },
+        %SpanRecord{
+          span_id: "branch2",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "branch2_span",
+          start_time: 1600,
+          end_time: 1900
+        },
+        %SpanRecord{
+          span_id: "leaf3",
+          parent_span_id: "branch2",
+          trace_id: "trace123",
+          name: "leaf3_span",
+          start_time: 1650,
+          end_time: 1750
+        }
+      ]
+
+      Enum.each(spans, &SpanStorage.store_span(&1, table_name: table_name))
+
+      all_descendants = SpanStorage.get_child_spans("root", table_name: table_name)
+      assert length(all_descendants) == 5
+
+      span_ids = Enum.map(all_descendants, & &1.span_id)
+      assert "branch1" in span_ids
+      assert "branch2" in span_ids
+      assert "leaf1" in span_ids
+      assert "leaf2" in span_ids
+      assert "leaf3" in span_ids
+
+      start_times = Enum.map(all_descendants, & &1.start_time)
+      assert start_times == [1100, 1150, 1300, 1600, 1650]
+    end
+  end
+
   describe "cleanup" do
     @tag span_storage: [cleanup_interval: 100]
     test "cleanup respects span TTL precisely", %{table_name: table_name} do

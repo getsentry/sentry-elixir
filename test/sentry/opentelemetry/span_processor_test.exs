@@ -183,7 +183,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
 
     @tag span_storage: true
-    test "nested child spans maintain sampling consistency" do
+    test "nested child spans maintain hierarchy" do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
       Sentry.Test.start_collecting_sentry_reports()
@@ -193,22 +193,22 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Tracer.with_span "root_span" do
         Tracer.with_span "level_1_child" do
           Tracer.with_span "level_2_child" do
-            Process.sleep(10)
+            Process.sleep(1)
           end
 
           Tracer.with_span "level_2_sibling" do
-            Process.sleep(10)
+            Process.sleep(1)
           end
         end
 
         Tracer.with_span "level_1_sibling" do
-          Process.sleep(10)
+          Process.sleep(1)
         end
       end
 
       assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
 
-      assert length(transaction.spans) == 2
+      assert length(transaction.spans) == 4
 
       trace_id = transaction.contexts.trace.trace_id
 
@@ -217,7 +217,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
       span_names = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
-      expected_names = ["level_1_child", "level_1_sibling"]
+      expected_names = ["level_1_child", "level_1_sibling", "level_2_child", "level_2_sibling"]
       assert span_names == expected_names
     end
 
