@@ -27,7 +27,7 @@ defp deps do
   [
     # ...
 
-    {:sentry, "~> 10.8"},
+    {:sentry, "~> 11.0"},
     {:hackney, "~> 1.20"}
   ]
 end
