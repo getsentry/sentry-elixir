@@ -1,3 +1,9 @@
+## Unreleased
+
+#### Various improvements
+
+- Allow any version of opentelemetry deps and verify minimum versions internally - this makes it possible to use `sentry` *with tracing disabled* along with older versions of opentelemetry deps ([#931](https://github.com/getsentry/sentry-elixir/pull/931))
+
 ## 11.0.2
 
 ### Bug fixes

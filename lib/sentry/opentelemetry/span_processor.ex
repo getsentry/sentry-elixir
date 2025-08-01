@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(OpenTelemetry) do
+if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
   defmodule Sentry.OpenTelemetry.SpanProcessor do
     @moduledoc false
 
