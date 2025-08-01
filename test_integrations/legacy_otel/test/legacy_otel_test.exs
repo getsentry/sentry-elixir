@@ -1,6 +1,8 @@
 defmodule LegacyOtelTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   describe "OpenTelemetry version compatibility" do
     test "older OpenTelemetry versions are detected as incompatible" do
       refute Sentry.OpenTelemetry.VersionChecker.tracing_compatible?()
@@ -53,6 +55,64 @@ defmodule LegacyOtelTest do
   describe "Sentry configuration with older OpenTelemetry" do
     test "tracing should be disabled in Sentry config" do
       refute Sentry.Config.tracing?
+    end
+
+    test "Config.validate! warns when traces_sample_rate is set but dependencies are not satisfied" do
+      config = [
+        dsn: "https://public@sentry.example.com/1",
+        traces_sample_rate: 0.5
+      ]
+
+      log_output = capture_log(fn ->
+        validated_config = Sentry.Config.validate!(config)
+
+        assert Keyword.get(validated_config, :traces_sample_rate) == 0.5
+        dsn = Keyword.get(validated_config, :dsn)
+        assert dsn.original_dsn == "https://public@sentry.example.com/1"
+      end)
+
+      assert log_output =~ "Sentry tracing is configured with traces_sample_rate: 0.5"
+      assert log_output =~ "but the required OpenTelemetry dependencies are not satisfied"
+      assert log_output =~ "Tracing will be disabled"
+      assert log_output =~ "opentelemetry (>= 1.5.0)"
+      assert log_output =~ "opentelemetry_api (>= 1.4.0)"
+      assert log_output =~ "opentelemetry_exporter (>= 1.0.0)"
+      assert log_output =~ "opentelemetry_semantic_conventions (>= 1.27.0)"
+    end
+
+    test "Config.validate! does not warn when traces_sample_rate is nil" do
+      config = [
+        dsn: "https://public@sentry.example.com/1",
+        traces_sample_rate: nil
+      ]
+
+      log_output = capture_log(fn ->
+        validated_config = Sentry.Config.validate!(config)
+
+        assert Keyword.get(validated_config, :traces_sample_rate) == nil
+        dsn = Keyword.get(validated_config, :dsn)
+        assert dsn.original_dsn == "https://public@sentry.example.com/1"
+      end)
+
+      refute log_output =~ "Sentry tracing is configured"
+      refute log_output =~ "OpenTelemetry dependencies are not satisfied"
+    end
+
+    test "Config.validate! does not warn when traces_sample_rate is not set" do
+      config = [
+        dsn: "https://public@sentry.example.com/1"
+      ]
+
+      log_output = capture_log(fn ->
+        validated_config = Sentry.Config.validate!(config)
+
+        assert Keyword.get(validated_config, :traces_sample_rate) == nil
+        dsn = Keyword.get(validated_config, :dsn)
+        assert dsn.original_dsn == "https://public@sentry.example.com/1"
+      end)
+
+      refute log_output =~ "Sentry tracing is configured"
+      refute log_output =~ "OpenTelemetry dependencies are not satisfied"
     end
   end
 end
