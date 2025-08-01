@@ -14,3 +14,6 @@ erl_crash.dump
 /priv/sentry.map
 
 test_integrations/phoenix_app/db
+
+test_integrations/*/_build
+test_integrations/*/deps

@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(:otel_sampler) do
+if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
   defmodule Sentry.OpenTelemetry.Sampler do
     @moduledoc false
 

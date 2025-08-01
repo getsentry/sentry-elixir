@@ -701,7 +701,10 @@ defmodule Sentry.Config do
   def integrations, do: fetch!(:integrations)
 
   @spec tracing?() :: boolean()
-  def tracing?, do: not is_nil(fetch!(:traces_sample_rate)) or not is_nil(get(:traces_sampler))
+  def tracing? do
+    (Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
+       not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
+  end
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

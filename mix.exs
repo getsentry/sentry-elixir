@@ -118,10 +118,10 @@ defmodule Sentry.Mixfile do
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
       {:quantum, "~> 3.0", only: [:test]},
-      {:opentelemetry, "~> 1.5", optional: true},
-      {:opentelemetry_api, "~> 1.4", optional: true},
-      {:opentelemetry_exporter, "~> 1.0", optional: true},
-      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true}
+      {:opentelemetry, ">= 0.0.0", optional: true},
+      {:opentelemetry_api, ">= 0.0.0", optional: true},
+      {:opentelemetry_exporter, ">= 0.0.0", optional: true},
+      {:opentelemetry_semantic_conventions, ">= 0.0.0", optional: true}
     ]
   end
 
@@ -148,6 +148,7 @@ defmodule Sentry.Mixfile do
     if Version.match?(System.version(), ">= 1.16.0") do
       run_integration_tests("umbrella", args)
       run_integration_tests("phoenix_app", args)
+      run_integration_tests("legacy_otel", args)
     else
       Mix.shell().info("Skipping integration tests for Elixir versions < 1.16")
     end
