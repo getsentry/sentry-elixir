@@ -118,6 +118,11 @@ defmodule Sentry.Mixfile do
       {:floki, ">= 0.30.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
       {:quantum, "~> 3.0", only: [:test]},
+
+      # Optional dependencies for Sentry.OpenTelemetry - we allow any version
+      # because the actual version requirements are verified via VersionChecker.
+      # This is to allow users install `sentry` even when they rely on opentelemetry
+      # libs that are too old for Sentry tracing feature.
       {:opentelemetry, ">= 0.0.0", optional: true},
       {:opentelemetry_api, ">= 0.0.0", optional: true},
       {:opentelemetry_exporter, ">= 0.0.0", optional: true},
