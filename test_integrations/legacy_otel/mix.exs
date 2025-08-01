@@ -23,6 +23,7 @@ defmodule LegacyOtel.MixProject do
     [
       {:sentry, path: "../.."},
       {:hackney, "~> 1.18"},
+      {:jason, "~> 1.1", optional: true},
       {:opentelemetry, "~> 1.3.0"},
       {:opentelemetry_api, "~> 1.2"},
       {:opentelemetry_exporter, "~> 1.4.0"},
