@@ -554,6 +554,7 @@ defmodule Sentry.Config do
         |> normalize_included_environments()
         |> normalize_environment()
         |> handle_deprecated_before_send()
+        |> warn_traces_sample_rate_without_dependencies()
 
       {:error, error} ->
         raise ArgumentError, """
@@ -701,7 +702,10 @@ defmodule Sentry.Config do
   def integrations, do: fetch!(:integrations)
 
   @spec tracing?() :: boolean()
-  def tracing?, do: not is_nil(fetch!(:traces_sample_rate)) or not is_nil(get(:traces_sampler))
+  def tracing? do
+    (Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
+       not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
+  end
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
@@ -760,6 +764,25 @@ defmodule Sentry.Config do
       :error ->
         opts
     end
+  end
+
+  defp warn_traces_sample_rate_without_dependencies(opts) do
+    traces_sample_rate = Keyword.get(opts, :traces_sample_rate)
+
+    if not is_nil(traces_sample_rate) and
+         not Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
+      require Logger
+
+      Logger.warning("""
+      Sentry tracing is configured with traces_sample_rate: #{inspect(traces_sample_rate)}, \
+      but the required OpenTelemetry dependencies are not satisfied. \
+      Tracing will be disabled. Please ensure you have compatible versions of: \
+      opentelemetry (>= 1.5.0), opentelemetry_api (>= 1.4.0), \
+      opentelemetry_exporter (>= 1.0.0), and opentelemetry_semantic_conventions (>= 1.27.0).
+      """)
+    end
+
+    opts
   end
 
   defp normalize_environment(config) do

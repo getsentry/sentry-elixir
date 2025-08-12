@@ -69,7 +69,7 @@ defmodule PhoenixApp.MixProject do
 
       {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.4"},
-      {:opentelemetry_exporter, "~> 1.0"},
+      {:opentelemetry_exporter, "~> 1.8"},
       {:opentelemetry_semantic_conventions, "~> 1.27"},
       {:opentelemetry_bandit, "~> 0.1"},
       {:opentelemetry_phoenix, "~> 2.0"},
