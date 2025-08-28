@@ -18,7 +18,7 @@ defmodule Sentry.Application do
     http_client = Keyword.fetch!(config, :client)
 
     maybe_http_client_spec =
-      if Code.ensure_loaded?(http_client) and function_exported?(http_client, :child_spec, 0) do
+      if {:module, http_client} == Code.ensure_loaded(http_client) and function_exported?(http_client, :child_spec, 0) do
         [http_client.child_spec()]
       else
         []
