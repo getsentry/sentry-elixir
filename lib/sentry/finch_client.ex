@@ -44,7 +44,7 @@ defmodule Sentry.FinchClient do
     request = Finch.build(:post, url, headers, body)
 
     case Finch.request(request, __MODULE__, Sentry.Config.finch_request_opts()) do
-      {:ok, %Finch.Response{status: status, headers: headers, body: body}} ->
+      {:ok, %{status: status, headers: headers, body: body}} ->
         {:ok, status, headers, body}
 
       {:error, error} ->
