@@ -16,8 +16,6 @@ defmodule Sentry.FinchClient do
   """
   @moduledoc since: "10.11.0"
 
-  alias Finch
-
   @impl true
   def child_spec do
     if Code.ensure_loaded?(Finch) do
