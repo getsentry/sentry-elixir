@@ -20,6 +20,7 @@ defmodule PhoenixAppWeb.Router do
     get "/", PageController, :home
     get "/exception", PageController, :exception
     get "/transaction", PageController, :transaction
+    get "/nested-spans", PageController, :nested_spans
 
     live "/test-worker", TestWorkerLive
 
