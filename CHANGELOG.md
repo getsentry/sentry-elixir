@@ -1,3 +1,9 @@
+## 11.0.4
+
+### Bug fixes
+
+- Correctly sanitize improper lists in Sentry context (attached to any event).
+
 ## 11.0.3
 
 #### Various improvements
