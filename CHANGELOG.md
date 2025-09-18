@@ -1,8 +1,6 @@
-## 11.0.4
+## Unreleased
 
-### Bug fixes
-
-- Correctly sanitize improper lists in Sentry context (attached to any event).
+- Fix safe JSON encoding of improper lists ([#938](https://github.com/getsentry/sentry-elixir/pull/938))
 
 ## 11.0.3
 
