@@ -1,4 +1,4 @@
-## Unreleased
+## 11.0.4
 
 - Fix safe JSON encoding of improper lists ([#938](https://github.com/getsentry/sentry-elixir/pull/938))
 
