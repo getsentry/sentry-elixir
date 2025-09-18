@@ -61,7 +61,8 @@ defmodule Sentry.ClientTest do
             bool: true,
             null: nil,
             int: 2,
-            map: %{bool: false}
+            map: %{bool: false},
+            improper_list: [1 | 2]
           },
           user: %{id: "valid-ID", email: {"user", "@example.com"}},
           tags: %{valid: "yes", tokens: MapSet.new([1])},
@@ -78,6 +79,7 @@ defmodule Sentry.ClientTest do
       assert rendered.extra.null == nil
       assert rendered.extra.int == 2
       assert rendered.extra.map.bool == false
+      assert rendered.extra.improper_list == "[1 | 2]"
 
       assert rendered.user.id == "valid-ID"
       assert rendered.user.email == ~s({"user", "@example.com"})

@@ -361,18 +361,22 @@ defmodule Sentry.Client do
   end
 
   defp sanitize_non_jsonable_value(value, json_library) when is_list(value) do
-    {mapped, changed?} =
-      Enum.map_reduce(value, _changed? = false, fn value, changed? ->
-        case sanitize_non_jsonable_value(value, json_library) do
-          :unchanged -> {value, changed?}
-          {:changed, value} -> {value, true}
-        end
-      end)
-
-    if changed? do
-      {:changed, mapped}
+    if List.improper?(value) do
+      {:changed, inspect(value)}
     else
-      :unchanged
+      {mapped, changed?} =
+        Enum.map_reduce(value, _changed? = false, fn value, changed? ->
+          case sanitize_non_jsonable_value(value, json_library) do
+            :unchanged -> {value, changed?}
+            {:changed, value} -> {value, true}
+          end
+        end)
+
+      if changed? do
+        {:changed, mapped}
+      else
+        :unchanged
+      end
     end
   end
 
