@@ -51,6 +51,14 @@ defmodule Sentry.Config do
           tuples. *Available since 10.3.0*.
           """
         ],
+        oban_tags: [
+          type: :boolean,
+          default: false,
+          doc: """
+          Whether to include Oban job tags in Sentry error tags. When enabled, the `job.tags`
+          will be joined with a "," and added as an `oban_tags` tag to Sentry events.
+          """
+        ],
         cron: [
           doc: """
           Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
