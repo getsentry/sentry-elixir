@@ -4,6 +4,7 @@ defmodule Sentry.Transport do
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
   alias Sentry.{ClientError, ClientReport, Config, Envelope, LoggerUtils}
+  alias Sentry.Transport.RateLimiter
 
   @default_retries [1000, 2000, 4000, 8000]
   @sentry_version 5
@@ -51,23 +52,9 @@ defmodule Sentry.Transport do
       {:ok, id} ->
         {:ok, id}
 
-      # If Sentry gives us a Retry-After header, we listen to that instead of our
-      # own retry.
-      {:retry_after, delay_ms} when retries_left != [] ->
-        Process.sleep(delay_ms)
-
-        post_envelope_with_retries(
-          client,
-          endpoint,
-          headers,
-          payload,
-          tl(retries_left),
-          envelope_items
-        )
-
-      {:retry_after, _delay_ms} ->
+      {:error, :rate_limited} ->
         ClientReport.Sender.record_discarded_events(:ratelimit_backoff, envelope_items)
-        {:error, ClientError.new(:too_many_retries)}
+        {:error, ClientError.new(:rate_limited)}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
@@ -98,19 +85,8 @@ defmodule Sentry.Transport do
          {:ok, json} <- Sentry.JSON.decode(body, Config.json_library()) do
       {:ok, Map.get(json, "id")}
     else
-      {:ok, 429, headers, _body} ->
-        delay_ms =
-          with timeout when is_binary(timeout) <-
-                 :proplists.get_value("Retry-After", headers, nil),
-               {delay_s, ""} <- Integer.parse(timeout) do
-            delay_s * 1000
-          else
-            _ ->
-              # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
-              60_000
-          end
-
-        {:retry_after, delay_ms}
+      {:ok, 429, _headers, _body} ->
+        {:error, :rate_limited}
 
       {:ok, status, headers, body} ->
         {:error, {:http, {status, headers, body}}}
@@ -127,6 +103,7 @@ defmodule Sentry.Transport do
       {:ok, status, resp_headers, resp_body}
       when is_integer(status) and status in 200..599 and is_list(resp_headers) and
              is_binary(resp_body) ->
+        update_rate_limits(resp_headers, status)
         {:ok, status, resp_headers, resp_body}
 
       {:ok, status, resp_headers, resp_body} ->
@@ -134,6 +111,35 @@ defmodule Sentry.Transport do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp update_rate_limits(headers, status) do
+    rate_limits_header = :proplists.get_value("X-Sentry-Rate-Limits", headers, nil)
+
+    cond do
+      is_binary(rate_limits_header) ->
+        # Use categorized rate limits if present
+        RateLimiter.update_rate_limits(rate_limits_header)
+
+      status == 429 ->
+        # Use global rate limit from Retry-After if no categorized limits are present
+        delay_seconds = get_global_delay(headers)
+        RateLimiter.update_global_rate_limit(delay_seconds)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp get_global_delay(headers) do
+    with timeout when is_binary(timeout) <- :proplists.get_value("Retry-After", headers, nil),
+         {delay, ""} <- Integer.parse(timeout) do
+      delay
+    else
+      # Per the spec, if Retry-After is missing or malformed, default to 60 seconds
+      # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
+      _ -> 60
     end
   end
 
