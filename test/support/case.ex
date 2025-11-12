@@ -10,6 +10,11 @@ defmodule Sentry.Case do
   setup context do
     config_before = all_config()
 
+    # Clear rate limiter state before each test
+    if Process.whereis(Sentry.Transport.RateLimiter) do
+      :ets.delete_all_objects(Sentry.Transport.RateLimiter)
+    end
+
     on_exit(fn ->
       assert config_before == all_config()
     end)

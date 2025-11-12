@@ -48,7 +48,7 @@ defmodule Sentry.Transport do
          retries_left,
          envelope_items
        ) do
-    case request(client, endpoint, headers, payload) do
+    case request(client, endpoint, headers, payload, envelope_items) do
       {:ok, id} ->
         {:ok, id}
 
@@ -79,8 +79,19 @@ defmodule Sentry.Transport do
     end
   end
 
-  defp request(client, endpoint, headers, body) do
-    with {:ok, 200, _headers, body} <-
+  defp check_rate_limited(envelope_items) do
+    rate_limited? =
+      Enum.any?(envelope_items, fn item ->
+        category = Envelope.get_data_category(item)
+        RateLimiter.rate_limited?(category)
+      end)
+
+    if rate_limited?, do: {:error, :rate_limited}, else: :ok
+  end
+
+  defp request(client, endpoint, headers, body, envelope_items) do
+    with :ok <- check_rate_limited(envelope_items),
+         {:ok, 200, _headers, body} <-
            client_post_and_validate_return_value(client, endpoint, headers, body),
          {:ok, json} <- Sentry.JSON.decode(body, Config.json_library()) do
       {:ok, Map.get(json, "id")}
@@ -90,6 +101,9 @@ defmodule Sentry.Transport do
 
       {:ok, status, headers, body} ->
         {:error, {:http, {status, headers, body}}}
+
+      {:error, :rate_limited} ->
+        {:error, :rate_limited}
 
       {:error, reason} ->
         {:error, {:request_failure, reason}}
