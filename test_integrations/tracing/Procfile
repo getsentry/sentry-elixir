@@ -1,0 +1,2 @@
+phoenix: cd ../phoenix_app && mix phx.server
+svelte: cd svelte_mini && npm run dev

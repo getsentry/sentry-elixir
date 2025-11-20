@@ -154,6 +154,7 @@ defmodule Sentry.Mixfile do
       run_integration_tests("umbrella", args)
       run_integration_tests("phoenix_app", args)
       run_integration_tests("legacy_otel", args)
+      run_integration_tests("tracing", args)
     else
       Mix.shell().info("Skipping integration tests for Elixir versions < 1.16")
     end

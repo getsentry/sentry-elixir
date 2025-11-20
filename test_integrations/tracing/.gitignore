@@ -1,0 +1,27 @@
+*.beam
+*.ez
+_build/
+deps/
+doc/
+.fetch
+erl_crash.dump
+*.plt
+*.plt.hash
+esbuild
+.elixir_ls/
+.lexical/
+
+# Phoenix mini
+phoenix_mini/tmp/
+phoenix_mini/_build/
+phoenix_mini/deps/
+
+# Svelte mini
+svelte_mini/node_modules/
+svelte_mini/dist/
+svelte_mini/.vite/
+svelte_mini/package-lock.json
+
+# Test artifacts
+tmp/
+.DS_Store
