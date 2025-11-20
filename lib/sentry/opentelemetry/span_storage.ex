@@ -121,6 +121,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       :ok
     end
 
+    @spec remove_child_span(String.t(), String.t(), keyword()) :: :ok
+    def remove_child_span(parent_span_id, span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+      key = {:child_span, parent_span_id, span_id}
+
+      :ets.delete(table_name, key)
+
+      :ok
+    end
+
     defp schedule_cleanup(interval) do
       Process.send_after(self(), :cleanup_stale_spans, interval)
     end

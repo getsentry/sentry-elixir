@@ -27,7 +27,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       SpanStorage.store_span(span_record)
 
-      if span_record.parent_span_id == nil do
+      # Check if this is a root span (no parent) or a transaction root (HTTP server request span)
+      # HTTP server request spans should be treated as transaction roots even when they have
+      # an external parent span ID (from distributed tracing)
+      is_transaction_root =
+        span_record.parent_span_id == nil or is_http_server_request_span?(span_record)
+
+      if is_transaction_root do
         child_span_records = SpanStorage.get_child_spans(span_record.span_id)
         transaction = build_transaction(span_record, child_span_records)
 
@@ -47,7 +53,17 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
               {:error, :invalid_span}
           end
 
+        # Clean up: remove the transaction root span and all its children
+        # Note: For distributed tracing, the transaction root span may have been stored
+        # as a child span (with a remote parent_span_id). In that case, we need to also
+        # remove it from the child spans, not just look for it as a root span.
         :ok = SpanStorage.remove_root_span(span_record.span_id)
+
+        if span_record.parent_span_id != nil do
+          # This span was stored as a child because it has a remote parent (distributed tracing).
+          # We need to explicitly remove it from the child spans storage.
+          :ok = SpanStorage.remove_child_span(span_record.parent_span_id, span_record.span_id)
+        end
 
         result
       else
@@ -58,6 +74,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @impl :otel_span_processor
     def force_flush(_config) do
       :ok
+    end
+
+    # Helper function to detect if a span represents an HTTP server request
+    # that should be treated as a transaction root for distributed tracing
+    defp is_http_server_request_span?(%{kind: kind, attributes: attributes}) do
+      kind == :server and
+        Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
     end
 
     defp build_transaction(root_span_record, child_span_records) do
