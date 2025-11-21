@@ -77,7 +77,7 @@ defmodule Sentry.Application do
     end
 
     if config[:oban][:capture_errors] do
-      Sentry.Integrations.Oban.ErrorReporter.attach()
+      Sentry.Integrations.Oban.ErrorReporter.attach(config[:oban])
     end
 
     if config[:quantum][:cron][:enabled] do

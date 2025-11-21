@@ -4,14 +4,14 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  @spec attach() :: :ok
-  def attach do
+  @spec attach(keyword()) :: :ok
+  def attach(config \\ []) when is_list(config) do
     _ =
       :telemetry.attach(
         __MODULE__,
         [:oban, :job, :exception],
         &__MODULE__.handle_event/4,
-        :no_config
+        config
       )
 
     :ok
@@ -21,32 +21,41 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           [atom(), ...],
           term(),
           %{required(:job) => struct(), optional(term()) => term()},
-          :no_config
+          keyword()
         ) :: :ok
   def handle_event(
         [:oban, :job, :exception],
         _measurements,
         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
-        :no_config
+        config
       ) do
     if report?(reason) do
-      report(job, kind, reason, stacktrace)
+      report(job, kind, reason, stacktrace, config)
     else
       :ok
     end
   end
 
-  defp report(job, kind, reason, stacktrace) do
+  defp report(job, kind, reason, stacktrace, config) do
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
         _ -> stacktrace
       end
 
+    base_tags = %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state}
+
+    tags =
+      if config[:oban_tags] === true and is_list(job.tags) and length(job.tags) > 0 do
+        Map.put(base_tags, :oban_tags, Enum.join(job.tags, ","))
+      else
+        base_tags
+      end
+
     opts =
       [
         stacktrace: stacktrace,
-        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+        tags: tags,
         fingerprint: [job.worker, "{{ default }}"],
         extra:
           Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
