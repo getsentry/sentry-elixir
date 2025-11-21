@@ -60,10 +60,14 @@ config :logger, :console,
 
 config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
 
-config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
-
 config :opentelemetry,
-  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
+  span_processor: {Sentry.OpenTelemetry.SpanProcessor, []},
+  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]},
+  text_map_propagators: [
+    Sentry.OpenTelemetry.Propagator,
+    :trace_context,
+    :baggage
+  ]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

@@ -50,7 +50,13 @@ defmodule Sentry.Mixfile do
           "Upgrade Guides": [~r{^pages/upgrade}]
         ],
         groups_for_modules: [
-          "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
+          "Plug and Phoenix": [
+            Sentry.PlugCapture,
+            Sentry.PlugContext,
+            Sentry.Plug.LiveViewContext,
+            Sentry.LiveViewHook,
+            Sentry.Phoenix.LiveViewTracing
+          ],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn, Sentry.ClientReport],
           HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],

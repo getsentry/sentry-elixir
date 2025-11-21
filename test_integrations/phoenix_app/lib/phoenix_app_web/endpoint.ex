@@ -44,6 +44,25 @@ defmodule PhoenixAppWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  # Simple CORS handler for e2e tests
+  plug :cors
+
+  defp cors(conn, _opts) do
+    conn
+    |> put_resp_header("access-control-allow-origin", "*")
+    |> put_resp_header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
+    |> put_resp_header("access-control-allow-headers", "content-type, sentry-trace, baggage")
+    |> then(fn conn ->
+      if conn.method == "OPTIONS" do
+        conn
+        |> send_resp(200, "")
+        |> halt()
+      else
+        conn
+      end
+    end)
+  end
+
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
@@ -51,6 +70,8 @@ defmodule PhoenixAppWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
+  plug Sentry.Plug.LiveViewContextCleanup
   plug Plug.Session, @session_options
+  plug Sentry.Plug.LiveViewContext
   plug PhoenixAppWeb.Router
 end

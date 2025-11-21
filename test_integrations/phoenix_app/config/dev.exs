@@ -84,12 +84,19 @@ dsn =
     do: System.get_env("SENTRY_DSN_LOCAL"),
     else: System.get_env("SENTRY_DSN")
 
+# For e2e tracing tests, use the TestClient to log events to a file
+client =
+  if System.get_env("SENTRY_E2E_TEST_MODE") == "true",
+    do: PhoenixApp.TestClient,
+    else: Sentry.HackneyClient
+
 config :sentry,
   dsn: dsn,
   environment_name: :dev,
   enable_source_code_context: true,
   send_result: :sync,
-  traces_sample_rate: 1.0
+  traces_sample_rate: 1.0,
+  client: client
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,
