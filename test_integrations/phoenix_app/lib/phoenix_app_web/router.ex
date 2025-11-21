@@ -30,14 +30,16 @@ defmodule PhoenixAppWeb.Router do
     get "/transaction", PageController, :transaction
     get "/nested-spans", PageController, :nested_spans
 
-    live "/test-worker", TestWorkerLive
+    live_session :default, on_mount: {Sentry.Phoenix.LiveViewTracing, :attach} do
+      live "/test-worker", TestWorkerLive
 
-    live "/users", UserLive.Index, :index
-    live "/users/new", UserLive.Index, :new
-    live "/users/:id/edit", UserLive.Index, :edit
+      live "/users", UserLive.Index, :index
+      live "/users/new", UserLive.Index, :new
+      live "/users/:id/edit", UserLive.Index, :edit
 
-    live "/users/:id", UserLive.Show, :show
-    live "/users/:id/show/edit", UserLive.Show, :edit
+      live "/users/:id", UserLive.Show, :show
+      live "/users/:id/show/edit", UserLive.Show, :edit
+    end
   end
 
   # API endpoints for e2e tracing tests

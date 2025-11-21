@@ -131,6 +131,9 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
   end
 
   test "GET /users with distributed tracing headers includes child spans with details", %{conn: conn} do
+    # Ensure the `sentry-trace` header controls the trace ID so both the disconnected
+    # mount and the connected `handle_params` transaction emit spans on the same trace.
+
     trace_id = "1234567890abcdef1234567890abcdef"
     span_id = "1234567890abcdef"
     sentry_trace = "#{trace_id}-#{span_id}-1"
@@ -142,7 +145,7 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     assert length(transactions) == 2
 
-    assert [mount_transaction, _handle_params_transaction] = transactions
+    assert [mount_transaction, handle_params_transaction] = transactions
 
     assert mount_transaction.contexts.trace.trace_id == trace_id
     assert mount_transaction.contexts.trace.parent_span_id != nil
@@ -153,5 +156,7 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert span_ecto.description == "SELECT u0.\"id\", u0.\"name\", u0.\"age\", u0.\"inserted_at\", u0.\"updated_at\" FROM \"users\" AS u0"
 
     assert span_ecto.data["db.system"] != nil
+
+    assert handle_params_transaction.contexts.trace.trace_id == trace_id
   end
 end

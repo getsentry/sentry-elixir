@@ -60,17 +60,13 @@ config :logger, :console,
 
 config :phoenix, :json_library, if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
 
-config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
-
 config :opentelemetry,
-  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
-
-# Configure OpenTelemetry to use Sentry propagator for distributed tracing
-config :opentelemetry,
+  span_processor: {Sentry.OpenTelemetry.SpanProcessor, []},
+  sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]},
   text_map_propagators: [
+    Sentry.OpenTelemetry.Propagator,
     :trace_context,
-    :baggage,
-    Sentry.OpenTelemetry.Propagator
+    :baggage
   ]
 
 # Import environment specific config. This must remain at the bottom

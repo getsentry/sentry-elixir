@@ -31,10 +31,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       # HTTP server request spans should be treated as transaction roots even when they have
       # an external parent span ID (from distributed tracing)
       is_transaction_root =
-        span_record.parent_span_id == nil or is_http_server_request_span?(span_record)
+        span_record.parent_span_id == nil or
+          is_http_server_request_span?(span_record) or
+          is_live_view_server_span?(span_record)
 
       if is_transaction_root do
-        child_span_records = SpanStorage.get_child_spans(span_record.span_id)
+        child_span_records =
+          span_record.span_id
+          |> SpanStorage.get_child_spans()
+          |> maybe_add_remote_children(span_record)
+
         transaction = build_transaction(span_record, child_span_records)
 
         result =
@@ -81,6 +87,68 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp is_http_server_request_span?(%{kind: kind, attributes: attributes}) do
       kind == :server and
         Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
+    end
+
+    defp is_live_view_server_span?(%{kind: :server, origin: origin, name: name})
+         when origin in ["opentelemetry_phoenix", :opentelemetry_phoenix] do
+      String.ends_with?(name, ".mount") or
+        String.contains?(name, ".handle_params") or
+        String.contains?(name, ".handle_event")
+    end
+
+    defp is_live_view_server_span?(_span_record), do: false
+
+    defp maybe_add_remote_children(child_span_records, %{parent_span_id: nil}) do
+      child_span_records
+    end
+
+    defp maybe_add_remote_children(child_span_records, span_record) do
+      if is_live_view_server_span?(span_record) do
+        existing_ids = MapSet.new(child_span_records, & &1.span_id)
+
+        adopted_children =
+          span_record.parent_span_id
+          |> SpanStorage.get_child_spans()
+          |> Enum.filter(&eligible_for_adoption?(&1, span_record, existing_ids))
+          |> Enum.map(&%{&1 | parent_span_id: span_record.span_id})
+
+        Enum.each(adopted_children, fn child ->
+          :ok = SpanStorage.remove_child_span(span_record.parent_span_id, child.span_id)
+        end)
+
+        child_span_records ++ adopted_children
+      else
+        child_span_records
+      end
+    end
+
+    defp eligible_for_adoption?(child, span_record, existing_ids) do
+      not MapSet.member?(existing_ids, child.span_id) and
+        child.parent_span_id == span_record.parent_span_id and
+        child.trace_id == span_record.trace_id and
+        child.kind != :server and
+        occurs_within_span?(child, span_record)
+    end
+
+    defp occurs_within_span?(child, parent) do
+      with {:ok, parent_start} <- parse_datetime(parent.start_time),
+           {:ok, parent_end} <- parse_datetime(parent.end_time),
+           {:ok, child_start} <- parse_datetime(child.start_time),
+           {:ok, child_end} <- parse_datetime(child.end_time) do
+        DateTime.compare(child_start, parent_start) != :lt and
+          DateTime.compare(child_end, parent_end) != :gt
+      else
+        _ -> true
+      end
+    end
+
+    defp parse_datetime(nil), do: :error
+
+    defp parse_datetime(timestamp) do
+      case DateTime.from_iso8601(timestamp) do
+        {:ok, datetime, _offset} -> {:ok, datetime}
+        {:error, _} -> :error
+      end
     end
 
     defp build_transaction(root_span_record, child_span_records) do

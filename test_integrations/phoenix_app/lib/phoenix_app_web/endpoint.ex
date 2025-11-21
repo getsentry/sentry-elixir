@@ -70,6 +70,8 @@ defmodule PhoenixAppWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
+  plug Sentry.Plug.LiveViewContextCleanup
   plug Plug.Session, @session_options
+  plug Sentry.Plug.LiveViewContext
   plug PhoenixAppWeb.Router
 end

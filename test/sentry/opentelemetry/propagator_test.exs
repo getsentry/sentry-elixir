@@ -12,6 +12,9 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
     @fields Record.extract(:span_ctx, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
     Record.defrecordp(:span_ctx, @fields)
 
+    @span_fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
+    Record.defrecordp(:span_record, :span, @span_fields)
+
     describe "fields/1" do
       test "returns the header fields used by the propagator" do
         assert Propagator.fields([]) == ["sentry-trace", "baggage"]
@@ -278,6 +281,30 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
           # The span ID in the new context becomes the parent span ID
           assert span_ctx(new_span_ctx, :span_id) == original_span_id
         end
+      end
+
+      test "extracted remote span is used as parent for new spans" do
+        sentry_trace_header = "1234567890abcdef1234567890abcdef-abcdef1234567890-1"
+
+        getter = fn key, _carrier ->
+          case key do
+            "sentry-trace" -> sentry_trace_header
+            _ -> :undefined
+          end
+        end
+
+        # Extract the remote span context
+        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+
+        # Attach the context (this is what :otel_propagator_text_map.extract/1 does)
+        _token = :otel_ctx.attach(ctx)
+
+        # Start a new span - it should use the extracted context as parent
+        new_span_ctx = Tracer.start_span("child_span", %{kind: :server})
+
+        # The new span should have the same trace_id as the extracted context
+        expected_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+        assert span_ctx(new_span_ctx, :trace_id) == expected_trace_id
       end
     end
   end

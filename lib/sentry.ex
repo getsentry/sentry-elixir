@@ -14,7 +14,8 @@ defmodule Sentry do
 
     * Automatically for Plug/Phoenix applications — see the
       [*Setup with Plug and Phoenix* guide](setup-with-plug-and-phoenix.html), and the
-      `Sentry.PlugCapture` and `Sentry.PlugContext` modules.
+      `Sentry.PlugCapture`, `Sentry.PlugContext`, `Sentry.Plug.LiveViewContext`, and
+      `Sentry.Phoenix.LiveViewTracing`.
 
     * Through integrations for various ecosystem tools, like [Oban](oban-integration.html)
       or [Quantum](quantum-integration.html).
