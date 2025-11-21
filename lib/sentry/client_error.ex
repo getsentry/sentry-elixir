@@ -33,6 +33,7 @@ defmodule Sentry.ClientError do
   """
   @type reason() ::
           :too_many_retries
+          | :rate_limited
           | :server_error
           | {:invalid_json, Exception.t()}
           | {:request_failure, reason :: :inet.posix() | term()}
@@ -71,6 +72,10 @@ defmodule Sentry.ClientError do
 
   defp format(:too_many_retries) do
     "Sentry responded with status 429 - Too Many Requests and the SDK exhausted the configured retries"
+  end
+
+  defp format(:rate_limited) do
+    "the event was dropped because the category is currently rate-limited by Sentry"
   end
 
   defp format({:invalid_json, reason}) do

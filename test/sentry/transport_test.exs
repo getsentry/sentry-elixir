@@ -234,7 +234,7 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
 
-    test "fails when it exhausts retries and Sentry replies with 429", %{bypass: bypass} do
+    test "fails immediately when Sentry replies with 429 (rate limited)", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
       test_pid = self()
       ref = make_ref()
@@ -247,7 +247,7 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(429, ~s<{}>)
       end)
 
-      assert :too_many_retries =
+      assert :rate_limited =
                error(fn ->
                  Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
                end)
@@ -259,6 +259,98 @@ defmodule Sentry.TransportTest do
 
       assert log =~ "[warning]"
       assert_received {:request, ^ref}
+    end
+
+    test "updates rate limits from X-Sentry-Rate-Limits header in 200 OK response", %{
+      bypass: bypass
+    } do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+
+      # Simulate Sentry sending rate limit in successful response
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:error:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"abc123"}>)
+      end)
+
+      # Request should succeed
+      assert {:ok, "abc123"} = Transport.encode_and_post_envelope(envelope, HackneyClient)
+
+      # But rate limit should be stored
+      assert Transport.RateLimiter.rate_limited?("error")
+      refute Transport.RateLimiter.rate_limited?("transaction")
+    end
+
+    test "updates rate limits from X-Sentry-Rate-Limits header in error responses", %{
+      bypass: bypass
+    } do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+
+      # Simulate Sentry sending rate limit in error response
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "120:transaction:organization")
+        |> Plug.Conn.resp(500, ~s<{"error":"Internal Server Error"}>)
+      end)
+
+      # Request should fail
+      assert {:error, %ClientError{reason: :server_error}} =
+               Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+
+      # But rate limit should still be stored
+      assert Transport.RateLimiter.rate_limited?("transaction")
+      refute Transport.RateLimiter.rate_limited?("error")
+    end
+
+    test "proactively enforces rate limits from 200 OK before subsequent requests", %{
+      bypass: bypass
+    } do
+      # First request returns 200 with rate limit header
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:error:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first-event"}>)
+      end)
+
+      envelope1 = Envelope.from_event(Event.create_event(message: "First error"))
+      assert {:ok, "first-event"} = Transport.encode_and_post_envelope(envelope1, HackneyClient)
+
+      # Verify rate limit was stored
+      assert Transport.RateLimiter.rate_limited?("error")
+
+      # Second error event should be dropped BEFORE making HTTP request
+      # This happens at the higher level (encode_and_post_envelope checks rate limits first)
+      envelope2 = Envelope.from_event(Event.create_event(message: "Second error"))
+
+      # The bypass will NOT receive a request because it's dropped before sending
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope2, HackneyClient, _retries = [])
+    end
+
+    test "handles multiple categories in single X-Sentry-Rate-Limits header", %{bypass: bypass} do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+
+      # Simulate Sentry rate-limiting multiple categories at once
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header(
+          "X-Sentry-Rate-Limits",
+          "60:error;transaction:key, 120:attachment:org"
+        )
+        |> Plug.Conn.resp(200, ~s<{"id":"xyz"}>)
+      end)
+
+      assert {:ok, "xyz"} = Transport.encode_and_post_envelope(envelope, HackneyClient)
+
+      # Both error and transaction should be rate-limited for 60 seconds
+      assert Transport.RateLimiter.rate_limited?("error")
+      assert Transport.RateLimiter.rate_limited?("transaction")
+
+      # Attachment should be rate-limited for 120 seconds
+      assert Transport.RateLimiter.rate_limited?("attachment")
+
+      # Other categories should not be rate-limited
+      refute Transport.RateLimiter.rate_limited?("session")
     end
   end
 

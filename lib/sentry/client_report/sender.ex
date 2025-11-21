@@ -31,6 +31,7 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba

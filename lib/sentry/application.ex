@@ -47,7 +47,7 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
-        [Sentry.Transport.SenderPool]
+        [Sentry.Transport.RateLimiter, Sentry.Transport.SenderPool]
 
     cache_loaded_applications()
 
