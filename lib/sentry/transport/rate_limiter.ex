@@ -101,10 +101,8 @@ defmodule Sentry.Transport.RateLimiter do
       :ok
 
   """
-  @spec update_rate_limits(String.t() | nil) :: :ok
-  def update_rate_limits(nil), do: :ok
-
-  def update_rate_limits(rate_limits_header) when is_binary(rate_limits_header) do
+  @spec update_rate_limits(String.t()) :: :ok
+  def update_rate_limits(rate_limits_header) do
     now = System.system_time(:second)
     rate_limits = parse_rate_limits_header(rate_limits_header)
 
