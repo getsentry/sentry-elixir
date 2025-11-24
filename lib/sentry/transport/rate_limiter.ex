@@ -27,7 +27,7 @@ defmodule Sentry.Transport.RateLimiter do
 
   @impl true
   def init(nil) do
-    _table = :ets.new(@table, [:named_table, :public, :set])
+    _table = :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     schedule_sweep()
     {:ok, :no_state}
   end
