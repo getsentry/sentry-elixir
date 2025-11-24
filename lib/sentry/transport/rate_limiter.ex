@@ -133,13 +133,13 @@ defmodule Sentry.Transport.RateLimiter do
   defp parse_rate_limits_header(header_value) do
     header_value
     |> String.split(",")
-    |> Enum.map(&String.trim/1)
     |> Enum.flat_map(&parse_quota_limit/1)
   end
 
   @spec parse_quota_limit(String.t()) :: [{String.t() | :global, integer()}]
   defp parse_quota_limit(quota_limit_str) do
-    {retry_after_str, rest} = quota_limit_str |> String.split(":") |> List.pop_at(0)
+    {retry_after_str, rest} =
+      quota_limit_str |> String.trim() |> String.split(":") |> List.pop_at(0)
 
     case parse_retry_after(retry_after_str) do
       {:ok, retry_after} -> parse_categories(rest, retry_after)
