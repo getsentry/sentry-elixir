@@ -33,6 +33,14 @@ defmodule Sentry.Application do
         []
       end
 
+    # Don't start RateLimiter in test environment - tests start their own instances
+    maybe_rate_limiter =
+      if Mix.env() == :test do
+        []
+      else
+        [Sentry.Transport.RateLimiter]
+      end
+
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
@@ -47,7 +55,8 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
-        [Sentry.Transport.RateLimiter, Sentry.Transport.SenderPool]
+        maybe_rate_limiter ++
+        [Sentry.Transport.SenderPool]
 
     cache_loaded_applications()
 

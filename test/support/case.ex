@@ -10,9 +10,12 @@ defmodule Sentry.Case do
   setup context do
     config_before = all_config()
 
-    # Clear rate limiter state before each test
-    if Process.whereis(Sentry.Transport.RateLimiter) do
-      :ets.delete_all_objects(Sentry.Transport.RateLimiter)
+    # Start a fresh RateLimiter for each test (with default name for Transport compatibility)
+    # For async tests, multiple tests may share the same RateLimiter - this is acceptable
+    # since RateLimiter state is typically not relevant to most tests.
+    case start_supervised(Sentry.Transport.RateLimiter) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
     end
 
     on_exit(fn ->
