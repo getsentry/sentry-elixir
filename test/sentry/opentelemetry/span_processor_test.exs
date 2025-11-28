@@ -1,6 +1,10 @@
 defmodule Sentry.Opentelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
+  require OpenTelemetry.Tracer, as: Tracer
+  require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+  require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+
   import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.SpanStorage
@@ -188,8 +192,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.Tracer, as: Tracer
-
       Tracer.with_span "root_span" do
         Tracer.with_span "level_1_child" do
           Tracer.with_span "level_2_child" do
@@ -247,8 +249,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       tasks =
         Enum.map(1..20, fn i ->
           Task.async(fn ->
-            require OpenTelemetry.Tracer, as: Tracer
-
             Tracer.with_span "concurrent_root_#{i}" do
               Tracer.with_span "concurrent_child_#{i}" do
                 Process.sleep(10)
@@ -286,8 +286,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.Tracer, as: Tracer
-
       Tracer.with_span "root_span" do
         Tracer.with_span "child_instrumented_function_one" do
           Process.sleep(10)
@@ -309,6 +307,520 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
       Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "treats HTTP server request spans as transaction roots for distributed tracing" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      # This represents a distributed trace where the client started the trace
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      # Create a remote parent span context using :otel_tracer.from_remote_span
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users",
+          "http.route" => "/api/users",
+          "server.address" => "localhost",
+          "server.port" => 4000
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+
+        Tracer.with_span "db.query:notifications", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO notifications (user_id) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction root despite having an external parent
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      # Verify transaction properties
+      assert transaction.transaction == "POST /api/users"
+      assert transaction.transaction_info == %{source: :custom}
+      assert length(transaction.spans) == 2
+
+      # Verify child spans are properly included
+      span_ops = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      assert span_ops == ["db", "db"]
+
+      # Verify child spans have detailed data (like SQL queries)
+      [span1, span2] = transaction.spans
+      assert span1.description =~ "INSERT INTO"
+      assert span2.description =~ "INSERT INTO"
+      assert span1.data["db.system"] == :postgresql
+      assert span2.data["db.system"] == :postgresql
+      assert span1.data["db.statement"] =~ "INSERT INTO users"
+      assert span2.data["db.statement"] =~ "INSERT INTO notifications"
+
+      # Verify all spans share the same trace ID (from the external parent)
+      trace_id = transaction.contexts.trace.trace_id
+
+      Enum.each(transaction.spans, fn span ->
+        assert span.trace_id == trace_id
+      end)
+
+      # The transaction should have the external parent's trace ID
+      assert transaction.contexts.trace.trace_id ==
+               "1234567890abcdef1234567890abcdef"
+    end
+
+    @tag span_storage: true
+    test "cleans up HTTP server span and children after sending distributed trace transaction", %{
+      table_name: table_name
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users"
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      # Verify the HTTP server span was removed from storage
+      # (even though it was stored as a child span due to having a remote parent)
+      http_server_span_id = transaction.contexts.trace.span_id
+      remote_parent_span_id_str = "abcdef1234567890"
+
+      # The HTTP server span should not exist in storage anymore
+      assert SpanStorage.get_root_span(http_server_span_id, table_name: table_name) == nil
+
+      # Check that it was also removed from child spans storage
+      # We can't directly check if a specific child was removed, but we can verify
+      # that get_child_spans for the remote parent returns empty (or doesn't include our span)
+      remaining_children =
+        SpanStorage.get_child_spans(remote_parent_span_id_str, table_name: table_name)
+
+      refute Enum.any?(remaining_children, fn span -> span.span_id == http_server_span_id end)
+
+      # Verify child spans of the HTTP server span were also removed
+      assert [] == SpanStorage.get_child_spans(http_server_span_id, table_name: table_name)
+    end
+  end
+
+  describe "parent-child span ordering (race condition)" do
+    # These tests verify that child spans are included in transactions even when
+    # the parent span's on_end is called before the child span's on_end.
+    # This simulates what happens with telemetry-based instrumentation like
+    # opentelemetry_phoenix + opentelemetry_ecto where the order of on_end calls
+    # is not guaranteed.
+
+    @tag span_storage: true
+    test "includes child spans when parent ends before child (race condition)" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # We need to simulate the race condition where:
+      # 1. Parent span starts
+      # 2. Child span starts
+      # 3. Parent span ends (on_end called) - but child is still running
+      # 4. Child span ends (on_end called) - after parent already ended
+      #
+      # This happens with telemetry-based instrumentation because:
+      # - Phoenix LiveView mount span ends when the mount callback returns
+      # - Ecto query span ends when the query completes
+      # - But with async telemetry events, the order of on_end calls isn't guaranteed
+
+      test_pid = self()
+
+      # Start parent span and get its context
+      parent_task =
+        Task.async(fn ->
+          Tracer.with_span "parent_span", %{kind: :internal} do
+            # Get parent span ID to pass to child
+            parent_span_ctx = Tracer.current_span_ctx()
+            parent_ctx = :otel_ctx.get_current()
+
+            # Send context to main process
+            send(test_pid, {:parent_ctx, parent_ctx, parent_span_ctx})
+
+            # Wait for child to start before parent ends
+            receive do
+              :child_started -> :ok
+            after
+              5000 -> raise "Timeout waiting for child_started"
+            end
+
+            # Parent span ends here (when with_span block exits)
+            # but child is still running
+          end
+
+          # Signal that parent has ended
+          send(test_pid, :parent_ended)
+        end)
+
+      # Receive parent context
+      parent_ctx =
+        receive do
+          {:parent_ctx, ctx, _span_ctx} -> ctx
+        after
+          5000 -> raise "Timeout waiting for parent context"
+        end
+
+      # Start child span in a separate process with parent context
+      child_task =
+        Task.async(fn ->
+          # Attach parent context to this process
+          :otel_ctx.attach(parent_ctx)
+
+          Tracer.with_span "child_span_delayed", %{kind: :internal} do
+            # Signal that child has started
+            send(test_pid, :child_started)
+
+            # Wait for parent to end first
+            receive do
+              :parent_ended -> :ok
+            after
+              5000 -> raise "Timeout waiting for parent_ended"
+            end
+
+            # Add a small delay to ensure parent's on_end has been processed
+            Process.sleep(50)
+
+            # Child span ends here (after parent has already ended)
+          end
+        end)
+
+      # Wait for child to start
+      receive do
+        :child_started -> :ok
+      after
+        5000 -> raise "Timeout waiting for child_started signal"
+      end
+
+      # Signal parent to end
+      send(parent_task.pid, :child_started)
+
+      # Wait for parent to end
+      receive do
+        :parent_ended -> :ok
+      after
+        5000 -> raise "Timeout waiting for parent_ended signal"
+      end
+
+      # Signal child to end (after parent has ended)
+      send(child_task.pid, :parent_ended)
+
+      Task.await(parent_task)
+      Task.await(child_task)
+
+      # Give some time for async processing
+      Process.sleep(100)
+
+      # The transaction should include the child span
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      assert length(transactions) == 1, "Expected 1 transaction, got #{length(transactions)}"
+      [transaction] = transactions
+
+      assert transaction.transaction == "parent_span"
+
+      # THIS IS THE KEY ASSERTION: The child span should be included
+      # even though the parent's on_end was called before the child's on_end
+      assert length(transaction.spans) == 1,
+             "Expected 1 child span, got #{length(transaction.spans)}. " <>
+               "This fails due to the race condition where parent ends before child."
+
+      [child_span] = transaction.spans
+      assert child_span.op == "child_span_delayed"
+      assert child_span.parent_span_id == transaction.span_id
+    end
+
+    @tag span_storage: true
+    test "includes multiple child spans when parent ends before children (race condition)" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Similar test but with multiple children ending at different times after the parent
+      test_pid = self()
+
+      parent_task =
+        Task.async(fn ->
+          Tracer.with_span "parent_with_multiple_children", %{kind: :internal} do
+            parent_ctx = :otel_ctx.get_current()
+            send(test_pid, {:parent_ctx, parent_ctx})
+
+            # Wait for both children to start
+            receive do
+              :children_started -> :ok
+            after
+              5000 -> raise "Timeout"
+            end
+
+            # Parent ends here
+          end
+
+          send(test_pid, :parent_ended)
+        end)
+
+      parent_ctx =
+        receive do
+          {:parent_ctx, ctx} -> ctx
+        after
+          5000 -> raise "Timeout"
+        end
+
+      # Start two child spans in separate processes
+      child1_task =
+        Task.async(fn ->
+          :otel_ctx.attach(parent_ctx)
+
+          Tracer.with_span "child_1", %{kind: :internal} do
+            send(test_pid, :child1_started)
+
+            receive do
+              :end_child1 -> :ok
+            after
+              5000 -> raise "Timeout"
+            end
+          end
+        end)
+
+      child2_task =
+        Task.async(fn ->
+          :otel_ctx.attach(parent_ctx)
+
+          Tracer.with_span "child_2", %{kind: :internal} do
+            send(test_pid, :child2_started)
+
+            receive do
+              :end_child2 -> :ok
+            after
+              5000 -> raise "Timeout"
+            end
+          end
+        end)
+
+      # Wait for both children to start
+      receive do
+        :child1_started -> :ok
+      after
+        5000 -> raise "Timeout"
+      end
+
+      receive do
+        :child2_started -> :ok
+      after
+        5000 -> raise "Timeout"
+      end
+
+      # Signal parent that children have started
+      send(parent_task.pid, :children_started)
+
+      # Wait for parent to end
+      receive do
+        :parent_ended -> :ok
+      after
+        5000 -> raise "Timeout"
+      end
+
+      # End children in sequence (both after parent)
+      Process.sleep(50)
+      send(child1_task.pid, :end_child1)
+      Process.sleep(20)
+      send(child2_task.pid, :end_child2)
+
+      Task.await(parent_task)
+      Task.await(child1_task)
+      Task.await(child2_task)
+
+      Process.sleep(100)
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      assert length(transactions) == 1, "Expected 1 transaction, got #{length(transactions)}"
+      [transaction] = transactions
+
+      assert transaction.transaction == "parent_with_multiple_children"
+
+      # Both child spans should be included
+      assert length(transaction.spans) == 2,
+             "Expected 2 child spans, got #{length(transaction.spans)}. " <>
+               "This fails due to the race condition."
+
+      span_ops = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      assert span_ops == ["child_1", "child_2"]
+    end
+
+    @tag span_storage: true
+    test "includes child spans created with start_span/end_span (ecto pattern)" do
+      # This test mimics the exact pattern used by opentelemetry_ecto:
+      # - Parent span uses with_span (like LiveView mount)
+      # - Child span uses start_span/end_span directly within the same process
+      #   (like Ecto telemetry handler)
+      #
+      # The key difference is that start_span/end_span doesn't nest like with_span,
+      # so we need to manually attach the parent context.
+
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      test_pid = self()
+
+      # This simulates what happens in LiveView + Ecto:
+      # 1. LiveView mount span starts (via opentelemetry_phoenix telemetry)
+      # 2. Ecto query runs, which creates a child span via telemetry
+      # 3. LiveView mount span ends
+      parent_task =
+        Task.async(fn ->
+          Tracer.with_span "LiveView.mount", %{kind: :server} do
+            # Get the current context to pass to child
+            parent_ctx = :otel_ctx.get_current()
+            send(test_pid, {:parent_ctx, parent_ctx})
+
+            # Wait for child to start
+            receive do
+              :child_started -> :ok
+            after
+              5000 -> raise "Timeout"
+            end
+
+            # Parent ends here, but child may still be running
+          end
+
+          send(test_pid, :parent_ended)
+        end)
+
+      # Get parent context
+      parent_ctx =
+        receive do
+          {:parent_ctx, ctx} -> ctx
+        after
+          5000 -> raise "Timeout"
+        end
+
+      # Simulate Ecto span creation (using start_span/end_span like opentelemetry_ecto does)
+      child_task =
+        Task.async(fn ->
+          # Attach parent context (this is what opentelemetry_process_propagator does)
+          # opentelemetry_ecto uses OpenTelemetry.Ctx.attach which returns a token
+          parent_token = OpenTelemetry.Ctx.attach(parent_ctx)
+
+          # Create child span using start_span (not with_span)
+          # This is exactly what opentelemetry_ecto does
+          child_span =
+            OpenTelemetry.Tracer.start_span("Ecto.query", %{
+              kind: :client,
+              attributes: %{
+                "db.system" => :postgresql,
+                "db.statement" => "SELECT * FROM users"
+              }
+            })
+
+          send(test_pid, :child_started)
+
+          # Wait for parent to end first (simulating the race condition)
+          receive do
+            :parent_ended -> :ok
+          after
+            5000 -> raise "Timeout"
+          end
+
+          Process.sleep(50)
+
+          # End the child span (after parent has ended)
+          # opentelemetry_ecto uses OpenTelemetry.Span.end_span/1, not Tracer.end_span/1
+          OpenTelemetry.Span.end_span(child_span)
+
+          # Detach the context token (cleanup)
+          OpenTelemetry.Ctx.detach(parent_token)
+        end)
+
+      # Wait for child to start
+      receive do
+        :child_started -> :ok
+      after
+        5000 -> raise "Timeout"
+      end
+
+      # Signal parent to end
+      send(parent_task.pid, :child_started)
+
+      # Wait for parent to end
+      receive do
+        :parent_ended -> :ok
+      after
+        5000 -> raise "Timeout"
+      end
+
+      # Signal child that parent has ended
+      send(child_task.pid, :parent_ended)
+
+      Task.await(parent_task)
+      Task.await(child_task)
+
+      Process.sleep(100)
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      assert length(transactions) == 1, "Expected 1 transaction, got #{length(transactions)}"
+      [transaction] = transactions
+
+      assert transaction.transaction == "LiveView.mount"
+
+      # The child span should be included even with start_span/end_span pattern
+      assert length(transaction.spans) == 1,
+             "Expected 1 child span (Ecto query), got #{length(transaction.spans)}. " <>
+               "This tests the opentelemetry_ecto pattern."
+
+      [child_span] = transaction.spans
+      assert child_span.op == "db"
+      assert child_span.description == "SELECT * FROM users"
     end
   end
 end
