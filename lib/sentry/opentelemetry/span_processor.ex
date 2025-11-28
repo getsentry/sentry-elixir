@@ -11,11 +11,15 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
     require Logger
+    require Record
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
 
-    # This can be a no-op since we can postpone inserting the span into storage until on_end
+    # Extract span record fields to access parent_span_id in on_start
+    @span_fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
+    Record.defrecordp(:span, @span_fields)
+
     @impl :otel_span_processor
     def on_start(_ctx, otel_span, _config) do
       otel_span
@@ -24,41 +28,92 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @impl :otel_span_processor
     def on_end(otel_span, _config) do
       span_record = SpanRecord.new(otel_span)
+      process_span(span_record)
+    end
 
+    defp process_span(span_record) do
       SpanStorage.store_span(span_record)
 
-      if span_record.parent_span_id == nil do
-        child_span_records = SpanStorage.get_child_spans(span_record.span_id)
-        transaction = build_transaction(span_record, child_span_records)
+      # Check if this is a root span (no parent) or a transaction root
+      #
+      # A span should be a transaction root if:
+      # 1. It has no parent (true root span)
+      # 2. OR it's a server span with only a REMOTE parent (distributed tracing)
+      #
+      # A span should NOT be a transaction root if:
+      # - It has a LOCAL parent (parent span exists in our SpanStorage)
+      is_transaction_root =
+        cond do
+          # No parent = definitely a root
+          span_record.parent_span_id == nil ->
+            true
 
-        result =
-          case Sentry.send_transaction(transaction) do
-            {:ok, _id} ->
-              true
+          # Has a parent - check if it's local or remote
+          true ->
+            has_local_parent = has_local_parent_span?(span_record.parent_span_id)
 
-            :ignored ->
-              true
+            if has_local_parent do
+              # Parent exists locally - this is a child span, not a transaction root
+              false
+            else
+              # Parent is remote (distributed tracing) - treat server spans as transaction roots
+              is_server_span?(span_record)
+            end
+        end
 
-            :excluded ->
-              true
-
-            {:error, error} ->
-              Logger.warning("Failed to send transaction to Sentry: #{inspect(error)}")
-              {:error, :invalid_span}
-          end
-
-        :ok = SpanStorage.remove_root_span(span_record.span_id)
-
-        result
+      if is_transaction_root do
+        build_and_send_transaction(span_record)
       else
         true
       end
+    end
+
+    defp build_and_send_transaction(span_record) do
+      child_span_records = SpanStorage.get_child_spans(span_record.span_id)
+      transaction = build_transaction(span_record, child_span_records)
+
+      result =
+        case Sentry.send_transaction(transaction) do
+          {:ok, _id} ->
+            true
+
+          :ignored ->
+            true
+
+          :excluded ->
+            true
+
+          {:error, error} ->
+            Logger.warning("Failed to send transaction to Sentry: #{inspect(error)}")
+            {:error, :invalid_span}
+        end
+
+      # Clean up: remove the transaction root span and all its children
+      :ok = SpanStorage.remove_root_span(span_record.span_id)
+
+      result
     end
 
     @impl :otel_span_processor
     def force_flush(_config) do
       :ok
     end
+
+    # Checks if a parent span exists in our local SpanStorage
+    # This helps distinguish between:
+    # - Local parents: span exists in storage (same service)
+    # - Remote parents: span doesn't exist in storage (distributed tracing from another service)
+    defp has_local_parent_span?(parent_span_id) do
+      SpanStorage.span_exists?(parent_span_id)
+    end
+
+    # Helper function to detect if a span is a server span that should be
+    # treated as a transaction root for distributed tracing.
+    defp is_server_span?(%{kind: :server, attributes: attributes}) do
+      Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
+    end
+
+    defp is_server_span?(_), do: false
 
     defp build_transaction(root_span_record, child_span_records) do
       root_span = build_span(root_span_record)
@@ -114,10 +169,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       url_path = Map.get(span_record.attributes, to_string(URLAttributes.url_path()))
 
+      # Build description with method and path
       description =
-        to_string(http_request_method) <>
-          ((client_address && " from #{client_address}") || "") <>
-          ((url_path && " #{url_path}") || "")
+        case url_path do
+          nil -> to_string(http_request_method)
+          path -> "#{http_request_method} #{path}"
+        end
+
+      description =
+        if client_address do
+          "#{description} from #{client_address}"
+        else
+          description
+        end
 
       {op, description}
     end

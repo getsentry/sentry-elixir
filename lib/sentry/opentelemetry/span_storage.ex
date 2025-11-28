@@ -37,6 +37,22 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       {:noreply, state}
     end
 
+    @spec span_exists?(String.t(), keyword()) :: boolean()
+    def span_exists?(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      case :ets.lookup(table_name, {:root_span, span_id}) do
+        [{{:root_span, ^span_id}, _span, _stored_at}] ->
+          true
+
+        [] ->
+          case :ets.match_object(table_name, {{:child_span, :_, span_id}, :_, :_}) do
+            [] -> false
+            _ -> true
+          end
+      end
+    end
+
     @spec store_span(SpanRecord.t(), keyword()) :: true
     def store_span(span_data, opts \\ []) do
       table_name = Keyword.get(opts, :table_name, default_table_name())
