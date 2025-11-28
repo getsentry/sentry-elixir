@@ -16,6 +16,8 @@ defmodule Sentry.Case do
     case start_supervised(Sentry.Transport.RateLimiter) do
       {:ok, _pid} -> :ok
       {:error, {:already_started, _pid}} -> :ok
+      # Elixir 1.13 compatibility
+      {:error, {{:already_started, _pid}, _}} -> :ok
     end
 
     on_exit(fn ->
