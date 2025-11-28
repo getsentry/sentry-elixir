@@ -77,25 +77,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
-    @spec span_exists?(String.t(), keyword()) :: boolean()
-    def span_exists?(span_id, opts \\ []) do
-      table_name = Keyword.get(opts, :table_name, default_table_name())
-
-      # Check root spans first
-      case :ets.lookup(table_name, {:root_span, span_id}) do
-        [_] ->
-          true
-
-        [] ->
-          # Check child spans - scan for any child span with this span_id
-          # This is O(n) but necessary when the span has a remote parent
-          case :ets.match_object(table_name, {{:child_span, :_, span_id}, :_, :_}) do
-            [_ | _] -> true
-            [] -> false
-          end
-      end
-    end
-
     @spec get_child_spans(String.t(), keyword()) :: [SpanRecord.t()]
     def get_child_spans(parent_span_id, opts \\ []) do
       table_name = Keyword.get(opts, :table_name, default_table_name())

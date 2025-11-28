@@ -22,6 +22,30 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @impl :otel_span_processor
     def on_start(_ctx, otel_span, _config) do
+      # Check if this is a LiveView span during static render
+      # If so, mark it so we can filter it out in on_end
+      if liveview_propagator_loaded?() and
+           Sentry.OpenTelemetry.LiveViewPropagator.static_render?() do
+        # Set an attribute on the span to mark it as from static render
+        :otel_span.set_attribute(otel_span, :"sentry.liveview.static_render", true)
+      end
+
+      # Track pending children: when a span starts with a parent, register it
+      # as a pending child. This allows us to wait for all children when
+      # the parent ends, solving the race condition where parent.on_end
+      # is called before child.on_end.
+      parent_span_id = span(otel_span, :parent_span_id)
+      span_id = span(otel_span, :span_id)
+
+      if parent_span_id != nil and parent_span_id != :undefined do
+        parent_span_id_str = cast_span_id(parent_span_id)
+        span_id_str = cast_span_id(span_id)
+
+        if parent_span_id_str != nil and span_id_str != nil do
+          SpanStorage.store_pending_child(parent_span_id_str, span_id_str)
+        end
+      end
+
       otel_span
     end
 
@@ -29,6 +53,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     def on_end(otel_span, _config) do
       span_record = SpanRecord.new(otel_span)
       process_span(span_record)
+    end
+
+    # Check if the LiveViewPropagator module is loaded (only compiled when Phoenix.LiveView is available)
+    defp liveview_propagator_loaded? do
+      Code.ensure_loaded?(Sentry.OpenTelemetry.LiveViewPropagator)
     end
 
     defp process_span(span_record) do
@@ -68,6 +97,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
+    defp has_local_parent_span?(parent_span_id) do
+      casted_parent_span_id = cast_span_id(parent_span_id)
+      SpanStorage.span_exists?(casted_parent_span_id)
+    end
+
     defp build_and_send_transaction(span_record) do
       child_span_records = SpanStorage.get_child_spans(span_record.span_id)
       transaction = build_transaction(span_record, child_span_records)
@@ -97,14 +131,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @impl :otel_span_processor
     def force_flush(_config) do
       :ok
-    end
-
-    # Checks if a parent span exists in our local SpanStorage
-    # This helps distinguish between:
-    # - Local parents: span exists in storage (same service)
-    # - Remote parents: span doesn't exist in storage (distributed tracing from another service)
-    defp has_local_parent_span?(parent_span_id) do
-      SpanStorage.span_exists?(parent_span_id)
     end
 
     # Helper function to detect if a span is a server span that should be
@@ -278,6 +304,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         end
       end)
       |> Map.new()
+    end
+
+    defp cast_span_id(span_id) when is_binary(span_id) do
+      span_id
+    end
+
+    defp cast_span_id(span_id) when is_integer(span_id) do
+      Integer.to_string(span_id)
     end
   end
 end
