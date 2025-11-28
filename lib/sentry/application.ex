@@ -35,7 +35,7 @@ defmodule Sentry.Application do
 
     # Don't start RateLimiter in test environment - tests start their own instances
     maybe_rate_limiter =
-      if Mix.env() == :test do
+      if Application.get_env(:sentry, :start_rate_limiter, true) == false do
         []
       else
         [Sentry.Transport.RateLimiter]

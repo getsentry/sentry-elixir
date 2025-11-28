@@ -14,7 +14,7 @@ defmodule Sentry.Transport.Sender do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) when is_list(options) do
     index = Keyword.fetch!(options, :index)
-    GenServer.start_link(__MODULE__, [], name: {:via, Registry, {@registry, index}})
+    GenServer.start_link(__MODULE__, options, name: {:via, Registry, {@registry, index}})
   end
 
   @spec send_async(module(), Event.t()) :: :ok
@@ -38,9 +38,13 @@ defmodule Sentry.Transport.Sender do
   ## Callbacks
 
   @impl GenServer
-  def init([]) do
+  def init(options) do
     if function_exported?(Process, :set_label, 1) do
       apply(Process, :set_label, [__MODULE__])
+    end
+
+    if rate_limiter_table_name = Keyword.get(options, :rate_limiter_table_name) do
+      Process.put(:rate_limiter_table_name, rate_limiter_table_name)
     end
 
     {:ok, %__MODULE__{}}

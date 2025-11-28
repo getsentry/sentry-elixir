@@ -375,7 +375,9 @@ defmodule Sentry.ClientTest do
              end) =~ "the Sentry SDK could not encode the event to JSON: :im_just_bad"
     end
 
+    @tag :manual_rate_limiting
     test "uses the async sender pool when :result is :none", %{bypass: bypass} do
+      start_supervised!(Sentry.Transport.RateLimiter)
       test_pid = self()
       ref = make_ref()
 

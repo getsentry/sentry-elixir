@@ -14,7 +14,7 @@ defmodule Sentry.ClientReport.Sender do
 
   @spec start_link([]) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, nil, name: Keyword.get(opts, :name, __MODULE__))
+    GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
   def record_discarded_events(reason, info, genserver \\ __MODULE__)
@@ -51,8 +51,13 @@ defmodule Sentry.ClientReport.Sender do
   ## Callbacks
 
   @impl true
-  def init(nil) do
+  def init(opts) do
     schedule_report()
+
+    if rate_limiter_table_name = Keyword.get(opts, :rate_limiter_table_name) do
+      Process.put(:rate_limiter_table_name, rate_limiter_table_name)
+    end
+
     {:ok, _state = %{}}
   end
 

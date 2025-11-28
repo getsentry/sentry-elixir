@@ -23,7 +23,12 @@ defmodule Sentry.ClientReportTest do
 
   describe "record_discarded_events/2 + flushing" do
     test "succefully records the discarded event to the client report", %{bypass: bypass} do
-      start_supervised!({Sender, name: :test_client_report})
+      sender_opts = [
+        name: :test_client_report,
+        rate_limiter_table_name: Process.get(:rate_limiter_table_name)
+      ]
+
+      start_supervised!({Sender, sender_opts})
 
       events = [
         %Event{

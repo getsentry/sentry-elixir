@@ -64,7 +64,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   ## Options
 
-    * `:table_name` - The ETS table name. Defaults to `__MODULE__`.
+    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
+      value in the process dictionary, then to `__MODULE__`.
 
   ## Examples
 
@@ -78,7 +79,7 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec rate_limited?(String.t(), keyword()) :: boolean()
   def rate_limited?(category, opts \\ []) do
-    table_name = Keyword.get(opts, :table_name, __MODULE__)
+    table_name = get_table_name(opts)
     now = System.system_time(:second)
     check_rate_limited(table_name, category, now) or check_rate_limited(table_name, :global, now)
   end
@@ -91,7 +92,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   ## Options
 
-    * `:table_name` - The ETS table name. Defaults to `__MODULE__`.
+    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
+      value in the process dictionary, then to `__MODULE__`.
 
   ## Examples
 
@@ -102,7 +104,7 @@ defmodule Sentry.Transport.RateLimiter do
   @spec update_global_rate_limit(pos_integer(), keyword()) :: :ok
   def update_global_rate_limit(retry_after_seconds, opts \\ [])
       when is_integer(retry_after_seconds) do
-    table_name = Keyword.get(opts, :table_name, __MODULE__)
+    table_name = get_table_name(opts)
     now = System.system_time(:second)
     expiry = now + retry_after_seconds
     :ets.insert(table_name, {:global, expiry})
@@ -117,7 +119,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   ## Options
 
-    * `:table_name` - The ETS table name. Defaults to `__MODULE__`.
+    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
+      value in the process dictionary, then to `__MODULE__`.
 
   ## Examples
 
@@ -127,7 +130,7 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_rate_limits(String.t(), keyword()) :: :ok
   def update_rate_limits(rate_limits_header, opts \\ []) do
-    table_name = Keyword.get(opts, :table_name, __MODULE__)
+    table_name = get_table_name(opts)
     now = System.system_time(:second)
     rate_limits = parse_rate_limits_header(rate_limits_header)
 
@@ -140,6 +143,18 @@ defmodule Sentry.Transport.RateLimiter do
   end
 
   ## Private Helpers
+
+  # Get the table name with the following hierarchy:
+  # 1. Value passed in opts[:table_name]
+  # 2. Value from process dictionary (:rate_limiter_table_name)
+  # 3. Default module name
+  @spec get_table_name(keyword()) :: atom()
+  defp get_table_name(opts) do
+    case Keyword.fetch(opts, :table_name) do
+      {:ok, table_name} -> table_name
+      :error -> Process.get(:rate_limiter_table_name, __MODULE__)
+    end
+  end
 
   @spec check_rate_limited(atom(), String.t() | :global, integer()) :: boolean()
   defp check_rate_limited(table_name, category, time) do
