@@ -24,6 +24,7 @@ defmodule Sentry.Mixfile do
       ],
       test_coverage: [tool: ExCoveralls],
       name: "Sentry",
+      cli: cli(),
       docs: [
         extra_section: "Guides",
         extras: [
@@ -81,10 +82,6 @@ defmodule Sentry.Mixfile do
     ]
   end
 
-  def cli do
-    [preferred_envs: ["coveralls.html": :test, "test.integrations": :test]]
-  end
-
   defp extra_applications(:test), do: [:logger, :opentelemetry]
   defp extra_applications(_other), do: [:logger]
 
@@ -93,6 +90,16 @@ defmodule Sentry.Mixfile do
 
   defp test_paths(nil), do: ["test"]
   defp test_paths(integration), do: ["test_integrations/#{integration}/test"]
+
+  defp cli do
+    [
+      preferred_envs: [
+        "coveralls.html": :test,
+        "test.integrations": :test,
+        "test.apps.start": :dev
+      ]
+    ]
+  end
 
   defp deps do
     [

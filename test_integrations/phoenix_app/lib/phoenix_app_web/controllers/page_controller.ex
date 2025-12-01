@@ -48,4 +48,35 @@ defmodule PhoenixAppWeb.PageController do
 
     render(conn, :home, layout: false)
   end
+
+  # E2E tracing test endpoints
+
+  def api_error(_conn, _params) do
+    raise ArithmeticError, "bad argument in arithmetic expression"
+  end
+
+  def health(conn, _params) do
+    json(conn, %{status: "ok"})
+  end
+
+  def api_data(conn, _params) do
+    Tracer.with_span "fetch_data" do
+      users = Repo.all(User)
+
+      Tracer.with_span "process_data" do
+        user_count = length(users)
+
+        first_user = Repo.get(User, 1)
+
+        json(conn, %{
+          message: "Data fetched successfully",
+          data: %{
+            user_count: user_count,
+            first_user: if(first_user, do: first_user.name, else: nil),
+            timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+          }
+        })
+      end
+    end
+  end
 end

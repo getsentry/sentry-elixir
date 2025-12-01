@@ -1,0 +1,2 @@
+phoenix: cd ../phoenix_app && SENTRY_E2E_TEST_MODE=true mix phx.server
+svelte: cd svelte_mini && npm run dev

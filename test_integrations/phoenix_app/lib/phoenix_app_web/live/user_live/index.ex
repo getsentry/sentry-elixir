@@ -6,7 +6,11 @@ defmodule PhoenixAppWeb.UserLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :users, Accounts.list_users())}
+    if connected?(socket) do
+      {:ok, stream(socket, :users, Accounts.list_users())}
+    else
+      {:ok, stream(socket, :users, [])}
+    end
   end
 
   @impl true
