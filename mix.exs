@@ -14,6 +14,7 @@ defmodule Sentry.Mixfile do
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       test_paths: test_paths(System.get_env("SENTRY_INTEGRATION")),
+      test_ignore_filters: [~r|/fixtures/|],
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :extra_return],
         plt_file: {:no_warn, "plts/dialyzer.plt"},
