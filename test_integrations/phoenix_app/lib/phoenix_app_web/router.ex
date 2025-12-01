@@ -13,6 +13,14 @@ defmodule PhoenixAppWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :put_cors_headers
+  end
+
+  defp put_cors_headers(conn, _opts) do
+    conn
+    |> put_resp_header("access-control-allow-origin", "*")
+    |> put_resp_header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
+    |> put_resp_header("access-control-allow-headers", "content-type, authorization, sentry-trace, baggage")
   end
 
   scope "/", PhoenixAppWeb do
@@ -28,9 +36,15 @@ defmodule PhoenixAppWeb.Router do
     live "/users", UserLive.Index, :index
     live "/users/new", UserLive.Index, :new
     live "/users/:id/edit", UserLive.Index, :edit
+  end
 
-    live "/users/:id", UserLive.Show, :show
-    live "/users/:id/show/edit", UserLive.Show, :edit
+  # For e2e DT tests with a front-end app
+  scope "/", PhoenixAppWeb do
+    pipe_through :api
+
+    get "/error", PageController, :api_error
+    get "/health", PageController, :health
+    get "/api/data", PageController, :api_data
   end
 
   # Other scopes may use custom stacks.

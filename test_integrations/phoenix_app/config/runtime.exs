@@ -20,6 +20,13 @@ if System.get_env("PHX_SERVER") do
   config :phoenix_app, PhoenixAppWeb.Endpoint, server: true
 end
 
+# Allow runtime configuration of Sentry DSN and environment
+if dsn = System.get_env("SENTRY_DSN") do
+  config :sentry,
+    dsn: dsn,
+    environment_name: System.get_env("SENTRY_ENVIRONMENT") || config_env()
+end
+
 if config_env() == :prod do
   # database_url =
   #   System.get_env("DATABASE_URL") ||

@@ -11,13 +11,19 @@ config :phoenix_app, PhoenixApp.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
+#
+# For e2e tests, disable debug_errors so exceptions propagate properly and
+# create transactions. In regular dev mode, enable debug_errors for a better
+# debugging experience.
+debug_errors_setting = System.get_env("SENTRY_E2E_TEST_MODE") != "true"
+
 config :phoenix_app, PhoenixAppWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
   check_origin: false,
   code_reloader: true,
-  debug_errors: true,
+  debug_errors: debug_errors_setting,
   secret_key_base: "ssyvoq7X2T73sT2ZBVN1QEG0tNTulcqGf9FwczYr4RpmegDucPWqdVDhLtH8YhcB",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:phoenix_app, ~w(--sourcemap=inline --watch)]},
@@ -80,16 +86,29 @@ config :phoenix_live_view,
 config :swoosh, :api_client, false
 
 dsn =
-  if System.get_env("SENTRY_LOCAL"),
-    do: System.get_env("SENTRY_DSN_LOCAL"),
-    else: System.get_env("SENTRY_DSN")
+  cond do
+    System.get_env("SENTRY_E2E_TEST_MODE") == "true" ->
+      # Use a fake DSN for e2e tests so events are processed
+      "https://public@sentry.example.com/1"
+    System.get_env("SENTRY_LOCAL") ->
+      System.get_env("SENTRY_DSN_LOCAL")
+    true ->
+      System.get_env("SENTRY_DSN")
+  end
+
+# For e2e tracing tests, use the TestClient to log events to a file
+client =
+  if System.get_env("SENTRY_E2E_TEST_MODE") == "true",
+    do: PhoenixApp.TestClient,
+    else: Sentry.HackneyClient
 
 config :sentry,
   dsn: dsn,
   environment_name: :dev,
   enable_source_code_context: true,
   send_result: :sync,
-  traces_sample_rate: 1.0
+  traces_sample_rate: 1.0,
+  client: client
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,

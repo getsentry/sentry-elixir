@@ -24,6 +24,7 @@ defmodule Sentry.Mixfile do
       ],
       test_coverage: [tool: ExCoveralls],
       name: "Sentry",
+      cli: cli(),
       docs: [
         extra_section: "Guides",
         extras: [
