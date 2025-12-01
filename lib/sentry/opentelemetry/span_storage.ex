@@ -42,7 +42,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       table_name = Keyword.get(opts, :table_name, default_table_name())
 
       case :ets.lookup(table_name, {:root_span, span_id}) do
-        [{{:root_span, ^span_id}, _span, _stored_at}] -> true
+        [{{:root_span, ^span_id}, _span, _stored_at}] ->
+          true
+
         [] ->
           case :ets.match_object(table_name, {{:child_span, :_, span_id}, :_, :_}) do
             [] -> false
