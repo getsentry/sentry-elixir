@@ -22,22 +22,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @impl :otel_span_processor
     def on_start(_ctx, otel_span, _config) do
-      # Track pending children: when a span starts with a parent, register it
-      # as a pending child. This allows us to wait for all children when
-      # the parent ends, solving the race condition where parent.on_end
-      # is called before child.on_end.
-      parent_span_id = span(otel_span, :parent_span_id)
-      span_id = span(otel_span, :span_id)
-
-      if parent_span_id != nil and parent_span_id != :undefined do
-        parent_span_id_str = cast_span_id(parent_span_id)
-        span_id_str = cast_span_id(span_id)
-
-        if parent_span_id_str != nil and span_id_str != nil do
-          SpanStorage.store_pending_child(parent_span_id_str, span_id_str)
-        end
-      end
-
       otel_span
     end
 
@@ -49,18 +33,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp process_span(span_record) do
       SpanStorage.store_span(span_record)
-
-      # Remove this span from pending children of its parent (if any)
-      # This must happen after store_span so the span is available when
-      # the parent builds its transaction
-      _ =
-        if span_record.parent_span_id != nil do
-          SpanStorage.remove_pending_child(span_record.parent_span_id, span_record.span_id)
-
-          # Check if our parent was waiting for us (and possibly other siblings)
-          # If parent has ended and we were the last pending child, build the transaction now
-          maybe_complete_waiting_parent(span_record.parent_span_id)
-        end
 
       # Check if this is a root span (no parent) or a transaction root
       #
@@ -90,34 +62,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         end
 
       if is_transaction_root do
-        # Check if we have pending children that haven't ended yet
-        if SpanStorage.has_pending_children?(span_record.span_id) do
-          # Store as waiting parent - transaction will be built when last child ends
-          SpanStorage.store_waiting_parent(span_record)
-          true
-        else
-          # No pending children, build and send transaction immediately
-          build_and_send_transaction(span_record)
-        end
+        build_and_send_transaction(span_record)
       else
         true
-      end
-    end
-
-    # Called when a child span ends to check if its parent was waiting for children
-    defp maybe_complete_waiting_parent(parent_span_id) do
-      case SpanStorage.get_waiting_parent(parent_span_id) do
-        nil ->
-          # Parent hasn't ended yet or wasn't a transaction root - nothing to do
-          :ok
-
-        parent_span_record ->
-          # Parent was waiting. Check if all children are done now.
-          unless SpanStorage.has_pending_children?(parent_span_id) do
-            # All children done! Build and send the transaction.
-            SpanStorage.remove_waiting_parent(parent_span_id)
-            build_and_send_transaction(parent_span_record)
-          end
       end
     end
 
@@ -143,15 +90,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       # Clean up: remove the transaction root span and all its children
       :ok = SpanStorage.remove_root_span(span_record.span_id)
-
-      # Also clean up any remaining pending children records (shouldn't be any, but be safe)
-      :ok = SpanStorage.remove_pending_children(span_record.span_id)
-
-      if span_record.parent_span_id != nil do
-        # This span was stored as a child because it has a remote parent (distributed tracing).
-        # We need to explicitly remove it from the child spans storage.
-        :ok = SpanStorage.remove_child_span(span_record.parent_span_id, span_record.span_id)
-      end
 
       result
     end
@@ -340,17 +278,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         end
       end)
       |> Map.new()
-    end
-
-    # Helper to convert span ID from integer to hex string (used in on_start)
-    defp cast_span_id(nil), do: nil
-    defp cast_span_id(:undefined), do: nil
-
-    defp cast_span_id(span_id) do
-      case :otel_utils.format_binary_string("~16.16.0b", [span_id]) do
-        {:ok, result} -> result
-        {:error, _} -> nil
-      end
     end
   end
 end
