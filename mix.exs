@@ -14,6 +14,7 @@ defmodule Sentry.Mixfile do
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       test_paths: test_paths(System.get_env("SENTRY_INTEGRATION")),
+      test_ignore_filters: [~r|/fixtures/|],
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :extra_return],
         plt_file: {:no_warn, "plts/dialyzer.plt"},
@@ -22,10 +23,6 @@ defmodule Sentry.Mixfile do
         plt_add_apps: [:mix, :ex_unit]
       ],
       test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        "coveralls.html": :test,
-        "test.integrations": :test
-      ],
       name: "Sentry",
       docs: [
         extra_section: "Guides",
@@ -82,6 +79,10 @@ defmodule Sentry.Mixfile do
         Sentry.Supervisor
       ]
     ]
+  end
+
+  def cli do
+    [preferred_envs: ["coveralls.html": :test, "test.integrations": :test]]
   end
 
   defp extra_applications(:test), do: [:logger, :opentelemetry]

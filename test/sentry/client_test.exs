@@ -228,11 +228,11 @@ defmodule Sentry.ClientTest do
       end)
 
       put_test_config(
-        before_send: fn event ->
+        before_send: fn %Event{} = event ->
           metadata = Map.new(Logger.metadata())
           {user_id, rest_metadata} = Map.pop(metadata, :user_id)
 
-          %Event{
+          %{
             event
             | extra: Map.merge(event.extra, rest_metadata),
               user: Map.put(event.user, :id, user_id)
