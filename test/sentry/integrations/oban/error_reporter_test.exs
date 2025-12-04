@@ -4,7 +4,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
   alias Sentry.Integrations.Oban.ErrorReporter
 
   defmodule MyWorker do
-    use Oban.Worker
+    use Oban.Worker, tags: ["tag1", "tag2"]
 
     @impl Oban.Worker
     def perform(%Oban.Job{}), do: :ok
@@ -33,6 +33,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.oban_queue == "default"
       assert event.tags.oban_state == "available"
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
+      assert event.tags.oban_tags == "tag1,tag2"
       assert %{job: %Oban.Job{}} = event.integration_meta.oban
 
       assert event.fingerprint == [@worker_as_string, "{{ default }}"]
@@ -64,6 +65,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.oban_queue == "default"
       assert event.tags.oban_state == "available"
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
+      assert event.tags.oban_tags == "tag1,tag2"
       assert %{job: %Oban.Job{}} = event.integration_meta.oban
 
       assert event.fingerprint == [@worker_as_string, "{{ default }}"]
@@ -154,11 +156,29 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
         assert Sentry.Test.pop_sentry_reports() == []
       end
     end
+
+    test "includes oban_tags when config option is enabled" do
+      Sentry.Test.start_collecting()
+
+      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [], oban_tags: true)
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert event.tags.oban_tags == "tag1,tag2"
+    end
+
+    test "excludes oban_tags when config option is disabled" do
+      Sentry.Test.start_collecting()
+
+      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [], oban_tags: false)
+
+      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert is_nil(Map.get(event.tags, :oban_tags))
+    end
   end
 
   ## Helpers
 
-  defp emit_telemetry_for_failed_job(kind, reason, stacktrace) do
+  defp emit_telemetry_for_failed_job(kind, reason, stacktrace, config \\ []) do
     job =
       %{"id" => "123", "entity" => "user", "type" => "delete"}
       |> MyWorker.new()
@@ -169,7 +189,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                [:oban, :job, :exception],
                %{},
                %{job: job, kind: kind, reason: reason, stacktrace: stacktrace},
-               :no_config
+               config
              )
 
     job
