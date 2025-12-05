@@ -1,6 +1,10 @@
 defmodule Sentry.Opentelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
+  require OpenTelemetry.Tracer, as: Tracer
+  require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+  require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+
   import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.SpanStorage
@@ -188,8 +192,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.Tracer, as: Tracer
-
       Tracer.with_span "root_span" do
         Tracer.with_span "level_1_child" do
           Tracer.with_span "level_2_child" do
@@ -247,8 +249,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       tasks =
         Enum.map(1..20, fn i ->
           Task.async(fn ->
-            require OpenTelemetry.Tracer, as: Tracer
-
             Tracer.with_span "concurrent_root_#{i}" do
               Tracer.with_span "concurrent_child_#{i}" do
                 Process.sleep(10)
@@ -286,8 +286,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.Tracer, as: Tracer
-
       Tracer.with_span "root_span" do
         Tracer.with_span "child_instrumented_function_one" do
           Process.sleep(10)
@@ -309,6 +307,146 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
       Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "treats HTTP server request spans as transaction roots for distributed tracing" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      # This represents a distributed trace where the client started the trace
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      # Create a remote parent span context using :otel_tracer.from_remote_span
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users",
+          "http.route" => "/api/users",
+          "server.address" => "localhost",
+          "server.port" => 4000
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+
+        Tracer.with_span "db.query:notifications", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO notifications (user_id) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction root despite having an external parent
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      # Verify transaction properties
+      assert transaction.transaction == "POST /api/users"
+      assert transaction.transaction_info == %{source: :custom}
+      assert length(transaction.spans) == 2
+
+      # Verify child spans are properly included
+      span_ops = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      assert span_ops == ["db", "db"]
+
+      # Verify child spans have detailed data (like SQL queries)
+      [span1, span2] = transaction.spans
+      assert span1.description =~ "INSERT INTO"
+      assert span2.description =~ "INSERT INTO"
+      assert span1.data["db.system"] == :postgresql
+      assert span2.data["db.system"] == :postgresql
+      assert span1.data["db.statement"] =~ "INSERT INTO users"
+      assert span2.data["db.statement"] =~ "INSERT INTO notifications"
+
+      # Verify all spans share the same trace ID (from the external parent)
+      trace_id = transaction.contexts.trace.trace_id
+
+      Enum.each(transaction.spans, fn span ->
+        assert span.trace_id == trace_id
+      end)
+
+      # The transaction should have the external parent's trace ID
+      assert transaction.contexts.trace.trace_id ==
+               "1234567890abcdef1234567890abcdef"
+    end
+
+    @tag span_storage: true
+    test "cleans up HTTP server span and children after sending distributed trace transaction", %{
+      table_name: table_name
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users"
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction
+      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+
+      # Verify the HTTP server span was removed from storage
+      # (even though it was stored as a child span due to having a remote parent)
+      http_server_span_id = transaction.contexts.trace.span_id
+      remote_parent_span_id_str = "abcdef1234567890"
+
+      # The HTTP server span should not exist in storage anymore
+      assert SpanStorage.get_root_span(http_server_span_id, table_name: table_name) == nil
+
+      # Check that it was also removed from child spans storage
+      # We can't directly check if a specific child was removed, but we can verify
+      # that get_child_spans for the remote parent returns empty (or doesn't include our span)
+      remaining_children =
+        SpanStorage.get_child_spans(remote_parent_span_id_str, table_name: table_name)
+
+      refute Enum.any?(remaining_children, fn span -> span.span_id == http_server_span_id end)
+
+      # Verify child spans of the HTTP server span were also removed
+      assert [] == SpanStorage.get_child_spans(http_server_span_id, table_name: table_name)
     end
   end
 end
