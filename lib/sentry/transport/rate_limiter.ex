@@ -1,10 +1,17 @@
 defmodule Sentry.Transport.RateLimiter do
   @moduledoc false
+
   # Tracks rate limits per category from Sentry API responses.
   # Uses an ETS table to store expiry timestamps for rate-limited categories.
   # When Sentry returns a 429 response with rate limit headers, this module
   # stores the expiry time per category, allowing other parts of the SDK to
   # check if an event should be dropped before sending.
+  #
+  # The ETS table stores tuples with these elements:
+  #
+  #   1. Category (String.t/0 | :global): the category being rate limited.
+  #   2. Expiry timestamp (Unix timestamp in seconds): time at which the rate-limit
+  #      entry expires and can be pruned).
   #
   # See https://develop.sentry.dev/sdk/expected-features/rate-limiting/
 
@@ -45,7 +52,8 @@ defmodule Sentry.Transport.RateLimiter do
   def handle_info(:sweep, %__MODULE__{table_name: table_name} = state) do
     now = System.system_time(:second)
 
-    # Match spec: select entries where expiry (position 2) < now
+    # This match spec elects entries where expiry is in the past.
+    # Remember, tuples are {category, expiry_time}.
     match_spec = [{{:"$1", :"$2"}, [{:<, :"$2", now}], [true]}]
 
     :ets.select_delete(table_name, match_spec)
@@ -81,14 +89,16 @@ defmodule Sentry.Transport.RateLimiter do
   def rate_limited?(category, opts \\ []) do
     table_name = get_table_name(opts)
     now = System.system_time(:second)
-    check_rate_limited(table_name, category, now) or check_rate_limited(table_name, :global, now)
+    rate_limited?(table_name, category, now) or rate_limited?(table_name, :global, now)
   end
 
   @doc """
-  Updates global rate limit from a Retry-After header value.
+  Updates global rate limit from a `Retry-After` header value.
 
-  This is a fallback for when X-Sentry-Rate-Limits is not present.
-  Stores a global rate limit (:global key) that affects all categories.
+  This is a fallback for when `X-Sentry-Rate-Limits` is not present.
+  Stores a global rate limit (`:global` key) that affects all categories.
+  The `Retry-After` header is parsed before getting here, so we get a clean
+  integer value here.
 
   ## Options
 
@@ -104,15 +114,13 @@ defmodule Sentry.Transport.RateLimiter do
   @spec update_global_rate_limit(pos_integer(), keyword()) :: :ok
   def update_global_rate_limit(retry_after_seconds, opts \\ [])
       when is_integer(retry_after_seconds) do
-    table_name = get_table_name(opts)
-    now = System.system_time(:second)
-    expiry = now + retry_after_seconds
-    :ets.insert(table_name, {:global, expiry})
+    expiry = System.system_time(:second) + retry_after_seconds
+    :ets.insert(get_table_name(opts), {:global, expiry})
     :ok
   end
 
   @doc """
-  Updates rate limits from the X-Sentry-Rate-Limits header.
+  Updates rate limits from the `X-Sentry-Rate-Limits` header value.
 
   Parses the header value and stores expiry timestamps for each category.
   Returns `:ok` regardless of parsing success.
@@ -130,16 +138,12 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_rate_limits(String.t(), keyword()) :: :ok
   def update_rate_limits(rate_limits_header, opts \\ []) do
-    table_name = get_table_name(opts)
     now = System.system_time(:second)
-    rate_limits = parse_rate_limits_header(rate_limits_header)
 
-    Enum.each(rate_limits, fn {category, retry_after_seconds} ->
-      expiry = now + retry_after_seconds
-      :ets.insert(table_name, {category, expiry})
-    end)
-
-    :ok
+    rate_limits_header
+    |> parse_rate_limits_header()
+    |> Enum.map(fn {category, retry_after_seconds} -> {category, now + retry_after_seconds} end)
+    |> then(&:ets.insert(get_table_name(opts), &1))
   end
 
   ## Private Helpers
@@ -148,7 +152,6 @@ defmodule Sentry.Transport.RateLimiter do
   # 1. Value passed in opts[:table_name]
   # 2. Value from process dictionary (:rate_limiter_table_name)
   # 3. Default module name
-  @spec get_table_name(keyword()) :: atom()
   defp get_table_name(opts) do
     case Keyword.fetch(opts, :table_name) do
       {:ok, table_name} -> table_name
@@ -156,56 +159,40 @@ defmodule Sentry.Transport.RateLimiter do
     end
   end
 
-  @spec check_rate_limited(atom(), String.t() | :global, integer()) :: boolean()
-  defp check_rate_limited(table_name, category, time) do
+  defp rate_limited?(table_name, category, now) do
     case :ets.lookup(table_name, category) do
-      [{^category, expiry}] when expiry > time -> true
-      _ -> false
+      [{^category, expiry}] when expiry > now -> true
+      _other -> false
     end
   end
 
   # Parse X-Sentry-Rate-Limits header
   # Format: "60:error;transaction:key, 2700:default:organization"
+  # This would mean
   # Returns: [{category, retry_after_seconds}, ...]
-  @spec parse_rate_limits_header(String.t()) :: [{String.t() | :global, integer()}]
   defp parse_rate_limits_header(header_value) do
     header_value
     |> String.split(",")
-    |> Enum.flat_map(&parse_quota_limit/1)
+    |> Enum.flat_map(fn quota_limit -> quota_limit |> String.trim() |> parse_quota_limit() end)
   end
 
-  @spec parse_quota_limit(String.t()) :: [{String.t() | :global, integer()}]
+  # Parses a single quota limit, like: "60:error;transaction:key"
   defp parse_quota_limit(quota_limit_str) do
-    {retry_after_str, rest} =
-      quota_limit_str |> String.trim() |> String.split(":") |> List.pop_at(0)
-
-    case parse_retry_after(retry_after_str) do
-      {:ok, retry_after} -> parse_categories(rest, retry_after)
-      :error -> []
+    with [retry_after_str | rest] <- String.split(quota_limit_str, ":", trim: true),
+         {retry_after, ""} <- Integer.parse(retry_after_str) do
+      rest
+      |> parse_categories()
+      |> Enum.map(&{&1, retry_after})
     end
   end
 
-  @spec parse_retry_after(String.t() | nil) :: {:ok, integer()} | :error
-  defp parse_retry_after(nil), do: :error
-
-  defp parse_retry_after(retry_after_str) do
-    case Integer.parse(retry_after_str) do
-      {retry_after, ""} -> {:ok, retry_after}
-      _ -> :error
+  defp parse_categories([categories_str | _rest]) do
+    case String.split(categories_str, ";", trim: true) do
+      [] -> [:global]
+      categories -> categories
     end
   end
 
-  @spec parse_categories([String.t()], integer()) :: [{String.t() | :global, integer()}]
-  defp parse_categories([categories_str | _rest], retry_after) do
-    case String.split(categories_str, ";") do
-      [""] -> [{:global, retry_after}]
-      categories -> Enum.map(categories, fn cat -> {cat, retry_after} end)
-    end
-  end
-
-  defp parse_categories(_, _), do: []
-
-  @spec schedule_sweep() :: reference()
   defp schedule_sweep do
     Process.send_after(self(), :sweep, @default_sweep_interval_ms)
   end
