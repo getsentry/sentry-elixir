@@ -14,6 +14,12 @@ defmodule Sentry.Transport.RateLimiter do
   #      entry expires and can be pruned).
   #
   # See https://develop.sentry.dev/sdk/expected-features/rate-limiting/
+  #
+  # For testing, we use the trick of determining the name of this GenServer
+  # and consequently the ETS table it uses) based on the Mix environment (at compile
+  # time, so no impact on performance). If we're in the :test environment, we require
+  # that there's a table name for this in the process dictionary. In normal circumstances
+  # we use __MODULE__ instead.
 
   use GenServer
 
@@ -33,16 +39,15 @@ defmodule Sentry.Transport.RateLimiter do
 
   """
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []) do
+  def start_link(opts) when is_list(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
-    GenServer.start_link(__MODULE__, opts, name: name)
+    GenServer.start_link(__MODULE__, _table_name = name, name: name)
   end
 
   ## GenServer Callbacks
 
   @impl true
-  def init(opts) do
-    table_name = Keyword.get(opts, :table_name, __MODULE__)
+  def init(table_name) do
     _table = :ets.new(table_name, [:named_table, :public, :set, read_concurrency: true])
     schedule_sweep()
     {:ok, %__MODULE__{table_name: table_name}}
@@ -86,10 +91,9 @@ defmodule Sentry.Transport.RateLimiter do
 
   """
   @spec rate_limited?(String.t(), keyword()) :: boolean()
-  def rate_limited?(category, opts \\ []) do
-    table_name = get_table_name(opts)
+  def rate_limited?(category) do
     now = System.system_time(:second)
-    rate_limited?(table_name, category, now) or rate_limited?(table_name, :global, now)
+    rate_limited?(category, now) or rate_limited?(:global, now)
   end
 
   @doc """
@@ -100,22 +104,16 @@ defmodule Sentry.Transport.RateLimiter do
   The `Retry-After` header is parsed before getting here, so we get a clean
   integer value here.
 
-  ## Options
-
-    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
-      value in the process dictionary, then to `__MODULE__`.
-
   ## Examples
 
       iex> RateLimiter.update_global_rate_limit(60)
       :ok
 
   """
-  @spec update_global_rate_limit(pos_integer(), keyword()) :: :ok
-  def update_global_rate_limit(retry_after_seconds, opts \\ [])
-      when is_integer(retry_after_seconds) do
+  @spec update_global_rate_limit(pos_integer()) :: :ok
+  def update_global_rate_limit(retry_after_seconds) when is_integer(retry_after_seconds) do
     expiry = System.system_time(:second) + retry_after_seconds
-    :ets.insert(get_table_name(opts), {:global, expiry})
+    :ets.insert(name(), {:global, expiry})
     :ok
   end
 
@@ -125,42 +123,28 @@ defmodule Sentry.Transport.RateLimiter do
   Parses the header value and stores expiry timestamps for each category.
   Returns `:ok` regardless of parsing success.
 
-  ## Options
-
-    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
-      value in the process dictionary, then to `__MODULE__`.
-
   ## Examples
 
       iex> RateLimiter.update_rate_limits("60:error;transaction")
       :ok
 
   """
-  @spec update_rate_limits(String.t(), keyword()) :: :ok
-  def update_rate_limits(rate_limits_header, opts \\ []) do
+  @spec update_rate_limits(String.t()) :: :ok
+  def update_rate_limits(rate_limits_header) when is_binary(rate_limits_header) do
     now = System.system_time(:second)
 
     rate_limits_header
     |> parse_rate_limits_header()
     |> Enum.map(fn {category, retry_after_seconds} -> {category, now + retry_after_seconds} end)
-    |> then(&:ets.insert(get_table_name(opts), &1))
+    |> then(&:ets.insert(name(), &1))
+
+    :ok
   end
 
   ## Private Helpers
 
-  # Get the table name with the following hierarchy:
-  # 1. Value passed in opts[:table_name]
-  # 2. Value from process dictionary (:rate_limiter_table_name)
-  # 3. Default module name
-  defp get_table_name(opts) do
-    case Keyword.fetch(opts, :table_name) do
-      {:ok, table_name} -> table_name
-      :error -> Process.get(:rate_limiter_table_name, __MODULE__)
-    end
-  end
-
-  defp rate_limited?(table_name, category, now) do
-    case :ets.lookup(table_name, category) do
+  defp rate_limited?(category, now) do
+    case :ets.lookup(name(), category) do
       [{^category, expiry}] when expiry > now -> true
       _other -> false
     end
@@ -178,11 +162,13 @@ defmodule Sentry.Transport.RateLimiter do
 
   # Parses a single quota limit, like: "60:error;transaction:key"
   defp parse_quota_limit(quota_limit_str) do
-    with [retry_after_str | rest] <- String.split(quota_limit_str, ":", trim: true),
+    with [retry_after_str | rest] <- String.split(quota_limit_str, ":"),
          {retry_after, ""} <- Integer.parse(retry_after_str) do
       rest
       |> parse_categories()
       |> Enum.map(&{&1, retry_after})
+    else
+      _other -> []
     end
   end
 
@@ -193,7 +179,17 @@ defmodule Sentry.Transport.RateLimiter do
     end
   end
 
+  defp parse_categories([]) do
+    [:global]
+  end
+
   defp schedule_sweep do
     Process.send_after(self(), :sweep, @default_sweep_interval_ms)
+  end
+
+  if Mix.env() == :test do
+    defp name, do: Process.get(:rate_limiter_table_name, __MODULE__)
+  else
+    defp name, do: __MODULE__
   end
 end
