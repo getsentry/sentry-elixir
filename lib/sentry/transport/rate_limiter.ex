@@ -152,7 +152,6 @@ defmodule Sentry.Transport.RateLimiter do
 
   # Parse X-Sentry-Rate-Limits header
   # Format: "60:error;transaction:key, 2700:default:organization"
-  # This would mean
   # Returns: [{category, retry_after_seconds}, ...]
   defp parse_rate_limits_header(header_value) do
     header_value
