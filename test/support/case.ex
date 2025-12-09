@@ -14,8 +14,8 @@ defmodule Sentry.Case do
       assert config_before == all_config()
     end)
 
-    # Start a fresh RateLimiter for each test with unique names for isolation
-    setup_rate_limiter(context)
+    # Start a fresh RateLimiter for each test with unique names for isolation.
+    setup_rate_limiter()
 
     case context[:span_storage] do
       nil -> :ok
@@ -24,17 +24,10 @@ defmodule Sentry.Case do
     end
   end
 
-  defp setup_rate_limiter(context) do
-    if context[:manual_rate_limiting] != true do
-      uid = System.unique_integer([:positive])
-      server_name = :"test_rate_limiter_#{uid}"
-      table_name = :"test_rate_limiter_table_#{uid}"
-
-      opts = [name: server_name, table_name: table_name]
-      start_supervised!({Sentry.Transport.RateLimiter, opts})
-
+  defp setup_rate_limiter do
+      table_name = :"test_rate_limiter_#{System.unique_integer([:positive])}"
       Process.put(:rate_limiter_table_name, table_name)
-    end
+      start_supervised!({Sentry.Transport.RateLimiter, name: table_name}, id: table_name)
   end
 
   defp setup_span_storage(opts) do

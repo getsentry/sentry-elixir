@@ -9,7 +9,6 @@ if config_env() == :test do
     hackney_opts: [recv_timeout: 50, pool: :sentry_pool],
     send_result: :sync,
     send_max_attempts: 1,
-    start_rate_limiter: false,
     dedup_events: false,
     test_mode: true,
     traces_sample_rate: 1.0

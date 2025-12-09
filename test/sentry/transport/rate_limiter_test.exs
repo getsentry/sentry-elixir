@@ -3,8 +3,6 @@ defmodule Sentry.Transport.RateLimiterTest do
 
   alias Sentry.Transport.RateLimiter
 
-  defp table_name, do: Process.get(:rate_limiter_table_name)
-
   describe "parse_rate_limits_header/1" do
     test "parses single category limit" do
       # X-Sentry-Rate-Limits: 60:error
@@ -135,4 +133,6 @@ defmodule Sentry.Transport.RateLimiterTest do
       assert RateLimiter.rate_limited?("error") == true
     end
   end
+
+  defp table_name, do: Process.get(:rate_limiter_table_name)
 end
