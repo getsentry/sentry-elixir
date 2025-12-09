@@ -35,7 +35,6 @@ defmodule Sentry.Transport.RateLimiter do
   ## Options
 
     * `:name` - The name to register the GenServer under. Defaults to `__MODULE__`.
-    * `:table_name` - The name for the ETS table. Defaults to `__MODULE__`.
 
   """
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -75,11 +74,6 @@ defmodule Sentry.Transport.RateLimiter do
   Returns `true` if the category is rate-limited (either specifically or via
   a global rate limit), `false` otherwise.
 
-  ## Options
-
-    * `:table_name` - The ETS table name. Falls back to the `:rate_limiter_table_name`
-      value in the process dictionary, then to `__MODULE__`.
-
   ## Examples
 
       iex> RateLimiter.rate_limited?("error")
@@ -90,8 +84,8 @@ defmodule Sentry.Transport.RateLimiter do
       true
 
   """
-  @spec rate_limited?(String.t(), keyword()) :: boolean()
-  def rate_limited?(category) do
+  @spec rate_limited?(String.t()) :: boolean()
+  def rate_limited?(category) when is_binary(category) do
     now = System.system_time(:second)
     rate_limited?(category, now) or rate_limited?(:global, now)
   end
