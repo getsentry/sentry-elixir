@@ -1,17 +1,42 @@
 <script>
+  import * as Sentry from "@sentry/svelte";
+
   let loading = $state(false);
   let result = $state("");
+
+  async function makeRequest(method, url) {
+    return await Sentry.startSpan(
+      { op: "http.client", name: `${method} ${url}` },
+      async (span) => {
+        const parsedURL = new URL(url, location.origin);
+
+        span.setAttribute("http.request.method", method);
+        span.setAttribute("server.address", parsedURL.hostname);
+        span.setAttribute("server.port", parsedURL.port || undefined);
+
+        const response = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        span.setAttribute("http.response.status_code", response.status);
+        span.setAttribute(
+          "http.response_content_length",
+          Number(response.headers.get("content-length"))
+        );
+
+        return response;
+      }
+    );
+  }
 
   async function triggerError() {
     loading = true;
     result = "";
     try {
-      const response = await fetch(`${SENTRY_E2E_PHOENIX_APP_URL}/error`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await makeRequest("GET", `${SENTRY_E2E_PHOENIX_APP_URL}/error`);
 
       if (response.ok) {
         const data = await response.json();
@@ -30,12 +55,7 @@
     loading = true;
     result = "";
     try {
-      const response = await fetch(`${SENTRY_E2E_PHOENIX_APP_URL}/api/data`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await makeRequest("GET", `${SENTRY_E2E_PHOENIX_APP_URL}/api/data`);
 
       if (response.ok) {
         const data = await response.json();
