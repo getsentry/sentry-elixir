@@ -1,0 +1,139 @@
+name: E2E Tracing Tests
+
+on:
+  push:
+    branches:
+      - master
+      - release/**
+  pull_request:
+
+jobs:
+  tracing-e2e:
+    name: Tracing E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Elixir and Erlang
+        uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9
+        with:
+          elixir-version: "1.18"
+          otp-version: "27.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache Elixir dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            test_integrations/phoenix_app/deps
+            test_integrations/phoenix_app/_build
+          key: ${{ runner.os }}-elixir-1.18-otp-27.2-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-elixir-1.18-otp-27.2-mix-
+
+      - name: Cache Node.js dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            test_integrations/tracing/node_modules
+            test_integrations/tracing/svelte_mini/node_modules
+          key: ${{ runner.os }}-node-20-${{ hashFiles('test_integrations/tracing/package-lock.json', 'test_integrations/tracing/svelte_mini/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-20-
+
+      - name: Install main project dependencies
+        run: mix deps.get
+
+      - name: Install Phoenix app dependencies
+        working-directory: test_integrations/phoenix_app
+        run: mix deps.get
+
+      - name: Compile Phoenix app
+        working-directory: test_integrations/phoenix_app
+        run: mix compile
+
+      - name: Install tracing test npm dependencies
+        working-directory: test_integrations/tracing
+        run: npm install
+
+      - name: Install Svelte app dependencies
+        working-directory: test_integrations/tracing/svelte_mini
+        run: npm install
+
+      - name: Install Playwright browsers
+        working-directory: test_integrations/tracing
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Start Phoenix server
+        working-directory: test_integrations/phoenix_app
+        run: |
+          rm -f tmp/sentry_debug_events.log
+          SENTRY_E2E_TEST_MODE=true mix phx.server &
+          echo $! > /tmp/phoenix.pid
+          echo "Phoenix server started with PID $(cat /tmp/phoenix.pid)"
+
+      - name: Start Svelte server
+        working-directory: test_integrations/tracing/svelte_mini
+        run: |
+          SENTRY_E2E_SVELTE_APP_PORT=4001 npm run dev &
+          echo $! > /tmp/svelte.pid
+          echo "Svelte server started with PID $(cat /tmp/svelte.pid)"
+
+      - name: Wait for Phoenix server
+        run: |
+          echo "Waiting for Phoenix server at http://localhost:4000/health..."
+          timeout 60 bash -c 'until curl -s http://localhost:4000/health > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+          echo "Phoenix server is ready!"
+          curl -s http://localhost:4000/health
+
+      - name: Wait for Svelte server
+        run: |
+          echo "Waiting for Svelte server at http://localhost:4001/health..."
+          timeout 60 bash -c 'until curl -s http://localhost:4001/health > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+          echo "Svelte server is ready!"
+          curl -s http://localhost:4001/health
+
+      - name: Run Playwright tests
+        working-directory: test_integrations/tracing
+        env:
+          SENTRY_E2E_PHOENIX_APP_URL: http://localhost:4000
+          SENTRY_E2E_SVELTE_APP_URL: http://localhost:4001
+          SENTRY_E2E_SERVERS_RUNNING: "true"
+        run: npx playwright test --reporter=list
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test_integrations/tracing/playwright-report/
+          retention-days: 7
+
+      - name: Upload test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-screenshots
+          path: test_integrations/tracing/test-results/
+          retention-days: 7
+
+      - name: Show Phoenix server logs
+        if: failure()
+        run: |
+          echo "=== Sentry debug events log ==="
+          cat test_integrations/phoenix_app/tmp/sentry_debug_events.log 2>/dev/null || echo "No events logged"
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          [ -f /tmp/phoenix.pid ] && kill $(cat /tmp/phoenix.pid) 2>/dev/null || true
+          [ -f /tmp/svelte.pid ] && kill $(cat /tmp/svelte.pid) 2>/dev/null || true

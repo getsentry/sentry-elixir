@@ -65,6 +65,14 @@ config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 config :opentelemetry,
   sampler: {Sentry.OpenTelemetry.Sampler, [drop: ["Elixir.Oban.Stager process"]]}
 
+# Configure OpenTelemetry to use Sentry propagator for distributed tracing
+config :opentelemetry,
+  text_map_propagators: [
+    :trace_context,
+    :baggage,
+    Sentry.OpenTelemetry.Propagator
+  ]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
