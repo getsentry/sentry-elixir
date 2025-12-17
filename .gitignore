@@ -17,3 +17,4 @@ test_integrations/phoenix_app/db
 
 test_integrations/*/_build
 test_integrations/*/deps
+test_integrations/*/test-results/

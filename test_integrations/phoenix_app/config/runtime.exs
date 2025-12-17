@@ -20,6 +20,21 @@ if System.get_env("PHX_SERVER") do
   config :phoenix_app, PhoenixAppWeb.Endpoint, server: true
 end
 
+# For e2e tracing tests, use the TestClient to log events to a file
+# This must be in runtime.exs because the env var is set at runtime, not compile time
+if System.get_env("SENTRY_E2E_TEST_MODE") == "true" do
+  config :sentry,
+    dsn: "https://public@sentry.example.com/1",
+    client: PhoenixApp.TestClient
+else
+  # Allow runtime configuration of Sentry DSN and environment
+  if dsn = System.get_env("SENTRY_DSN") do
+    config :sentry,
+      dsn: dsn,
+      environment_name: System.get_env("SENTRY_ENVIRONMENT") || config_env()
+  end
+end
+
 if config_env() == :prod do
   # database_url =
   #   System.get_env("DATABASE_URL") ||
