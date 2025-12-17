@@ -44,6 +44,8 @@ defmodule PhoenixAppWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  plug :cors
+
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
@@ -53,4 +55,22 @@ defmodule PhoenixAppWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug PhoenixAppWeb.Router
+
+  # CORS plug for e2e tests - allows the Svelte frontend to make
+  # cross-origin requests to the Phoenix backend
+  defp cors(conn, _opts) do
+    conn
+    |> put_resp_header("access-control-allow-origin", "*")
+    |> put_resp_header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
+    |> put_resp_header("access-control-allow-headers", "content-type, sentry-trace, baggage")
+    |> handle_preflight()
+  end
+
+  defp handle_preflight(%{method: "OPTIONS"} = conn) do
+    conn
+    |> send_resp(200, "")
+    |> halt()
+  end
+
+  defp handle_preflight(conn), do: conn
 end
