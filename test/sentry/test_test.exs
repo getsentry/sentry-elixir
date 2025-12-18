@@ -9,9 +9,6 @@ defmodule Sentry.TestTest do
   doctest Test
 
   setup do
-    # Start RateLimiter for tests that send events through Transport
-    start_supervised!(Sentry.Transport.RateLimiter)
-
     bypass = Bypass.open()
     put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", dedup_events: false)
     %{bypass: bypass}

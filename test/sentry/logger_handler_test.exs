@@ -648,9 +648,6 @@ defmodule Sentry.LoggerHandlerTest do
          },
          send_request: true
     test "discards logged messages", %{sender_ref: ref} do
-      # manually starting the rate limiter with the default name since we don't
-      # have the ability to inject it into the logger backend
-      start_supervised!(Sentry.Transport.RateLimiter)
       register_delay()
 
       Logger.error("First")
