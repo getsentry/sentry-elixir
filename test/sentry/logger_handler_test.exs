@@ -15,8 +15,6 @@ defmodule Sentry.LoggerHandlerTest do
     @moduletag :skip
   end
 
-  @handler_name :sentry_handler
-
   setup :register_before_send
   setup :add_handler
 
@@ -33,15 +31,15 @@ defmodule Sentry.LoggerHandlerTest do
     end)
   end
 
-  test "skips logs from a lower level than the configured one" do
+  test "skips logs from a lower level than the configured one", %{handler_name: handler_name} do
     # Default level is :error, so this doesn't get reported.
     Logger.warning("Warning message")
 
     # Change the level to :info and make sure that :debug messages are not reported.
-    assert :ok = :logger.update_handler_config(@handler_name, :level, :info)
+    assert :ok = :logger.update_handler_config(handler_name, :level, :info)
 
     on_exit(fn ->
-      :logger.update_handler_config(@handler_name, :level, :error)
+      :logger.update_handler_config(handler_name, :level, :error)
     end)
 
     Logger.debug("Debug message")
@@ -557,11 +555,12 @@ defmodule Sentry.LoggerHandlerTest do
            rate_limiting: [max_events: 2, interval: 150],
            capture_log_messages: true
          }
-    test "works with changing config to disable rate limiting", %{sender_ref: ref} do
-      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+    test "works with changing config to disable rate limiting",
+         %{sender_ref: ref, handler_name: handler_name} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
 
       :ok =
-        :logger.update_handler_config(@handler_name, :config, put_in(config.rate_limiting, nil))
+        :logger.update_handler_config(handler_name, :config, put_in(config.rate_limiting, nil))
 
       for index <- 1..10 do
         message = "Message #{index}"
@@ -571,18 +570,19 @@ defmodule Sentry.LoggerHandlerTest do
     end
 
     @tag handler_config: %{capture_log_messages: true}
-    test "works with changing config to enable rate limiting", %{sender_ref: ref} do
+    test "works with changing config to enable rate limiting",
+         %{sender_ref: ref, handler_name: handler_name} do
       for index <- 1..10 do
         message = "Message #{index}"
         Logger.error(message)
         assert_receive {^ref, %{message: %{formatted: ^message}}}
       end
 
-      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+      assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
 
       :ok =
         :logger.update_handler_config(
-          @handler_name,
+          handler_name,
           :config,
           put_in(config.rate_limiting, max_events: 1, interval: 100)
         )
@@ -598,12 +598,13 @@ defmodule Sentry.LoggerHandlerTest do
            rate_limiting: [max_events: 2, interval: 100],
            capture_log_messages: true
          }
-    test "works with changing config to update rate limiting", %{sender_ref: ref} do
-      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+    test "works with changing config to update rate limiting",
+         %{sender_ref: ref, handler_name: handler_name} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
 
       :ok =
         :logger.update_handler_config(
-          @handler_name,
+          handler_name,
           :config,
           put_in(config.rate_limiting, max_events: 1, interval: 100)
         )
@@ -619,12 +620,13 @@ defmodule Sentry.LoggerHandlerTest do
            rate_limiting: [max_events: 2, interval: 100],
            capture_log_messages: true
          }
-    test "works with changing config but without changing rate limiting", %{sender_ref: ref} do
-      assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+    test "works with changing config but without changing rate limiting",
+         %{sender_ref: ref, handler_name: handler_name} do
+      assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
 
       :ok =
         :logger.update_handler_config(
-          @handler_name,
+          handler_name,
           :config,
           put_in(config.rate_limiting, max_events: 2, interval: 100)
         )
@@ -648,9 +650,6 @@ defmodule Sentry.LoggerHandlerTest do
          },
          send_request: true
     test "discards logged messages", %{sender_ref: ref} do
-      # manually starting the rate limiter with the default name since we don't
-      # have the ability to inject it into the logger backend
-      start_supervised!(Sentry.Transport.RateLimiter)
       register_delay()
 
       Logger.error("First")
@@ -665,8 +664,8 @@ defmodule Sentry.LoggerHandlerTest do
   @tag handler_config: %{
          sync_threshold: 2
        }
-  test "cannot set discard_threshold and sync_threshold" do
-    assert {:ok, %{config: config}} = :logger.get_handler_config(@handler_name)
+  test "cannot set discard_threshold and sync_threshold", %{handler_name: handler_name} do
+    assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
 
     assert {:error,
             {:callback_crashed,
@@ -674,10 +673,9 @@ defmodule Sentry.LoggerHandlerTest do
               %ArgumentError{
                 message:
                   ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
-              },
-              _}}} =
+              }, _}}} =
              :logger.update_handler_config(
-               @handler_name,
+               handler_name,
                :config,
                Map.put(config, :discard_threshold, 1)
              )
@@ -721,17 +719,24 @@ defmodule Sentry.LoggerHandlerTest do
   end
 
   defp add_handler(context) do
+    # Use a unique handler name per test for proper isolation. This ensures
+    # that events from one test's cleanup cannot be captured by another test's
+    # handler, since each test has its own dedicated handler.
+    handler_name = :"sentry_handler_#{System.unique_integer([:positive])}"
+
     handler_config =
       case Map.fetch(context, :handler_config) do
         {:ok, config} -> %{config: config}
         :error -> %{}
       end
 
-    assert :ok = :logger.add_handler(@handler_name, Sentry.LoggerHandler, handler_config)
+    assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
 
     on_exit(fn ->
-      _ = :logger.remove_handler(@handler_name)
+      _ = :logger.remove_handler(handler_name)
     end)
+
+    %{handler_name: handler_name}
   end
 
   defp run_and_catch_exit(test_genserver_pid, fun) do

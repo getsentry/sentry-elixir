@@ -40,33 +40,50 @@ defmodule Sentry.Transport.SenderPool do
     end
   end
 
-  @spec increase_queued_events_counter() :: :ok
+  # Returns the key used, so callers can pass it to decrease_* later
+  @spec increase_queued_events_counter() :: term()
   def increase_queued_events_counter do
-    counter = :persistent_term.get(@queued_events_key)
+    key = queued_events_key()
+    counter = :persistent_term.get(key)
     :counters.add(counter, 1, 1)
+    key
   end
 
-  @spec increase_queued_transactions_counter() :: :ok
+  @spec increase_queued_transactions_counter() :: term()
   def increase_queued_transactions_counter do
-    counter = :persistent_term.get(@queued_transactions_key)
+    key = queued_transactions_key()
+    counter = :persistent_term.get(key)
     :counters.add(counter, 1, 1)
+    key
   end
 
-  @spec decrease_queued_events_counter() :: :ok
-  def decrease_queued_events_counter do
-    counter = :persistent_term.get(@queued_events_key)
+  # Accept optional key to decrement the correct counter (used by Sender)
+  @spec decrease_queued_events_counter(term()) :: :ok
+  def decrease_queued_events_counter(key \\ nil) do
+    key = key || queued_events_key()
+    counter = :persistent_term.get(key)
     :counters.sub(counter, 1, 1)
   end
 
-  @spec decrease_queued_transactions_counter() :: :ok
-  def decrease_queued_transactions_counter do
-    counter = :persistent_term.get(@queued_transactions_key)
+  @spec decrease_queued_transactions_counter(term()) :: :ok
+  def decrease_queued_transactions_counter(key \\ nil) do
+    key = key || queued_transactions_key()
+    counter = :persistent_term.get(key)
     :counters.sub(counter, 1, 1)
   end
 
   @spec get_queued_events_counter() :: non_neg_integer()
   def get_queued_events_counter do
-    counter = :persistent_term.get(@queued_events_key)
+    counter = :persistent_term.get(queued_events_key())
     :counters.get(counter, 1)
+  end
+
+  # Allow per-process override of counter keys (for test isolation)
+  defp queued_events_key do
+    Process.get(:sentry_queued_events_key, @queued_events_key)
+  end
+
+  defp queued_transactions_key do
+    Process.get(:sentry_queued_transactions_key, @queued_transactions_key)
   end
 end

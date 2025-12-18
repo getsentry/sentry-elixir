@@ -24,18 +24,16 @@ jobs:
           # Newest supported Elixir/Erlang pair.
           - elixir: '1.19.3-otp-28'
             otp: '28.1'
-            lint: false
+            lint: true
             dialyzer: true
             os: ubuntu-latest
 
           - elixir: '1.18.4-otp-27'
             otp: '28.0'
-            lint: true
             os: ubuntu-latest
 
           - elixir: '1.18'
             otp: '27.2'
-            lint: true
             os: ubuntu-latest
 
           # One version before the last supported one.

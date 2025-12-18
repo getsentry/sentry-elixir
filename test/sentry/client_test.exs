@@ -376,7 +376,6 @@ defmodule Sentry.ClientTest do
     end
 
     test "uses the async sender pool when :result is :none", %{bypass: bypass} do
-      start_supervised!(Sentry.Transport.RateLimiter)
       test_pid = self()
       ref = make_ref()
 
