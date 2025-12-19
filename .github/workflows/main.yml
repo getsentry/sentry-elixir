@@ -49,7 +49,6 @@ jobs:
           # However, official support goes back to OTP 22.x
           - elixir: '1.13'
             otp: '25.3'
-            release_test: true
             os: ubuntu-22.04
 
     steps:

@@ -107,11 +107,12 @@ defmodule Sentry.Sources do
     path_pattern = Keyword.fetch!(config, :source_code_path_pattern)
 
     exclude_patterns =
-      Keyword.get(
-        config,
+      config
+      |> Keyword.get(
         :source_code_exclude_patterns,
         [~r"/_build/", ~r"/deps/", ~r"/priv/", ~r"/test/"]
       )
+      |> compile_patterns()
 
     config
     |> Keyword.fetch!(:root_source_code_paths)
@@ -205,6 +206,20 @@ defmodule Sentry.Sources do
   defp exclude_files(file_names, [exclude_pattern | rest]) do
     Enum.reject(file_names, &String.match?(&1, exclude_pattern))
     |> exclude_files(rest)
+  end
+
+  # Compile string patterns to regexes at runtime, pass through already-compiled regexes.
+  # This supports OTP 28+ where regexes cannot be serialized in release config files.
+  defp compile_patterns(patterns) when is_list(patterns) do
+    Enum.map(patterns, &compile_pattern/1)
+  end
+
+  defp compile_patterns(nil), do: nil
+
+  defp compile_pattern(pattern) when is_struct(pattern, Regex), do: pattern
+
+  defp compile_pattern(pattern) when is_binary(pattern) do
+    Regex.compile!(pattern)
   end
 
   defp source_to_lines(source) do

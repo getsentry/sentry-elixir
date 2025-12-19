@@ -99,10 +99,24 @@ defmodule Sentry.ConfigTest do
       config = [source_code_exclude_patterns: [regex]]
       assert Config.validate!(config)[:source_code_exclude_patterns] == [regex]
 
-      message = ~r/invalid list in :source_code_exclude_patterns option/
+      config = [source_code_exclude_patterns: ["foo", "bar/baz"]]
+      assert Config.validate!(config)[:source_code_exclude_patterns] == ["foo", "bar/baz"]
+
+      config = [source_code_exclude_patterns: [~r/foo/, "bar"]]
+      [regex, string] = Config.validate!(config)[:source_code_exclude_patterns]
+      assert regex.source == "foo"
+      assert string == "bar"
+
+      message = ~r/invalid regex pattern/
 
       assert_raise ArgumentError, message, fn ->
-        Config.validate!(source_code_exclude_patterns: ["foo"])
+        Config.validate!(source_code_exclude_patterns: ["[invalid"])
+      end
+
+      message = ~r/expected a Regex or a string pattern/
+
+      assert_raise ArgumentError, message, fn ->
+        Config.validate!(source_code_exclude_patterns: [:atom])
       end
     end
 

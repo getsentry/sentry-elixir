@@ -73,6 +73,13 @@ config :opentelemetry,
     Sentry.OpenTelemetry.Propagator
   ]
 
+# Import version specific config
+elixir_version = System.version() |> String.split(".") |> Enum.take(2) |> Enum.join(".")
+
+if File.exists?("config/config-#{elixir_version}.exs") do
+  import_config "config-#{elixir_version}.exs"
+end
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
