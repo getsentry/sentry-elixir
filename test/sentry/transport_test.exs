@@ -10,6 +10,13 @@ defmodule Sentry.TransportTest do
     setup do
       bypass = Bypass.open()
       put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+
+      # Ensure Hackney is started for tests that use HackneyClient
+      # Since the default client is now FinchClient, Hackney won't be started automatically
+      if Code.ensure_loaded?(:hackney) do
+        {:ok, _} = Application.ensure_all_started(:hackney)
+      end
+
       %{bypass: bypass}
     end
 
