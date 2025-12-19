@@ -17,7 +17,7 @@ defmodule Umbrella.MixProject do
   # Run "mix help deps" for examples and options.
   defp deps do
     [
-      {:hackney, "~> 1.18"},
+      {:finch, "~> 0.17"},
       {:jason, "~> 1.4"},
       {:sentry, path: "../.."}
     ]
