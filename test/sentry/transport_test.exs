@@ -4,7 +4,7 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, Transport}
+  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
 
   describe "encode_and_post_envelope/2" do
     setup do
