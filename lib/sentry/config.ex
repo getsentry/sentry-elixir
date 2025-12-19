@@ -352,11 +352,12 @@ defmodule Sentry.Config do
     client: [
       type: :atom,
       type_doc: "`t:module/0`",
-      default: Sentry.HackneyClient,
+      default: Sentry.FinchClient,
       doc: """
       A module that implements the `Sentry.HTTPClient`
-      behaviour. Defaults to `Sentry.HackneyClient`, which uses
-      [hackney](https://github.com/benoitc/hackney) as the HTTP client.
+      behaviour. Defaults to `Sentry.FinchClient`, which uses
+      [Finch](https://github.com/sneako/finch) as the HTTP client.
+      *The default changed from Hackney to Finch in v10.11.0*.
       """
     ],
     send_max_attempts: [
@@ -366,32 +367,67 @@ defmodule Sentry.Config do
       The maximum number of attempts to send an event to Sentry.
       """
     ],
-    hackney_opts: [
+    finch_pool_opts: [
       type: :keyword_list,
-      default: [pool: :sentry_pool],
+      default: [size: 50],
       doc: """
-      Options to be passed to `hackney`. Only
-      applied if `:client` is set to `Sentry.HackneyClient`.
+      Pool options to be passed to `Finch.start_link/1`. These options control
+      the connection pool behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#start_link/1)
+      for available options.
       """
     ],
-    hackney_pool_timeout: [
-      type: :timeout,
-      default: 5000,
+    finch_request_opts: [
+      type: :keyword_list,
+      default: [receive_timeout: 5000],
       doc: """
-      The maximum time to wait for a
-      connection to become available. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
+      Request options to be passed to `Finch.request/4`. These options control
+      individual request behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#request/4)
+      for available options.
       """
     ],
-    hackney_pool_max_connections: [
-      type: :pos_integer,
-      default: 50,
-      doc: """
-      The maximum number of
-      connections to keep in the pool. Only applied if `:client` is set to
-      `Sentry.HackneyClient`.
-      """
-    ]
+    hackney_opts:
+      [
+        type: :keyword_list,
+        default: [pool: :sentry_pool],
+        doc: """
+        Options to be passed to `hackney`. Only
+        applied if `:client` is set to `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        ),
+    hackney_pool_timeout:
+      [
+        type: :timeout,
+        default: 5000,
+        doc: """
+        The maximum time to wait for a
+        connection to become available. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        ),
+    hackney_pool_max_connections:
+      [
+        type: :pos_integer,
+        default: 50,
+        doc: """
+        The maximum number of
+        connections to keep in the pool. Only applied if `:client` is set to
+        `Sentry.HackneyClient`.
+        """
+      ] ++
+        if(Mix.env() == :test,
+          do: [],
+          else: [deprecated: "Use Finch as the default HTTP client instead."]
+        )
   ]
 
   source_code_context_opts_schema = [
@@ -667,6 +703,12 @@ defmodule Sentry.Config do
 
   @spec traces_sampler() :: traces_sampler_function() | nil
   def traces_sampler, do: get(:traces_sampler)
+
+  @spec finch_pool_opts() :: keyword()
+  def finch_pool_opts, do: fetch!(:finch_pool_opts)
+
+  @spec finch_request_opts() :: keyword()
+  def finch_request_opts, do: fetch!(:finch_request_opts)
 
   @spec hackney_opts() :: keyword()
   def hackney_opts, do: fetch!(:hackney_opts)

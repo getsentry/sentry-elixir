@@ -50,7 +50,7 @@ defmodule Sentry.Mixfile do
           "Plug and Phoenix": [Sentry.PlugCapture, Sentry.PlugContext, Sentry.LiveViewHook],
           Loggers: [Sentry.LoggerBackend, Sentry.LoggerHandler],
           "Data Structures": [Sentry.Attachment, Sentry.CheckIn, Sentry.ClientReport],
-          HTTP: [Sentry.HTTPClient, Sentry.HackneyClient],
+          HTTP: [Sentry.HTTPClient, Sentry.FinchClient, Sentry.HackneyClient],
           Interfaces: [~r/^Sentry\.Interfaces/],
           Testing: [Sentry.Test]
         ],
@@ -64,7 +64,7 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [:hackney, :hackney_pool, Plug.Conn, :telemetry]],
+      xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]],
       aliases: aliases()
     ]
   end
@@ -101,6 +101,7 @@ defmodule Sentry.Mixfile do
 
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
+      {:finch, "~> 0.19.0"},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},

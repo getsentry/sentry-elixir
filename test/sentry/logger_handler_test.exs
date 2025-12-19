@@ -88,7 +88,10 @@ defmodule Sentry.LoggerHandlerTest do
 
     test "TODO", %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+
+      Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+      |> Finch.request(Sentry.FinchClient)
+
       assert_receive {^ref, event}, 1000
       assert event.original_exception == %RuntimeError{message: "Error"}
     end
@@ -98,7 +101,8 @@ defmodule Sentry.LoggerHandlerTest do
          %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
 
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+      |> Finch.request(Sentry.FinchClient)
 
       assert_receive {^ref, event}, 1000
       assert event.original_exception == %RuntimeError{message: "Error"}
@@ -112,7 +116,8 @@ defmodule Sentry.LoggerHandlerTest do
          %{sender_ref: ref} do
       start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
 
-      :hackney.get("http://127.0.0.1:8003/error_route", [], "", [])
+      Finch.build(:get, "http://127.0.0.1:8003/error_route", [], "", [])
+      |> Finch.request(Sentry.FinchClient)
 
       assert_receive {^ref, _event}, 1000
       assert_receive {^ref, _event}, 1000
@@ -687,7 +692,7 @@ defmodule Sentry.LoggerHandlerTest do
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
       dedup_events: false,
-      hackney_opts: [recv_timeout: 500, pool: :sentry_pool]
+      finch_request_opts: [receive_timeout: 500]
     )
 
     Bypass.expect(bypass, fn conn ->

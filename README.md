@@ -20,7 +20,7 @@ This is the official Sentry SDK for [Sentry].
 
 To use Sentry in your project, add it as a dependency in your `mix.exs` file.
 
-Sentry does not install a JSON library nor an HTTP client by itself. Sentry will default to the [built-in `JSON`](https://hexdocs.pm/elixir/JSON.html) for JSON and [Hackney] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
+Sentry does not install a JSON library nor an HTTP client by itself. Sentry will default to the [built-in `JSON`](https://hexdocs.pm/elixir/JSON.html) for JSON and [Finch] for HTTP requests, but can be configured to use other ones. To use the default ones, do:
 
 ```elixir
 defp deps do
@@ -28,7 +28,8 @@ defp deps do
     # ...
 
     {:sentry, "~> 11.0"},
-    {:hackney, "~> 1.20"}
+    {:jason, "~> 1.4"},
+    {:finch, "~> 0.17.0"}
   ]
 end
 ```
@@ -203,7 +204,7 @@ Licensed under the MIT license, see [`LICENSE`](./LICENSE).
 
 [Sentry]: http://sentry.io/
 [Jason]: https://github.com/michalmuskala/jason
-[Hackney]: https://github.com/benoitc/hackney
+[Finch]: https://github.com/sneako/finch
 [Bypass]: https://github.com/PSPDFKit-labs/bypass
 [docs]: https://hexdocs.pm/sentry/readme.html
 [logger-handlers]: https://www.erlang.org/doc/apps/kernel/logger_chapter#handlers
