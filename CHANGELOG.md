@@ -4,6 +4,31 @@
 
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
 
+#### Various improvements
+
+- `:source_code_exclude_patterns` support for OTP-28.0 ([#965](https://github.com/getsentry/sentry-elixir/pull/965))
+  ##### For people on OTP 28.1
+
+  All you need is to use `~r/foo/E` instead of `~r/foo/` in your config files. For example:
+
+  ```elixir
+  config :sentry,
+    enable_source_code_context: true,
+    root_source_code_paths: [File.cwd!()],
+    source_code_exclude_patterns: [~r/_build/E, ~r/deps/E, ~r/priv/E, ~r/test/E]
+  ```
+
+  ##### For people on OTP 28.0
+
+  You can convert your regexps for `source_code_exclude_patterns` config to strings:
+
+  ```elixir
+  config :sentry,
+    enable_source_code_context: true,
+    root_source_code_paths: [File.cwd!()],
+    source_code_exclude_patterns: ["/_build/", "/deps/", "/priv/", "/test/"]
+  ```
+
 ## 11.0.4
 
 - Fix safe JSON encoding of improper lists ([#938](https://github.com/getsentry/sentry-elixir/pull/938))

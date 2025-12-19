@@ -425,13 +425,17 @@ defmodule Sentry.Config do
       """
     ],
     source_code_exclude_patterns: [
-      type:
-        {:list,
-         {:custom, __MODULE__, :__validate_struct__, [:source_code_exclude_patterns, Regex]}},
-      type_doc: "list of `t:Regex.t/0`",
+      type: {:list, {:custom, __MODULE__, :__validate_source_code_exclude_pattern__, []}},
+      type_doc: "list of `t:Regex.t/0` or `t:String.t/0`",
       doc: """
       A list of regular expressions used to determine which files to
-      exclude from source code context.
+      exclude from source code context. Each element can be either a compiled
+      `Regex` or a string pattern that will be compiled to a regex at runtime.
+
+      Using strings is required for OTP 28.0 compatibility, as compiled regexes
+      cannot be serialized in release config files.
+
+      If you're on OTP 28.1 or later, you must use `/E` modifier in your regexps.
       """
     ],
     source_code_map_path: [
@@ -890,5 +894,24 @@ defmodule Sentry.Config do
     else
       {:error, "expected #{inspect(key)} to be a #{inspect(mod)} struct, got: #{inspect(term)}"}
     end
+  end
+
+  def __validate_source_code_exclude_pattern__(term) when is_struct(term, Regex) do
+    {:ok, term}
+  end
+
+  def __validate_source_code_exclude_pattern__(term) when is_binary(term) do
+    case Regex.compile(term) do
+      {:ok, _regex} ->
+        # Keep the string - it will be compiled at runtime in Sources
+        {:ok, term}
+
+      {:error, {reason, position}} ->
+        {:error, "invalid regex pattern #{inspect(term)}: #{reason} at position #{position}"}
+    end
+  end
+
+  def __validate_source_code_exclude_pattern__(term) do
+    {:error, "expected a Regex or a string pattern, got: #{inspect(term)}"}
   end
 end

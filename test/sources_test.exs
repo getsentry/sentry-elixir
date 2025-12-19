@@ -64,6 +64,57 @@ defmodule Sentry.SourcesTest do
              To fix this, you'll have to rename one of the conflicting paths.
              """
     end
+
+    test "accepts string patterns for source_code_exclude_patterns (OTP 28+ compatibility)" do
+      paths = [
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_a",
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_b"
+      ]
+
+      assert {:ok, result} =
+               Sources.load_files(
+                 root_source_code_paths: paths,
+                 source_code_exclude_patterns: ["module_b"]
+               )
+
+      assert Map.has_key?(result, "lib/module_a.ex")
+      refute Map.has_key?(result, "lib/module_b.ex")
+    end
+
+    test "accepts mixed string and regex patterns for source_code_exclude_patterns" do
+      paths = [
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_a",
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_b"
+      ]
+
+      assert {:ok, result} =
+               Sources.load_files(
+                 root_source_code_paths: paths,
+                 source_code_exclude_patterns: [~r/module_a/, "module_b"]
+               )
+
+      refute Map.has_key?(result, "lib/module_a.ex")
+      refute Map.has_key?(result, "lib/module_b.ex")
+    end
+
+    test "string patterns survive term serialization (OTP 28+ release simulation)" do
+      paths = [
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_a",
+        File.cwd!() <> "/test/fixtures/example-umbrella-app/apps/app_b"
+      ]
+
+      original_config = [
+        root_source_code_paths: paths,
+        source_code_exclude_patterns: ["module_b", "/deps/"]
+      ]
+
+      serialized = :erlang.term_to_binary(original_config)
+      deserialized_config = :erlang.binary_to_term(serialized)
+
+      assert {:ok, result} = Sources.load_files(deserialized_config)
+      assert Map.has_key?(result, "lib/module_a.ex")
+      refute Map.has_key?(result, "lib/module_b.ex")
+    end
   end
 
   describe "load_source_code_map_if_present/0" do

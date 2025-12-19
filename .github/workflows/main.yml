@@ -26,19 +26,23 @@ jobs:
             otp: '28.1'
             lint: true
             dialyzer: true
+            release_test: true
             os: ubuntu-latest
 
           - elixir: '1.18.4-otp-27'
             otp: '28.0'
+            release_test: true
             os: ubuntu-latest
 
           - elixir: '1.18'
             otp: '27.2'
+            release_test: true
             os: ubuntu-latest
 
           # One version before the last supported one.
           - elixir: '1.17'
             otp: '26.2'
+            release_test: true
             os: ubuntu-22.04
 
           # Oldest supported Elixir/Erlang pair that's tested;
@@ -118,6 +122,12 @@ jobs:
       env:
         SKIP_TRACING_E2E: "true"
       run: mix test.integrations
+
+    - name: Check `mix release` with phoenix_app and sentry configured
+      if: matrix.release_test
+      run: |
+        cd test_integrations/phoenix_app
+        MIX_ENV=prod mix release
 
     - name: Cache Dialyzer PLT
       uses: actions/cache@v4
