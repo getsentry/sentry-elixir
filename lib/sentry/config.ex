@@ -435,7 +435,7 @@ defmodule Sentry.Config do
       Using strings is required for OTP 28.0 compatibility, as compiled regexes
       cannot be serialized in release config files.
 
-      If you're on OTP 28.1 or later, you must use `\E` modifier in your regexps.
+      If you're on OTP 28.1 or later, you must use `/E` modifier in your regexps.
       """
     ],
     source_code_map_path: [
