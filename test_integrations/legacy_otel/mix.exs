@@ -22,7 +22,7 @@ defmodule LegacyOtel.MixProject do
   defp deps do
     [
       {:sentry, path: "../.."},
-      {:hackney, "~> 1.18"},
+      {:finch, "~> 0.17"},
       {:jason, "~> 1.1", optional: true},
       {:opentelemetry, "~> 1.3.0"},
       {:opentelemetry_api, "~> 1.2"},
