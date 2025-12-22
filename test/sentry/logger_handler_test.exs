@@ -678,7 +678,8 @@ defmodule Sentry.LoggerHandlerTest do
               %ArgumentError{
                 message:
                   ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
-              }, _}}} =
+              },
+              _}}} =
              :logger.update_handler_config(
                handler_name,
                :config,
