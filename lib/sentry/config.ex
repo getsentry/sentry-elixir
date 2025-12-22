@@ -51,7 +51,7 @@ defmodule Sentry.Config do
           tuples. *Available since 10.3.0*.
           """
         ],
-        oban_tags: [
+        add_oban_tags_as_tags: [
           type: :boolean,
           default: false,
           doc: """

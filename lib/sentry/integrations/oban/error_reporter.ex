@@ -46,7 +46,8 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
     base_tags = %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state}
 
     tags =
-      if config[:oban_tags] === true and is_list(job.tags) and not Enum.empty?(job.tags) do
+      if config[:add_oban_tags_as_tags] === true and is_list(job.tags) and
+           not Enum.empty?(job.tags) do
         Map.put(base_tags, :oban_tags, Enum.join(job.tags, ","))
       else
         base_tags

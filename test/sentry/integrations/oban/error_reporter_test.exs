@@ -155,19 +155,23 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       end
     end
 
-    test "includes oban_tags when config option is enabled" do
+    test "includes oban_tags when add_oban_tags_as_tags config option is enabled" do
       Sentry.Test.start_collecting()
 
-      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [], oban_tags: true)
+      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+        add_oban_tags_as_tags: true
+      )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
       assert event.tags.oban_tags == "tag1,tag2"
     end
 
-    test "excludes oban_tags when config option is disabled" do
+    test "excludes add_oban_tags_as_tags when config option is disabled" do
       Sentry.Test.start_collecting()
 
-      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [], oban_tags: false)
+      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+        add_oban_tags_as_tags: false
+      )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
       assert is_nil(Map.get(event.tags, :oban_tags))
