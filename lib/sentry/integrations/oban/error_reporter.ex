@@ -4,6 +4,8 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
+  require Logger
+
   @spec attach(keyword()) :: :ok
   def attach(config \\ []) when is_list(config) do
     _ =
@@ -45,13 +47,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
     base_tags = %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state}
 
-    tags =
-      if config[:add_oban_tags_as_tags] === true and is_list(job.tags) and
-           not Enum.empty?(job.tags) do
-        Map.put(base_tags, :oban_tags, Enum.join(job.tags, ","))
-      else
-        base_tags
-      end
+    tags = merge_oban_tags(base_tags, config[:oban_tags_to_sentry_tags], job)
 
     opts =
       [
@@ -103,5 +99,36 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
   defp maybe_unwrap_exception(kind, reason, stacktrace) do
     Exception.normalize(kind, reason, stacktrace)
+  end
+
+  defp merge_oban_tags(base_tags, nil, _job), do: base_tags
+
+  defp merge_oban_tags(base_tags, tags_config, job) do
+    try do
+      custom_tags = call_oban_tags_to_sentry_tags(tags_config, job)
+
+      if is_map(custom_tags) do
+        Map.merge(base_tags, custom_tags)
+      else
+        Logger.warning(
+          "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
+        )
+
+        base_tags
+      end
+    rescue
+      error ->
+        Logger.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
+
+        base_tags
+    end
+  end
+
+  defp call_oban_tags_to_sentry_tags(fun, job) when is_function(fun, 1) do
+    fun.(job)
+  end
+
+  defp call_oban_tags_to_sentry_tags({module, function}, job) do
+    apply(module, function, [job])
   end
 end

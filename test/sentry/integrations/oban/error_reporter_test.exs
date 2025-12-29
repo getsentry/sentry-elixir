@@ -4,7 +4,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
   alias Sentry.Integrations.Oban.ErrorReporter
 
   defmodule MyWorker do
-    use Oban.Worker, tags: ["tag1", "tag2"]
+    use Oban.Worker
 
     @impl Oban.Worker
     def perform(%Oban.Job{}), do: :ok
@@ -155,26 +155,60 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       end
     end
 
-    test "includes oban_tags when add_oban_tags_as_tags config option is enabled" do
+    test "includes custom tags when oban_tags_to_sentry_tags function config option is set and returns non empty map" do
       Sentry.Test.start_collecting()
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-        add_oban_tags_as_tags: true
+        oban_tags_to_sentry_tags: fn _job -> %{custom_tag: "custom_value"} end
       )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
-      assert event.tags.oban_tags == "tag1,tag2"
+      assert event.tags.custom_tag == "custom_value"
     end
 
-    test "excludes add_oban_tags_as_tags when config option is disabled" do
+    test "handles oban_tags_to_sentry_tags errors gracefully" do
       Sentry.Test.start_collecting()
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-        add_oban_tags_as_tags: false
+        oban_tags_to_sentry_tags: fn _job -> raise "tag transform error" end
+      )
+
+      assert [_event] = Sentry.Test.pop_sentry_reports()
+    end
+
+    test "handles invalid oban_tags_to_sentry_tags return values gracefully" do
+      Sentry.Test.start_collecting()
+
+      test_cases = [
+        1,
+        "invalid",
+        :invalid,
+        [1, 2, 3],
+        nil
+      ]
+
+      Enum.each(test_cases, fn invalid_value ->
+        emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+          oban_tags_to_sentry_tags: fn _job -> invalid_value end
+        )
+
+        assert [_event] = Sentry.Test.pop_sentry_reports()
+      end)
+    end
+
+    test "supports MFA tuple for oban_tags_to_sentry_tags" do
+      defmodule TestTagsTransform do
+        def transform(_job), do: %{custom_tag: "custom_value"}
+      end
+
+      Sentry.Test.start_collecting()
+
+      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+        oban_tags_to_sentry_tags: {TestTagsTransform, :transform}
       )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
-      assert is_nil(Map.get(event.tags, :oban_tags))
+      assert event.tags.custom_tag == "custom_value"
     end
   end
 
