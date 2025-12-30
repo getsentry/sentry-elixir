@@ -4,14 +4,16 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  @spec attach() :: :ok
-  def attach do
+  require Logger
+
+  @spec attach(keyword()) :: :ok
+  def attach(config \\ []) when is_list(config) do
     _ =
       :telemetry.attach(
         __MODULE__,
         [:oban, :job, :exception],
         &__MODULE__.handle_event/4,
-        :no_config
+        config
       )
 
     :ok
@@ -21,32 +23,36 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           [atom(), ...],
           term(),
           %{required(:job) => struct(), optional(term()) => term()},
-          :no_config
+          keyword()
         ) :: :ok
   def handle_event(
         [:oban, :job, :exception],
         _measurements,
         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
-        :no_config
+        config
       ) do
     if report?(reason) do
-      report(job, kind, reason, stacktrace)
+      report(job, kind, reason, stacktrace, config)
     else
       :ok
     end
   end
 
-  defp report(job, kind, reason, stacktrace) do
+  defp report(job, kind, reason, stacktrace, config) do
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
         _ -> stacktrace
       end
 
+    base_tags = %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state}
+
+    tags = merge_oban_tags(base_tags, config[:oban_tags_to_sentry_tags], job)
+
     opts =
       [
         stacktrace: stacktrace,
-        tags: %{oban_worker: job.worker, oban_queue: job.queue, oban_state: job.state},
+        tags: tags,
         fingerprint: [job.worker, "{{ default }}"],
         extra:
           Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
@@ -93,5 +99,36 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
   defp maybe_unwrap_exception(kind, reason, stacktrace) do
     Exception.normalize(kind, reason, stacktrace)
+  end
+
+  defp merge_oban_tags(base_tags, nil, _job), do: base_tags
+
+  defp merge_oban_tags(base_tags, tags_config, job) do
+    try do
+      custom_tags = call_oban_tags_to_sentry_tags(tags_config, job)
+
+      if is_map(custom_tags) do
+        Map.merge(base_tags, custom_tags)
+      else
+        Logger.warning(
+          "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
+        )
+
+        base_tags
+      end
+    rescue
+      error ->
+        Logger.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
+
+        base_tags
+    end
+  end
+
+  defp call_oban_tags_to_sentry_tags(fun, job) when is_function(fun, 1) do
+    fun.(job)
+  end
+
+  defp call_oban_tags_to_sentry_tags({module, function}, job) do
+    apply(module, function, [job])
   end
 end

@@ -8,6 +8,13 @@ defmodule Sentry.Config do
   """
   @type traces_sampler_function :: (map() -> boolean() | float()) | {module(), atom()}
 
+  @typedoc """
+  A function that transforms an Oban job into a map of Sentry tags.
+
+  The function receives an Oban job struct and should return a map of tags and their values to be added to Sentry reported error.
+  """
+  @type oban_tags_to_sentry_tags_function :: (map() -> map()) | {module(), atom()}
+
   integrations_schema = [
     max_expected_check_in_time: [
       type: :integer,
@@ -49,6 +56,24 @@ defmodule Sentry.Config do
           Whether to capture errors from Oban jobs. When enabled, the Sentry SDK will capture
           errors that happen in Oban jobs, including when errors return `{:error, reason}`
           tuples. *Available since 10.3.0*.
+          """
+        ],
+        oban_tags_to_sentry_tags: [
+          type: {:custom, __MODULE__, :__validate_oban_tags_to_sentry_tags__, []},
+          default: nil,
+          type_doc: "`t:oban_tags_to_sentry_tags_function/0` or `nil`",
+          doc: """
+          A function that determines the Sentry tags to be added based on the Oban job. This function receives an Oban.Job struct
+          and should return a map of tags and their values to be sent to Sentry.
+
+          Example:
+          ```elixir
+          oban_tags_to_sentry_tags: fn job ->
+            Map.new(job.tags, fn tag -> {"oban_tags.\#{tag}", true} end)
+          end
+          ```
+
+          This example transforms all Oban job tags into Sentry tags prefixed with "oban_tags." and with a value of "true".
           """
         ],
         cron: [
@@ -955,5 +980,25 @@ defmodule Sentry.Config do
 
   def __validate_source_code_exclude_pattern__(term) do
     {:error, "expected a Regex or a string pattern, got: #{inspect(term)}"}
+  end
+
+  def __validate_oban_tags_to_sentry_tags__(nil), do: {:ok, nil}
+
+  def __validate_oban_tags_to_sentry_tags__(fun) when is_function(fun, 1) do
+    {:ok, fun}
+  end
+
+  def __validate_oban_tags_to_sentry_tags__({module, function})
+      when is_atom(module) and is_atom(function) do
+    if function_exported?(module, function, 1) do
+      {:ok, {module, function}}
+    else
+      {:error, "function #{module}.#{function}/1 is not exported"}
+    end
+  end
+
+  def __validate_oban_tags_to_sentry_tags__(other) do
+    {:error,
+     "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
   end
 end
