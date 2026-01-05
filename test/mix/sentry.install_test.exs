@@ -43,7 +43,7 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     |> assert_creates("config/prod.exs", """
     import Config
 
-    config :test,
+    config :sentry,
       dsn: "test_dsn",
       environment_name: Mix.env(),
       enable_source_code_context: true,
