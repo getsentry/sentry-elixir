@@ -8,6 +8,8 @@ defmodule Sentry.Envelope do
     ClientReport,
     Config,
     Event,
+    LogBatch,
+    LogEvent,
     Transaction,
     UUID
   }
@@ -15,7 +17,13 @@ defmodule Sentry.Envelope do
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
           items: [
-            Attachment.t() | CheckIn.t() | ClientReport.t() | Event.t() | Transaction.t(),
+            Attachment.t()
+            | CheckIn.t()
+            | ClientReport.t()
+            | Event.t()
+            | LogBatch.t()
+            | LogEvent.t()
+            | Transaction.t(),
             ...
           ]
         }
@@ -69,6 +77,25 @@ defmodule Sentry.Envelope do
   end
 
   @doc """
+  Creates a new envelope containing log events.
+
+  According to the Sentry Logs Protocol, log events are sent in batches
+  within a single envelope item with content_type "application/vnd.sentry.items.log+json".
+  All log events are wrapped in a single item with { items: [...] }.
+  """
+  @doc since: "11.0.0"
+  @spec from_log_events([LogEvent.t()]) :: t()
+  def from_log_events(log_events) when is_list(log_events) do
+    # Create a single log batch item that wraps all log events
+    log_batch = %LogBatch{log_events: log_events}
+
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: [log_batch]
+    }
+  end
+
+  @doc """
   Returns the "data category" of the envelope's contents (to be used in client reports and more).
   """
   @doc since: "10.8.0"
@@ -77,6 +104,8 @@ defmodule Sentry.Envelope do
           | CheckIn.t()
           | ClientReport.t()
           | Event.t()
+          | LogBatch.t()
+          | LogEvent.t()
           | Transaction.t()
         ) ::
           String.t()
@@ -85,6 +114,7 @@ defmodule Sentry.Envelope do
   def get_data_category(%CheckIn{}), do: "monitor"
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
+  def get_data_category(%LogBatch{}), do: "log_item"
 
   @doc """
   Encodes the envelope into its binary representation.
@@ -161,6 +191,26 @@ defmodule Sentry.Envelope do
       {:ok, encoded_transaction} ->
         header = ~s({"type":"transaction","length":#{byte_size(encoded_transaction)}})
         [header, ?\n, encoded_transaction, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %LogBatch{log_events: log_events}) do
+    items = Enum.map(log_events, &LogEvent.to_map/1)
+    payload = %{items: items}
+
+    case Sentry.JSON.encode(payload, json_library) do
+      {:ok, encoded_payload} ->
+        header = %{
+          "type" => "log",
+          "item_count" => length(items),
+          "content_type" => "application/vnd.sentry.items.log+json"
+        }
+
+        {:ok, encoded_header} = Sentry.JSON.encode(header, json_library)
+        [encoded_header, ?\n, encoded_payload, ?\n]
 
       {:error, _reason} = error ->
         throw(error)

@@ -128,7 +128,8 @@ defmodule Sentry.Mixfile do
       {:opentelemetry, ">= 0.0.0", optional: true},
       {:opentelemetry_api, ">= 0.0.0", optional: true},
       {:opentelemetry_exporter, ">= 0.0.0", optional: true},
-      {:opentelemetry_semantic_conventions, ">= 0.0.0", optional: true}
+      {:opentelemetry_semantic_conventions, ">= 0.0.0", optional: true},
+      {:opentelemetry_logger_metadata, "~> 0.2.0", only: :test}
     ]
   end
 

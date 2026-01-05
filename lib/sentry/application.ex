@@ -34,6 +34,13 @@ defmodule Sentry.Application do
         []
       end
 
+    maybe_log_event_buffer =
+      if Config.enabled_logs?() do
+        [Sentry.LogEventBuffer]
+      else
+        []
+      end
+
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
@@ -48,6 +55,7 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
+        maybe_log_event_buffer ++
         maybe_rate_limiter() ++
         [Sentry.Transport.SenderPool]
 
