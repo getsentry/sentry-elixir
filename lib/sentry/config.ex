@@ -862,7 +862,16 @@ defmodule Sentry.Config do
 
   @compile {:inline, fetch!: 1}
   defp fetch!(key) do
-    :persistent_term.get({:sentry_config, key})
+    # Check process dictionary first for test-specific config overrides.
+    # This allows tests to use put_test_config/1 for isolated configuration
+    # without affecting other tests, even when running async: true.
+    case Process.get({:sentry_test_config, key}, :__not_set__) do
+      :__not_set__ ->
+        :persistent_term.get({:sentry_config, key})
+
+      value ->
+        value
+    end
   rescue
     ArgumentError ->
       raise """
@@ -874,7 +883,16 @@ defmodule Sentry.Config do
 
   @compile {:inline, get: 1}
   defp get(key) do
-    :persistent_term.get({:sentry_config, key}, nil)
+    # Check process dictionary first for test-specific config overrides.
+    # This allows tests to use put_test_config/1 for isolated configuration
+    # without affecting other tests, even when running async: true.
+    case Process.get({:sentry_test_config, key}, :__not_set__) do
+      :__not_set__ ->
+        :persistent_term.get({:sentry_config, key}, nil)
+
+      value ->
+        value
+    end
   end
 
   def __validate_path__(nil), do: {:ok, nil}

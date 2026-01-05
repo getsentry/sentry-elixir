@@ -18,8 +18,8 @@ defmodule Sentry.TestHelpers do
 
   @spec put_test_config(keyword()) :: :ok
   def put_test_config(config) when is_list(config) do
-    all_original_config = all_config()
-
+    # Store original values from both process dictionary and :persistent_term
+    # We validate each key individually like Sentry.put_config/2 does
     original_config =
       for {key, val} <- config do
         renamed_key =
@@ -28,19 +28,45 @@ defmodule Sentry.TestHelpers do
             other -> other
           end
 
-        current_val = :persistent_term.get({:sentry_config, renamed_key}, :__not_set__)
-        Sentry.put_config(renamed_key, val)
-        {renamed_key, current_val}
+        # Validate this single key-value pair (this also transforms values like DSN strings)
+        validated_config = Sentry.Config.validate!([{renamed_key, val}])
+        validated_val = Keyword.fetch!(validated_config, renamed_key)
+
+        # Store original values
+        current_process_val = Process.get({:sentry_test_config, renamed_key}, :__not_set__)
+        current_persistent_val = :persistent_term.get({:sentry_config, renamed_key}, :__not_set__)
+
+        # Set in both locations:
+        # - Process dictionary for process-local isolation
+        # - :persistent_term so spawned processes (like sender pool workers) can see it
+        Process.put({:sentry_test_config, renamed_key}, validated_val)
+        :persistent_term.put({:sentry_config, renamed_key}, validated_val)
+
+        {renamed_key, current_process_val, current_persistent_val}
       end
 
+    # Register cleanup to restore original values in both locations
     ExUnit.Callbacks.on_exit(fn ->
       Enum.each(original_config, fn
-        {key, :__not_set__} -> :persistent_term.erase({:sentry_config, key})
-        {key, original_val} -> :persistent_term.put({:sentry_config, key}, original_val)
-      end)
+        {key, :__not_set__, :__not_set__} ->
+          Process.delete({:sentry_test_config, key})
+          :persistent_term.erase({:sentry_config, key})
 
-      assert all_original_config == all_config()
+        {key, :__not_set__, persistent_val} ->
+          Process.delete({:sentry_test_config, key})
+          :persistent_term.put({:sentry_config, key}, persistent_val)
+
+        {key, process_val, :__not_set__} ->
+          Process.put({:sentry_test_config, key}, process_val)
+          :persistent_term.erase({:sentry_config, key})
+
+        {key, process_val, persistent_val} ->
+          Process.put({:sentry_test_config, key}, process_val)
+          :persistent_term.put({:sentry_config, key}, persistent_val)
+      end)
     end)
+
+    :ok
   end
 
   @spec set_mix_shell(module()) :: :ok
@@ -101,9 +127,9 @@ defmodule Sentry.TestHelpers do
     items
     |> Enum.chunk_every(2)
     |> Enum.flat_map(fn
-      [header, item] ->[{decode!(header), decode!(item)}]
+      [header, item] -> [{decode!(header), decode!(item)}]
 
-      [""] ->[]
+      [""] -> []
     end)
   end
 end
