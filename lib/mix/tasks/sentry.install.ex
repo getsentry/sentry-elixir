@@ -52,30 +52,28 @@ if Code.ensure_loaded?(Igniter) do
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
-      app_name = Igniter.Project.Application.app_name(igniter)
-
       igniter
       |> Igniter.Project.Config.configure(
         "prod.exs",
-        app_name,
+        :sentry,
         [:dsn],
         igniter.args.options[:dsn]
       )
       |> Igniter.Project.Config.configure(
         "prod.exs",
-        app_name,
+        :sentry,
         [:environment_name],
         {:code, quote(do: Mix.env())}
       )
       |> Igniter.Project.Config.configure(
         "prod.exs",
-        app_name,
+        :sentry,
         [:enable_source_code_context],
         true
       )
       |> Igniter.Project.Config.configure(
         "prod.exs",
-        app_name,
+        :sentry,
         [:root_source_code_paths],
         {:code, quote(do: [File.cwd!()])}
       )

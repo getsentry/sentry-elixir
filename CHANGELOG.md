@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Bug Fixes
+
+- Wrong app_name used by Igniter in prod.exs ([#1](https://github.com/PJUllrich/sentry-elixir/pull/1))
+
 #### Features
 
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
