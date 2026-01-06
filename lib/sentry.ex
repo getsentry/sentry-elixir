@@ -214,6 +214,17 @@ defmodule Sentry do
           | {module(), function_name :: atom()}
 
   @typedoc """
+  A callback to use with the `:before_send_log` configuration option.
+
+  If this is `{module, function_name}`, then `module.function_name(log_event)` will
+  be called, where `log_event` is of type `t:Sentry.LogEvent.t/0`.
+  """
+  @typedoc since: "12.0.0"
+  @type before_send_log_callback() ::
+          (Sentry.LogEvent.t() -> as_boolean(Sentry.LogEvent.t()))
+          | {module(), function_name :: atom()}
+
+  @typedoc """
   The strategy to use when sending an event to Sentry.
   """
   @typedoc since: "9.0.0"

@@ -243,6 +243,18 @@ defmodule Sentry.ConfigTest do
         Config.validate!(after_send_event: :not_a_function)
       end
     end
+
+    test ":before_send_log" do
+      assert Config.validate!(before_send_log: {MyMod, :my_fun})[:before_send_log] ==
+               {MyMod, :my_fun}
+
+      fun = & &1
+      assert Config.validate!(before_send_log: fun)[:before_send_log] == fun
+
+      assert_raise ArgumentError, ~r/invalid value for :before_send_log option/, fn ->
+        Config.validate!(before_send_log: :not_a_function)
+      end
+    end
   end
 
   describe "put_config/2" do
