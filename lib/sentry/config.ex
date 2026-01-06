@@ -13,6 +13,7 @@ defmodule Sentry.Config do
 
   The function receives an Oban job struct and should return a map of tags and their values to be added to Sentry reported error.
   """
+  @typedoc since: "12.0.0"
   @type oban_tags_to_sentry_tags_function :: (map() -> map()) | {module(), atom()}
 
   integrations_schema = [
@@ -63,17 +64,18 @@ defmodule Sentry.Config do
           default: nil,
           type_doc: "`t:oban_tags_to_sentry_tags_function/0` or `nil`",
           doc: """
-          A function that determines the Sentry tags to be added based on the Oban job. This function receives an Oban.Job struct
-          and should return a map of tags and their values to be sent to Sentry.
+          A function that determines the Sentry tags to be added based on the Oban job.
+          This function receives an `Oban.Job` struct and must return a map of tags
+          and their values to be sent to Sentry.
 
-          Example:
           ```elixir
           oban_tags_to_sentry_tags: fn job ->
             Map.new(job.tags, fn tag -> {"oban_tags.\#{tag}", true} end)
           end
           ```
 
-          This example transforms all Oban job tags into Sentry tags prefixed with "oban_tags." and with a value of "true".
+          This example transforms all Oban job tags into Sentry tags prefixed
+          with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
           """
         ],
         cron: [
