@@ -9,14 +9,25 @@ defmodule PhoenixApp.Application do
   def start(_type, _args) do
     :ok = Application.ensure_started(:inets)
 
+    # Add the regular Sentry.LoggerHandler for crash reports
     :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
       config: %{metadata: [:file, :line]}
+    })
+
+    # Add the new Sentry.LogsHandler for structured logging
+    :logger.add_handler(:sentry_logs_handler, Sentry.LogsHandler, %{
+      config: %{
+        level: :info,
+        excluded_domains: [:cowboy, :ranch],
+        metadata: [:request_id, :user_id]
+      }
     })
 
     OpentelemetryBandit.setup()
     OpentelemetryPhoenix.setup(adapter: :bandit)
     OpentelemetryOban.setup()
     OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)
+    OpentelemetryLoggerMetadata.setup()
 
     children = [
       PhoenixAppWeb.Telemetry,

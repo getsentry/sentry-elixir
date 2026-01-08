@@ -79,6 +79,7 @@ defmodule PhoenixApp.MixProject do
        branch: "oban-v1.27-semantics",
        sparse: "instrumentation/opentelemetry_oban"},
       {:opentelemetry_ecto, "~> 1.2"},
+      {:opentelemetry_logger_metadata, "~> 0.2.0"},
       {:hackney, "~> 1.18"},
       {:oban, "~> 2.10"}
     ]

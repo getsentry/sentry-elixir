@@ -1,9 +1,6 @@
 defmodule PhoenixApp.TestClient do
   @moduledoc """
   A test Sentry client that logs envelopes to a file for e2e test validation.
-
-  This client mimics the behavior of Sentry::DebugTransport in sentry-ruby,
-  logging all envelopes to a file that can be read by Playwright tests.
   """
 
   require Logger

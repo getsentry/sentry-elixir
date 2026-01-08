@@ -1,6 +1,7 @@
 defmodule PhoenixAppWeb.PageController do
   use PhoenixAppWeb, :controller
 
+  require Logger
   require OpenTelemetry.Tracer, as: Tracer
 
   alias PhoenixApp.{Repo, Accounts.User}
@@ -78,5 +79,80 @@ defmodule PhoenixAppWeb.PageController do
         })
       end
     end
+  end
+
+  # Test endpoint for structured logging with OpenTelemetry trace context
+  #
+  # This endpoint demonstrates how logs automatically include trace context
+  # when using opentelemetry_logger_metadata. All logs within the traced spans
+  # will include trace_id and span_id in the Sentry log events.
+  #
+  # To test:
+  # 1. Start the Phoenix app: cd test_integrations/phoenix_app && iex -S mix phx.server
+  # 2. Visit: http://localhost:4000/logs
+  # 3. Check Sentry logs - they should have trace_id matching the transaction traces
+  def logs_demo(conn, params) do
+    request_id = get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
+    user_id = Map.get(params, "user_id", 123)
+
+    # Set logger metadata
+    Logger.metadata(request_id: request_id, user_id: user_id)
+
+    # Log at different levels with structured data
+    Logger.info("User session started",
+      action: "login",
+      ip_address: to_string(:inet.ntoa(conn.remote_ip)),
+      user_agent: get_req_header(conn, "user-agent") |> List.first()
+    )
+
+    Logger.debug("Processing user request",
+      endpoint: "/logs",
+      method: conn.method,
+      query_params: params
+    )
+
+    # Simulate some work with nested spans and logging
+    Tracer.with_span "process_logs_demo" do
+      Logger.info("Inside traced span",
+        span_name: "process_logs_demo",
+        duration_hint: "will take ~100ms"
+      )
+
+      :timer.sleep(100)
+
+      Tracer.with_span "database_query" do
+        users = Repo.all(User)
+        Logger.info("Database query completed",
+          query: "SELECT * FROM users",
+          result_count: length(users)
+        )
+      end
+    end
+
+    Logger.warning("Sample warning log",
+      warning_type: "demo",
+      severity: "low"
+    )
+
+    Logger.error("Sample error log (not an exception)",
+      error_type: "demo",
+      recoverable: true,
+      retry_count: 0
+    )
+
+    # Force flush the log buffer immediately
+    Sentry.LogEventBuffer.flush()
+
+    json(conn, %{
+      message: "Logs demo completed - check your Sentry logs!",
+      info: %{
+        request_id: request_id,
+        user_id: user_id,
+        logs_sent: "Multiple log events at info, debug, warning, and error levels",
+        note: "These are structured log events, not error events",
+        check: "Look for these logs in Sentry's Logs section (not Errors)",
+        flushed: "Log buffer was flushed immediately"
+      }
+    })
   end
 end

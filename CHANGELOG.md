@@ -7,6 +7,7 @@
 #### Features
 
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
+- Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
 
 #### Various improvements
 

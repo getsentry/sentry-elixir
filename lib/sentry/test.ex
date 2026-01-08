@@ -79,6 +79,7 @@ defmodule Sentry.Test do
   @server __MODULE__.OwnershipServer
   @events_key :events
   @transactions_key :transactions
+  @logs_key :logs
 
   # Used internally when reporting an event, *before* reporting the actual event.
   @doc false
@@ -92,6 +93,48 @@ defmodule Sentry.Test do
   @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Transaction{} = transaction) do
     maybe_collect(transaction, @transactions_key)
+  end
+
+  # Used internally when reporting log events, *before* reporting the actual log events.
+  @doc false
+  @spec maybe_collect_logs([Sentry.LogEvent.t()]) :: :collected | :not_collecting
+  def maybe_collect_logs(log_events) when is_list(log_events) do
+    if Sentry.Config.test_mode?() do
+      dsn_set? = not is_nil(Sentry.Config.dsn())
+      ensure_ownership_server_started()
+
+      case NimbleOwnership.fetch_owner(@server, callers(), @logs_key) do
+        {:ok, owner_pid} ->
+          result =
+            NimbleOwnership.get_and_update(
+              @server,
+              owner_pid,
+              @logs_key,
+              fn logs ->
+                {:collected, (logs || []) ++ log_events}
+              end
+            )
+
+          case result do
+            {:ok, :collected} ->
+              :collected
+
+            {:error, error} ->
+              raise ArgumentError,
+                    "cannot collect Sentry logs: #{Exception.message(error)}"
+          end
+
+        :error when dsn_set? ->
+          :not_collecting
+
+        # If the :dsn option is not set and we didn't capture the item, it's alright,
+        # we can just swallow it.
+        :error ->
+          :collected
+      end
+    else
+      :not_collecting
+    end
   end
 
   @doc false
@@ -156,6 +199,7 @@ defmodule Sentry.Test do
   def start_collecting_sentry_reports(_context \\ %{}) do
     start_collecting(key: @events_key)
     start_collecting(key: @transactions_key)
+    start_collecting(key: @logs_key)
   end
 
   @doc """
@@ -365,6 +409,58 @@ defmodule Sentry.Test do
 
       {:error, error} when is_exception(error) ->
         raise ArgumentError, "cannot pop Sentry transactions: #{Exception.message(error)}"
+    end
+  end
+
+  @doc """
+  Pops all the collected log events from the current process.
+
+  This function returns a list of all the log events that have been collected from the current
+  process and all the processes that were allowed through it. If the current process
+  is not collecting log events, this function raises an error.
+
+  After this function returns, the current process will still be collecting log events, but
+  the collected log events will be reset to `[]`.
+
+  ## Examples
+
+      iex> Sentry.Test.start_collecting_sentry_reports()
+      :ok
+      iex> log_event = %Sentry.LogEvent{
+      ...>   level: :info,
+      ...>   body: "Test log message",
+      ...>   timestamp: System.system_time(:microsecond) / 1_000_000
+      ...> }
+      iex> Sentry.LogEventBuffer.add_event(log_event)
+      :ok
+      iex> [%Sentry.LogEvent{} = collected] = Sentry.Test.pop_sentry_logs()
+      iex> collected.body
+      "Test log message"
+
+  """
+  @doc since: "11.0.0"
+  @spec pop_sentry_logs(pid()) :: [Sentry.LogEvent.t()]
+  def pop_sentry_logs(owner_pid \\ self()) when is_pid(owner_pid) do
+    result =
+      try do
+        NimbleOwnership.get_and_update(@server, owner_pid, @logs_key, fn
+          nil -> {:not_collecting, []}
+          logs when is_list(logs) -> {logs, []}
+        end)
+      catch
+        :exit, {:noproc, _} ->
+          raise ArgumentError, "not collecting reported logs from #{inspect(owner_pid)}"
+      end
+
+    case result do
+      {:ok, :not_collecting} ->
+        raise ArgumentError, "not collecting reported logs from #{inspect(owner_pid)}"
+
+      {:ok, logs} ->
+        logs
+
+      {:error, error} when is_exception(error) ->
+        raise ArgumentError, "cannot pop Sentry logs: #{Exception.message(error)}"
     end
   end
 

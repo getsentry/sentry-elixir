@@ -14,6 +14,7 @@ defmodule Sentry.Client do
     Envelope,
     Event,
     Interfaces,
+    LogEvent,
     LoggerUtils,
     Options,
     Transaction,
@@ -131,6 +132,36 @@ defmodule Sentry.Client do
     else
       :excluded ->
         :excluded
+    end
+  end
+
+  @doc """
+  Sends a batch of log events to Sentry.
+
+  Log events are sent asynchronously and do not support callbacks or sampling.
+  They are buffered and sent in batches according to the Sentry Logs Protocol.
+
+  Returns `{:ok, envelope_id}` on success or `{:error, reason}` on failure.
+  """
+  @doc since: "12.0.0"
+  @spec send_log_batch([LogEvent.t()]) ::
+          {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
+  def send_log_batch([]), do: {:ok, ""}
+
+  def send_log_batch(log_events) when is_list(log_events) do
+    case Sentry.Test.maybe_collect_logs(log_events) do
+      :collected ->
+        {:ok, ""}
+
+      :not_collecting ->
+        client = Config.client()
+
+        request_retries =
+          Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
+        log_events
+        |> Envelope.from_log_events()
+        |> Transport.encode_and_post_envelope(client, request_retries)
     end
   end
 
