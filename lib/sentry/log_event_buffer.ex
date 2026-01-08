@@ -22,6 +22,7 @@ defmodule Sentry.LogEventBuffer do
   @typedoc false
   @type state :: %{
           events: [LogEvent.t()],
+          count: non_neg_integer(),
           max_events: non_neg_integer(),
           timer_ref: reference() | nil
         }
@@ -82,6 +83,7 @@ defmodule Sentry.LogEventBuffer do
 
     state = %{
       events: [],
+      count: 0,
       max_events: max_events,
       timer_ref: schedule_flush()
     }
@@ -92,20 +94,21 @@ defmodule Sentry.LogEventBuffer do
   @impl GenServer
   def handle_cast({:add_event, event}, state) do
     # Check if queue is at max capacity
-    if length(state.events) >= @max_queue_size do
+    if state.count >= @max_queue_size do
       # Drop the event to prevent memory issues
       log_warning("Log event buffer is full (#{@max_queue_size} events), dropping event")
       {:noreply, state}
     else
       events = [event | state.events]
+      new_count = state.count + 1
 
-      if length(events) >= state.max_events do
+      if new_count >= state.max_events do
         # Flush immediately if we've reached max_events
         send_events(events)
         cancel_timer(state.timer_ref)
-        {:noreply, %{state | events: [], timer_ref: schedule_flush()}}
+        {:noreply, %{state | events: [], count: 0, timer_ref: schedule_flush()}}
       else
-        {:noreply, %{state | events: events}}
+        {:noreply, %{state | events: events, count: new_count}}
       end
     end
   end
@@ -115,27 +118,27 @@ defmodule Sentry.LogEventBuffer do
     send_events(state.events)
     cancel_timer(state.timer_ref)
     flush_stale_timeout_message()
-    {:reply, :ok, %{state | events: [], timer_ref: schedule_flush()}}
+    {:reply, :ok, %{state | events: [], count: 0, timer_ref: schedule_flush()}}
   end
 
   @impl GenServer
   def handle_call(:size, _from, state) do
-    {:reply, length(state.events), state}
+    {:reply, state.count, state}
   end
 
   @impl GenServer
   def handle_info(:flush_timeout, state) do
-    if state.events != [] do
+    if state.count > 0 do
       send_events(state.events)
     end
 
-    {:noreply, %{state | events: [], timer_ref: schedule_flush()}}
+    {:noreply, %{state | events: [], count: 0, timer_ref: schedule_flush()}}
   end
 
   @impl GenServer
   def terminate(_reason, state) do
     # Flush any remaining events on shutdown
-    if state.events != [] do
+    if state.count > 0 do
       send_events(state.events)
     end
 
