@@ -11,7 +11,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
       Logger.configure(level: original_level)
     end)
 
-    put_test_config(dsn: "http://public:secret@localhost:8080/1", enabled_logs: true)
+    put_test_config(dsn: "http://public:secret@localhost:8080/1", enable_logs: true)
 
     Sentry.Test.start_collecting_sentry_reports()
 

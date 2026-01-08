@@ -15,7 +15,7 @@ defmodule Sentry.LogsHandlerTest do
 
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      enabled_logs: true,
+      enable_logs: true,
       max_log_events: 100
     )
 
@@ -223,8 +223,8 @@ defmodule Sentry.LogsHandlerTest do
       assert_buffer_size(buffer, 1)
     end
 
-    test "does not send logs when enabled_logs is false", %{buffer: buffer} do
-      put_test_config(enabled_logs: false)
+    test "does not send logs when enable_logs is false", %{buffer: buffer} do
+      put_test_config(enable_logs: false)
 
       initial_size = LogEventBuffer.size(server: buffer)
 

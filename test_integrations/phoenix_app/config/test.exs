@@ -39,7 +39,7 @@ config :sentry,
   test_mode: true,
   send_result: :sync,
   traces_sample_rate: 1.0,
-  enabled_logs: true
+  enable_logs: true
 
 config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 

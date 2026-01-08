@@ -21,13 +21,13 @@ defmodule Sentry.LogsHandler do
 
   ## Configuration
 
-  This handler **requires** that you set `enabled_logs: true` in your Sentry configuration.
+  This handler **requires** that you set `enable_logs: true` in your Sentry configuration.
   If this is not set, the handler will not send any log events.
 
       # In config/config.exs
       config :sentry,
         dsn: "https://public:secret@app.getsentry.com/1",
-        enabled_logs: true
+        enable_logs: true
 
   ## Usage
 
@@ -152,10 +152,10 @@ defmodule Sentry.LogsHandler do
   @spec adding_handler(:logger.handler_config()) :: {:ok, :logger.handler_config()}
   def adding_handler(config) do
     # Check if logs are enabled
-    unless Config.enabled_logs?() do
+    unless Config.enable_logs?() do
       Logger.warning(
-        "Sentry.LogsHandler is being added but enabled_logs is set to false. " <>
-          "No log events will be sent to Sentry. Set enabled_logs: true in your Sentry configuration."
+        "Sentry.LogsHandler is being added but enable_logs is set to false. " <>
+          "No log events will be sent to Sentry. Set enable_logs: true in your Sentry configuration."
       )
     end
 
@@ -195,7 +195,7 @@ defmodule Sentry.LogsHandler do
       }) do
     cond do
       # Check if logs are enabled globally
-      not Config.enabled_logs?() ->
+      not Config.enable_logs?() ->
         :ok
 
       # Check log level
