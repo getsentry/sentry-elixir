@@ -373,6 +373,7 @@ defmodule Sentry.Config do
       capture and send structured log events according to the
       [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
       Use `Sentry.LogsHandler` to capture log events from Erlang's `:logger`.
+      *Available since 12.0.0*.
       """
     ],
     max_log_events: [
@@ -383,7 +384,7 @@ defmodule Sentry.Config do
       Log events are buffered and sent in batches to reduce network overhead.
       When the buffer reaches this size, it will be flushed immediately.
       Otherwise, logs are flushed every 5 seconds. Only applies when `:enabled_logs`
-      is `true`.
+      is `true`. *Available since 12.0.0*.
       """
     ]
   ]
