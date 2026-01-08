@@ -105,7 +105,6 @@ defmodule Sentry.Envelope do
           | ClientReport.t()
           | Event.t()
           | LogBatch.t()
-          | LogEvent.t()
           | Transaction.t()
         ) ::
           String.t()
