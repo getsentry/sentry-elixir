@@ -193,8 +193,8 @@ defmodule Sentry.LogEventBuffer do
       if Config.test_mode?() do
         do_send_events(events)
       else
-        # Send asynchronously to avoid blocking in production
-        Task.start(fn -> do_send_events(events) end)
+        # Send asynchronously via Task.Supervisor to avoid blocking and prevent unbounded task spawning
+        Task.Supervisor.start_child(__MODULE__.TaskSupervisor, fn -> do_send_events(events) end)
       end
 
     :ok

@@ -36,7 +36,10 @@ defmodule Sentry.Application do
 
     maybe_log_event_buffer =
       if Config.enabled_logs?() do
-        [Sentry.LogEventBuffer]
+        [
+          {Task.Supervisor, name: Sentry.LogEventBuffer.TaskSupervisor},
+          Sentry.LogEventBuffer
+        ]
       else
         []
       end
