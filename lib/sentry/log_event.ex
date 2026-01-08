@@ -127,7 +127,7 @@ defmodule Sentry.LogEvent do
   Other fields like environment, release, server_name, parent_span_id go into attributes
   with "sentry." prefix.
   """
-  @spec to_map(t()) :: map()
+  @spec to_map(t()) :: %{optional(atom()) => term()}
   def to_map(%__MODULE__{} = log_event) do
     %{
       timestamp: log_event.timestamp,
