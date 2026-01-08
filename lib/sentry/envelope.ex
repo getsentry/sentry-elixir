@@ -83,7 +83,7 @@ defmodule Sentry.Envelope do
   within a single envelope item with content_type "application/vnd.sentry.items.log+json".
   All log events are wrapped in a single item with { items: [...] }.
   """
-  @doc since: "11.0.0"
+  @doc since: "12.0.0"
   @spec from_log_events([LogEvent.t()]) :: t()
   def from_log_events(log_events) when is_list(log_events) do
     # Create a single log batch item that wraps all log events
