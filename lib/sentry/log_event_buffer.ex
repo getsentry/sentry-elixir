@@ -114,6 +114,7 @@ defmodule Sentry.LogEventBuffer do
   def handle_call(:flush, _from, state) do
     send_events(state.events)
     cancel_timer(state.timer_ref)
+    flush_stale_timeout_message()
     {:reply, :ok, %{state | events: [], timer_ref: schedule_flush()}}
   end
 
@@ -152,6 +153,16 @@ defmodule Sentry.LogEventBuffer do
   defp cancel_timer(timer_ref) do
     _ = Process.cancel_timer(timer_ref)
     :ok
+  end
+
+  # Flush any stale :flush_timeout message that may be in the queue.
+  # This can happen if the timer fires while we're in the middle of a flush.
+  defp flush_stale_timeout_message do
+    receive do
+      :flush_timeout -> :ok
+    after
+      0 -> :ok
+    end
   end
 
   defp log_warning(message) do
