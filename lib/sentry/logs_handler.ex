@@ -127,6 +127,12 @@ defmodule Sentry.LogsHandler do
       Logger metadata keys to include as attributes in the log event.
       If set to `:all`, all metadata will be included.
       """
+    ],
+    buffer: [
+      type: {:or, [:atom, :pid, {:tuple, [:atom, :atom]}]},
+      default: LogEventBuffer,
+      type_doc: "`t:GenServer.server/0`",
+      doc: false
     ]
   ]
 
@@ -136,7 +142,8 @@ defmodule Sentry.LogsHandler do
   defstruct [
     :level,
     :excluded_domains,
-    :metadata
+    :metadata,
+    :buffer
   ]
 
   ## Logger handler callbacks
@@ -210,7 +217,7 @@ defmodule Sentry.LogsHandler do
         log_event_struct = LogEvent.from_logger_event(log_event, attributes, parameters)
 
         # Add to buffer
-        LogEventBuffer.add_event(log_event_struct)
+        LogEventBuffer.add_event(log_event_struct, server: config.buffer)
 
         :ok
     end

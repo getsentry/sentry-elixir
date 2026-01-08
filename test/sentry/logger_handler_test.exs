@@ -359,7 +359,7 @@ defmodule Sentry.LoggerHandlerTest do
       {:ok, agent} = Agent.start_link(fn -> nil end)
 
       run_and_catch_exit(test_genserver, fn ->
-        Agent.get(agent, & &1, 0)
+        Agent.get(agent, fn state -> Process.sleep(100) && state end, 0)
       end)
 
       assert_receive {^ref, event}

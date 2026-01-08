@@ -31,10 +31,17 @@ defmodule Sentry.LogEventBuffer do
 
   @doc """
   Starts the log event buffer process.
+
+  ## Options
+
+    * `:name` - The name to register the process under. Defaults to `#{inspect(__MODULE__)}`.
+    * `:max_events` - Maximum events before flushing. Defaults to `Sentry.Config.max_log_events/0`.
+
   """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    {name, opts} = Keyword.pop(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @doc """
@@ -45,9 +52,16 @@ defmodule Sentry.LogEventBuffer do
 
   In test mode with collection enabled, logs are collected immediately
   and not added to the buffer.
+
+  ## Options
+
+    * `:server` - The server to add the event to. Defaults to `#{inspect(__MODULE__)}`.
+
   """
-  @spec add_event(LogEvent.t()) :: :ok
-  def add_event(%LogEvent{} = event) do
+  @spec add_event(LogEvent.t(), keyword()) :: :ok
+  def add_event(%LogEvent{} = event, opts \\ []) do
+    server = Keyword.get(opts, :server, __MODULE__)
+
     # In test mode, try to collect immediately before buffering
     # This ensures the caller chain is preserved for Sentry.Test collection
     case Sentry.Test.maybe_collect_logs([event]) do
@@ -55,24 +69,36 @@ defmodule Sentry.LogEventBuffer do
         :ok
 
       :not_collecting ->
-        GenServer.cast(__MODULE__, {:add_event, event})
+        GenServer.cast(server, {:add_event, event})
     end
   end
 
   @doc """
   Flushes all buffered events immediately.
+
+  ## Options
+
+    * `:server` - The server to flush. Defaults to `#{inspect(__MODULE__)}`.
+
   """
-  @spec flush() :: :ok
-  def flush do
-    GenServer.call(__MODULE__, :flush)
+  @spec flush(keyword()) :: :ok
+  def flush(opts \\ []) do
+    server = Keyword.get(opts, :server, __MODULE__)
+    GenServer.call(server, :flush)
   end
 
   @doc """
   Returns the current number of buffered events.
+
+  ## Options
+
+    * `:server` - The server to query. Defaults to `#{inspect(__MODULE__)}`.
+
   """
-  @spec size() :: non_neg_integer()
-  def size do
-    GenServer.call(__MODULE__, :size)
+  @spec size(keyword()) :: non_neg_integer()
+  def size(opts \\ []) do
+    server = Keyword.get(opts, :server, __MODULE__)
+    GenServer.call(server, :size)
   end
 
   ## GenServer callbacks
