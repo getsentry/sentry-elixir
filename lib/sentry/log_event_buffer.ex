@@ -204,7 +204,7 @@ defmodule Sentry.LogEventBuffer do
   end
 
   defp do_send_events(events) do
-    case Sentry.Client.send_log_events(events) do
+    case Sentry.Client.send_log_batch(events) do
       {:ok, envelope_id} ->
         log_debug(
           "[LogEventBuffer] Successfully sent #{length(events)} log events (envelope_id: #{envelope_id})"

@@ -144,11 +144,11 @@ defmodule Sentry.Client do
   Returns `{:ok, envelope_id}` on success or `{:error, reason}` on failure.
   """
   @doc since: "12.0.0"
-  @spec send_log_events([LogEvent.t()]) ::
+  @spec send_log_batch([LogEvent.t()]) ::
           {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
-  def send_log_events([]), do: {:ok, ""}
+  def send_log_batch([]), do: {:ok, ""}
 
-  def send_log_events(log_events) when is_list(log_events) do
+  def send_log_batch(log_events) when is_list(log_events) do
     case Sentry.Test.maybe_collect_logs(log_events) do
       :collected ->
         {:ok, ""}
