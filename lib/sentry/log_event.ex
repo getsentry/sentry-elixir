@@ -91,7 +91,11 @@ defmodule Sentry.LogEvent do
       iex> Sentry.LogEvent.from_logger_event(log_event, %{}, %{name: "Jane"})
       %Sentry.LogEvent{body: "Hello Jane", template: "Hello %{name}", parameters: ["Jane"], ...}
   """
-  @spec from_logger_event(:logger.log_event(), map(), [String.t()] | %{optional(String.t()) => String.t()} | nil) :: t()
+  @spec from_logger_event(
+          :logger.log_event(),
+          map(),
+          [String.t()] | %{optional(String.t()) => String.t()} | nil
+        ) :: t()
   def from_logger_event(log_event, attrs \\ %{}, parameters \\ nil)
 
   def from_logger_event(%{level: log_level, msg: msg} = log_event, attrs, parameters) do

@@ -167,7 +167,11 @@ defmodule Sentry.LogsHandlerTest do
       assert_buffer_size(buffer, initial_size + 2)
     end
 
-    test "includes metadata as attributes", %{handler_name: handler_name, bypass: bypass, buffer: buffer} do
+    test "includes metadata as attributes", %{
+      handler_name: handler_name,
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -210,7 +214,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "includes all metadata when configured with :all", %{handler_name: handler_name, buffer: buffer} do
+    test "includes all metadata when configured with :all", %{
+      handler_name: handler_name,
+      buffer: buffer
+    } do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       updated_config = %{config.config | metadata: :all}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
@@ -235,7 +242,10 @@ defmodule Sentry.LogsHandlerTest do
       assert LogEventBuffer.size(server: buffer) == initial_size
     end
 
-    test "generates trace_id when no trace context is available", %{bypass: bypass, buffer: buffer} do
+    test "generates trace_id when no trace context is available", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -268,7 +278,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "captures message template with %s parameters via Logger metadata", %{bypass: bypass, buffer: buffer} do
+    test "captures message template with %s parameters via Logger metadata", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -321,7 +334,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "captures message template with %{key} named parameters", %{bypass: bypass, buffer: buffer} do
+    test "captures message template with %{key} named parameters", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -374,7 +390,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "does not include template attributes for plain string messages", %{bypass: bypass, buffer: buffer} do
+    test "does not include template attributes for plain string messages", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -418,7 +437,10 @@ defmodule Sentry.LogsHandlerTest do
       :ok
     end
 
-    test "automatically includes trace context from OpenTelemetry spans", %{bypass: bypass, buffer: buffer} do
+    test "automatically includes trace context from OpenTelemetry spans", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -472,7 +494,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "includes trace context from nested OpenTelemetry spans", %{bypass: bypass, buffer: buffer} do
+    test "includes trace context from nested OpenTelemetry spans", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -531,7 +556,10 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "works out-of-the-box when both handlers are configured", %{bypass: bypass, buffer: buffer} do
+    test "works out-of-the-box when both handlers are configured", %{
+      bypass: bypass,
+      buffer: buffer
+    } do
       test_pid = self()
 
       Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
