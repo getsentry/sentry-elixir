@@ -3,7 +3,7 @@ defmodule Sentry.LogEvent do
   Represents a log event that can be sent to Sentry.
 
   Log events follow the Sentry Logs Protocol as defined in:
-  https://develop.sentry.dev/sdk/telemetry/logs/
+  <https://develop.sentry.dev/sdk/telemetry/logs/>
 
   This module is used internally by `Sentry.LogsHandler` to create structured
   log events from Erlang `:logger` events.
