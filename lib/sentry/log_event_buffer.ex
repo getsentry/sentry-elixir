@@ -132,6 +132,7 @@ defmodule Sentry.LogEventBuffer do
         # Flush immediately if we've reached max_events
         send_events(events)
         cancel_timer(state.timer_ref)
+        flush_stale_timeout_message()
         {:noreply, %{state | events: [], count: 0, timer_ref: schedule_flush()}}
       else
         {:noreply, %{state | events: events, count: new_count}}
@@ -188,7 +189,9 @@ defmodule Sentry.LogEventBuffer do
   # This can happen if the timer fires while we're in the middle of a flush.
   defp flush_stale_timeout_message do
     receive do
-      :flush_timeout -> :ok
+      :flush_timeout ->
+        log_debug("Flushed stale timeout message")
+        :ok
     after
       0 -> :ok
     end
