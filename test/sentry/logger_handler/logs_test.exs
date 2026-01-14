@@ -1,4 +1,4 @@
-defmodule Sentry.LogsHandlerTest do
+defmodule Sentry.LoggerHandler.LogsTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
@@ -36,8 +36,8 @@ defmodule Sentry.LogsHandlerTest do
   describe "adding handler" do
     test "accepts configuration", %{handler_name: handler_name} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      assert is_struct(config.config, Sentry.LogsHandler)
-      assert config.config.level == :info
+      assert is_struct(config.config, Sentry.LoggerHandler)
+      assert config.config.logs_level == :info
     end
   end
 
@@ -78,7 +78,7 @@ defmodule Sentry.LogsHandlerTest do
 
     test "filters logs below configured level", %{handler_name: handler_name, buffer: buffer} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | level: :warning}
+      updated_config = %{config.config | logs_level: :warning}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       initial_size = LogEventBuffer.size(server: buffer)
@@ -124,7 +124,7 @@ defmodule Sentry.LogsHandlerTest do
       end)
 
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | level: :info}
+      updated_config = %{config.config | logs_level: :info}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       initial_size = LogEventBuffer.size(server: buffer)
@@ -142,7 +142,7 @@ defmodule Sentry.LogsHandlerTest do
 
     test "filters excluded domains", %{handler_name: handler_name, buffer: buffer} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | excluded_domains: [:cowboy]}
+      updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       initial_size = LogEventBuffer.size(server: buffer)
@@ -156,7 +156,7 @@ defmodule Sentry.LogsHandlerTest do
 
     test "includes logs from non-excluded domains", %{handler_name: handler_name, buffer: buffer} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | excluded_domains: [:cowboy]}
+      updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       initial_size = LogEventBuffer.size(server: buffer)
@@ -199,7 +199,7 @@ defmodule Sentry.LogsHandlerTest do
       end)
 
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | metadata: [:request_id, :user_id]}
+      updated_config = %{config.config | logs_metadata: [:request_id, :user_id]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       LogEventBuffer.flush(server: buffer)
@@ -219,7 +219,7 @@ defmodule Sentry.LogsHandlerTest do
       buffer: buffer
     } do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | metadata: :all}
+      updated_config = %{config.config | logs_metadata: :all}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
       LogEventBuffer.flush(server: buffer)
@@ -230,16 +230,42 @@ defmodule Sentry.LogsHandlerTest do
       assert_buffer_size(buffer, 1)
     end
 
-    test "does not send logs when enable_logs is false", %{buffer: buffer} do
+    test "does not send logs when enable_logs is false at handler setup time" do
+      # Create a separate buffer for this test - isolated from the setup's handler
+      isolated_buffer = :"isolated_buffer_#{System.unique_integer([:positive])}"
+      start_supervised!({LogEventBuffer, name: isolated_buffer}, id: isolated_buffer)
+
+      handler_name = :"sentry_logs_handler_disabled_#{System.unique_integer([:positive])}"
+
+      # Set enable_logs to false BEFORE adding a new handler
       put_test_config(enable_logs: false)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      handler_config = %{
+        config: %{
+          logs_level: :info,
+          logs_excluded_domains: [],
+          logs_metadata: [],
+          logs_buffer: isolated_buffer
+        }
+      }
+
+      # Add handler with enable_logs: false - LogsBackend should NOT be included
+      assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
+
+      on_exit(fn ->
+        _ = :logger.remove_handler(handler_name)
+      end)
+
+      initial_size = LogEventBuffer.size(server: isolated_buffer)
+      assert initial_size == 0
 
       Logger.info("Test message")
 
-      wait_for_buffer_stable(buffer, initial_size)
+      # Give some time for the log to be processed
+      Process.sleep(100)
 
-      assert LogEventBuffer.size(server: buffer) == initial_size
+      # The isolated buffer should still be empty because LogsBackend was not enabled
+      assert LogEventBuffer.size(server: isolated_buffer) == 0
     end
 
     test "generates trace_id when no trace context is available", %{
@@ -556,7 +582,7 @@ defmodule Sentry.LogsHandlerTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "works out-of-the-box when both handlers are configured", %{
+    test "works out-of-the-box when handler is configured", %{
       bypass: bypass,
       buffer: buffer
     } do
@@ -610,10 +636,15 @@ defmodule Sentry.LogsHandlerTest do
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 
     handler_config = %{
-      config: %{level: :info, excluded_domains: [], metadata: [], buffer: buffer}
+      config: %{
+        logs_level: :info,
+        logs_excluded_domains: [],
+        logs_metadata: [],
+        logs_buffer: buffer
+      }
     }
 
-    assert :ok = :logger.add_handler(handler_name, Sentry.LogsHandler, handler_config)
+    assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
 
     on_exit(fn ->
       _ = :logger.remove_handler(handler_name)

@@ -9,17 +9,16 @@ defmodule PhoenixApp.Application do
   def start(_type, _args) do
     :ok = Application.ensure_started(:inets)
 
-    # Add the regular Sentry.LoggerHandler for crash reports
+    # Add the Sentry.LoggerHandler for crash reports and structured logging
+    # When enable_logs: true is set in config, logs are also sent to Sentry's Logs Protocol
     :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
-      config: %{metadata: [:file, :line]}
-    })
-
-    # Add the new Sentry.LogsHandler for structured logging
-    :logger.add_handler(:sentry_logs_handler, Sentry.LogsHandler, %{
       config: %{
-        level: :info,
-        excluded_domains: [:cowboy, :ranch],
-        metadata: [:request_id, :user_id]
+        # Error capture options
+        metadata: [:file, :line],
+        # Logs protocol options (requires enable_logs: true in sentry config)
+        logs_level: :info,
+        logs_excluded_domains: [:cowboy, :ranch],
+        logs_metadata: [:request_id, :user_id]
       }
     })
 

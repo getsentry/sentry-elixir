@@ -103,6 +103,42 @@ defmodule Sentry.LoggerHandler do
       `:discard_threshold` and `:sync_threshold` cannot be used together. If you set this option,
       set `:sync_threshold` to `nil`.
       """
+    ],
+    logs_level: [
+      type:
+        {:in,
+         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
+      default: nil,
+      type_doc: "`t:Logger.level/0` or `nil`",
+      doc: """
+      (*since v12.0.0*) When set along with `enable_logs: true` in your Sentry config, logs at or above
+      this level will be sent to Sentry's Logs Protocol as structured log events. If `nil` (the default),
+      logs sending is disabled. This is independent from `:level`, which controls error reporting.
+      """
+    ],
+    logs_excluded_domains: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:atom/0`",
+      doc: """
+      (*since v12.0.0*) Domains to exclude from logs sending (in addition to `:sentry` which is always excluded).
+      This is independent from `:excluded_domains`, which controls error reporting.
+      """
+    ],
+    logs_metadata: [
+      type: {:or, [{:list, :atom}, {:in, [:all]}]},
+      default: [],
+      type_doc: "list of `t:atom/0`, or `:all`",
+      doc: """
+      (*since v12.0.0*) Logger metadata keys to include as attributes in log events sent to Sentry's Logs Protocol.
+      If set to `:all`, all metadata will be included. This is independent from `:metadata`.
+      """
+    ],
+    logs_buffer: [
+      type: {:or, [:atom, :pid, {:tuple, [:atom, :atom]}]},
+      default: Sentry.LogEventBuffer,
+      type_doc: "`t:GenServer.server/0`",
+      doc: false
     ]
   ]
 
@@ -235,9 +271,8 @@ defmodule Sentry.LoggerHandler do
 
   @moduledoc since: "9.0.0"
 
-  alias Sentry.LoggerUtils
-  alias Sentry.LoggerHandler.RateLimiter
-  alias Sentry.Transport.SenderPool
+  alias Sentry.Config
+  alias Sentry.LoggerHandler.{ErrorBackend, LogsBackend, RateLimiter}
 
   # The config for this logger handler.
   defstruct [
@@ -248,7 +283,12 @@ defmodule Sentry.LoggerHandler do
     :capture_log_messages,
     :rate_limiting,
     :sync_threshold,
-    :discard_threshold
+    :discard_threshold,
+    :logs_level,
+    :logs_excluded_domains,
+    :logs_metadata,
+    :logs_buffer,
+    backends: []
   ]
 
   ## Logger handler callbacks
@@ -260,7 +300,12 @@ defmodule Sentry.LoggerHandler do
     # The :config key may not be here.
     sentry_config = Map.get(config, :config, %{})
 
-    config = Map.put(config, :config, cast_config(%__MODULE__{}, sentry_config))
+    handler_config = cast_config(%__MODULE__{}, sentry_config)
+
+    backends = [ErrorBackend] ++ if Config.enable_logs?(), do: [LogsBackend], else: []
+    handler_config = %{handler_config | backends: backends}
+
+    config = Map.put(config, :config, handler_config)
 
     if rate_limiting_config = config.config.rate_limiting do
       _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
@@ -277,7 +322,7 @@ defmodule Sentry.LoggerHandler do
   def changing_config(:update, old_config, new_config) do
     new_sentry_config =
       if is_struct(new_config.config, __MODULE__) do
-        Map.from_struct(new_config.config)
+        new_config.config |> Map.from_struct() |> Map.delete(:backends)
       else
         new_config.config
       end
@@ -322,117 +367,13 @@ defmodule Sentry.LoggerHandler do
   # Callback for :logger handlers
   @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
-  def log(%{level: log_level, meta: log_meta} = log_event, %{
-        config: %__MODULE__{} = config,
-        id: handler_id
-      }) do
-    cond do
-      Logger.compare_levels(log_level, config.level) == :lt ->
-        :ok
+  def log(log_event, %{config: %__MODULE__{backends: backends} = config, id: handler_id}) do
+    # Dispatch to all configured backends
+    Enum.each(backends, fn backend ->
+      backend.handle_event(log_event, config, handler_id)
+    end)
 
-      LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.excluded_domains) ->
-        :ok
-
-      config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
-        :ok
-
-      # Discard event.
-      config.discard_threshold &&
-          SenderPool.get_queued_events_counter() >= config.discard_threshold ->
-        :ok
-
-      true ->
-        # Logger handlers run in the process that logs, so we already read all the
-        # necessary Sentry context from the process dictionary (when creating the event).
-        # If we take meta[:sentry] here, we would duplicate all the stuff. This
-        # behavior is different than the one in Sentry.LoggerBackend because the Logger
-        # backend runs in its own process.
-        sentry_opts =
-          LoggerUtils.build_sentry_options(
-            log_level,
-            log_meta[:sentry],
-            log_meta,
-            config.metadata,
-            config.tags_from_metadata
-          )
-
-        log_unfiltered(log_event, sentry_opts, config)
-    end
-  end
-
-  # Elixir 1.19 puts string translation inside the report instead of replacing
-  # it completely. We switch it back for compatibility with existing code.
-  defp log_unfiltered(
-         %{msg: {:report, %{elixir_translation: unicode_chardata}}} = log_event,
-         sentry_opts,
-         %__MODULE__{} = config
-       ) do
-    log_unfiltered(%{log_event | msg: {:string, unicode_chardata}}, sentry_opts, config)
-  end
-
-  # A string was logged. We check for the :crash_reason metadata and try to build a sensible
-  # report from there, otherwise we use the logged string directly.
-  defp log_unfiltered(
-         %{msg: {:string, unicode_chardata}} = log_event,
-         sentry_opts,
-         %__MODULE__{} = config
-       ) do
-    log_from_crash_reason(log_event.meta[:crash_reason], unicode_chardata, sentry_opts, config)
-  end
-
-  # "report" here is of type logger:report/0, which is a struct, map or keyword list.
-  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config)
-       when is_struct(report) do
-    capture(:message, inspect(report), sentry_opts, config)
-  end
-
-  defp log_unfiltered(%{msg: {:report, report}}, sentry_opts, %__MODULE__{} = config) do
-    case Map.new(report) do
-      %{reason: {exception, stacktrace}}
-      when is_exception(exception) and is_list(stacktrace) ->
-        sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-        capture(:exception, exception, sentry_opts, config)
-
-      %{reason: {reason, stacktrace}} when is_list(stacktrace) ->
-        sentry_opts = Keyword.put(sentry_opts, :stacktrace, stacktrace)
-        capture(:message, "** (stop) " <> Exception.format_exit(reason), sentry_opts, config)
-
-      %{reason: reason} ->
-        sentry_opts =
-          Keyword.update!(sentry_opts, :extra, &Map.put(&1, :crash_reason, inspect(reason)))
-
-        capture(:message, "** (stop) #{Exception.format_exit(reason)}", sentry_opts, config)
-
-      # Special-case Ranch messages because their formatting is their formatting.
-      %{format: ~c"Ranch listener ~p" ++ _, args: args} ->
-        capture_from_ranch_error(args, sentry_opts, config)
-
-      # Handles errors which may occur on < 1.15 when there are crashes during
-      # initialization of some processes.
-      %{label: {_lib, _reason}, report: report} when is_list(report) ->
-        error = Enum.find(report, fn {name, _value} -> name == :error_info end)
-        {_, exception, stacktrace} = error
-
-        sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-
-        capture(:exception, exception, sentry_opts, config)
-
-      _ ->
-        if config.capture_log_messages do
-          capture(:message, inspect(report), sentry_opts, config)
-        else
-          :ok
-        end
-    end
-  end
-
-  defp log_unfiltered(
-         %{msg: {format, format_args}} = log_event,
-         sentry_opts,
-         %__MODULE__{} = config
-       ) do
-    string_message = format |> :io_lib.format(format_args) |> IO.chardata_to_string()
-    log_from_crash_reason(log_event.meta[:crash_reason], string_message, sentry_opts, config)
+    :ok
   end
 
   ## Helpers
@@ -450,249 +391,6 @@ defmodule Sentry.LoggerHandler do
             ":sync_threshold and :discard_threshold cannot be used together, one of them must be nil"
     else
       config
-    end
-  end
-
-  defp log_from_crash_reason(
-         {exception, stacktrace},
-         _chardata_message,
-         sentry_opts,
-         %__MODULE__{} = config
-       )
-       when is_exception(exception) and is_list(stacktrace) do
-    sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-    capture(:exception, exception, sentry_opts, config)
-  end
-
-  defp log_from_crash_reason(
-         {reason, stacktrace},
-         chardata_message,
-         sentry_opts,
-         %__MODULE__{} = config
-       )
-       when is_list(stacktrace) do
-    sentry_opts =
-      sentry_opts
-      |> Keyword.put(:stacktrace, stacktrace)
-      |> add_extra_to_sentry_opts(%{crash_reason: inspect(reason)})
-      |> add_extra_to_sentry_opts(extra_info_from_message(chardata_message))
-
-    case reason do
-      {type, {GenServer, :call, [_pid, call, _timeout]}} = reason
-      when type in [:noproc, :timeout] ->
-        sentry_opts =
-          Keyword.put_new(sentry_opts, :fingerprint, [
-            Atom.to_string(type),
-            "genserver_call",
-            inspect(call)
-          ])
-
-        capture(:message, Exception.format_exit(reason), sentry_opts, config)
-
-      _other ->
-        try_to_parse_message_or_just_report_it(chardata_message, sentry_opts, config)
-    end
-  end
-
-  defp log_from_crash_reason(
-         _other_reason,
-         chardata_message,
-         sentry_opts,
-         %__MODULE__{
-           capture_log_messages: true
-         } = config
-       ) do
-    string_message = :unicode.characters_to_binary(chardata_message)
-    capture(:message, string_message, sentry_opts, config)
-  end
-
-  defp log_from_crash_reason(_other_reason, _string_message, _sentry_opts, _config) do
-    :ok
-  end
-
-  defp extra_info_from_message([
-         [
-           "GenServer ",
-           _pid,
-           " terminating",
-           _reason,
-           "\nLast message",
-           _from,
-           ": ",
-           last_message
-         ],
-         "\nState: ",
-         state | _rest
-       ]) do
-    %{genserver_state: state, last_message: last_message}
-  end
-
-  # Sometimes there's an extra sneaky [] in there.
-  defp extra_info_from_message([
-         [
-           "GenServer ",
-           _pid,
-           " terminating",
-           _reason,
-           [],
-           "\nLast message",
-           _from,
-           ": ",
-           last_message
-         ],
-         "\nState: ",
-         state | _rest
-       ]) do
-    %{genserver_state: state, last_message: last_message}
-  end
-
-  defp extra_info_from_message(_message) do
-    %{}
-  end
-
-  # We do this because messages from Erlang's gen_* behaviours are often full of interesting
-  # and useful data. For example, GenServer messages contain the PID, the reason, the last
-  # message, and a treasure trove of stuff. If we cannot parse the message, such is life
-  # and we just report it as is.
-
-  defp try_to_parse_message_or_just_report_it(
-         [
-           [
-             "GenServer ",
-             inspected_pid,
-             " terminating",
-             chardata_reason,
-             _whatever_this_is = [],
-             "\nLast message",
-             [" (from ", inspected_sender_pid, ")"],
-             ": ",
-             inspected_last_message
-           ],
-           "\nState: ",
-           inspected_state | _
-         ],
-         sentry_opts,
-         config
-       ) do
-    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
-
-    sentry_opts =
-      sentry_opts
-      |> Keyword.put(:interpolation_parameters, [inspected_pid])
-      |> add_extra_to_sentry_opts(%{
-        pid_which_sent_last_message: inspected_sender_pid,
-        last_message: inspected_last_message,
-        genserver_state: inspected_state
-      })
-
-    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
-  end
-
-  defp try_to_parse_message_or_just_report_it(
-         [
-           [
-             "GenServer ",
-             inspected_pid,
-             " terminating",
-             chardata_reason,
-             "\nLast message",
-             [" (from ", inspected_sender_pid, ")"],
-             ": ",
-             inspected_last_message
-           ],
-           "\nState: ",
-           inspected_state | _
-         ],
-         sentry_opts,
-         config
-       ) do
-    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
-
-    sentry_opts =
-      sentry_opts
-      |> Keyword.put(:interpolation_parameters, [inspected_pid])
-      |> add_extra_to_sentry_opts(%{
-        pid_which_sent_last_message: inspected_sender_pid,
-        last_message: inspected_last_message,
-        genserver_state: inspected_state
-      })
-
-    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
-  end
-
-  defp try_to_parse_message_or_just_report_it(
-         [
-           [
-             "GenServer ",
-             inspected_pid,
-             " terminating",
-             chardata_reason,
-             "\nLast message: ",
-             inspected_last_message
-           ],
-           "\nState: ",
-           inspected_state | _
-         ],
-         sentry_opts,
-         config
-       ) do
-    string_reason = chardata_reason |> :unicode.characters_to_binary() |> String.trim()
-
-    sentry_opts =
-      sentry_opts
-      |> Keyword.put(:interpolation_parameters, [inspected_pid])
-      |> add_extra_to_sentry_opts(%{
-        last_message: inspected_last_message,
-        genserver_state: inspected_state
-      })
-
-    capture(:message, "GenServer %s terminating: #{string_reason}", sentry_opts, config)
-  end
-
-  defp try_to_parse_message_or_just_report_it(chardata_message, sentry_opts, config) do
-    string_message = :unicode.characters_to_binary(chardata_message)
-    capture(:message, string_message, sentry_opts, config)
-  end
-
-  # This is only causing issues on OTP 25 apparently.
-  # TODO: remove special-cased Ranch handling when we depend on OTP 26+.
-  defp capture_from_ranch_error(
-         _args = [
-           _listener,
-           _connection_process,
-           _stream,
-           _request_process,
-           _reason = {{exception, stacktrace}, _}
-         ],
-         sentry_opts,
-         %__MODULE__{} = config
-       )
-       when is_exception(exception) do
-    sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-    capture(:exception, exception, sentry_opts, config)
-  end
-
-  defp capture_from_ranch_error(args, sentry_opts, %__MODULE__{} = config) do
-    capture(:message, "Ranch listener error: #{inspect(args)}", sentry_opts, config)
-  end
-
-  defp add_extra_to_sentry_opts(sentry_opts, new_extra) do
-    Keyword.update(sentry_opts, :extra, %{}, &Map.merge(new_extra, &1))
-  end
-
-  for function <- [:exception, :message] do
-    sentry_fun = :"capture_#{function}"
-
-    defp capture(unquote(function), exception_or_message, sentry_opts, %__MODULE__{} = config) do
-      sentry_opts =
-        if config.sync_threshold &&
-             SenderPool.get_queued_events_counter() >= config.sync_threshold do
-          Keyword.put(sentry_opts, :result, :sync)
-        else
-          sentry_opts
-        end
-
-      Sentry.unquote(sentry_fun)(exception_or_message, sentry_opts)
     end
   end
 end
