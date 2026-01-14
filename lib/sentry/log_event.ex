@@ -22,11 +22,8 @@ defmodule Sentry.LogEvent do
           body: String.t(),
           timestamp: float(),
           trace_id: String.t() | nil,
-          parent_span_id: String.t() | nil,
+          span_id: String.t() | nil,
           attributes: map(),
-          environment: String.t() | nil,
-          release: String.t() | nil,
-          server_name: String.t() | nil,
           template: String.t() | nil,
           parameters: list() | nil
         }
@@ -37,10 +34,7 @@ defmodule Sentry.LogEvent do
     :body,
     :timestamp,
     :trace_id,
-    :parent_span_id,
-    :environment,
-    :release,
-    :server_name,
+    :span_id,
     :template,
     :parameters,
     attributes: %{}
@@ -107,7 +101,7 @@ defmodule Sentry.LogEvent do
     {body, template, processed_params} = extract_message_with_template(msg, parameters)
 
     # Extract trace context if available, generate trace_id if not present
-    {trace_id, parent_span_id} = extract_trace_context(log_event)
+    {trace_id, span_id} = extract_trace_context(log_event)
     trace_id = trace_id || Sentry.UUID.uuid4_hex()
 
     %__MODULE__{
@@ -115,10 +109,7 @@ defmodule Sentry.LogEvent do
       body: body,
       timestamp: timestamp,
       trace_id: trace_id,
-      parent_span_id: parent_span_id,
-      environment: Config.environment_name(),
-      release: Config.release(),
-      server_name: Config.server_name(),
+      span_id: span_id,
       template: template,
       parameters: processed_params,
       attributes: attrs
@@ -128,8 +119,9 @@ defmodule Sentry.LogEvent do
   @doc """
   Converts a log event to a map suitable for JSON encoding.
 
-  Other fields like environment, release, server_name, parent_span_id go into attributes
-  with "sentry." prefix.
+  The output matches the Sentry log schema with top-level fields: timestamp, level, body,
+  trace_id, span_id, and attributes. Environment, release, and server_name are added
+  to attributes with "sentry." prefix.
   """
   @spec to_map(t()) :: %{optional(atom()) => term()}
   def to_map(%__MODULE__{} = log_event) do
@@ -138,6 +130,7 @@ defmodule Sentry.LogEvent do
       level: to_string(log_event.level),
       body: log_event.body,
       trace_id: log_event.trace_id,
+      span_id: log_event.span_id,
       attributes: build_attributes(log_event)
     }
   end
@@ -287,10 +280,9 @@ defmodule Sentry.LogEvent do
     formatted_attrs
     |> put_sentry_attr("sentry.sdk.name", "sentry.elixir")
     |> put_sentry_attr("sentry.sdk.version", @sdk_version)
-    |> put_sentry_attr_if("sentry.environment", log_event.environment)
-    |> put_sentry_attr_if("sentry.release", log_event.release)
-    |> put_sentry_attr_if("sentry.address", log_event.server_name)
-    |> put_sentry_attr_if("sentry.trace.parent_span_id", log_event.parent_span_id)
+    |> put_sentry_attr_if("sentry.environment", Config.environment_name())
+    |> put_sentry_attr_if("sentry.release", Config.release())
+    |> put_sentry_attr_if("sentry.address", Config.server_name())
     |> put_message_template_attrs(log_event.template, log_event.parameters)
   end
 

@@ -487,13 +487,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
             assert String.length(log_event["trace_id"]) == 32
             assert String.match?(log_event["trace_id"], ~r/^[0-9a-f]{32}$/)
 
-            assert %{
-                     "sentry.trace.parent_span_id" => %{
-                       "type" => "string",
-                       "value" => span_id
-                     }
-                   } = log_event["attributes"]
-
+            span_id = log_event["span_id"]
             assert is_binary(span_id)
             assert String.length(span_id) == 16
             assert String.match?(span_id, ~r/^[0-9a-f]{16}$/)
@@ -544,11 +538,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
             assert parent_log["trace_id"] == child_log["trace_id"]
 
-            parent_span_id =
-              get_in(parent_log, ["attributes", "sentry.trace.parent_span_id", "value"])
-
-            child_span_id =
-              get_in(child_log, ["attributes", "sentry.trace.parent_span_id", "value"])
+            parent_span_id = parent_log["span_id"]
+            child_span_id = child_log["span_id"]
 
             assert is_binary(parent_span_id)
             assert is_binary(child_span_id)
@@ -602,12 +593,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
             assert is_binary(log_event["trace_id"])
             assert String.length(log_event["trace_id"]) == 32
 
-            assert %{
-                     "sentry.trace.parent_span_id" => %{
-                       "type" => "string",
-                       "value" => _span_id
-                     }
-                   } = log_event["attributes"]
+            assert is_binary(log_event["span_id"])
 
             send(test_pid, :envelope_sent)
 

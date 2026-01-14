@@ -162,12 +162,18 @@ defmodule Sentry.LogEventTest do
         level: :info,
         body: "User jane_doe logged in",
         timestamp: 1_000_000.5,
+        trace_id: "abc123",
+        span_id: "span456",
         template: "User ~s logged in",
         parameters: ["jane_doe"],
         attributes: %{}
       }
 
       result = LogEvent.to_map(log_event)
+
+      # span_id should be a top-level field, not in attributes
+      assert result.span_id == "span456"
+      assert result.trace_id == "abc123"
 
       assert result.attributes["sentry.message.template"] == %{
                value: "User ~s logged in",

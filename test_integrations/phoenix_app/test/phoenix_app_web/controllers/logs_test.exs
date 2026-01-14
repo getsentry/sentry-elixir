@@ -36,7 +36,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
         assert String.length(log.trace_id) == 32
       end
 
-      traced_logs = Enum.filter(app_logs, &(&1.parent_span_id != nil))
+      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
       assert length(traced_logs) >= 2
 
       log_bodies = Enum.map(app_logs, & &1.body)
@@ -53,7 +53,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
 
       assert length(app_logs) >= 2
 
-      traced_logs = Enum.filter(app_logs, &(&1.parent_span_id != nil))
+      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
       trace_ids = traced_logs |> Enum.map(& &1.trace_id) |> Enum.uniq()
       assert length(trace_ids) == 1
     end
@@ -77,11 +77,11 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
       logs = Sentry.Test.pop_sentry_logs()
       app_logs = filter_app_logs(logs)
 
-      traced_logs = Enum.filter(app_logs, &(&1.parent_span_id != nil))
+      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
 
-      parent_span_ids = traced_logs |> Enum.map(& &1.parent_span_id) |> Enum.uniq()
+      span_ids = traced_logs |> Enum.map(& &1.span_id) |> Enum.uniq()
 
-      assert length(parent_span_ids) >= 2
+      assert length(span_ids) >= 2
     end
 
     test "separate requests have different trace_ids", %{conn: conn} do
@@ -100,19 +100,6 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
       trace_id_2 = hd(app_logs2).trace_id
 
       assert trace_id_1 != trace_id_2
-    end
-
-    test "logs include environment from Sentry config", %{conn: conn} do
-      get(conn, ~p"/logs")
-
-      logs = Sentry.Test.pop_sentry_logs()
-      app_logs = filter_app_logs(logs)
-
-      assert length(app_logs) >= 1
-
-      for log <- app_logs do
-        assert log.environment == "dev"
-      end
     end
   end
 
