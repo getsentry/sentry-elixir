@@ -101,7 +101,7 @@ defmodule Sentry.Mixfile do
 
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
-      {:finch, "~> 0.19.0"},
+      {:finch, "~> 0.19.0", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
