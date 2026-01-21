@@ -4,6 +4,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   require OpenTelemetry.Tracer, as: Tracer
   require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
   require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+  require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
+  require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+  require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
   import Sentry.TestHelpers
 
@@ -522,8 +525,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
-
       Tracer.with_span "POST /api/login", %{
         kind: :server,
         attributes: %{
@@ -547,8 +548,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-
       Tracer.with_span "SELECT users", %{
         kind: :client,
         attributes: %{
@@ -571,8 +570,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-
       Tracer.with_span "db.connect", %{
         kind: :client,
         attributes: %{
@@ -593,8 +590,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
       Sentry.Test.start_collecting_sentry_reports()
-
-      require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
       Tracer.with_span "MyApp.Workers.EmailWorker process", %{
         kind: :consumer,
@@ -662,8 +657,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
       Sentry.Test.start_collecting_sentry_reports()
-
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
 
       Tracer.with_span "parent_operation" do
         Tracer.with_span "db.query", %{
