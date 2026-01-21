@@ -93,6 +93,60 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     end
   end
 
+  describe "span_exists?" do
+    @tag span_storage: true
+    test "returns true for existing root span", %{table_name: table_name} do
+      root_span = %SpanRecord{
+        span_id: "root123",
+        parent_span_id: nil,
+        trace_id: "trace123",
+        name: "root_span"
+      }
+
+      SpanStorage.store_span(root_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("root123", table_name: table_name) == true
+    end
+
+    @tag span_storage: true
+    test "returns true for existing child span", %{table_name: table_name} do
+      child_span = %SpanRecord{
+        span_id: "child123",
+        parent_span_id: "parent123",
+        trace_id: "trace123",
+        name: "child_span"
+      }
+
+      SpanStorage.store_span(child_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("child123", table_name: table_name) == true
+    end
+
+    @tag span_storage: true
+    test "returns false for non-existent span", %{table_name: table_name} do
+      assert SpanStorage.span_exists?("nonexistent", table_name: table_name) == false
+    end
+
+    @tag span_storage: true
+    test "returns true for HTTP server span with remote parent (distributed tracing)", %{
+      table_name: table_name
+    } do
+      # HTTP server span with a remote parent (from distributed tracing)
+      # is stored as a child span, not a root span
+      http_server_span = %SpanRecord{
+        span_id: "http_span_123",
+        parent_span_id: "remote_parent_456",
+        trace_id: "trace123",
+        name: "GET /users"
+      }
+
+      SpanStorage.store_span(http_server_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("http_span_123", table_name: table_name) == true
+      assert SpanStorage.span_exists?("remote_parent_456", table_name: table_name) == false
+    end
+  end
+
   describe "child spans" do
     @tag span_storage: true
     test "stores and retrieves child spans", %{table_name: table_name} do

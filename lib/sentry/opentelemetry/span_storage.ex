@@ -53,6 +53,26 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
+    @doc """
+    Retrieves a span by its ID, regardless of whether it's a root or child span.
+    Returns nil if the span is not found.
+    """
+    @spec get_span(String.t(), keyword()) :: SpanRecord.t() | nil
+    def get_span(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      case :ets.lookup(table_name, {:root_span, span_id}) do
+        [{{:root_span, ^span_id}, span, _stored_at}] ->
+          span
+
+        [] ->
+          case :ets.match_object(table_name, {{:child_span, :_, span_id}, :_, :_}) do
+            [{_key, span, _stored_at} | _] -> span
+            [] -> nil
+          end
+      end
+    end
+
     @spec store_span(SpanRecord.t(), keyword()) :: true
     def store_span(span_data, opts \\ []) do
       table_name = Keyword.get(opts, :table_name, default_table_name())
@@ -133,6 +153,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       :ets.select_delete(table_name, [
         {{{:child_span, parent_span_id, :_}, :_, :_}, [], [true]}
       ])
+
+      :ok
+    end
+
+    @spec remove_child_span(String.t(), String.t(), keyword()) :: :ok
+    def remove_child_span(parent_span_id, span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+      key = {:child_span, parent_span_id, span_id}
+
+      :ets.delete(table_name, key)
 
       :ok
     end
