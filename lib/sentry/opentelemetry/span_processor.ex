@@ -37,17 +37,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp process_span(span_record) do
-      # Check if this is a root span (no parent) or a transaction root
-      #
-      # A span should be a transaction root if:
-      # 1. It has no parent (true root span)
-      # 2. OR it's a server span with only a REMOTE parent (distributed tracing)
-      #
-      # A span should NOT be a transaction root if:
-      # - It has a LOCAL parent (parent span exists in our SpanStorage)
-      #
-      # Note: LiveView spans during static render are filtered earlier by
-      # skip_static_render_liveview_span?/1, so we don't need to handle them here.
       is_transaction_root =
         cond do
           # No parent = definitely a root
