@@ -113,8 +113,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
             {:error, :invalid_span}
         end
 
-      # Clean up: remove the transaction root span and all its children
-      :ok = SpanStorage.remove_root_span(span_record.span_id)
+      :ok =
+        SpanStorage.remove_transaction_root_span(
+          span_record.span_id,
+          span_record.parent_span_id
+        )
 
       result
     end

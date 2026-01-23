@@ -57,6 +57,91 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     end
 
     @tag span_storage: true
+    test "remove_root_span does not remove spans stored with a parent", %{
+      table_name: table_name
+    } do
+      http_server_span = %SpanRecord{
+        span_id: "http_span_123",
+        parent_span_id: "remote_parent_456",
+        trace_id: "trace123",
+        name: "GET /users"
+      }
+
+      SpanStorage.store_span(http_server_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("http_span_123", table_name: table_name)
+
+      SpanStorage.remove_root_span("http_span_123", table_name: table_name)
+
+      assert SpanStorage.span_exists?("http_span_123", table_name: table_name)
+    end
+
+    @tag span_storage: true
+    test "remove_transaction_root_span removes span with remote parent and its children", %{
+      table_name: table_name
+    } do
+      http_server_span = %SpanRecord{
+        span_id: "http_span_123",
+        parent_span_id: "remote_parent_456",
+        trace_id: "trace123",
+        name: "GET /users"
+      }
+
+      db_query_span = %SpanRecord{
+        span_id: "db_span_789",
+        parent_span_id: "http_span_123",
+        trace_id: "trace123",
+        name: "SELECT * FROM users"
+      }
+
+      SpanStorage.store_span(http_server_span, table_name: table_name)
+      SpanStorage.store_span(db_query_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("http_span_123", table_name: table_name)
+      assert SpanStorage.span_exists?("db_span_789", table_name: table_name)
+
+      SpanStorage.remove_transaction_root_span(
+        "http_span_123",
+        "remote_parent_456",
+        table_name: table_name
+      )
+
+      assert :ets.tab2list(table_name) == []
+
+      refute SpanStorage.span_exists?("http_span_123", table_name: table_name)
+      refute SpanStorage.span_exists?("db_span_789", table_name: table_name)
+    end
+
+    @tag span_storage: true
+    test "remove_transaction_root_span works for true root spans (no parent)", %{
+      table_name: table_name
+    } do
+      root_span = %SpanRecord{
+        span_id: "root_span_123",
+        parent_span_id: nil,
+        trace_id: "trace123",
+        name: "GET /users"
+      }
+
+      child_span = %SpanRecord{
+        span_id: "child_span_456",
+        parent_span_id: "root_span_123",
+        trace_id: "trace123",
+        name: "SELECT * FROM users"
+      }
+
+      SpanStorage.store_span(root_span, table_name: table_name)
+      SpanStorage.store_span(child_span, table_name: table_name)
+
+      SpanStorage.remove_transaction_root_span("root_span_123", nil, table_name: table_name)
+
+      assert :ets.tab2list(table_name) == []
+
+      refute SpanStorage.span_exists?("root_span_123", table_name: table_name)
+      refute SpanStorage.span_exists?("child_span_456", table_name: table_name)
+    end
+
+    @tag span_storage: true
     test "removes root span and all its children", %{table_name: table_name} do
       root_span = %SpanRecord{
         span_id: "root123",
@@ -738,6 +823,98 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       Process.sleep(200)
 
       assert :ets.info(table_name, :size) == 0
+    end
+  end
+
+  describe "race condition: in-progress child spans" do
+    @tag span_storage: true
+    test "remove_child_spans preserves in-progress child spans", %{
+      table_name: table_name
+    } do
+      completed_child = %SpanRecord{
+        span_id: "completed_child",
+        parent_span_id: "parent123",
+        trace_id: "trace123",
+        name: "completed_child_span",
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: "2024-01-01T00:00:01.000Z"
+      }
+
+      in_progress_child = %SpanRecord{
+        span_id: "in_progress_child",
+        parent_span_id: "parent123",
+        trace_id: "trace123",
+        name: "in_progress_child_span",
+        start_time: "2024-01-01T00:00:00.500Z",
+        end_time: nil
+      }
+
+      SpanStorage.store_span(completed_child, table_name: table_name)
+      SpanStorage.store_span(in_progress_child, table_name: table_name)
+
+      assert length(SpanStorage.get_child_spans("parent123", table_name: table_name)) == 2
+
+      SpanStorage.remove_child_spans("parent123", table_name: table_name)
+
+      remaining = SpanStorage.get_child_spans("parent123", table_name: table_name)
+      assert length(remaining) == 1
+      assert hd(remaining).span_id == "in_progress_child"
+      assert hd(remaining).end_time == nil
+    end
+
+    @tag span_storage: true
+    test "remove_transaction_root_span preserves in-progress child spans", %{
+      table_name: table_name
+    } do
+      http_span = %SpanRecord{
+        span_id: "http_span",
+        parent_span_id: nil,
+        trace_id: "trace123",
+        name: "GET /dashboard",
+        kind: :server,
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: "2024-01-01T00:00:02.000Z"
+      }
+
+      liveview_mount_span = %SpanRecord{
+        span_id: "liveview_mount",
+        parent_span_id: "http_span",
+        trace_id: "trace123",
+        name: "Phoenix.LiveView.mount",
+        kind: :server,
+        origin: "opentelemetry_phoenix",
+        start_time: "2024-01-01T00:00:00.100Z",
+        end_time: nil
+      }
+
+      db_span = %SpanRecord{
+        span_id: "db_query",
+        parent_span_id: "http_span",
+        trace_id: "trace123",
+        name: "SELECT * FROM users",
+        kind: :client,
+        start_time: "2024-01-01T00:00:00.200Z",
+        end_time: "2024-01-01T00:00:00.300Z"
+      }
+
+      SpanStorage.store_span(http_span, table_name: table_name)
+      SpanStorage.store_span(liveview_mount_span, table_name: table_name)
+      SpanStorage.store_span(db_span, table_name: table_name)
+
+      assert SpanStorage.span_exists?("http_span", table_name: table_name)
+      assert SpanStorage.span_exists?("liveview_mount", table_name: table_name)
+      assert SpanStorage.span_exists?("db_query", table_name: table_name)
+
+      SpanStorage.remove_transaction_root_span("http_span", nil, table_name: table_name)
+
+      refute SpanStorage.span_exists?("http_span", table_name: table_name)
+      refute SpanStorage.span_exists?("db_query", table_name: table_name)
+
+      assert SpanStorage.span_exists?("liveview_mount", table_name: table_name)
+
+      remaining_span = SpanStorage.get_span("liveview_mount", table_name: table_name)
+      assert remaining_span.span_id == "liveview_mount"
+      assert remaining_span.end_time == nil
     end
   end
 end
