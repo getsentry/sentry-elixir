@@ -364,6 +364,28 @@ defmodule Sentry.Config do
       """,
       default: [],
       keys: integrations_schema
+    ],
+    enable_logs: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable sending log events to Sentry. When enabled, the SDK will
+      capture and send structured log events according to the
+      [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
+      Use `Sentry.LogsHandler` to capture log events from Erlang's `:logger`.
+      *Available since 12.0.0*.
+      """
+    ],
+    max_log_events: [
+      type: :non_neg_integer,
+      default: 100,
+      doc: """
+      The maximum number of log events to buffer before flushing to Sentry.
+      Log events are buffered and sent in batches to reduce network overhead.
+      When the buffer reaches this size, it will be flushed immediately.
+      Otherwise, logs are flushed every 5 seconds. Only applies when `:enable_logs`
+      is `true`. *Available since 12.0.0*.
+      """
     ]
   ]
 
@@ -779,6 +801,12 @@ defmodule Sentry.Config do
     (Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
        not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
   end
+
+  @spec enable_logs?() :: boolean()
+  def enable_logs?, do: fetch!(:enable_logs)
+
+  @spec max_log_events() :: non_neg_integer()
+  def max_log_events, do: fetch!(:max_log_events)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

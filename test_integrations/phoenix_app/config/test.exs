@@ -4,7 +4,9 @@ import Config
 config :phoenix_app, PhoenixApp.Repo,
   adapter: Ecto.Adapters.SQLite3,
   pool: Ecto.Adapters.SQL.Sandbox,
-  database: "db/test.sqlite3"
+  database: "db/test.sqlite3",
+  queue_target: 5000,
+  queue_interval: 10000
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
@@ -36,11 +38,13 @@ config :sentry,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
   send_result: :sync,
-  traces_sample_rate: 1.0
+  traces_sample_rate: 1.0,
+  enable_logs: true
 
 config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,
   engine: Oban.Engines.Lite,
-  queues: [default: 10, background: 5]
+  queues: [default: 10, background: 5],
+  testing: :manual
