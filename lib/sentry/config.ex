@@ -610,8 +610,8 @@ defmodule Sentry.Config do
       doc: """
       Allows performing operations on a log event *before* it is sent, as
       well as filtering out the log event altogether.
-      If the callback returns `nil` or `false`, the log event is not reported. If it returns an
-      updated `Sentry.LogEvent`, then the updated log event is used instead.
+      If the callback returns `nil` or `false`, the log event is not reported. If it returns a
+      (potentially-updated) `Sentry.LogEvent`, then the updated log event is used instead.
       *Available since v12.0.0*.
       """
     ]
