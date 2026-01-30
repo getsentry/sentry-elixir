@@ -1,13 +1,14 @@
 ## Unreleased
 
+#### Features
+
+- Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
+- Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
+- Support for LiveView spans captured under single trace root ([#977](https://github.com/getsentry/sentry-elixir/pull/977))
+
 ### Bug Fixes
 
 - Wrong app_name used by Igniter in prod.exs ([#1](https://github.com/PJUllrich/sentry-elixir/pull/1))
-
-#### Features
-
-- Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
-- Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
 
 #### Various improvements
 
