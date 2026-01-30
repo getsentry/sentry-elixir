@@ -37,26 +37,23 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp process_span(span_record) do
-      is_transaction_root =
+      transaction_root? =
         cond do
           # No parent = definitely a root
           span_record.parent_span_id == nil ->
             true
 
           # Has a parent - check if it's local or remote
-          true ->
-            has_local_parent = has_local_parent_span?(span_record.parent_span_id)
+          has_local_parent_span?(span_record.parent_span_id) ->
+            # Parent exists locally - this is a child span, not a transaction root
+            false
 
-            if has_local_parent do
-              # Parent exists locally - this is a child span, not a transaction root
-              false
-            else
-              # Parent is remote (distributed tracing) - treat server spans as transaction roots
-              is_server_span?(span_record)
-            end
+          true ->
+            # Parent is remote (distributed tracing) - treat server spans as transaction roots
+            server_span?(span_record)
         end
 
-      if is_transaction_root do
+      if transaction_root? do
         build_and_send_transaction(span_record)
       else
         true
@@ -68,19 +65,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     # Check if it's an HTTP server request span or a LiveView span
-    defp is_server_span?(%{kind: :server} = span_record) do
-      is_http_server_span?(span_record) or is_liveview_span?(span_record)
+    defp server_span?(%{kind: :server} = span_record) do
+      http_server_span?(span_record) or liveview_span?(span_record)
     end
 
-    defp is_server_span?(_), do: false
+    defp server_span?(_), do: false
 
-    defp is_http_server_span?(%{kind: :server, attributes: attributes}) do
+    defp http_server_span?(%{kind: :server, attributes: attributes}) do
       Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
     end
 
     # Check if span name matches LiveView lifecycle patterns
-    defp is_liveview_span?(%{origin: "opentelemetry_phoenix"}), do: true
-    defp is_liveview_span?(_), do: false
+    defp liveview_span?(%{origin: "opentelemetry_phoenix"}), do: true
+    defp liveview_span?(_), do: false
 
     defp build_and_send_transaction(span_record) do
       child_span_records = SpanStorage.get_child_spans(span_record.span_id)

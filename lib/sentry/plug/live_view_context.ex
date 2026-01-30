@@ -136,7 +136,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
           Sentry.OpenTelemetry.Propagator.extract(
             ctx,
             carrier,
-            &map_keys/1,
+            &Map.keys/1,
             &map_getter/2,
             []
           )
@@ -185,10 +185,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
       else
         %{}
       end
-    end
-
-    defp map_keys(carrier) do
-      Map.keys(carrier)
     end
 
     defp map_getter(key, carrier) do

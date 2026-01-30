@@ -114,7 +114,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
               Sentry.OpenTelemetry.Propagator.extract(
                 :otel_ctx.get_current(),
                 carrier,
-                &map_keys/1,
+                &Map.keys/1,
                 &map_getter/2,
                 []
               )
@@ -143,8 +143,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
     # Check if span context has a valid (non-zero) trace ID
     defp has_valid_span?(span_ctx(trace_id: trace_id)) when trace_id != 0, do: true
     defp has_valid_span?(_), do: false
-
-    defp map_keys(carrier), do: Map.keys(carrier)
 
     defp map_getter(key, carrier) do
       case Map.fetch(carrier, key) do
