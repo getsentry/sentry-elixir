@@ -8,6 +8,7 @@ defmodule PhoenixAppWeb.Router do
     plug :put_root_layout, html: {PhoenixAppWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug Sentry.Plug.LiveViewContext
   end
 
   pipeline :api do
@@ -32,6 +33,7 @@ defmodule PhoenixAppWeb.Router do
     get "/logs", PageController, :logs_demo
 
     live "/test-worker", TestWorkerLive
+    live "/tracing-test", TracingTestLive
 
     live "/users", UserLive.Index, :index
     live "/users/new", UserLive.Index, :new

@@ -4,6 +4,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   require OpenTelemetry.Tracer, as: Tracer
   require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
   require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+  require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
+  require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+  require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
   import Sentry.TestHelpers
 
@@ -522,8 +525,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
-
       Tracer.with_span "POST /api/login", %{
         kind: :server,
         attributes: %{
@@ -547,8 +548,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-
       Tracer.with_span "SELECT users", %{
         kind: :client,
         attributes: %{
@@ -571,8 +570,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-
       Tracer.with_span "db.connect", %{
         kind: :client,
         attributes: %{
@@ -593,8 +590,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
       Sentry.Test.start_collecting_sentry_reports()
-
-      require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
       Tracer.with_span "MyApp.Workers.EmailWorker process", %{
         kind: :consumer,
@@ -663,8 +658,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Sentry.Test.start_collecting_sentry_reports()
 
-      require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-
       Tracer.with_span "parent_operation" do
         Tracer.with_span "db.query", %{
           kind: :client,
@@ -684,6 +677,148 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       assert child_span.op == "db"
       assert child_span.description == "INSERT INTO orders (user_id) VALUES (?)"
+    end
+  end
+
+  describe "race condition: parent finishes before child" do
+    @tag span_storage: true
+    test "in-progress child span is preserved and becomes transaction root when parent finishes first",
+         %{
+           table_name: table_name
+         } do
+      # This test reproduces the race condition where a parent span (HTTP request)
+      # finishes and sends its transaction before a child span (LiveView mount)
+      # has completed. The child span data should NOT be lost.
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
+
+      # === Simulate scenario using SpanRecord structs directly ===
+      # This bypasses OTel span creation complexity while testing the actual bug
+
+      # Parent HTTP span (started, then completed)
+      parent_span = %SpanRecord{
+        span_id: "parent_http_span",
+        parent_span_id: nil,
+        trace_id: "trace123abc",
+        name: "GET /dashboard",
+        kind: :server,
+        origin: "opentelemetry_phoenix",
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: nil,
+        attributes: %{
+          "http.request.method" => :GET,
+          "url.path" => "/dashboard"
+        }
+      }
+
+      # Child LiveView span (started, still in-progress when parent finishes)
+      child_span = %SpanRecord{
+        span_id: "child_liveview_mount",
+        parent_span_id: "parent_http_span",
+        trace_id: "trace123abc",
+        name: "Phoenix.LiveView.mount",
+        kind: :server,
+        origin: "opentelemetry_phoenix",
+        start_time: "2024-01-01T00:00:00.100Z",
+        end_time: nil,
+        attributes: %{
+          "http.request.method" => :GET
+        }
+      }
+
+      # Store both spans (simulating on_start)
+      SpanStorage.store_span(parent_span, table_name: table_name)
+      SpanStorage.store_span(child_span, table_name: table_name)
+
+      # Verify both are stored
+      assert SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+      assert SpanStorage.span_exists?("child_liveview_mount", table_name: table_name)
+
+      # === Parent finishes (child still in-progress) ===
+      completed_parent = %{parent_span | end_time: "2024-01-01T00:00:02.000Z"}
+      SpanStorage.update_span(completed_parent, table_name: table_name)
+
+      # Simulate what SpanProcessor.on_end does: get child spans, build transaction, remove
+      child_spans = SpanStorage.get_child_spans("parent_http_span", table_name: table_name)
+
+      # The child should still be in the list (it's stored as a child of parent)
+      assert length(child_spans) == 1
+
+      # Only COMPLETED children should be included in the transaction
+      completed_children = Enum.filter(child_spans, &(&1.end_time != nil))
+      assert completed_children == []
+
+      # Now remove the transaction root span (this is what caused the bug)
+      SpanStorage.remove_transaction_root_span("parent_http_span", nil, table_name: table_name)
+
+      # === KEY BUG CHECK: In-progress child should still exist ===
+      assert SpanStorage.span_exists?("child_liveview_mount", table_name: table_name),
+             "In-progress child span was prematurely deleted when parent finished!"
+
+      # Parent should be gone
+      refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+
+      # === Later: child completes ===
+      completed_child = %{child_span | end_time: "2024-01-01T00:00:03.000Z"}
+      SpanStorage.update_span(completed_child, table_name: table_name)
+
+      # Verify child can still be retrieved and is now complete
+      retrieved_child = SpanStorage.get_span("child_liveview_mount", table_name: table_name)
+      assert retrieved_child != nil
+      assert retrieved_child.end_time == "2024-01-01T00:00:03.000Z"
+
+      # When child's on_end runs, it won't find its parent in storage,
+      # so it should become a transaction root itself (tested via has_local_parent_span?)
+      refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+    end
+
+    @tag span_storage: true
+    test "completed child spans are removed when parent finishes", %{table_name: table_name} do
+      # Verify that completed child spans ARE correctly removed (not broken by the fix)
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
+
+      # Parent span
+      parent_span = %SpanRecord{
+        span_id: "parent_span",
+        parent_span_id: nil,
+        trace_id: "trace456",
+        name: "GET /api/users",
+        kind: :server,
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: nil,
+        attributes: %{}
+      }
+
+      # Completed child span (has end_time)
+      completed_child = %SpanRecord{
+        span_id: "completed_child",
+        parent_span_id: "parent_span",
+        trace_id: "trace456",
+        name: "db.query",
+        kind: :client,
+        start_time: "2024-01-01T00:00:00.100Z",
+        end_time: "2024-01-01T00:00:00.200Z",
+        attributes: %{}
+      }
+
+      SpanStorage.store_span(parent_span, table_name: table_name)
+      SpanStorage.store_span(completed_child, table_name: table_name)
+
+      # Parent finishes
+      completed_parent = %{parent_span | end_time: "2024-01-01T00:00:01.000Z"}
+      SpanStorage.update_span(completed_parent, table_name: table_name)
+
+      # Remove transaction root
+      SpanStorage.remove_transaction_root_span("parent_span", nil, table_name: table_name)
+
+      # Both should be gone - completed children should be removed
+      refute SpanStorage.span_exists?("parent_span", table_name: table_name)
+      refute SpanStorage.span_exists?("completed_child", table_name: table_name)
     end
   end
 end

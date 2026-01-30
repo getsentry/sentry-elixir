@@ -23,6 +23,11 @@ defmodule PhoenixApp.Application do
     })
 
     OpentelemetryBandit.setup()
+
+    # Set up Sentry's LiveView context propagation BEFORE OpentelemetryPhoenix
+    # This enables distributed tracing context to flow from HTTP requests to LiveView WebSocket processes
+    Sentry.OpenTelemetry.LiveViewPropagator.setup()
+
     OpentelemetryPhoenix.setup(adapter: :bandit)
     OpentelemetryOban.setup()
     OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)

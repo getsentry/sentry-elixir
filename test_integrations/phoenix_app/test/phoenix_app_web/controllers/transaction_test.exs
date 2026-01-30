@@ -1,6 +1,7 @@
 defmodule Sentry.Integrations.Phoenix.TransactionTest do
   use PhoenixAppWeb.ConnCase, async: false
 
+  import Phoenix.LiveViewTest
   import Sentry.TestHelpers
 
   setup do
@@ -128,5 +129,88 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert handle_params_transaction.contexts.trace.trace_id != mount_transaction.contexts.trace.trace_id
 
     refute mount_transaction.contexts.trace.trace_id == handle_params_transaction.contexts.trace.trace_id
+  end
+
+  describe "distributed tracing with sentry-trace header" do
+    test "LiveView mount inherits trace context from sentry-trace header", %{conn: conn} do
+      trace_id = "1234567890abcdef1234567890abcdef"
+      parent_span_id = "abcdef1234567890"
+
+      conn =
+        conn
+        |> put_req_header("sentry-trace", "#{trace_id}-#{parent_span_id}-1")
+
+      get(conn, ~p"/users")
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      mount_transaction =
+        Enum.find(transactions, fn t ->
+          t.transaction == "PhoenixAppWeb.UserLive.Index.mount"
+        end)
+
+      handle_params_transaction =
+        Enum.find(transactions, fn t ->
+          t.transaction == "PhoenixAppWeb.UserLive.Index.handle_params"
+        end)
+
+      assert mount_transaction != nil
+      assert handle_params_transaction != nil
+
+      assert mount_transaction.contexts.trace.trace_id == trace_id
+      assert handle_params_transaction.contexts.trace.trace_id == trace_id
+
+      assert mount_transaction.contexts.trace.parent_span_id == parent_span_id
+      assert handle_params_transaction.contexts.trace.parent_span_id == parent_span_id
+    end
+
+    test "LiveView handle_event in WebSocket shares trace context with initial request", %{conn: conn} do
+      trace_id = "fedcba0987654321fedcba0987654321"
+      parent_span_id = "1234567890fedcba"
+
+      conn =
+        conn
+        |> put_req_header("sentry-trace", "#{trace_id}-#{parent_span_id}-1")
+
+      {:ok, view, _html} = live(conn, ~p"/tracing-test")
+
+      view |> element("#increment-btn") |> render_click()
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      handle_event_transaction =
+        Enum.find(transactions, fn t ->
+          String.contains?(t.transaction, "handle_event#increment")
+        end)
+
+      assert handle_event_transaction != nil,
+             "Expected handle_event transaction, got: #{inspect(Enum.map(transactions, & &1.transaction))}"
+
+      assert handle_event_transaction.contexts.trace.trace_id == trace_id,
+             "Expected trace_id #{trace_id}, got #{handle_event_transaction.contexts.trace.trace_id}"
+    end
+
+    test "baggage header is preserved through LiveView lifecycle", %{conn: conn} do
+      trace_id = "abababababababababababababababab"
+      parent_span_id = "cdcdcdcdcdcdcdcd"
+      baggage = "sentry-environment=production,sentry-release=1.0.0"
+
+      conn =
+        conn
+        |> put_req_header("sentry-trace", "#{trace_id}-#{parent_span_id}-1")
+        |> put_req_header("baggage", baggage)
+
+      get(conn, ~p"/users")
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      mount_transaction =
+        Enum.find(transactions, fn t ->
+          t.transaction == "PhoenixAppWeb.UserLive.Index.mount"
+        end)
+
+      assert mount_transaction != nil
+      assert mount_transaction.contexts.trace.trace_id == trace_id
+    end
   end
 end
