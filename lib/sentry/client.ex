@@ -168,13 +168,10 @@ defmodule Sentry.Client do
     callback = Config.before_send_log()
 
     if callback do
-      Enum.reduce(log_events, [], fn log_event, acc ->
-        case call_before_send_log(log_event, callback) do
-          %LogEvent{} = result -> [result | acc]
-          _ -> acc
-        end
-      end)
-      |> Enum.reverse()
+      for log_event <- log_events,
+          %LogEvent{} = modified_event <- [call_before_send_log(log_event, callback)] do
+        modified_event
+      end
     else
       log_events
     end
