@@ -160,7 +160,7 @@ defmodule Sentry.Client do
       :not_collecting ->
         log_events
         |> run_before_send_log_callbacks()
-        |> do_send_log_events()
+        |> send_log_events()
     end
   end
 
@@ -185,9 +185,9 @@ defmodule Sentry.Client do
     apply(mod, fun, [log_event])
   end
 
-  defp do_send_log_events([]), do: {:ok, ""}
+  defp send_log_events([]), do: {:ok, ""}
 
-  defp do_send_log_events(log_events) do
+  defp send_log_events(log_events) do
     client = Config.client()
 
     request_retries =
