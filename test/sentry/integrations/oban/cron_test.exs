@@ -48,6 +48,19 @@ defmodule Sentry.Integrations.Oban.CronTest do
       })
     end
 
+    test "ignores #{event_type} events with a cron expr of @reboot even with timezone", %{
+      bypass: bypass
+    } do
+      Bypass.down(bypass)
+
+      :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
+        job: %Oban.Job{
+          worker: "Sentry.MyWorker",
+          meta: %{"cron" => true, "cron_expr" => "@reboot", "cron_tz" => "Etc/UTC"}
+        }
+      })
+    end
+
     test "ignores #{event_type} events with a cron expr that is not a string", %{bypass: bypass} do
       Bypass.down(bypass)
 

@@ -88,23 +88,26 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
-    monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
-    monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
-
-    monitor_slug =
-      case config[:monitor_slug_generator] do
-        nil ->
-          slugify(job.worker)
-
-        {mod, fun} when is_atom(mod) and is_atom(fun) ->
-          mod |> apply(fun, [job]) |> slugify()
-      end
-
-    case Keyword.merge(monitor_config_opts, schedule_opts(job)) do
+    # Check schedule first - if empty (e.g., @reboot), skip check-in entirely
+    # since @reboot can't be expressed as a cron/interval schedule
+    case schedule_opts(job) do
       [] ->
         nil
 
-      monitor_config_opts ->
+      schedule_opts ->
+        monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
+        monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
+        monitor_config_opts = Keyword.merge(monitor_config_opts, schedule_opts)
+
+        monitor_slug =
+          case config[:monitor_slug_generator] do
+            nil ->
+              slugify(job.worker)
+
+            {mod, fun} when is_atom(mod) and is_atom(fun) ->
+              mod |> apply(fun, [job]) |> slugify()
+          end
+
         id = CheckInIDMappings.lookup_or_insert_new(job.id)
 
         opts = [
