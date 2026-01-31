@@ -618,6 +618,159 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
   end
 
+  describe "before_send_log callback" do
+    test "allows modifying log events before sending", %{bypass: bypass, buffer: buffer} do
+      test_pid = self()
+
+      put_test_config(
+        before_send_log: fn log_event ->
+          %{log_event | attributes: Map.put(log_event.attributes, "custom_attr", "injected")}
+        end
+      )
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        [_header, _item_header, item_body, _] = String.split(body, "\n")
+
+        item_body_map = decode!(item_body)
+        assert %{"items" => [log_event]} = item_body_map
+
+        assert log_event["attributes"]["custom_attr"] == %{
+                 "type" => "string",
+                 "value" => "injected"
+               }
+
+        send(test_pid, :envelope_sent)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
+      end)
+
+      Logger.info("Test message")
+
+      assert_buffer_size(buffer, 1)
+
+      LogEventBuffer.flush(server: buffer)
+
+      assert_receive :envelope_sent, 1000
+    end
+
+    test "filters out log events when callback returns nil", %{bypass: bypass, buffer: buffer} do
+      put_test_config(
+        before_send_log: fn log_event ->
+          if String.contains?(log_event.body, "should_be_filtered") do
+            nil
+          else
+            log_event
+          end
+        end
+      )
+
+      test_pid = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        [_header, _item_header, item_body, _] = String.split(body, "\n")
+
+        item_body_map = decode!(item_body)
+        assert %{"items" => [log_event]} = item_body_map
+        assert log_event["body"] == "This message should pass"
+
+        send(test_pid, :envelope_sent)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
+      end)
+
+      Logger.info("This message should_be_filtered")
+      Logger.info("This message should pass")
+
+      assert_buffer_size(buffer, 2)
+
+      LogEventBuffer.flush(server: buffer)
+
+      assert_receive :envelope_sent, 1000
+    end
+
+    test "filters out log events when callback returns false", %{bypass: bypass, buffer: buffer} do
+      put_test_config(
+        before_send_log: fn log_event ->
+          if String.contains?(log_event.body, "drop_me") do
+            false
+          else
+            log_event
+          end
+        end
+      )
+
+      test_pid = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        [_header, _item_header, item_body, _] = String.split(body, "\n")
+
+        item_body_map = decode!(item_body)
+        assert %{"items" => [log_event]} = item_body_map
+        assert log_event["body"] == "Keep this message"
+
+        send(test_pid, :envelope_sent)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
+      end)
+
+      Logger.info("drop_me please")
+      Logger.info("Keep this message")
+
+      assert_buffer_size(buffer, 2)
+
+      LogEventBuffer.flush(server: buffer)
+
+      assert_receive :envelope_sent, 1000
+    end
+
+    test "supports MFA tuple callback format", %{bypass: bypass, buffer: buffer} do
+      test_pid = self()
+
+      put_test_config(before_send_log: {__MODULE__, :before_send_log_callback})
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        [_header, _item_header, item_body, _] = String.split(body, "\n")
+
+        item_body_map = decode!(item_body)
+        assert %{"items" => [log_event]} = item_body_map
+
+        assert log_event["attributes"]["mfa_added"] == %{
+                 "type" => "string",
+                 "value" => "true"
+               }
+
+        send(test_pid, :envelope_sent)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
+      end)
+
+      Logger.info("Test MFA callback")
+
+      assert_buffer_size(buffer, 1)
+
+      LogEventBuffer.flush(server: buffer)
+
+      assert_receive :envelope_sent, 1000
+    end
+
+    test "does not send any logs when all are filtered", %{buffer: buffer} do
+      put_test_config(before_send_log: fn _log_event -> nil end)
+
+      Logger.info("All messages filtered 1")
+      Logger.info("All messages filtered 2")
+
+      assert_buffer_size(buffer, 2)
+
+      LogEventBuffer.flush(server: buffer)
+
+      refute_receive _, 100
+    end
+  end
+
+  def before_send_log_callback(log_event) do
+    %{log_event | attributes: Map.put(log_event.attributes, "mfa_added", "true")}
+  end
+
   defp add_logs_handler(%{buffer: buffer}) do
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 

@@ -603,6 +603,17 @@ defmodule Sentry.Config do
       be passed as arguments. The return value of the callback is not returned. See the
       [*Event Callbacks* section](#module-event-callbacks) below for more information.
       """
+    ],
+    before_send_log: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_log_callback/0`",
+      doc: """
+      Allows performing operations on a log event *before* it is sent, as
+      well as filtering out the log event altogether.
+      If the callback returns `nil` or `false`, the log event is not reported. If it returns a
+      (potentially-updated) `Sentry.LogEvent`, then the updated log event is used instead.
+      *Available since v12.0.0*.
+      """
     ]
   ]
 
@@ -807,6 +818,10 @@ defmodule Sentry.Config do
 
   @spec max_log_events() :: non_neg_integer()
   def max_log_events, do: fetch!(:max_log_events)
+
+  @spec before_send_log() ::
+          (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil
+  def before_send_log, do: get(:before_send_log)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do
