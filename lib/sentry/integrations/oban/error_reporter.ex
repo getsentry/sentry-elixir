@@ -51,8 +51,15 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   defp call_skip_error_report_callback(callback, job) do
     worker =
       case apply(Oban.Worker, :from_string, [job.worker]) do
-        {:ok, mod} -> mod
-        :error -> nil
+        {:ok, mod} ->
+          mod
+
+        {:error, _} ->
+          Logger.warning(
+            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
+          )
+
+          nil
       end
 
     try do
