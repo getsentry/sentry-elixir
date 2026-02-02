@@ -5,6 +5,7 @@
 - Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
 - Support for LiveView spans captured under single trace root ([#977](https://github.com/getsentry/sentry-elixir/pull/977))
+- Handle HTTP 413 responses for oversized envelopes ([#982](https://github.com/getsentry/sentry-elixir/pull/982))
 
 ### Bug Fixes
 
