@@ -2,6 +2,7 @@
 
 #### Features
 
+- Add `should_report_error_callback` option to Oban.ErrorReporter for flexible error reporting logic ([#832](https://github.com/getsentry/sentry-elixir/pull/832))
 - Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
 - Support for LiveView spans captured under single trace root ([#977](https://github.com/getsentry/sentry-elixir/pull/977))
