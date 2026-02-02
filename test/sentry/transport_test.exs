@@ -269,6 +269,41 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
 
+    test "fails immediately when Sentry replies with 413 (envelope too large)", %{bypass: bypass} do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, {:request, ref})
+
+        conn
+        |> Plug.Conn.put_resp_header("x-sentry-error", "Payload Too Large")
+        |> Plug.Conn.resp(413, ~s<Payload Too Large>)
+      end)
+
+      {:error, %ClientError{} = error} =
+        Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [100, 200])
+
+      assert error.reason == :envelope_too_large
+      assert {413, headers, "Payload Too Large"} = error.http_response
+      assert :proplists.get_value("x-sentry-error", headers, nil) == "Payload Too Large"
+
+      assert Exception.message(error) =~
+               "the envelope was rejected due to exceeding size limits"
+
+      assert_received {:request, ^ref}
+      refute_received {:request, ^ref}
+
+      log =
+        capture_log(fn ->
+          Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ "exceeding size limits"
+    end
+
     test "updates rate limits from X-Sentry-Rate-Limits header in 200 OK response", %{
       bypass: bypass
     } do

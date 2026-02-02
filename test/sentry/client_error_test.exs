@@ -48,6 +48,22 @@ defmodule Sentry.ClientErrorTest do
              Response Body: "{}"
              """
     end
+
+    test "with :envelope_too_large and HTTP response as the reason" do
+      exception =
+        ClientError.envelope_too_large(
+          413,
+          [{"X-Sentry-Error", "envelope too large"}],
+          "Payload Too Large"
+        )
+
+      assert Exception.message(exception) == """
+             Sentry failed to report event: the envelope was rejected due to exceeding size limits.
+             HTTP Status: 413
+             Response Headers: [{"X-Sentry-Error", "envelope too large"}]
+             Response Body: "Payload Too Large"
+             """
+    end
   end
 
   defp message_for_reason(reason) do

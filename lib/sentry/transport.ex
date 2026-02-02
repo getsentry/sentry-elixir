@@ -56,6 +56,10 @@ defmodule Sentry.Transport do
         ClientReport.Sender.record_discarded_events(:ratelimit_backoff, envelope_items)
         {:error, ClientError.new(:rate_limited)}
 
+      {:error, {:envelope_too_large, {status, headers, body}}} ->
+        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
+        {:error, ClientError.envelope_too_large(status, headers, body)}
+
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
@@ -98,6 +102,9 @@ defmodule Sentry.Transport do
     else
       {:ok, 429, _headers, _body} ->
         {:error, :rate_limited}
+
+      {:ok, 413, headers, body} ->
+        {:error, {:envelope_too_large, {413, headers, body}}}
 
       {:ok, status, headers, body} ->
         {:error, {:http, {status, headers, body}}}

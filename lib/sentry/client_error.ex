@@ -35,6 +35,7 @@ defmodule Sentry.ClientError do
           :too_many_retries
           | :rate_limited
           | :server_error
+          | :envelope_too_large
           | {:invalid_json, Exception.t()}
           | {:request_failure, reason :: :inet.posix() | term()}
           | {Exception.kind(), reason :: term(), Exception.stacktrace()}
@@ -52,6 +53,16 @@ defmodule Sentry.ClientError do
     %__MODULE__{reason: :server_error, http_response: {status, headers, body}}
   end
 
+  @doc false
+  @spec envelope_too_large(
+          status :: 100..599,
+          headers :: [{String.t(), String.t()}],
+          body :: binary()
+        ) :: t
+  def envelope_too_large(status, headers, body) do
+    %__MODULE__{reason: :envelope_too_large, http_response: {status, headers, body}}
+  end
+
   @impl true
   def message(%__MODULE__{reason: reason, http_response: http_response}) do
     "Sentry failed to report event: #{format(reason, http_response)}"
@@ -60,6 +71,15 @@ defmodule Sentry.ClientError do
   defp format(:server_error, {status, headers, body}) do
     """
     the Sentry server responded with an error, the details are below.
+    HTTP Status: #{status}
+    Response Headers: #{inspect(headers)}
+    Response Body: #{inspect(body)}
+    """
+  end
+
+  defp format(:envelope_too_large, {status, headers, body}) do
+    """
+    the envelope was rejected due to exceeding size limits.
     HTTP Status: #{status}
     Response Headers: #{inspect(headers)}
     Response Body: #{inspect(body)}
