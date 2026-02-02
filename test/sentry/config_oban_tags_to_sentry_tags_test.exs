@@ -59,4 +59,39 @@ defmodule Sentry.ConfigObanTagsToSentryTagsTest do
       end
     end
   end
+
+  describe "skip_error_report_callback configuration validation" do
+    test "accepts nil" do
+      assert :ok = put_test_config(integrations: [oban: [skip_error_report_callback: nil]])
+      assert Sentry.Config.integrations()[:oban][:skip_error_report_callback] == nil
+    end
+
+    test "accepts function with arity 2" do
+      fun = fn _worker, _job -> true end
+      assert :ok = put_test_config(integrations: [oban: [skip_error_report_callback: fun]])
+      assert Sentry.Config.integrations()[:oban][:skip_error_report_callback] == fun
+    end
+
+    test "rejects function with wrong arity" do
+      fun = fn _job -> true end
+
+      assert_raise ArgumentError, ~r/expected :skip_error_report_callback to be/, fn ->
+        put_test_config(integrations: [oban: [skip_error_report_callback: fun]])
+      end
+    end
+
+    test "rejects invalid types" do
+      assert_raise ArgumentError, ~r/expected :skip_error_report_callback to be/, fn ->
+        put_test_config(integrations: [oban: [skip_error_report_callback: "invalid"]])
+      end
+
+      assert_raise ArgumentError, ~r/expected :skip_error_report_callback to be/, fn ->
+        put_test_config(integrations: [oban: [skip_error_report_callback: 123]])
+      end
+
+      assert_raise ArgumentError, ~r/expected :skip_error_report_callback to be/, fn ->
+        put_test_config(integrations: [oban: [skip_error_report_callback: []]])
+      end
+    end
+  end
 end

@@ -78,6 +78,25 @@ defmodule Sentry.Config do
           with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
           """
         ],
+        skip_error_report_callback: [
+          type: {:custom, __MODULE__, :__validate_skip_error_report_callback__, []},
+          default: nil,
+          type_doc: "`(module(), Oban.Job.t() -> boolean())` or `nil`",
+          doc: """
+          A function that determines whether to skip reporting errors for Oban job retries.
+          The function receives the worker module and the `Oban.Job` struct and should return
+          `true` to skip reporting or `false` to report the error.
+
+          ```elixir
+          skip_error_report_callback: fn _worker, job ->
+            job.attempt < job.max_attempts
+          end
+          ```
+
+          This example skips reporting errors for all non-final retry attempts.
+          *Available since 12.0.0*.
+          """
+        ],
         cron: [
           doc: """
           Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
@@ -1076,5 +1095,16 @@ defmodule Sentry.Config do
   def __validate_oban_tags_to_sentry_tags__(other) do
     {:error,
      "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_skip_error_report_callback__(nil), do: {:ok, nil}
+
+  def __validate_skip_error_report_callback__(fun) when is_function(fun, 2) do
+    {:ok, fun}
+  end
+
+  def __validate_skip_error_report_callback__(other) do
+    {:error,
+     "expected :skip_error_report_callback to be nil or a function with arity 2, got: #{inspect(other)}"}
   end
 end
