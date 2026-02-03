@@ -78,22 +78,22 @@ defmodule Sentry.Config do
           with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
           """
         ],
-        skip_error_report_callback: [
+        should_report_error_callback: [
           type: {:or, [nil, {:fun, 2}]},
           default: nil,
           type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
           doc: """
-          A function that determines whether to skip reporting errors for Oban job retries.
+          A function that determines whether to report errors for Oban jobs.
           The function receives the worker module and the `Oban.Job` struct and should return
-          `true` to skip reporting or `false` to report the error.
+          `true` to report the error or `false` to skip reporting.
 
           ```elixir
-          skip_error_report_callback: fn _worker, job ->
-            job.attempt < job.max_attempts
+          should_report_error_callback: fn _worker, job ->
+            job.attempt >= job.max_attempts
           end
           ```
 
-          This example skips reporting errors for all non-final retry attempts.
+          This example only reports errors on final retry attempts.
           *Available since 12.0.0*.
           """
         ],
@@ -1097,14 +1097,14 @@ defmodule Sentry.Config do
      "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
   end
 
-  def __validate_skip_error_report_callback__(nil), do: {:ok, nil}
+  def __validate_should_report_error_callback__(nil), do: {:ok, nil}
 
-  def __validate_skip_error_report_callback__(fun) when is_function(fun, 2) do
+  def __validate_should_report_error_callback__(fun) when is_function(fun, 2) do
     {:ok, fun}
   end
 
-  def __validate_skip_error_report_callback__(other) do
+  def __validate_should_report_error_callback__(other) do
     {:error,
-     "expected :skip_error_report_callback to be nil or a function with arity 2, got: #{inspect(other)}"}
+     "expected :should_report_error_callback to be nil or a function with arity 2, got: #{inspect(other)}"}
   end
 end

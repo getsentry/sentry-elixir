@@ -39,16 +39,16 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   end
 
   defp should_report?(job, config) do
-    case Keyword.get(config, :skip_error_report_callback) do
+    case Keyword.get(config, :should_report_error_callback) do
       callback when is_function(callback, 2) ->
-        not call_skip_error_report_callback(callback, job)
+        call_should_report_error_callback(callback, job)
 
       _ ->
         true
     end
   end
 
-  defp call_skip_error_report_callback(callback, job) do
+  defp call_should_report_error_callback(callback, job) do
     worker =
       case apply(Oban.Worker, :from_string, [job.worker]) do
         {:ok, mod} ->
@@ -68,14 +68,14 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       error ->
         Logger.warning(
           """
-          :skip_error_report_callback failed for worker #{inspect(worker)} \
+          :should_report_error_callback failed for worker #{inspect(worker)} \
           (job ID #{job.id}):
-          
+
           #{Exception.format(:error, error, __STACKTRACE__)}\
           """
         )
 
-        false
+        true
     end
   end
 

@@ -57,7 +57,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     assert [] = transaction.spans
   end
 
-  describe "skip_error_report_callback config" do
+  describe "should_report_error_callback config" do
     setup do
       :telemetry.detach(ErrorReporter)
 
@@ -69,13 +69,13 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       :ok
     end
 
-    test "skips error reporting when callback returns true" do
+    test "skips error reporting when callback returns false" do
       test_pid = self()
 
       ErrorReporter.attach(
-        skip_error_report_callback: fn worker, job ->
+        should_report_error_callback: fn worker, job ->
           send(test_pid, {:callback_invoked, worker, job})
-          true
+          false
         end
       )
 
@@ -94,13 +94,13 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert [] = Sentry.Test.pop_sentry_reports()
     end
 
-    test "reports error when callback returns false" do
+    test "reports error when callback returns true" do
       test_pid = self()
 
       ErrorReporter.attach(
-        skip_error_report_callback: fn worker, job ->
+        should_report_error_callback: fn worker, job ->
           send(test_pid, {:callback_invoked, worker, job})
-          false
+          true
         end
       )
 
@@ -124,9 +124,9 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       test_pid = self()
 
       ErrorReporter.attach(
-        skip_error_report_callback: fn worker, job ->
+        should_report_error_callback: fn worker, job ->
           send(test_pid, {:callback_args, worker, job})
-          false
+          true
         end
       )
 
@@ -155,10 +155,10 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       test_pid = self()
 
       ErrorReporter.attach(
-        skip_error_report_callback: fn _worker, job ->
-          should_skip = job.attempt < job.max_attempts
-          send(test_pid, {:skip_decision, job.attempt, job.max_attempts, should_skip})
-          should_skip
+        should_report_error_callback: fn _worker, job ->
+          should_report = job.attempt >= job.max_attempts
+          send(test_pid, {:report_decision, job.attempt, job.max_attempts, should_report})
+          should_report
         end
       )
 
@@ -169,10 +169,10 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
       Oban.drain_queue(queue: :default)
 
-      assert_receive {:skip_decision, attempt, max_attempts, should_skip}
+      assert_receive {:report_decision, attempt, max_attempts, should_report}
       assert attempt == 1
       assert max_attempts == 3
-      assert should_skip == true
+      assert should_report == false
 
       assert [] = Sentry.Test.pop_sentry_reports()
     end
@@ -181,7 +181,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       log =
         capture_log(fn ->
           ErrorReporter.attach(
-            skip_error_report_callback: fn _worker, _job ->
+            should_report_error_callback: fn _worker, _job ->
               raise "callback crashed!"
             end
           )
@@ -194,7 +194,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
           Oban.drain_queue(queue: :default)
         end)
 
-      assert log =~ "skip_error_report_callback failed"
+      assert log =~ "should_report_error_callback failed"
       assert log =~ "FailingWorker"
       assert log =~ "callback crashed!"
 
@@ -220,10 +220,10 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       test_pid = self()
 
       ErrorReporter.attach(
-        skip_error_report_callback: fn worker, _job ->
-          should_skip = worker == FailingWorker
-          send(test_pid, {:worker_check, worker, should_skip})
-          should_skip
+        should_report_error_callback: fn worker, _job ->
+          should_report = worker != FailingWorker
+          send(test_pid, {:worker_check, worker, should_report})
+          should_report
         end
       )
 
@@ -234,7 +234,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
       Oban.drain_queue(queue: :default)
 
-      assert_receive {:worker_check, FailingWorker, true}
+      assert_receive {:worker_check, FailingWorker, false}
 
       assert [] = Sentry.Test.pop_sentry_reports()
     end
@@ -245,9 +245,9 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       log =
         capture_log(fn ->
           ErrorReporter.attach(
-            skip_error_report_callback: fn worker, job ->
+            should_report_error_callback: fn worker, job ->
               send(test_pid, {:callback_with_unknown_worker, worker, job})
-              false
+              true
             end
           )
 

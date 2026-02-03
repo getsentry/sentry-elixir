@@ -213,7 +213,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.custom_tag == "custom_value"
     end
 
-    test "skip_error_report_callback skips when callback returns true" do
+    test "should_report_error_callback skips when callback returns false" do
       job =
         %{"id" => "123", "entity" => "user", "type" => "delete"}
         |> MyWorker.new()
@@ -225,18 +225,18 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
       job_attempt_1 = Map.merge(job, %{attempt: 1, max_attempts: 3})
 
-      # Callback returns true -> skip reporting
+      # Callback returns false -> skip reporting
       assert :ok =
                ErrorReporter.handle_event(
                  [:oban, :job, :exception],
                  %{},
                  %{job: job_attempt_1, kind: :error, reason: reason, stacktrace: []},
-                 skip_error_report_callback: fn _worker, job -> job.attempt < job.max_attempts end
+                 should_report_error_callback: fn _worker, job -> job.attempt >= job.max_attempts end
                )
 
       assert [] = Sentry.Test.pop_sentry_reports()
 
-      # Final attempt: callback returns false -> report
+      # Final attempt: callback returns true -> report
       job_attempt_3 = Map.merge(job, %{attempt: 3, max_attempts: 3})
 
       assert :ok =
@@ -244,7 +244,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job_attempt_3, kind: :error, reason: reason, stacktrace: []},
-                 skip_error_report_callback: fn _worker, job -> job.attempt < job.max_attempts end
+                 should_report_error_callback: fn _worker, job -> job.attempt >= job.max_attempts end
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
@@ -252,7 +252,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert event.tags.oban_worker == "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
     end
 
-    test "skip_error_report_callback receives worker module and job" do
+    test "should_report_error_callback receives worker module and job" do
       job =
         %{"id" => "123", "entity" => "user", "type" => "delete"}
         |> MyWorker.new()
@@ -268,9 +268,9 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job, kind: :error, reason: reason, stacktrace: []},
-                 skip_error_report_callback: fn worker, received_job ->
+                 should_report_error_callback: fn worker, received_job ->
                    send(test_pid, {:callback_args, worker, received_job})
-                   false
+                   true
                  end
                )
 
@@ -279,28 +279,28 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert received_job == job
     end
 
-    test "skip_error_report_callback reports when callback returns false" do
+    test "should_report_error_callback reports when callback returns true" do
       Sentry.Test.start_collecting()
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-        skip_error_report_callback: fn _worker, _job -> false end
+        should_report_error_callback: fn _worker, _job -> true end
       )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
       assert event.original_exception == %RuntimeError{message: "oops"}
     end
 
-    test "skip_error_report_callback handles errors gracefully and defaults to reporting" do
+    test "should_report_error_callback handles errors gracefully and defaults to reporting" do
       Sentry.Test.start_collecting()
 
       log =
         capture_log(fn ->
           emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-            skip_error_report_callback: fn _worker, _job -> raise "callback error" end
+            should_report_error_callback: fn _worker, _job -> raise "callback error" end
           )
         end)
 
-      assert log =~ "skip_error_report_callback failed"
+      assert log =~ "should_report_error_callback failed"
       assert log =~ "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
       assert log =~ "callback error"
 
