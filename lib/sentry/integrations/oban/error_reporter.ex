@@ -66,14 +66,12 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       callback.(worker, job) == true
     rescue
       error ->
-        Logger.warning(
-          """
-          :should_report_error_callback failed for worker #{inspect(worker)} \
-          (job ID #{job.id}):
+        Logger.warning("""
+        :should_report_error_callback failed for worker #{inspect(worker)} \
+        (job ID #{job.id}):
 
-          #{Exception.format(:error, error, __STACKTRACE__)}\
-          """
-        )
+        #{Exception.format(:error, error, __STACKTRACE__)}\
+        """)
 
         true
     end

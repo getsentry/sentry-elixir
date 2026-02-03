@@ -231,7 +231,9 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job_attempt_1, kind: :error, reason: reason, stacktrace: []},
-                 should_report_error_callback: fn _worker, job -> job.attempt >= job.max_attempts end
+                 should_report_error_callback: fn _worker, job ->
+                   job.attempt >= job.max_attempts
+                 end
                )
 
       assert [] = Sentry.Test.pop_sentry_reports()
@@ -244,7 +246,9 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
                  [:oban, :job, :exception],
                  %{},
                  %{job: job_attempt_3, kind: :error, reason: reason, stacktrace: []},
-                 should_report_error_callback: fn _worker, job -> job.attempt >= job.max_attempts end
+                 should_report_error_callback: fn _worker, job ->
+                   job.attempt >= job.max_attempts
+                 end
                )
 
       assert [event] = Sentry.Test.pop_sentry_reports()
