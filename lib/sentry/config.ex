@@ -81,7 +81,7 @@ defmodule Sentry.Config do
         skip_error_report_callback: [
           type: {:custom, __MODULE__, :__validate_skip_error_report_callback__, []},
           default: nil,
-          type_doc: "`(module(), Oban.Job.t() -> boolean())` or `nil`",
+          type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
           doc: """
           A function that determines whether to skip reporting errors for Oban job retries.
           The function receives the worker module and the `Oban.Job` struct and should return
