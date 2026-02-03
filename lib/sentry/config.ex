@@ -1096,15 +1096,4 @@ defmodule Sentry.Config do
     {:error,
      "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
   end
-
-  def __validate_should_report_error_callback__(nil), do: {:ok, nil}
-
-  def __validate_should_report_error_callback__(fun) when is_function(fun, 2) do
-    {:ok, fun}
-  end
-
-  def __validate_should_report_error_callback__(other) do
-    {:error,
-     "expected :should_report_error_callback to be nil or a function with arity 2, got: #{inspect(other)}"}
-  end
 end
