@@ -79,7 +79,7 @@ defmodule Sentry.Config do
           """
         ],
         skip_error_report_callback: [
-          type: {:custom, __MODULE__, :__validate_skip_error_report_callback__, []},
+          type: {:or, [nil, {:fun, 2}]},
           default: nil,
           type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
           doc: """

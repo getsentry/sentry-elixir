@@ -67,8 +67,12 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
     rescue
       error ->
         Logger.warning(
-          "skip_error_report_callback failed for worker #{inspect(worker)} " <>
-            "(job ID #{job.id}): #{inspect(error)}"
+          """
+          :skip_error_report_callback failed for worker #{inspect(worker)} \
+          (job ID #{job.id}):
+          
+          #{Exception.format(:error, error, __STACKTRACE__)}\
+          """
         )
 
         false
