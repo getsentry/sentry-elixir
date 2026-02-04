@@ -24,8 +24,10 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     test "GET /logs captures logs with trace context", %{conn: conn} do
       conn = get(conn, ~p"/logs")
 
-      assert json_response(conn, 200)["message"] == "Logs demo completed - check your Sentry logs!"
+      assert json_response(conn, 200)["message"] ==
+               "Logs demo completed - check your Sentry logs!"
 
+      Sentry.flush()
       logs = Sentry.Test.pop_sentry_logs()
 
       app_logs = filter_app_logs(logs)
@@ -48,6 +50,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     test "GET /logs app logs share trace_id within same request", %{conn: conn} do
       get(conn, ~p"/logs")
 
+      Sentry.flush()
       logs = Sentry.Test.pop_sentry_logs()
       app_logs = filter_app_logs(logs)
 
@@ -61,6 +64,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     test "GET /logs captures logs at different levels", %{conn: conn} do
       get(conn, ~p"/logs")
 
+      Sentry.flush()
       logs = Sentry.Test.pop_sentry_logs()
       app_logs = filter_app_logs(logs)
 
@@ -74,6 +78,7 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     test "GET /logs logs have proper span hierarchy", %{conn: conn} do
       get(conn, ~p"/logs")
 
+      Sentry.flush()
       logs = Sentry.Test.pop_sentry_logs()
       app_logs = filter_app_logs(logs)
 
@@ -86,10 +91,12 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
 
     test "separate requests have different trace_ids", %{conn: conn} do
       get(conn, ~p"/logs")
+      Sentry.flush()
       logs1 = Sentry.Test.pop_sentry_logs()
       app_logs1 = filter_app_logs(logs1)
 
       get(conn, ~p"/logs")
+      Sentry.flush()
       logs2 = Sentry.Test.pop_sentry_logs()
       app_logs2 = filter_app_logs(logs2)
 

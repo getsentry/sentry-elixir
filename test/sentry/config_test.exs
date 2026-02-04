@@ -289,6 +289,49 @@ defmodule Sentry.ConfigTest do
 
       assert output =~ ":hackney_pool_max_connections option is deprecated"
     end
+
+    test ":telemetry_buffer_capacities" do
+      # Default value is empty map
+      assert Config.validate!([])[:telemetry_buffer_capacities] == %{}
+
+      # Custom value with valid categories
+      capacities = %{error: 200, log: 2000}
+
+      assert Config.validate!(telemetry_buffer_capacities: capacities)[
+               :telemetry_buffer_capacities
+             ] == capacities
+
+      # Invalid: wrong category key
+      assert_raise ArgumentError, ~r/telemetry_buffer_capacities/, fn ->
+        Config.validate!(telemetry_buffer_capacities: %{invalid: 100})
+      end
+
+      # Invalid: not a positive integer value
+      assert_raise ArgumentError, ~r/telemetry_buffer_capacities/, fn ->
+        Config.validate!(telemetry_buffer_capacities: %{error: 0})
+      end
+    end
+
+    test ":telemetry_scheduler_weights" do
+      # Default value is empty map
+      assert Config.validate!([])[:telemetry_scheduler_weights] == %{}
+
+      # Custom value with valid priorities
+      weights = %{critical: 10, high: 5}
+
+      assert Config.validate!(telemetry_scheduler_weights: weights)[:telemetry_scheduler_weights] ==
+               weights
+
+      # Invalid: wrong priority key
+      assert_raise ArgumentError, ~r/telemetry_scheduler_weights/, fn ->
+        Config.validate!(telemetry_scheduler_weights: %{invalid: 5})
+      end
+
+      # Invalid: not a positive integer value
+      assert_raise ArgumentError, ~r/telemetry_scheduler_weights/, fn ->
+        Config.validate!(telemetry_scheduler_weights: %{critical: 0})
+      end
+    end
   end
 
   describe "put_config/2" do

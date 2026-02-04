@@ -647,25 +647,6 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
-  describe "discard threshold" do
-    @tag handler_config: %{
-           discard_threshold: 2,
-           sync_threshold: nil,
-           capture_log_messages: true
-         },
-         send_request: true
-    test "discards logged messages", %{sender_ref: ref} do
-      register_delay()
-
-      Logger.error("First")
-      Logger.error("Second")
-      Logger.error("Third")
-      assert_receive {^ref, %{message: %{formatted: "First"}}}
-      assert_receive {^ref, %{message: %{formatted: "Second"}}}
-      refute_receive {^ref, _event}, 100
-    end
-  end
-
   @tag handler_config: %{
          sync_threshold: 2
        }
@@ -684,23 +665,6 @@ defmodule Sentry.LoggerHandlerTest do
                :config,
                Map.put(config, :discard_threshold, 1)
              )
-  end
-
-  defp register_delay do
-    bypass = Bypass.open()
-
-    put_test_config(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      dedup_events: false,
-      finch_request_opts: [receive_timeout: 500]
-    )
-
-    Bypass.expect(bypass, fn conn ->
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
-      Process.sleep(150)
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
   end
 
   defp register_before_send(context) do

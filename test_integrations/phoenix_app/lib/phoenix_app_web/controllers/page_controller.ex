@@ -92,7 +92,9 @@ defmodule PhoenixAppWeb.PageController do
   # 2. Visit: http://localhost:4000/logs
   # 3. Check Sentry logs - they should have trace_id matching the transaction traces
   def logs_demo(conn, params) do
-    request_id = get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
+    request_id =
+      get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
+
     user_id = Map.get(params, "user_id", 123)
 
     # Set logger metadata
@@ -122,6 +124,7 @@ defmodule PhoenixAppWeb.PageController do
 
       Tracer.with_span "database_query" do
         users = Repo.all(User)
+
         Logger.info("Database query completed",
           query: "SELECT * FROM users",
           result_count: length(users)
@@ -140,9 +143,6 @@ defmodule PhoenixAppWeb.PageController do
       retry_count: 0
     )
 
-    # Force flush the log buffer immediately
-    Sentry.LogEventBuffer.flush()
-
     json(conn, %{
       message: "Logs demo completed - check your Sentry logs!",
       info: %{
@@ -150,8 +150,7 @@ defmodule PhoenixAppWeb.PageController do
         user_id: user_id,
         logs_sent: "Multiple log events at info, debug, warning, and error levels",
         note: "These are structured log events, not error events",
-        check: "Look for these logs in Sentry's Logs section (not Errors)",
-        flushed: "Log buffer was flushed immediately"
+        check: "Look for these logs in Sentry's Logs section (not Errors)"
       }
     })
   end

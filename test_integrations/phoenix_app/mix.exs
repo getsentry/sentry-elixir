@@ -34,7 +34,6 @@ defmodule PhoenixApp.MixProject do
     [
       {:nimble_options, "~> 1.0"},
       {:nimble_ownership, "~> 0.3.0 or ~> 1.0"},
-
       {:postgrex, ">= 0.0.0"},
       {:ecto, "~> 3.12"},
       {:ecto_sql, "~> 3.12"},
@@ -64,9 +63,7 @@ defmodule PhoenixApp.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
       {:bypass, "~> 2.1", only: :test},
-
       {:sentry, path: "../.."},
-
       {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.4"},
       {:opentelemetry_exporter, "~> 1.8"},

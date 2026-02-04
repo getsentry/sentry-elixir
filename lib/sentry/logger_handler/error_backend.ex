@@ -11,9 +11,9 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
 
   require Logger
 
+  alias Sentry.TelemetryProcessor
   alias Sentry.LoggerHandler.RateLimiter
   alias Sentry.LoggerUtils
-  alias Sentry.Transport.SenderPool
 
   @impl true
   def handle_event(%{level: log_level, meta: log_meta} = log_event, config, handler_id) do
@@ -29,7 +29,7 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
 
       # Discard event.
       config.discard_threshold &&
-          SenderPool.get_queued_events_counter() >= config.discard_threshold ->
+          TelemetryProcessor.buffer_size(:error) >= config.discard_threshold ->
         :ok
 
       true ->
@@ -360,7 +360,7 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
 
   defp maybe_switch_to_sync(sentry_opts, config) do
     if config.sync_threshold &&
-         SenderPool.get_queued_events_counter() >= config.sync_threshold do
+         TelemetryProcessor.buffer_size(:error) >= config.sync_threshold do
       Keyword.put(sentry_opts, :result, :sync)
     else
       sentry_opts

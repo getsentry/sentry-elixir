@@ -79,6 +79,7 @@ defmodule Sentry.Test do
   @server __MODULE__.OwnershipServer
   @events_key :events
   @transactions_key :transactions
+  @check_ins_key :check_ins
   @logs_key :logs
 
   # Used internally when reporting an event, *before* reporting the actual event.
@@ -93,6 +94,13 @@ defmodule Sentry.Test do
   @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
   def maybe_collect(%Sentry.Transaction{} = transaction) do
     maybe_collect(transaction, @transactions_key)
+  end
+
+  # Used internally when reporting a check-in, *before* reporting the actual check-in.
+  @doc false
+  @spec maybe_collect(Sentry.CheckIn.t()) :: :collected | :not_collecting
+  def maybe_collect(%Sentry.CheckIn{} = check_in) do
+    maybe_collect(check_in, @check_ins_key)
   end
 
   # Used internally when reporting log events, *before* reporting the actual log events.
@@ -199,7 +207,26 @@ defmodule Sentry.Test do
   def start_collecting_sentry_reports(_context \\ %{}) do
     start_collecting(key: @events_key)
     start_collecting(key: @transactions_key)
+    start_collecting(key: @check_ins_key)
     start_collecting(key: @logs_key)
+
+    # Allow the TelemetryProcessor scheduler to collect items on behalf of this process.
+    # Items that flow through the scheduler (a separate process) need explicit
+    # permission in NimbleOwnership to store collected items for the test process.
+    try do
+      processor = Sentry.TelemetryProcessor.default_name()
+      scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor)
+
+      Enum.each([@check_ins_key, @logs_key], fn key ->
+        case NimbleOwnership.allow(@server, self(), scheduler_pid, key) do
+          :ok -> :ok
+          {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
+          {:error, _} -> :ok
+        end
+      end)
+    catch
+      :exit, _ -> :ok
+    end
   end
 
   @doc """
@@ -413,6 +440,42 @@ defmodule Sentry.Test do
   end
 
   @doc """
+  Pops all the collected check-ins from the current process.
+
+  This function returns a list of all the check-ins that have been collected from the current
+  process and all the processes that were allowed through it. If the current process
+  is not collecting check-ins, this function raises an error.
+
+  After this function returns, the current process will still be collecting check-ins, but
+  the collected check-ins will be reset to `[]`.
+  """
+  @doc since: "11.0.0"
+  @spec pop_sentry_check_ins(pid()) :: [Sentry.CheckIn.t()]
+  def pop_sentry_check_ins(owner_pid \\ self()) when is_pid(owner_pid) do
+    result =
+      try do
+        NimbleOwnership.get_and_update(@server, owner_pid, @check_ins_key, fn
+          nil -> {:not_collecting, []}
+          check_ins when is_list(check_ins) -> {check_ins, []}
+        end)
+      catch
+        :exit, {:noproc, _} ->
+          raise ArgumentError, "not collecting reported check-ins from #{inspect(owner_pid)}"
+      end
+
+    case result do
+      {:ok, :not_collecting} ->
+        raise ArgumentError, "not collecting reported check-ins from #{inspect(owner_pid)}"
+
+      {:ok, check_ins} ->
+        check_ins
+
+      {:error, error} when is_exception(error) ->
+        raise ArgumentError, "cannot pop Sentry check-ins: #{Exception.message(error)}"
+    end
+  end
+
+  @doc """
   Pops all the collected log events from the current process.
 
   This function returns a list of all the log events that have been collected from the current
@@ -431,8 +494,8 @@ defmodule Sentry.Test do
       ...>   body: "Test log message",
       ...>   timestamp: System.system_time(:microsecond) / 1_000_000
       ...> }
-      iex> Sentry.LogEventBuffer.add_event(log_event)
-      :ok
+      iex> Sentry.Test.maybe_collect_logs([log_event])
+      :collected
       iex> [%Sentry.LogEvent{} = collected] = Sentry.Test.pop_sentry_logs()
       iex> collected.body
       "Test log message"

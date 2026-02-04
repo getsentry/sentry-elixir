@@ -467,6 +467,40 @@ defmodule Sentry.Config do
       connections to keep in the pool. Only applied if `:client` is set to
       `Sentry.HackneyClient`.
       """
+    ],
+    telemetry_buffer_capacities: [
+      type: {:map, {:in, [:error, :check_in, :transaction, :log]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{category => pos_integer()}`",
+      doc: """
+      Overrides for the maximum number of items each telemetry buffer can hold.
+      When a buffer reaches capacity, oldest items are dropped to make room.
+      Categories: `:error`, `:check_in`, `:transaction`, `:log`.
+      Defaults: error=100, check_in=100, transaction=1000, log=1000.
+      *Available since v12.0.0*.
+      """
+    ],
+    telemetry_scheduler_weights: [
+      type: {:map, {:in, [:critical, :high, :medium, :low]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{priority => pos_integer()}`",
+      doc: """
+      Overrides for the weighted round-robin scheduler priority weights.
+      Higher weights mean more sending slots for that priority level.
+      Priorities: `:critical` (errors), `:high` (check-ins), `:medium` (transactions), `:low` (logs).
+      Defaults: critical=5, high=4, medium=3, low=2.
+      *Available since v12.0.0*.
+      """
+    ],
+    transport_capacity: [
+      type: :pos_integer,
+      default: 1000,
+      doc: """
+      Maximum number of envelopes the transport queue can hold. When the queue
+      is full, the scheduler stops dequeuing from buffers until space becomes
+      available. The transport queue processes one envelope at a time.
+      *Available since v11.0.0*.
+      """
     ]
   ]
 
@@ -810,6 +844,15 @@ defmodule Sentry.Config do
 
   @spec max_log_events() :: non_neg_integer()
   def max_log_events, do: fetch!(:max_log_events)
+
+  @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
+  def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
+
+  @spec telemetry_scheduler_weights() :: %{Sentry.Telemetry.Category.priority() => pos_integer()}
+  def telemetry_scheduler_weights, do: fetch!(:telemetry_scheduler_weights)
+
+  @spec transport_capacity() :: pos_integer()
+  def transport_capacity, do: fetch!(:transport_capacity)
 
   @spec before_send_log() ::
           (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil

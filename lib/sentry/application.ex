@@ -34,16 +34,6 @@ defmodule Sentry.Application do
         []
       end
 
-    maybe_log_event_buffer =
-      if Config.enable_logs?() do
-        [
-          {Task.Supervisor, name: Sentry.LogEventBuffer.TaskSupervisor},
-          Sentry.LogEventBuffer
-        ]
-      else
-        []
-      end
-
     children =
       [
         {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
@@ -54,11 +44,16 @@ defmodule Sentry.Application do
          [
            max_expected_check_in_time:
              Keyword.fetch!(integrations_config, :max_expected_check_in_time)
+         ]},
+        {Sentry.TelemetryProcessor,
+         [
+           buffer_capacities: telemetry_buffer_capacities(),
+           scheduler_weights: Config.telemetry_scheduler_weights(),
+           transport_capacity: Config.transport_capacity()
          ]}
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
-        maybe_log_event_buffer ++
         maybe_rate_limiter() ++
         [Sentry.Transport.SenderPool]
 
@@ -117,5 +112,17 @@ defmodule Sentry.Application do
     defp maybe_rate_limiter, do: []
   else
     defp maybe_rate_limiter, do: [Sentry.Transport.RateLimiter]
+  end
+
+  # Merge max_log_events config with telemetry_buffer_capacities for backward compatibility
+  defp telemetry_buffer_capacities do
+    capacities = Config.telemetry_buffer_capacities()
+    max_log_events = Config.max_log_events()
+
+    if max_log_events > 0 and not Map.has_key?(capacities, :log) do
+      Map.put(capacities, :log, max_log_events)
+    else
+      capacities
+    end
   end
 end

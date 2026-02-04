@@ -181,6 +181,7 @@ defmodule SentryTest do
 
       assert {:ok, "1923"} =
                Sentry.capture_check_in(
+                 result: :sync,
                  status: :in_progress,
                  monitor_slug: "my-slug",
                  duration: 123.2,
@@ -217,7 +218,30 @@ defmodule SentryTest do
         Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
       end)
 
-      assert {:ok, "1923"} = Sentry.capture_check_in(status: :ok, monitor_slug: "default-slug")
+      assert {:ok, "1923"} =
+               Sentry.capture_check_in(
+                 result: :sync,
+                 status: :ok,
+                 monitor_slug: "default-slug"
+               )
+    end
+
+    test "buffers check-in via TelemetryProcessor with result: :none" do
+      Sentry.Test.start_collecting_sentry_reports()
+
+      assert {:ok, check_in_id} =
+               Sentry.capture_check_in(
+                 result: :none,
+                 status: :in_progress,
+                 monitor_slug: "my-slug"
+               )
+
+      assert is_binary(check_in_id)
+
+      assert [%Sentry.CheckIn{} = check_in] = Sentry.Test.pop_sentry_check_ins()
+      assert check_in.check_in_id == check_in_id
+      assert check_in.status == :in_progress
+      assert check_in.monitor_slug == "my-slug"
     end
   end
 
@@ -344,6 +368,26 @@ defmodule SentryTest do
                )
 
       assert_receive {:after_send, "test-transaction", "340"}
+    end
+  end
+
+  describe "get_queued_events_count/0" do
+    test "returns the number of buffered events" do
+      # With TelemetryProcessor, items are processed immediately with batch_size=1.
+      # This test verifies the API returns a non-negative integer and can query the buffer.
+      initial_count = Sentry.get_queued_events_count()
+      assert initial_count >= 0
+      assert is_integer(initial_count)
+    end
+  end
+
+  describe "get_queued_transactions_count/0" do
+    test "returns the number of buffered transactions" do
+      # With TelemetryProcessor, items are processed immediately with batch_size=1.
+      # This test verifies the API returns a non-negative integer and can query the buffer.
+      count = Sentry.get_queued_transactions_count()
+      assert count >= 0
+      assert is_integer(count)
     end
   end
 end

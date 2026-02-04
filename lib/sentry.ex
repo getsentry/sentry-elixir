@@ -40,7 +40,7 @@ defmodule Sentry do
   > was the `:included_environments` option (a list of environments to report events for).
   > This was used together with the `:environment_name` option to determine whether to
   > send events. `:included_environments` is deprecated in v10.0.0 in favor of setting
-  > or not setting `:dsn`. It will be removed in v11.0.0.
+  > or not setting `:dsn`. It will be removed in v12.0.0.
 
   You can even rely on more specific logic to determine the environment name. It's
   not uncommon for most applications to have a "staging" environment. In order
@@ -183,7 +183,17 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, ClientReport, Config, Event, LoggerUtils, Options}
+  alias Sentry.{
+    CheckIn,
+    Client,
+    ClientError,
+    ClientReport,
+    Config,
+    Event,
+    LoggerUtils,
+    Options,
+    TelemetryProcessor
+  }
 
   require Logger
 
@@ -350,7 +360,7 @@ defmodule Sentry do
   """
   @spec send_event(Event.t(), keyword()) :: send_result
   def send_event(event, options \\ []) do
-    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    # TODO: remove on v12.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
     cond do
@@ -378,7 +388,7 @@ defmodule Sentry do
   end
 
   def send_transaction(transaction, options \\ []) do
-    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    # TODO: remove on v12.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
     cond do
@@ -443,11 +453,15 @@ defmodule Sentry do
   @doc since: "10.2.0"
   @spec capture_check_in(keyword()) ::
           {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
+  @send_check_in_opts [:result, :client, :request_retries]
+
   def capture_check_in(options) when is_list(options) do
     if Config.dsn() do
-      options
+      {send_opts, create_opts} = Keyword.split(options, @send_check_in_opts)
+
+      create_opts
       |> CheckIn.new()
-      |> Client.send_check_in(options)
+      |> Client.send_check_in(send_opts)
     else
       :ignored
     end
@@ -501,5 +515,70 @@ defmodule Sentry do
       %Sentry.DSN{original_dsn: original_dsn} -> original_dsn
       nil -> nil
     end
+  end
+
+  @doc """
+  Flushes all pending telemetry (events, transactions, check-ins, logs) to Sentry.
+
+  This is a blocking call that drains all buffers and waits for the scheduler
+  to process all pending items. Useful before application shutdown to ensure
+  all telemetry is sent.
+
+  ## Options
+
+    * `:timeout` - Maximum time to wait for flush to complete (default: 5000ms)
+
+  ## Examples
+
+      # Flush with default timeout
+      Sentry.flush()
+
+      # Flush with custom timeout
+      Sentry.flush(timeout: 10_000)
+
+  """
+  @doc since: "11.0.0"
+  @spec flush(keyword()) :: :ok
+  def flush(opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 5000)
+    TelemetryProcessor.flush(TelemetryProcessor.default_name(), timeout)
+  end
+
+  @doc """
+  Returns the number of events currently buffered and waiting to be sent.
+
+  This is useful for monitoring the health of the event buffer and implementing
+  custom backpressure mechanisms. The count includes only error events, not
+  transactions.
+
+  ## Examples
+
+      iex> Sentry.get_queued_events_count()
+      0
+
+  """
+  @doc since: "12.0.0"
+  @spec get_queued_events_count() :: non_neg_integer()
+  def get_queued_events_count do
+    TelemetryProcessor.buffer_size(:error)
+  end
+
+  @doc """
+  Returns the number of transactions currently buffered and waiting to be sent.
+
+  This is useful for monitoring the health of the event buffer and implementing
+  custom backpressure mechanisms. The count includes only transactions, not
+  error events.
+
+  ## Examples
+
+      iex> Sentry.get_queued_transactions_count()
+      0
+
+  """
+  @doc since: "12.0.0"
+  @spec get_queued_transactions_count() :: non_neg_integer()
+  def get_queued_transactions_count do
+    TelemetryProcessor.buffer_size(:transaction)
   end
 end

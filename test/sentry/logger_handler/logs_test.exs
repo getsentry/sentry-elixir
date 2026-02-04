@@ -3,7 +3,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.LogEventBuffer
+  alias Sentry.TelemetryProcessor
 
   require Logger
   require OpenTelemetry.Tracer, as: Tracer
@@ -19,16 +19,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       max_log_events: 100
     )
 
-    buffer = :"log_event_buffer_#{System.unique_integer([:positive])}"
-    start_supervised!({LogEventBuffer, name: buffer})
-
-    on_exit(fn ->
-      if Process.whereis(buffer) do
-        LogEventBuffer.flush(server: buffer)
-      end
-    end)
-
-    %{bypass: bypass, buffer: buffer}
+    # TelemetryProcessor is already started by Sentry.Case
+    %{bypass: bypass}
   end
 
   setup :add_logs_handler
@@ -42,7 +34,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
   end
 
   describe "logging with handler" do
-    test "creates log event and adds to buffer", %{bypass: bypass, buffer: buffer} do
+    test "creates log event and adds to buffer", %{bypass: bypass} do
       test_pid = self()
 
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -65,36 +57,35 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Test log message")
 
-      assert_buffer_size(buffer, initial_size + 1)
+      assert_buffer_size(nil, initial_size + 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters logs below configured level", %{handler_name: handler_name, buffer: buffer} do
+    test "filters logs below configured level", %{handler_name: handler_name} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       updated_config = %{config.config | logs_level: :warning}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Info message should be filtered")
       Logger.debug("Debug message should be filtered")
 
-      wait_for_buffer_stable(buffer, initial_size)
+      wait_for_buffer_stable(nil, initial_size)
 
-      assert LogEventBuffer.size(server: buffer) == initial_size
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
     test "accepts logs at or above configured level", %{
       handler_name: handler_name,
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -127,50 +118,49 @@ defmodule Sentry.LoggerHandler.LogsTest do
       updated_config = %{config.config | logs_level: :info}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Info message")
       Logger.warning("Warning message")
       Logger.error("Error message")
 
-      assert_buffer_size(buffer, initial_size + 3)
+      assert_buffer_size(nil, initial_size + 3)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters excluded domains", %{handler_name: handler_name, buffer: buffer} do
+    test "filters excluded domains", %{handler_name: handler_name} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Cowboy message", domain: [:cowboy])
 
-      wait_for_buffer_stable(buffer, initial_size)
+      wait_for_buffer_stable(nil, initial_size)
 
-      assert LogEventBuffer.size(server: buffer) == initial_size
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
-    test "includes logs from non-excluded domains", %{handler_name: handler_name, buffer: buffer} do
+    test "includes logs from non-excluded domains", %{handler_name: handler_name} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      initial_size = LogEventBuffer.size(server: buffer)
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Regular message")
       Logger.info("Phoenix message", domain: [:phoenix])
 
-      assert_buffer_size(buffer, initial_size + 2)
+      assert_buffer_size(nil, initial_size + 2)
     end
 
     test "includes metadata as attributes", %{
       handler_name: handler_name,
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -202,40 +192,41 @@ defmodule Sentry.LoggerHandler.LogsTest do
       updated_config = %{config.config | logs_metadata: [:request_id, :user_id]}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Logger.metadata(request_id: "abc123", user_id: 42, other_meta: "should not be included")
       Logger.info("Request processed")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "includes all metadata when configured with :all", %{
-      handler_name: handler_name,
-      buffer: buffer
+      handler_name: handler_name
     } do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       updated_config = %{config.config | logs_metadata: :all}
       assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Logger.metadata(request_id: "abc123", user_id: 42, custom_field: "value")
       Logger.info("Request with metadata")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
     end
 
-    test "does not send logs when enable_logs is false at handler setup time" do
-      # Create a separate buffer for this test - isolated from the setup's handler
-      isolated_buffer = :"isolated_buffer_#{System.unique_integer([:positive])}"
-      start_supervised!({LogEventBuffer, name: isolated_buffer}, id: isolated_buffer)
+    test "does not send logs when enable_logs is false at handler setup time", %{
+      handler_name: handler_name
+    } do
+      # Remove the main handler first so we can test with enable_logs: false
+      :ok = :logger.remove_handler(handler_name)
 
-      handler_name = :"sentry_logs_handler_disabled_#{System.unique_integer([:positive])}"
+      disabled_handler_name =
+        :"sentry_logs_handler_disabled_#{System.unique_integer([:positive])}"
 
       # Set enable_logs to false BEFORE adding a new handler
       put_test_config(enable_logs: false)
@@ -244,33 +235,31 @@ defmodule Sentry.LoggerHandler.LogsTest do
         config: %{
           logs_level: :info,
           logs_excluded_domains: [],
-          logs_metadata: [],
-          logs_buffer: isolated_buffer
+          logs_metadata: []
         }
       }
 
       # Add handler with enable_logs: false - LogsBackend should NOT be included
-      assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
+      assert :ok =
+               :logger.add_handler(disabled_handler_name, Sentry.LoggerHandler, handler_config)
 
       on_exit(fn ->
-        _ = :logger.remove_handler(handler_name)
+        _ = :logger.remove_handler(disabled_handler_name)
       end)
 
-      initial_size = LogEventBuffer.size(server: isolated_buffer)
-      assert initial_size == 0
+      initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Test message")
 
       # Give some time for the log to be processed
       Process.sleep(100)
 
-      # The isolated buffer should still be empty because LogsBackend was not enabled
-      assert LogEventBuffer.size(server: isolated_buffer) == 0
+      # Buffer should still be at initial size because LogsBackend was not enabled
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
     test "generates trace_id when no trace context is available", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -293,20 +282,19 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Logger.info("Log without trace")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "captures message template with %s parameters via Logger metadata", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -348,21 +336,20 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       # Use Logger with %s template and parameters via metadata
       Logger.info("User %s logged in from %s", parameters: ["jane_doe", "192.168.1.1"])
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "captures message template with %{key} named parameters", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -404,21 +391,20 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       # Use Logger with %{key} template and named parameters
       Logger.info("Hello %{name} from %{city}", parameters: %{name: "Jane", city: "NYC"})
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "does not include template attributes for plain string messages", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -440,13 +426,13 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Logger.info("Simple log message")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
@@ -464,8 +450,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
 
     test "automatically includes trace context from OpenTelemetry spans", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -501,22 +486,21 @@ defmodule Sentry.LoggerHandler.LogsTest do
         end
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Tracer.with_span "test_span" do
         Logger.info("Log inside OTel span")
       end
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "includes trace context from nested OpenTelemetry spans", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -554,7 +538,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
         end
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       require OpenTelemetry.Tracer, as: Tracer
 
@@ -566,16 +550,15 @@ defmodule Sentry.LoggerHandler.LogsTest do
         end
       end
 
-      assert_buffer_size(buffer, 2)
+      assert_buffer_size(nil, 2)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
     test "works out-of-the-box when handler is configured", %{
-      bypass: bypass,
-      buffer: buffer
+      bypass: bypass
     } do
       test_pid = self()
 
@@ -604,22 +587,22 @@ defmodule Sentry.LoggerHandler.LogsTest do
         end
       end)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       Tracer.with_span "api_call" do
         Logger.info("Processing API request")
       end
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
   end
 
   describe "before_send_log callback" do
-    test "allows modifying log events before sending", %{bypass: bypass, buffer: buffer} do
+    test "allows modifying log events before sending", %{bypass: bypass} do
       test_pid = self()
 
       put_test_config(
@@ -646,14 +629,14 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       Logger.info("Test message")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters out log events when callback returns nil", %{bypass: bypass, buffer: buffer} do
+    test "filters out log events when callback returns nil", %{bypass: bypass} do
       put_test_config(
         before_send_log: fn log_event ->
           if String.contains?(log_event.body, "should_be_filtered") do
@@ -681,14 +664,14 @@ defmodule Sentry.LoggerHandler.LogsTest do
       Logger.info("This message should_be_filtered")
       Logger.info("This message should pass")
 
-      assert_buffer_size(buffer, 2)
+      assert_buffer_size(nil, 2)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters out log events when callback returns false", %{bypass: bypass, buffer: buffer} do
+    test "filters out log events when callback returns false", %{bypass: bypass} do
       put_test_config(
         before_send_log: fn log_event ->
           if String.contains?(log_event.body, "drop_me") do
@@ -716,14 +699,14 @@ defmodule Sentry.LoggerHandler.LogsTest do
       Logger.info("drop_me please")
       Logger.info("Keep this message")
 
-      assert_buffer_size(buffer, 2)
+      assert_buffer_size(nil, 2)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "supports MFA tuple callback format", %{bypass: bypass, buffer: buffer} do
+    test "supports MFA tuple callback format", %{bypass: bypass} do
       test_pid = self()
 
       put_test_config(before_send_log: {__MODULE__, :before_send_log_callback})
@@ -746,22 +729,22 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       Logger.info("Test MFA callback")
 
-      assert_buffer_size(buffer, 1)
+      assert_buffer_size(nil, 1)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       assert_receive :envelope_sent, 1000
     end
 
-    test "does not send any logs when all are filtered", %{buffer: buffer} do
+    test "does not send any logs when all are filtered", %{} do
       put_test_config(before_send_log: fn _log_event -> nil end)
 
       Logger.info("All messages filtered 1")
       Logger.info("All messages filtered 2")
 
-      assert_buffer_size(buffer, 2)
+      assert_buffer_size(nil, 2)
 
-      LogEventBuffer.flush(server: buffer)
+      TelemetryProcessor.flush()
 
       refute_receive _, 100
     end
@@ -771,7 +754,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
     %{log_event | attributes: Map.put(log_event.attributes, "mfa_added", "true")}
   end
 
-  defp add_logs_handler(%{buffer: buffer}) do
+  defp add_logs_handler(%{telemetry_processor: telemetry_processor}) do
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 
     handler_config = %{
@@ -779,7 +762,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
         logs_level: :info,
         logs_excluded_domains: [],
         logs_metadata: [],
-        logs_buffer: buffer
+        telemetry_processor: telemetry_processor
       }
     }
 
@@ -792,13 +775,13 @@ defmodule Sentry.LoggerHandler.LogsTest do
     %{handler_name: handler_name}
   end
 
-  defp assert_buffer_size(buffer, expected_size, timeout \\ 1000) do
-    wait_until(fn -> LogEventBuffer.size(server: buffer) == expected_size end, timeout)
-    assert LogEventBuffer.size(server: buffer) == expected_size
+  defp assert_buffer_size(_buffer, expected_size, timeout \\ 1000) do
+    wait_until(fn -> TelemetryProcessor.buffer_size(:log) == expected_size end, timeout)
+    assert TelemetryProcessor.buffer_size(:log) == expected_size
   end
 
-  defp wait_for_buffer_stable(buffer, expected_size, timeout \\ 1000) do
-    wait_until(fn -> LogEventBuffer.size(server: buffer) == expected_size end, timeout)
+  defp wait_for_buffer_stable(_buffer, expected_size, timeout \\ 1000) do
+    wait_until(fn -> TelemetryProcessor.buffer_size(:log) == expected_size end, timeout)
   end
 
   defp wait_until(condition_fn, timeout) do

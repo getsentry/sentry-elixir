@@ -17,6 +17,7 @@ defmodule Sentry.Client do
     LogEvent,
     LoggerUtils,
     Options,
+    TelemetryProcessor,
     Transaction,
     Transport
   }
@@ -29,6 +30,7 @@ defmodule Sentry.Client do
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
+    result_type = Keyword.get_lazy(opts, :result, &Config.send_result/0)
     client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
     # This is a "private" option, only really used in testing.
@@ -37,12 +39,7 @@ defmodule Sentry.Client do
         Application.get_env(:sentry, :request_retries, Transport.default_retries())
       end)
 
-    send_result =
-      check_in
-      |> Envelope.from_check_in()
-      |> Transport.encode_and_post_envelope(client, request_retries)
-
-    send_result
+    encode_and_send(check_in, result_type, client, request_retries)
   end
 
   # This is what executes the "Event Pipeline".
@@ -285,13 +282,13 @@ defmodule Sentry.Client do
     end
   end
 
-  defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
+  defp encode_and_send(%Event{} = event, _result_type = :none, _client, _request_retries) do
     case Sentry.Test.maybe_collect(event) do
       :collected ->
         {:ok, ""}
 
       :not_collecting ->
-        :ok = Transport.Sender.send_async(client, event)
+        :ok = TelemetryProcessor.add(event)
         {:ok, ""}
     end
   end
@@ -319,7 +316,7 @@ defmodule Sentry.Client do
   defp encode_and_send(
          %Transaction{} = transaction,
          _result_type = :none,
-         client,
+         _client,
          _request_retries
        ) do
     case Sentry.Test.maybe_collect(transaction) do
@@ -327,8 +324,30 @@ defmodule Sentry.Client do
         {:ok, ""}
 
       :not_collecting ->
-        :ok = Transport.Sender.send_async(client, transaction)
+        :ok = TelemetryProcessor.add(transaction)
         {:ok, ""}
+    end
+  end
+
+  defp encode_and_send(%CheckIn{} = check_in, _result_type = :sync, client, request_retries) do
+    check_in
+    |> Envelope.from_check_in()
+    |> Transport.encode_and_post_envelope(client, request_retries)
+  end
+
+  defp encode_and_send(
+         %CheckIn{} = check_in,
+         _result_type = :none,
+         _client,
+         _request_retries
+       ) do
+    case Sentry.Test.maybe_collect(check_in) do
+      :collected ->
+        {:ok, check_in.check_in_id}
+
+      :not_collecting ->
+        :ok = TelemetryProcessor.add(check_in)
+        {:ok, check_in.check_in_id}
     end
   end
 
