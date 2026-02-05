@@ -255,6 +255,40 @@ defmodule Sentry.ConfigTest do
         Config.validate!(before_send_log: :not_a_function)
       end
     end
+
+    test "deprecated hackney options do not warn when not explicitly configured" do
+      output =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          # Only configure non-hackney options
+          Config.validate!(dsn: "https://public:secret@app.getsentry.com/1")
+        end)
+
+      refute output =~ "hackney"
+    end
+
+    test "deprecated hackney options warn when explicitly configured" do
+      output =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          Config.validate!(hackney_opts: [pool: :my_pool])
+        end)
+
+      assert output =~ ":hackney_opts option is deprecated"
+      assert output =~ "Use Finch as the default HTTP client instead"
+
+      output =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          Config.validate!(hackney_pool_timeout: 10_000)
+        end)
+
+      assert output =~ ":hackney_pool_timeout option is deprecated"
+
+      output =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          Config.validate!(hackney_pool_max_connections: 100)
+        end)
+
+      assert output =~ ":hackney_pool_max_connections option is deprecated"
+    end
   end
 
   describe "put_config/2" do
