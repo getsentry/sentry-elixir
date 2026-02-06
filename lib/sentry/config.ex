@@ -436,47 +436,38 @@ defmodule Sentry.Config do
       for available options.
       """
     ],
-    hackney_opts:
-      [
-        type: :keyword_list,
-        default: [pool: :sentry_pool],
-        doc: """
-        Options to be passed to `hackney`. Only
-        applied if `:client` is set to `Sentry.HackneyClient`.
-        """
-      ] ++
-        if(Mix.env() == :test,
-          do: [],
-          else: [deprecated: "Use Finch as the default HTTP client instead."]
-        ),
-    hackney_pool_timeout:
-      [
-        type: :timeout,
-        default: 5000,
-        doc: """
-        The maximum time to wait for a
-        connection to become available. Only applied if `:client` is set to
-        `Sentry.HackneyClient`.
-        """
-      ] ++
-        if(Mix.env() == :test,
-          do: [],
-          else: [deprecated: "Use Finch as the default HTTP client instead."]
-        ),
-    hackney_pool_max_connections:
-      [
-        type: :pos_integer,
-        default: 50,
-        doc: """
-        The maximum number of
-        connections to keep in the pool. Only applied if `:client` is set to
-        `Sentry.HackneyClient`.
-        """
-      ] ++
-        if(Mix.env() == :test,
-          do: [],
-          else: [deprecated: "Use Finch as the default HTTP client instead."]
-        )
+    hackney_opts: [
+      type: :keyword_list,
+      default: [pool: :sentry_pool],
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      Options to be passed to `hackney`. Only
+      applied if `:client` is set to `Sentry.HackneyClient`.
+      """
+    ],
+    hackney_pool_timeout: [
+      type: :timeout,
+      default: 5000,
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      The maximum time to wait for a
+      connection to become available. Only applied if `:client` is set to
+      `Sentry.HackneyClient`.
+      """
+    ],
+    hackney_pool_max_connections: [
+      type: :pos_integer,
+      default: 50,
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      The maximum number of
+      connections to keep in the pool. Only applied if `:client` is set to
+      `Sentry.HackneyClient`.
+      """
+    ]
   ]
 
   source_code_context_opts_schema = [
@@ -654,6 +645,7 @@ defmodule Sentry.Config do
         |> normalize_included_environments()
         |> normalize_environment()
         |> handle_deprecated_before_send()
+        |> warn_deprecated_hackney_options(config)
         |> warn_traces_sample_rate_without_dependencies()
 
       {:error, error} ->
@@ -880,6 +872,27 @@ defmodule Sentry.Config do
       :error ->
         opts
     end
+  end
+
+  @hackney_deprecated_options [
+    :hackney_opts,
+    :hackney_pool_timeout,
+    :hackney_pool_max_connections
+  ]
+
+  # Warn about deprecated hackney options only if the user explicitly provided them
+  # in their configuration. We check against the original config (before NimbleOptions
+  # fills in defaults) to avoid warning when users are using the default Finch client.
+  defp warn_deprecated_hackney_options(opts, original_config) do
+    Enum.each(@hackney_deprecated_options, fn opt ->
+      if Keyword.has_key?(original_config, opt) do
+        IO.warn(
+          "#{inspect(opt)} option is deprecated. Use Finch as the default HTTP client instead."
+        )
+      end
+    end)
+
+    opts
   end
 
   defp warn_traces_sample_rate_without_dependencies(opts) do
