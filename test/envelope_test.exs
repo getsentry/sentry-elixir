@@ -3,7 +3,7 @@ defmodule Sentry.EnvelopeTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent}
 
   describe "to_binary/1" do
     test "encodes an envelope" do
@@ -193,6 +193,51 @@ defmodule Sentry.EnvelopeTest do
     assert decoded_client_report["discarded_events"] == [
              %{"category" => "error", "reason" => "event_processor", "quantity" => 1}
            ]
+  end
+
+  describe "item_count/1" do
+    test "counts log events in a log envelope" do
+      log_events =
+        Enum.map(1..5, fn _ ->
+          %LogEvent{
+            timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+            level: :info,
+            body: "test log"
+          }
+        end)
+
+      envelope = Envelope.from_log_events(log_events)
+      assert Envelope.item_count(envelope) == 5
+    end
+
+    test "counts single event envelope as 1" do
+      event = Event.create_event([])
+      envelope = Envelope.from_event(event)
+      assert Envelope.item_count(envelope) == 1
+    end
+
+    test "counts event with attachments" do
+      attachments = [
+        %Attachment{data: "a", filename: "a.txt"},
+        %Attachment{data: "b", filename: "b.txt"}
+      ]
+
+      event = %Event{Event.create_event([]) | attachments: attachments}
+      envelope = Envelope.from_event(event)
+      # 1 event + 2 attachments
+      assert Envelope.item_count(envelope) == 3
+    end
+
+    test "counts check-in envelope as 1" do
+      check_in = %CheckIn{
+        check_in_id: Sentry.UUID.uuid4_hex(),
+        monitor_slug: "test",
+        status: :ok
+      }
+
+      envelope = Envelope.from_check_in(check_in)
+      assert Envelope.item_count(envelope) == 1
+    end
   end
 
   test "returns correct data_category" do

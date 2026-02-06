@@ -34,11 +34,15 @@ defmodule Sentry.Application do
         []
       end
 
-    maybe_log_event_buffer =
+    maybe_telemetry_processor =
       if Config.enable_logs?() do
         [
-          {Task.Supervisor, name: Sentry.LogEventBuffer.TaskSupervisor},
-          Sentry.LogEventBuffer
+          {Sentry.TelemetryProcessor,
+           [
+             buffer_capacities: Config.telemetry_buffer_capacities(),
+             scheduler_weights: Config.telemetry_scheduler_weights(),
+             transport_capacity: Config.transport_capacity()
+           ]}
         ]
       else
         []
@@ -58,7 +62,7 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
-        maybe_log_event_buffer ++
+        maybe_telemetry_processor ++
         maybe_rate_limiter() ++
         [Sentry.Transport.SenderPool]
 
