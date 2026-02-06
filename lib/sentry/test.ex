@@ -200,6 +200,29 @@ defmodule Sentry.Test do
     start_collecting(key: @events_key)
     start_collecting(key: @transactions_key)
     start_collecting(key: @logs_key)
+
+    # Allow the TelemetryProcessor scheduler to collect log events on behalf of this process.
+    # Logs flow through the scheduler (a separate process) and need explicit
+    # permission in NimbleOwnership to store collected items for the test process.
+    try do
+      processor =
+        Process.get(:sentry_telemetry_processor, Sentry.TelemetryProcessor.default_name())
+
+      scheduler_name = Sentry.TelemetryProcessor.scheduler_name(processor)
+      scheduler_pid = GenServer.whereis(scheduler_name)
+
+      if scheduler_pid do
+        case NimbleOwnership.allow(@server, self(), scheduler_pid, @logs_key) do
+          :ok -> :ok
+          {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
+          {:error, _} -> :ok
+        end
+      end
+    catch
+      :exit, _ -> :ok
+    end
+
+    :ok
   end
 
   @doc """
@@ -431,8 +454,8 @@ defmodule Sentry.Test do
       ...>   body: "Test log message",
       ...>   timestamp: System.system_time(:microsecond) / 1_000_000
       ...> }
-      iex> Sentry.LogEventBuffer.add_event(log_event)
-      :ok
+      iex> Sentry.Test.maybe_collect_logs([log_event])
+      :collected
       iex> [%Sentry.LogEvent{} = collected] = Sentry.Test.pop_sentry_logs()
       iex> collected.body
       "Test log message"

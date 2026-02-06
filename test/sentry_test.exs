@@ -346,4 +346,16 @@ defmodule SentryTest do
       assert_receive {:after_send, "test-transaction", "340"}
     end
   end
+
+  describe "flush/1" do
+    test "returns :ok silently when TelemetryProcessor is not running" do
+      # Default TelemetryProcessor is not started in test — this is the :noproc path
+      log =
+        capture_log(fn ->
+          assert :ok = Sentry.flush()
+        end)
+
+      refute log =~ "failed unexpectedly"
+    end
+  end
 end

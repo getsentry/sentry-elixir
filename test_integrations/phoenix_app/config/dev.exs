@@ -90,8 +90,7 @@ config :sentry,
   enable_source_code_context: true,
   send_result: :sync,
   traces_sample_rate: 1.0,
-  enable_logs: true,
-  max_log_events: 5
+  enable_logs: true
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,

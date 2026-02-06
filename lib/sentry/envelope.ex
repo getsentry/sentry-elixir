@@ -115,6 +115,20 @@ defmodule Sentry.Envelope do
   def get_data_category(%LogBatch{}), do: "log_item"
 
   @doc """
+  Returns the total number of payload items in the envelope.
+
+  For log envelopes, this counts individual log events within the LogBatch.
+  For other envelope types, each item counts as 1.
+  """
+  @spec item_count(t()) :: non_neg_integer()
+  def item_count(%__MODULE__{items: items}) do
+    Enum.reduce(items, 0, fn
+      %LogBatch{log_events: log_events}, acc -> acc + length(log_events)
+      _other, acc -> acc + 1
+    end)
+  end
+
+  @doc """
   Encodes the envelope into its binary representation.
 
   For now, we support only envelopes with a single event and any number of attachments
