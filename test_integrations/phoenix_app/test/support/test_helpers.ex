@@ -91,7 +91,6 @@ defmodule Sentry.TestHelpers do
     |> Enum.chunk_every(2)
     |> Enum.flat_map(fn
       [header, item] -> [{decode!(header), decode!(item)}]
-
       [""] -> []
     end)
   end

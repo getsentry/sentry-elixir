@@ -46,7 +46,6 @@ defmodule PhoenixApp.TestClient do
     with {:ok, header_line, rest} <- get_first_line(lines),
          {:ok, envelope_headers} <- Jason.decode(header_line),
          {:ok, items} <- parse_items(rest) do
-
       envelope = %{
         headers: envelope_headers,
         items: items

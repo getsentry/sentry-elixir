@@ -24,7 +24,8 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     test "GET /logs captures logs with trace context", %{conn: conn} do
       conn = get(conn, ~p"/logs")
 
-      assert json_response(conn, 200)["message"] == "Logs demo completed - check your Sentry logs!"
+      assert json_response(conn, 200)["message"] ==
+               "Logs demo completed - check your Sentry logs!"
 
       logs = Sentry.Test.pop_sentry_logs()
 

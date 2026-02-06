@@ -82,10 +82,10 @@ defmodule PhoenixAppWeb.TracingTestLive do
 
       <div class="space-y-4">
         <div class="p-4 bg-gray-100 rounded">
-          <p><strong>Counter:</strong> <span id="counter-value"><%= @counter %></span></p>
-          <p><strong>Last Action:</strong> <span id="last-action"><%= @last_action %></span></p>
+          <p><strong>Counter:</strong> <span id="counter-value">{@counter}</span></p>
+          <p><strong>Last Action:</strong> <span id="last-action">{@last_action}</span></p>
           <%= if @data do %>
-            <p><strong>Data:</strong> <span id="data-value"><%= inspect(@data) %></span></p>
+            <p><strong>Data:</strong> <span id="data-value">{inspect(@data)}</span></p>
           <% end %>
         </div>
 

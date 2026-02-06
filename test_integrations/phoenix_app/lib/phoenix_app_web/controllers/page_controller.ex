@@ -92,7 +92,9 @@ defmodule PhoenixAppWeb.PageController do
   # 2. Visit: http://localhost:4000/logs
   # 3. Check Sentry logs - they should have trace_id matching the transaction traces
   def logs_demo(conn, params) do
-    request_id = get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
+    request_id =
+      get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
+
     user_id = Map.get(params, "user_id", 123)
 
     # Set logger metadata
@@ -122,6 +124,7 @@ defmodule PhoenixAppWeb.PageController do
 
       Tracer.with_span "database_query" do
         users = Repo.all(User)
+
         Logger.info("Database query completed",
           query: "SELECT * FROM users",
           result_count: length(users)
