@@ -8,14 +8,22 @@
           <div>
             <label class="block text-sm font-medium text-gray-700">Sleep Time (ms)</label>
             <div class="mt-1">
-              <input type="number" name="test_job[sleep_time]" value="1000" min="0"
-                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+              <input
+                type="number"
+                name="test_job[sleep_time]"
+                value="1000"
+                min="0"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              />
             </div>
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700">Queue</label>
-            <select name="test_job[queue]" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            <select
+              name="test_job[queue]"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
               <option value="default">default</option>
               <option value="background">background</option>
             </select>
@@ -23,8 +31,12 @@
 
           <div class="relative flex items-start">
             <div class="flex h-6 items-center">
-              <input type="checkbox" name="test_job[should_fail]" value="true"
-                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+              <input
+                type="checkbox"
+                name="test_job[should_fail]"
+                value="true"
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+              />
             </div>
             <div class="ml-3 text-sm leading-6">
               <label class="font-medium text-gray-900">Should Fail</label>
@@ -32,7 +44,10 @@
           </div>
 
           <div>
-            <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <button
+              type="submit"
+              class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
               Schedule Job
             </button>
           </div>
@@ -50,12 +65,14 @@
           <div>
             <label class="block text-sm font-medium text-gray-700">Number of Jobs</label>
             <div class="mt-1">
-              <input type="number"
-                     name="auto[job_count]"
-                     value="5"
-                     min="1"
-                     max="100"
-                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+              <input
+                type="number"
+                name="auto[job_count]"
+                value="5"
+                min="1"
+                max="100"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              />
             </div>
             <p class="mt-2 text-sm text-gray-500">
               Jobs will be created with random sleep times (500-5000ms), random queues, and random failure states.
@@ -63,7 +80,10 @@
           </div>
 
           <div>
-            <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <button
+              type="submit"
+              class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
               Auto Schedule Jobs
             </button>
           </div>
@@ -89,11 +109,13 @@
         <tbody class="divide-y divide-gray-200 bg-white">
           <%= for job <- @jobs do %>
             <tr>
-              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><%= job.id %></td>
-              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><%= job.queue %></td>
-              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><%= job.state %></td>
-              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><%= job.attempt %></td>
-              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><%= inspect(job.args) %></td>
+              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{job.id}</td>
+              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{job.queue}</td>
+              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{job.state}</td>
+              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{job.attempt}</td>
+              <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                {inspect(job.args)}
+              </td>
             </tr>
           <% end %>
         </tbody>

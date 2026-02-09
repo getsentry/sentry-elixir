@@ -61,7 +61,10 @@ defmodule PhoenixAppWeb.UserLiveTest do
 
       assert transaction_save.transaction == "PhoenixAppWeb.UserLive.Index.handle_event#save"
       assert transaction_save.transaction_info.source == :custom
-      assert transaction_save.contexts.trace.op == "PhoenixAppWeb.UserLive.Index.handle_event#save"
+
+      assert transaction_save.contexts.trace.op ==
+               "PhoenixAppWeb.UserLive.Index.handle_event#save"
+
       assert transaction_save.contexts.trace.origin == "opentelemetry_phoenix"
 
       assert length(transaction_save.spans) == 1

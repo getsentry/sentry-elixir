@@ -50,7 +50,9 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
     assert [span_ecto] = mount_transaction.spans
 
     assert span_ecto.op == "db"
-    assert span_ecto.description == "SELECT u0.\"id\", u0.\"name\", u0.\"age\", u0.\"inserted_at\", u0.\"updated_at\" FROM \"users\" AS u0"
+
+    assert span_ecto.description ==
+             "SELECT u0.\"id\", u0.\"name\", u0.\"age\", u0.\"inserted_at\", u0.\"updated_at\" FROM \"users\" AS u0"
 
     assert handle_params_transaction.transaction ==
              "PhoenixAppWeb.UserLive.Index.handle_params"
@@ -102,14 +104,17 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     child_span_ids = MapSet.new(child_spans, & &1.span_id)
 
-    grandchild_spans = Enum.filter(transaction.spans, fn span ->
-      span.parent_span_id != transaction.span_id and span.parent_span_id in child_span_ids
-    end)
+    grandchild_spans =
+      Enum.filter(transaction.spans, fn span ->
+        span.parent_span_id != transaction.span_id and span.parent_span_id in child_span_ids
+      end)
 
     assert length(grandchild_spans) == 3
   end
 
-  test "LiveView mount and handle_params create disconnected transactions with child spans", %{conn: conn} do
+  test "LiveView mount and handle_params create disconnected transactions with child spans", %{
+    conn: conn
+  } do
     get(conn, ~p"/users")
 
     transactions = Sentry.Test.pop_sentry_transactions()
@@ -126,9 +131,12 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
 
     assert handle_params_transaction.transaction == "PhoenixAppWeb.UserLive.Index.handle_params"
     assert handle_params_transaction.span_id != mount_transaction.span_id
-    assert handle_params_transaction.contexts.trace.trace_id != mount_transaction.contexts.trace.trace_id
 
-    refute mount_transaction.contexts.trace.trace_id == handle_params_transaction.contexts.trace.trace_id
+    assert handle_params_transaction.contexts.trace.trace_id !=
+             mount_transaction.contexts.trace.trace_id
+
+    refute mount_transaction.contexts.trace.trace_id ==
+             handle_params_transaction.contexts.trace.trace_id
   end
 
   describe "distributed tracing with sentry-trace header" do
@@ -164,7 +172,9 @@ defmodule Sentry.Integrations.Phoenix.TransactionTest do
       assert handle_params_transaction.contexts.trace.parent_span_id == parent_span_id
     end
 
-    test "LiveView handle_event in WebSocket shares trace context with initial request", %{conn: conn} do
+    test "LiveView handle_event in WebSocket shares trace context with initial request", %{
+      conn: conn
+    } do
       trace_id = "fedcba0987654321fedcba0987654321"
       parent_span_id = "1234567890fedcba"
 
