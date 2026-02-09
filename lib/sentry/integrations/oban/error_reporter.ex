@@ -31,10 +31,49 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
         config
       ) do
-    if report?(reason) do
+    if report?(reason) and should_report?(job, config) do
       report(job, kind, reason, stacktrace, config)
     else
       :ok
+    end
+  end
+
+  defp should_report?(job, config) do
+    case Keyword.get(config, :should_report_error_callback) do
+      callback when is_function(callback, 2) ->
+        call_should_report_error_callback(callback, job)
+
+      _ ->
+        true
+    end
+  end
+
+  defp call_should_report_error_callback(callback, job) do
+    worker =
+      case apply(Oban.Worker, :from_string, [job.worker]) do
+        {:ok, mod} ->
+          mod
+
+        {:error, _} ->
+          Logger.warning(
+            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
+          )
+
+          nil
+      end
+
+    try do
+      callback.(worker, job) == true
+    rescue
+      error ->
+        Logger.warning("""
+        :should_report_error_callback failed for worker #{inspect(worker)} \
+        (job ID #{job.id}):
+
+        #{Exception.format(:error, error, __STACKTRACE__)}\
+        """)
+
+        true
     end
   end
 

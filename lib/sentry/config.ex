@@ -78,6 +78,25 @@ defmodule Sentry.Config do
           with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
           """
         ],
+        should_report_error_callback: [
+          type: {:or, [nil, {:fun, 2}]},
+          default: nil,
+          type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
+          doc: """
+          A function that determines whether to report errors for Oban jobs.
+          The function receives the worker module and the `Oban.Job` struct and should return
+          `true` to report the error or `false` to skip reporting.
+
+          ```elixir
+          should_report_error_callback: fn _worker, job ->
+            job.attempt >= job.max_attempts
+          end
+          ```
+
+          This example only reports errors on final retry attempts.
+          *Available since 12.0.0*.
+          """
+        ],
         cron: [
           doc: """
           Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)

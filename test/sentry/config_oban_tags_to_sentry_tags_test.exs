@@ -59,4 +59,39 @@ defmodule Sentry.ConfigObanTagsToSentryTagsTest do
       end
     end
   end
+
+  describe "should_report_error_callback configuration validation" do
+    test "accepts nil" do
+      assert :ok = put_test_config(integrations: [oban: [should_report_error_callback: nil]])
+      assert Sentry.Config.integrations()[:oban][:should_report_error_callback] == nil
+    end
+
+    test "accepts function with arity 2" do
+      fun = fn _worker, _job -> true end
+      assert :ok = put_test_config(integrations: [oban: [should_report_error_callback: fun]])
+      assert Sentry.Config.integrations()[:oban][:should_report_error_callback] == fun
+    end
+
+    test "rejects function with wrong arity" do
+      fun = fn _job -> true end
+
+      assert_raise ArgumentError, ~r/invalid value for :should_report_error_callback/, fn ->
+        put_test_config(integrations: [oban: [should_report_error_callback: fun]])
+      end
+    end
+
+    test "rejects invalid types" do
+      assert_raise ArgumentError, ~r/invalid value for :should_report_error_callback/, fn ->
+        put_test_config(integrations: [oban: [should_report_error_callback: "invalid"]])
+      end
+
+      assert_raise ArgumentError, ~r/invalid value for :should_report_error_callback/, fn ->
+        put_test_config(integrations: [oban: [should_report_error_callback: 123]])
+      end
+
+      assert_raise ArgumentError, ~r/invalid value for :should_report_error_callback/, fn ->
+        put_test_config(integrations: [oban: [should_report_error_callback: []]])
+      end
+    end
+  end
 end
