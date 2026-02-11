@@ -7,6 +7,7 @@
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
 - Support for LiveView spans captured under single trace root ([#977](https://github.com/getsentry/sentry-elixir/pull/977))
 - Handle HTTP 413 responses for oversized envelopes ([#982](https://github.com/getsentry/sentry-elixir/pull/982))
+- Introduced `TelemetryProcessor` according to [the spec](https://develop.sentry.dev/sdk/telemetry/telemetry-processor/) [#987](https://github.com/getsentry/sentry-elixir/pull/987))
 
 ### Bug Fixes
 
