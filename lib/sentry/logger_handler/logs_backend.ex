@@ -11,13 +11,12 @@ defmodule Sentry.LoggerHandler.LogsBackend do
   # - `:logs_level` - Minimum log level to send
   # - `:logs_excluded_domains` - Domains to exclude
   # - `:logs_metadata` - Metadata keys to include as attributes
-  # - `:logs_buffer` - Buffer process for batching (defaults to LogEventBuffer)
 
   @behaviour Sentry.LoggerHandler.Backend
 
   require Logger
 
-  alias Sentry.{LogEvent, LogEventBuffer, LoggerUtils}
+  alias Sentry.{LogEvent, LoggerUtils, TelemetryProcessor}
 
   @impl true
   def handle_event(%{level: log_level, meta: log_meta} = log_event, config, _handler_id) do
@@ -49,8 +48,8 @@ defmodule Sentry.LoggerHandler.LogsBackend do
     # Create log event
     log_event_struct = LogEvent.from_logger_event(log_event, attributes, parameters)
 
-    # Add to buffer
-    LogEventBuffer.add_event(log_event_struct, server: config.logs_buffer)
+    # Add to TelemetryProcessor buffer (use configured processor for test isolation)
+    TelemetryProcessor.add(config.telemetry_processor, log_event_struct)
 
     :ok
   end
