@@ -29,20 +29,22 @@ defmodule Sentry.Client do
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
-    client = Keyword.get_lazy(opts, :client, &Config.client/0)
+    if Config.telemetry_processor_category?(:check_in) do
+      :ok = TelemetryProcessor.add(check_in)
+      {:ok, check_in.check_in_id}
+    else
+      client = Keyword.get_lazy(opts, :client, &Config.client/0)
 
-    # This is a "private" option, only really used in testing.
-    request_retries =
-      Keyword.get_lazy(opts, :request_retries, fn ->
-        Application.get_env(:sentry, :request_retries, Transport.default_retries())
-      end)
+      # This is a "private" option, only really used in testing.
+      request_retries =
+        Keyword.get_lazy(opts, :request_retries, fn ->
+          Application.get_env(:sentry, :request_retries, Transport.default_retries())
+        end)
 
-    send_result =
       check_in
       |> Envelope.from_check_in()
       |> Transport.encode_and_post_envelope(client, request_retries)
-
-    send_result
+    end
   end
 
   # This is what executes the "Event Pipeline".
