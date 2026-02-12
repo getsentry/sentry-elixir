@@ -16,20 +16,20 @@ defmodule Sentry.Telemetry.SchedulerTest do
   end
 
   describe "build_priority_cycle/0" do
-    test "builds cycle with correct weight for log category" do
+    test "builds cycle with correct weights for all categories" do
       cycle = Scheduler.build_priority_cycle()
 
-      # Default weight: low=2
-      assert length(cycle) == 2
-      assert Enum.frequencies(cycle) == %{log: 2}
+      # Default weights: critical=5, low=2
+      assert length(cycle) == 7
+      assert Enum.frequencies(cycle) == %{error: 5, log: 2}
     end
 
     test "builds cycle with custom weights" do
       custom_weights = %{low: 5}
       cycle = Scheduler.build_priority_cycle(custom_weights)
 
-      assert length(cycle) == 5
-      assert Enum.frequencies(cycle) == %{log: 5}
+      assert length(cycle) == 10
+      assert Enum.frequencies(cycle) == %{error: 5, log: 5}
     end
   end
 
@@ -59,6 +59,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
         )
 
       state = :sys.get_state(pid)
+      # Only log buffer provided, so cycle is filtered to log only with weight 5
       assert length(state.priority_cycle) == 5
       GenServer.stop(pid)
       stop_buffers(buffers)
@@ -303,7 +304,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
           Process.sleep(50)
         end)
 
-      assert log =~ "transport queue full, dropping 5 log item(s)"
+      assert log =~ "transport queue full, dropping 5 item(s)"
 
       state = :sys.get_state(pid)
       assert state.size == 0
@@ -412,7 +413,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
           Scheduler.flush(pid)
         end)
 
-      assert log =~ "failed to send log envelope"
+      assert log =~ "failed to send envelope"
 
       GenServer.stop(pid)
       stop_buffers(buffers)

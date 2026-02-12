@@ -394,6 +394,24 @@ defmodule Sentry.Config do
       Use `Sentry.LogsHandler` to capture log events from Erlang's `:logger`.
       *Available since 12.0.0*.
       """
+    ],
+    telemetry_processor_categories: [
+      type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
+      default: [:log],
+      doc: """
+      List of event categories that should be processed through the TelemetryProcessor.
+      Categories in this list use the TelemetryProcessor's ring buffer and weighted
+      round-robin scheduler, which provides prioritized scheduling and backpressure.
+      Categories not in this list use the original sender-based approach.
+
+      Available categories:
+        * `:error` - Error events (critical priority, batch_size=1)
+        * `:check_in` - Cron check-ins (high priority, batch_size=1)
+        * `:transaction` - Performance transactions (medium priority, batch_size=1)
+        * `:log` - Log entries (low priority, batch_size=100, 5s timeout)
+
+      *Available since 12.0.0*.
+      """
     ]
   ]
 
@@ -859,6 +877,13 @@ defmodule Sentry.Config do
 
   @spec transport_capacity() :: pos_integer()
   def transport_capacity, do: fetch!(:transport_capacity)
+
+  @spec telemetry_processor_categories() :: [atom()]
+  def telemetry_processor_categories, do: fetch!(:telemetry_processor_categories)
+
+  @spec telemetry_processor_category?(atom()) :: boolean()
+  def telemetry_processor_category?(category),
+    do: category in telemetry_processor_categories()
 
   @spec before_send_log() ::
           (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil

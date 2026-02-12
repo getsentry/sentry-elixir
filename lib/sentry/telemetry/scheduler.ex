@@ -5,11 +5,9 @@ defmodule Sentry.Telemetry.Scheduler do
   The scheduler cycles through category buffers based on priority weights,
   ensuring critical telemetry gets priority over high-volume data under load.
 
-  Currently, only the `:log` category is managed. The weighted round-robin
-  structure is in place for future expansion to additional categories.
-
   ## Weights
 
+    * `:critical` - weight 5 (errors)
     * `:low` - weight 2 (logs)
 
   ## Signal-Based Wake
@@ -35,11 +33,12 @@ defmodule Sentry.Telemetry.Scheduler do
   alias __MODULE__
 
   alias Sentry.Telemetry.{Buffer, Category}
-  alias Sentry.{ClientReport, Config, Envelope, LogEvent, Transport}
+  alias Sentry.{ClientReport, Config, Envelope, Event, LogEvent, Transport}
 
   @default_capacity 1000
 
   @type buffers :: %{
+          error: GenServer.server(),
           log: GenServer.server()
         }
 
@@ -78,7 +77,7 @@ defmodule Sentry.Telemetry.Scheduler do
   ## Examples
 
       iex> Sentry.Telemetry.Scheduler.build_priority_cycle()
-      [:log, :log]
+      [:error, :error, :error, :error, :error, :log, :log]
 
   """
   @spec build_priority_cycle(map() | nil) :: [Category.t()]
@@ -151,7 +150,9 @@ defmodule Sentry.Telemetry.Scheduler do
     on_envelope = Keyword.get(opts, :on_envelope)
     capacity = Keyword.get(opts, :capacity, @default_capacity)
 
-    priority_cycle = build_priority_cycle(weights)
+    priority_cycle =
+      build_priority_cycle(weights)
+      |> Enum.filter(fn category -> Map.has_key?(buffers, category) end)
 
     state = %Scheduler{
       buffers: buffers,
@@ -232,6 +233,10 @@ defmodule Sentry.Telemetry.Scheduler do
     end
   end
 
+  defp send_items(state, :error, [%Event{} = event]) do
+    process_and_send_event(state, event, &send_envelope/2)
+  end
+
   defp send_items(state, :log, log_events) do
     process_and_send_logs(state, log_events, &send_envelope/2)
   end
@@ -242,12 +247,35 @@ defmodule Sentry.Telemetry.Scheduler do
 
       if items != [] do
         case category do
-          :log -> process_and_send_logs(state, items, &send_envelope_direct/2)
+          :error ->
+            Enum.each(items, fn event ->
+              process_and_send_event(state, event, &send_envelope_direct/2)
+            end)
+
+          :log ->
+            process_and_send_logs(state, items, &send_envelope_direct/2)
         end
       end
     end
 
     state
+  end
+
+  defp process_and_send_event(%{on_envelope: on_envelope} = state, %Event{} = event, send_fn) do
+    # Skip test collection when on_envelope is set (used by unit tests)
+    if is_nil(on_envelope) do
+      case Sentry.Test.maybe_collect(event) do
+        :collected ->
+          state
+
+        :not_collecting ->
+          envelope = Envelope.from_event(event)
+          send_fn.(state, envelope)
+      end
+    else
+      envelope = Envelope.from_event(event)
+      send_fn.(state, envelope)
+    end
   end
 
   defp process_and_send_logs(%{on_envelope: on_envelope} = state, log_events, send_fn) do
@@ -321,7 +349,7 @@ defmodule Sentry.Telemetry.Scheduler do
     item_count = Envelope.item_count(envelope)
 
     if state.size + item_count > state.capacity do
-      Logger.warning("Sentry: transport queue full, dropping #{item_count} log item(s)")
+      Logger.warning("Sentry: transport queue full, dropping #{item_count} item(s)")
 
       ClientReport.Sender.record_discarded_events(:queue_overflow, envelope.items)
       state
@@ -351,7 +379,7 @@ defmodule Sentry.Telemetry.Scheduler do
         :ok
 
       {:error, error} ->
-        Logger.warning("Sentry: failed to send log envelope: #{Exception.message(error)}")
+        Logger.warning("Sentry: failed to send envelope: #{Exception.message(error)}")
 
         {:error, error}
     end
@@ -422,12 +450,14 @@ defmodule Sentry.Telemetry.Scheduler do
 
   defp default_weights do
     %{
+      critical: Category.weight(:critical),
       low: Category.weight(:low)
     }
   end
 
   defp category_priority_mapping do
     [
+      {:error, :critical},
       {:log, :low}
     ]
   end
