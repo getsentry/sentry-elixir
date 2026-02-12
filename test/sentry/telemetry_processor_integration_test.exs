@@ -112,6 +112,55 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  describe "check-in events with telemetry_processor_categories" do
+    setup do
+      put_test_config(telemetry_processor_categories: [:check_in, :log])
+      :ok
+    end
+
+    test "buffers check-in events through TelemetryProcessor when opted in", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      {:ok, _id} = Sentry.capture_check_in(status: :ok, monitor_slug: "test-job")
+
+      check_in_buffer = TelemetryProcessor.get_buffer(ctx.processor, :check_in)
+      assert Buffer.size(check_in_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      bodies = collect_envelope_bodies(ctx.ref, 1)
+      assert length(bodies) == 1
+
+      [items] = Enum.map(bodies, &decode_envelope!/1)
+      assert [{%{"type" => "check_in"}, check_in}] = items
+      assert check_in["monitor_slug"] == "test-job"
+      assert check_in["status"] == "ok"
+    end
+
+    test "flush drains check-in buffer completely", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      for i <- 1..3 do
+        {:ok, _id} = Sentry.capture_check_in(status: :ok, monitor_slug: "job-#{i}")
+      end
+
+      check_in_buffer = TelemetryProcessor.get_buffer(ctx.processor, :check_in)
+      assert Buffer.size(check_in_buffer) == 3
+
+      :sys.resume(scheduler)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+
+      assert Buffer.size(check_in_buffer) == 0
+
+      bodies = collect_envelope_bodies(ctx.ref, 3)
+      items = Enum.map(bodies, &decode_envelope!/1)
+      assert length(items) == 3
+      assert Enum.all?(items, fn [{%{"type" => type}, _}] -> type == "check_in" end)
+    end
+  end
+
   describe "log batching" do
     test "sends log events as batched envelopes", ctx do
       TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
@@ -192,5 +241,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   end
 
   defp decoded_envelope_category([{%{"type" => "event"}, _} | _]), do: :error
+  defp decoded_envelope_category([{%{"type" => "check_in"}, _} | _]), do: :check_in
   defp decoded_envelope_category([{%{"type" => "log"}, _} | _]), do: :log
 end
