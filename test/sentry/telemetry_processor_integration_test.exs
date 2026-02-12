@@ -5,7 +5,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   alias Sentry.TelemetryProcessor
   alias Sentry.Telemetry.Buffer
-  alias Sentry.LogEvent
+  alias Sentry.{LogEvent, Transaction}
 
   setup context do
     bypass = Bypass.open()
@@ -161,6 +161,57 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  describe "transaction events with telemetry_processor_categories" do
+    setup do
+      put_test_config(telemetry_processor_categories: [:transaction, :log])
+      :ok
+    end
+
+    test "buffers transaction events through TelemetryProcessor when opted in", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      transaction = make_transaction()
+      TelemetryProcessor.add(ctx.processor, transaction)
+
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+      assert Buffer.size(transaction_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      bodies = collect_envelope_bodies(ctx.ref, 1)
+      assert length(bodies) == 1
+
+      [items] = Enum.map(bodies, &decode_envelope!/1)
+      assert [{%{"type" => "transaction"}, transaction_data}] = items
+      assert is_binary(transaction_data["event_id"])
+      assert is_number(transaction_data["start_timestamp"])
+      assert is_number(transaction_data["timestamp"])
+    end
+
+    test "flush drains transaction buffer completely", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      for _i <- 1..3 do
+        TelemetryProcessor.add(ctx.processor, make_transaction())
+      end
+
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+      assert Buffer.size(transaction_buffer) == 3
+
+      :sys.resume(scheduler)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+
+      assert Buffer.size(transaction_buffer) == 0
+
+      bodies = collect_envelope_bodies(ctx.ref, 3)
+      items = Enum.map(bodies, &decode_envelope!/1)
+      assert length(items) == 3
+      assert Enum.all?(items, fn [{%{"type" => type}, _}] -> type == "transaction" end)
+    end
+  end
+
   describe "log batching" do
     test "sends log events as batched envelopes", ctx do
       TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
@@ -218,6 +269,18 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  defp make_transaction do
+    now = System.system_time(:microsecond)
+
+    %Transaction{
+      event_id: Sentry.UUID.uuid4_hex(),
+      span_id: Sentry.UUID.uuid4_hex() |> binary_part(0, 16),
+      start_timestamp: (now - 1_000_000) / 1_000_000,
+      timestamp: now / 1_000_000,
+      spans: []
+    }
+  end
+
   defp make_log_event(body) do
     %LogEvent{
       timestamp: System.system_time(:nanosecond) / 1_000_000_000,
@@ -242,5 +305,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   defp decoded_envelope_category([{%{"type" => "event"}, _} | _]), do: :error
   defp decoded_envelope_category([{%{"type" => "check_in"}, _} | _]), do: :check_in
+  defp decoded_envelope_category([{%{"type" => "transaction"}, _} | _]), do: :transaction
   defp decoded_envelope_category([{%{"type" => "log"}, _} | _]), do: :log
 end

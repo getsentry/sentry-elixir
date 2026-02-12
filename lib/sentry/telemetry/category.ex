@@ -9,22 +9,24 @@ defmodule Sentry.Telemetry.Category do
 
     * `:error` - Error events (critical priority)
     * `:check_in` - Cron check-ins (high priority)
+    * `:transaction` - Performance transactions (medium priority)
     * `:log` - Log entries (low priority)
 
   ## Priorities and Weights
 
     * `:critical` - weight 5 (errors)
     * `:high` - weight 4 (check-ins)
+    * `:medium` - weight 3 (transactions)
     * `:low` - weight 2 (logs)
 
   """
   @moduledoc since: "12.0.0"
 
   @typedoc "Telemetry category types."
-  @type t :: :error | :check_in | :log
+  @type t :: :error | :check_in | :transaction | :log
 
   @typedoc "Priority levels for categories."
-  @type priority :: :critical | :high | :low
+  @type priority :: :critical | :high | :medium | :low
 
   @typedoc "Buffer configuration for a category."
   @type config :: %{
@@ -33,18 +35,20 @@ defmodule Sentry.Telemetry.Category do
           timeout: pos_integer() | nil
         }
 
-  @priorities [:critical, :high, :low]
-  @categories [:error, :check_in, :log]
+  @priorities [:critical, :high, :medium, :low]
+  @categories [:error, :check_in, :transaction, :log]
 
   @weights %{
     critical: 5,
     high: 4,
+    medium: 3,
     low: 2
   }
 
   @default_configs %{
     error: %{capacity: 100, batch_size: 1, timeout: nil},
     check_in: %{capacity: 100, batch_size: 1, timeout: nil},
+    transaction: %{capacity: 1000, batch_size: 1, timeout: nil},
     log: %{capacity: 1000, batch_size: 100, timeout: 5000}
   }
 
@@ -59,6 +63,9 @@ defmodule Sentry.Telemetry.Category do
       iex> Sentry.Telemetry.Category.priority(:check_in)
       :high
 
+      iex> Sentry.Telemetry.Category.priority(:transaction)
+      :medium
+
       iex> Sentry.Telemetry.Category.priority(:log)
       :low
 
@@ -66,6 +73,7 @@ defmodule Sentry.Telemetry.Category do
   @spec priority(t()) :: priority()
   def priority(:error), do: :critical
   def priority(:check_in), do: :high
+  def priority(:transaction), do: :medium
   def priority(:log), do: :low
 
   @doc """
@@ -77,6 +85,9 @@ defmodule Sentry.Telemetry.Category do
 
       iex> Sentry.Telemetry.Category.weight(:high)
       4
+
+      iex> Sentry.Telemetry.Category.weight(:medium)
+      3
 
       iex> Sentry.Telemetry.Category.weight(:low)
       2
@@ -104,6 +115,9 @@ defmodule Sentry.Telemetry.Category do
       iex> Sentry.Telemetry.Category.default_config(:check_in)
       %{capacity: 100, batch_size: 1, timeout: nil}
 
+      iex> Sentry.Telemetry.Category.default_config(:transaction)
+      %{capacity: 1000, batch_size: 1, timeout: nil}
+
       iex> Sentry.Telemetry.Category.default_config(:log)
       %{capacity: 1000, batch_size: 100, timeout: 5000}
 
@@ -119,7 +133,7 @@ defmodule Sentry.Telemetry.Category do
   ## Examples
 
       iex> Sentry.Telemetry.Category.all()
-      [:error, :check_in, :log]
+      [:error, :check_in, :transaction, :log]
 
   """
   @spec all() :: [t()]
@@ -131,7 +145,7 @@ defmodule Sentry.Telemetry.Category do
   ## Examples
 
       iex> Sentry.Telemetry.Category.priorities()
-      [:critical, :high, :low]
+      [:critical, :high, :medium, :low]
 
   """
   @spec priorities() :: [priority()]

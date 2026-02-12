@@ -12,6 +12,7 @@ defmodule Sentry.TelemetryProcessor do
 
     * Error Buffer - for error events (critical priority)
     * Check-in Buffer - for cron check-ins (high priority)
+    * Transaction Buffer - for performance transactions (medium priority)
     * Log Buffer - for log entries (low priority)
     * Scheduler - weighted round-robin scheduler with integrated transport queue
 
@@ -22,6 +23,9 @@ defmodule Sentry.TelemetryProcessor do
 
       # Add check-ins to the buffer
       TelemetryProcessor.add(processor, %Sentry.CheckIn{...})
+
+      # Add transactions to the buffer
+      TelemetryProcessor.add(processor, %Sentry.Transaction{...})
 
       # Add log events to the buffer
       TelemetryProcessor.add(processor, %Sentry.LogEvent{...})
@@ -35,7 +39,7 @@ defmodule Sentry.TelemetryProcessor do
   use Supervisor
 
   alias Sentry.Telemetry.{Buffer, Category, Scheduler}
-  alias Sentry.{CheckIn, Event, LogEvent}
+  alias Sentry.{CheckIn, Event, LogEvent, Transaction}
 
   @default_name __MODULE__
 
@@ -91,12 +95,16 @@ defmodule Sentry.TelemetryProcessor do
 
   Returns `:ok`.
   """
-  @spec add(Event.t() | CheckIn.t() | LogEvent.t()) :: :ok
+  @spec add(Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) :: :ok
   def add(%Event{} = item) do
     add(processor_name(), item)
   end
 
   def add(%CheckIn{} = item) do
+    add(processor_name(), item)
+  end
+
+  def add(%Transaction{} = item) do
     add(processor_name(), item)
   end
 
@@ -111,7 +119,8 @@ defmodule Sentry.TelemetryProcessor do
 
   Returns `:ok`.
   """
-  @spec add(Supervisor.supervisor(), Event.t() | CheckIn.t() | LogEvent.t()) :: :ok
+  @spec add(Supervisor.supervisor(), Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
+          :ok
   def add(processor, %Event{} = item) when is_atom(processor) do
     Buffer.add(buffer_name(processor, :error), item)
     Scheduler.signal(scheduler_name(processor))
@@ -134,6 +143,20 @@ defmodule Sentry.TelemetryProcessor do
 
   def add(processor, %CheckIn{} = item) do
     buffer = get_buffer(processor, :check_in)
+    Buffer.add(buffer, item)
+    scheduler = get_scheduler(processor)
+    Scheduler.signal(scheduler)
+    :ok
+  end
+
+  def add(processor, %Transaction{} = item) when is_atom(processor) do
+    Buffer.add(buffer_name(processor, :transaction), item)
+    Scheduler.signal(scheduler_name(processor))
+    :ok
+  end
+
+  def add(processor, %Transaction{} = item) do
+    buffer = get_buffer(processor, :transaction)
     Buffer.add(buffer, item)
     scheduler = get_scheduler(processor)
     Scheduler.signal(scheduler)
@@ -187,7 +210,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns the buffer pid for a given category.
   """
   @spec get_buffer(Supervisor.supervisor(), Category.t()) :: pid()
-  def get_buffer(processor, category) when category in [:error, :check_in, :log] do
+  def get_buffer(processor, category) when category in [:error, :check_in, :transaction, :log] do
     children = Supervisor.which_children(processor)
     buffer_id = buffer_id(category)
 
@@ -217,7 +240,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Category.t()) :: non_neg_integer()
-  def buffer_size(category) when category in [:error, :check_in, :log] do
+  def buffer_size(category) when category in [:error, :check_in, :transaction, :log] do
     buffer_size(processor_name(), category)
   end
 
@@ -227,7 +250,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Supervisor.supervisor(), Category.t()) :: non_neg_integer()
-  def buffer_size(processor, category) when category in [:error, :check_in, :log] do
+  def buffer_size(processor, category) when category in [:error, :check_in, :transaction, :log] do
     case safe_get_buffer(processor, category) do
       {:ok, buffer} -> Buffer.size(buffer)
       :error -> 0
@@ -290,6 +313,7 @@ defmodule Sentry.TelemetryProcessor do
         buffers: %{
           error: Map.fetch!(buffer_names, :error),
           check_in: Map.fetch!(buffer_names, :check_in),
+          transaction: Map.fetch!(buffer_names, :transaction),
           log: Map.fetch!(buffer_names, :log)
         },
         name: scheduler_name(processor_name),
@@ -310,6 +334,7 @@ defmodule Sentry.TelemetryProcessor do
 
   defp buffer_id(:error), do: :error_buffer
   defp buffer_id(:check_in), do: :check_in_buffer
+  defp buffer_id(:transaction), do: :transaction_buffer
   defp buffer_id(:log), do: :log_buffer
 
   @doc false
