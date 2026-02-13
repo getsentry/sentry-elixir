@@ -271,7 +271,12 @@ defmodule Sentry.Client do
         {:ok, ""}
 
       :not_collecting ->
-        :ok = Transport.Sender.send_async(client, transaction)
+        if Config.telemetry_processor_category?(:transaction) do
+          :ok = TelemetryProcessor.add(transaction)
+        else
+          :ok = Transport.Sender.send_async(client, transaction)
+        end
+
         {:ok, ""}
     end
   end
