@@ -2,21 +2,22 @@ defmodule Sentry.TelemetryProcessor do
   @moduledoc """
   Supervisor managing telemetry buffers and scheduler for the Sentry SDK.
 
-  The TelemetryProcessor is the coordinator for log telemetry data flowing
-  through the SDK. It manages a log ring buffer coordinated by a weighted
+  The TelemetryProcessor is the coordinator for telemetry data flowing
+  through the SDK. It manages ring buffers coordinated by a weighted
   round-robin scheduler.
-
-  Currently, only logs are managed by the TelemetryProcessor. Other categories
-  (errors, transactions, check-ins) will be added in future versions.
 
   ## Architecture
 
   The processor starts as a supervisor with the following children:
 
+    * Error Buffer - for error events (critical priority)
     * Log Buffer - for log entries (low priority)
     * Scheduler - weighted round-robin scheduler with integrated transport queue
 
   ## Usage
+
+      # Add error events to the buffer
+      TelemetryProcessor.add(processor, %Sentry.Event{...})
 
       # Add log events to the buffer
       TelemetryProcessor.add(processor, %Sentry.LogEvent{...})
@@ -30,7 +31,7 @@ defmodule Sentry.TelemetryProcessor do
   use Supervisor
 
   alias Sentry.Telemetry.{Buffer, Category, Scheduler}
-  alias Sentry.LogEvent
+  alias Sentry.{Event, LogEvent}
 
   @default_name __MODULE__
 
@@ -79,26 +80,44 @@ defmodule Sentry.TelemetryProcessor do
   end
 
   @doc """
-  Adds a log event to the log buffer.
+  Adds an event to the appropriate buffer.
 
   Uses the processor from process dictionary or the default (`#{inspect(@default_name)}`).
   See `add/2` for the version accepting a custom processor.
 
   Returns `:ok`.
   """
-  @spec add(LogEvent.t()) :: :ok
+  @spec add(Event.t() | LogEvent.t()) :: :ok
+  def add(%Event{} = item) do
+    add(processor_name(), item)
+  end
+
   def add(%LogEvent{} = item) do
     add(processor_name(), item)
   end
 
   @doc """
-  Adds a log event to the log buffer.
+  Adds an event to the appropriate buffer.
 
   After adding, the scheduler is signaled to wake and process items.
 
   Returns `:ok`.
   """
-  @spec add(Supervisor.supervisor(), LogEvent.t()) :: :ok
+  @spec add(Supervisor.supervisor(), Event.t() | LogEvent.t()) :: :ok
+  def add(processor, %Event{} = item) when is_atom(processor) do
+    Buffer.add(buffer_name(processor, :error), item)
+    Scheduler.signal(scheduler_name(processor))
+    :ok
+  end
+
+  def add(processor, %Event{} = item) do
+    buffer = get_buffer(processor, :error)
+    Buffer.add(buffer, item)
+    scheduler = get_scheduler(processor)
+    Scheduler.signal(scheduler)
+    :ok
+  end
+
   def add(processor, %LogEvent{} = item) when is_atom(processor) do
     Buffer.add(buffer_name(processor, :log), item)
     Scheduler.signal(scheduler_name(processor))
@@ -146,7 +165,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns the buffer pid for a given category.
   """
   @spec get_buffer(Supervisor.supervisor(), Category.t()) :: pid()
-  def get_buffer(processor, category) when category == :log do
+  def get_buffer(processor, category) when category in [:error, :log] do
     children = Supervisor.which_children(processor)
     buffer_id = buffer_id(category)
 
@@ -170,13 +189,13 @@ defmodule Sentry.TelemetryProcessor do
   end
 
   @doc """
-  Returns the current size of the log buffer.
+  Returns the current size of a buffer for a given category.
 
   Uses the processor from process dictionary or the default.
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Category.t()) :: non_neg_integer()
-  def buffer_size(category) when category == :log do
+  def buffer_size(category) when category in [:error, :log] do
     buffer_size(processor_name(), category)
   end
 
@@ -186,7 +205,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Supervisor.supervisor(), Category.t()) :: non_neg_integer()
-  def buffer_size(processor, category) when category == :log do
+  def buffer_size(processor, category) when category in [:error, :log] do
     case safe_get_buffer(processor, category) do
       {:ok, buffer} -> Buffer.size(buffer)
       :error -> 0
@@ -247,6 +266,7 @@ defmodule Sentry.TelemetryProcessor do
     scheduler_opts =
       [
         buffers: %{
+          error: Map.fetch!(buffer_names, :error),
           log: Map.fetch!(buffer_names, :log)
         },
         name: scheduler_name(processor_name),
@@ -265,6 +285,7 @@ defmodule Sentry.TelemetryProcessor do
     Supervisor.init(children, strategy: :one_for_one)
   end
 
+  defp buffer_id(:error), do: :error_buffer
   defp buffer_id(:log), do: :log_buffer
 
   @doc false
