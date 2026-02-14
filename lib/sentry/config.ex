@@ -495,26 +495,24 @@ defmodule Sentry.Config do
       """
     ],
     telemetry_buffer_capacities: [
-      type: {:map, {:in, [:log]}, :pos_integer},
+      type: {:map, {:in, [:error, :check_in, :log]}, :pos_integer},
       default: %{},
       type_doc: "`%{category => pos_integer()}`",
       doc: """
       Overrides for the maximum number of items each telemetry buffer can hold.
       When a buffer reaches capacity, oldest items are dropped to make room.
-      Currently only the `:log` category is managed by the TelemetryProcessor.
-      Default: log=1000.
+      Default: error=100, check_in=100, log=1000.
       *Available since v12.0.0*.
       """
     ],
     telemetry_scheduler_weights: [
-      type: {:map, {:in, [:low]}, :pos_integer},
+      type: {:map, {:in, [:critical, :high, :low]}, :pos_integer},
       default: %{},
       type_doc: "`%{priority => pos_integer()}`",
       doc: """
       Overrides for the weighted round-robin scheduler priority weights.
       Higher weights mean more sending slots for that priority level.
-      Currently only the `:low` priority (logs) is managed by the TelemetryProcessor.
-      Default: low=2.
+      Default: critical=5, high=4, low=2.
       *Available since v12.0.0*.
       """
     ],
