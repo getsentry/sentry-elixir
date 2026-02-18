@@ -40,7 +40,7 @@ defmodule Sentry do
   > was the `:included_environments` option (a list of environments to report events for).
   > This was used together with the `:environment_name` option to determine whether to
   > send events. `:included_environments` is deprecated in v10.0.0 in favor of setting
-  > or not setting `:dsn`. It will be removed in v11.0.0.
+  > or not setting `:dsn`. It will be removed in v12.0.0.
 
   You can even rely on more specific logic to determine the environment name. It's
   not uncommon for most applications to have a "staging" environment. In order
@@ -183,7 +183,17 @@ defmodule Sentry do
   > with `:source_code_exclude_patterns`.
   """
 
-  alias Sentry.{CheckIn, Client, ClientError, ClientReport, Config, Event, LoggerUtils, Options}
+  alias Sentry.{
+    CheckIn,
+    Client,
+    ClientError,
+    ClientReport,
+    Config,
+    Event,
+    LoggerUtils,
+    Options,
+    TelemetryProcessor
+  }
 
   require Logger
 
@@ -350,7 +360,7 @@ defmodule Sentry do
   """
   @spec send_event(Event.t(), keyword()) :: send_result
   def send_event(event, options \\ []) do
-    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    # TODO: remove on v12.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
     cond do
@@ -378,7 +388,7 @@ defmodule Sentry do
   end
 
   def send_transaction(transaction, options \\ []) do
-    # TODO: remove on v11.0.0, :included_environments was deprecated in 10.0.0.
+    # TODO: remove on v12.0.0, :included_environments was deprecated in 10.0.0.
     included_envs = Config.included_environments()
 
     cond do
@@ -500,6 +510,44 @@ defmodule Sentry do
     case Config.dsn() do
       %Sentry.DSN{original_dsn: original_dsn} -> original_dsn
       nil -> nil
+    end
+  end
+
+  @doc """
+  Flushes all pending events to Sentry.
+
+  This is a blocking call that drains all the buffers and waits for the scheduler
+  to process all pending items. Useful before application shutdown to ensure
+  all telemetry events are sent.
+
+  ## Options
+
+    * `:timeout` - Maximum time to wait for flush to complete (default: 5000ms)
+
+  ## Examples
+
+      # Flush with default timeout
+      Sentry.flush()
+
+      # Flush with custom timeout
+      Sentry.flush(timeout: 10_000)
+
+  """
+  @doc since: "12.0.0"
+  @spec flush(keyword()) :: :ok
+  def flush(opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 5000)
+
+    try do
+      TelemetryProcessor.flush(TelemetryProcessor.default_name(), timeout)
+    catch
+      :exit, {:noproc, _} ->
+        Logger.warning("Sentry.flush/1 failed: TelemetryProcessor not running")
+        :ok
+
+      :exit, reason ->
+        Logger.warning("Sentry.flush/1 failed unexpectedly: #{inspect(reason)}")
+        :ok
     end
   end
 end

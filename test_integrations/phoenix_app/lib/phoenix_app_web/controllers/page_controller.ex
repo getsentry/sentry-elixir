@@ -143,8 +143,8 @@ defmodule PhoenixAppWeb.PageController do
       retry_count: 0
     )
 
-    # Force flush the log buffer immediately
-    Sentry.LogEventBuffer.flush()
+    # Force flush the telemetry processor immediately
+    Sentry.flush()
 
     json(conn, %{
       message: "Logs demo completed - check your Sentry logs!",

@@ -14,7 +14,6 @@ defmodule Sentry.Client do
     Envelope,
     Event,
     Interfaces,
-    LogEvent,
     LoggerUtils,
     Options,
     Transaction,
@@ -133,69 +132,6 @@ defmodule Sentry.Client do
       :excluded ->
         :excluded
     end
-  end
-
-  @doc """
-  Sends a batch of log events to Sentry.
-
-  Log events are sent asynchronously and do not support sampling.
-  They are buffered and sent in batches according to the Sentry Logs Protocol.
-
-  If a `:before_send_log` callback is configured, it will be called for each log event.
-  If the callback returns `nil` or `false`, the log event is not sent. If it returns an
-  updated `Sentry.LogEvent`, that will be used instead.
-
-  Returns `{:ok, envelope_id}` on success or `{:error, reason}` on failure.
-  """
-  @doc since: "12.0.0"
-  @spec send_log_batch([LogEvent.t()]) ::
-          {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
-  def send_log_batch([]), do: {:ok, ""}
-
-  def send_log_batch(log_events) when is_list(log_events) do
-    case Sentry.Test.maybe_collect_logs(log_events) do
-      :collected ->
-        {:ok, ""}
-
-      :not_collecting ->
-        log_events
-        |> run_before_send_log_callbacks()
-        |> send_log_events()
-    end
-  end
-
-  defp run_before_send_log_callbacks(log_events) do
-    callback = Config.before_send_log()
-
-    if callback do
-      for log_event <- log_events,
-          %LogEvent{} = modified_event <- [call_before_send_log(log_event, callback)] do
-        modified_event
-      end
-    else
-      log_events
-    end
-  end
-
-  defp call_before_send_log(log_event, function) when is_function(function, 1) do
-    function.(log_event)
-  end
-
-  defp call_before_send_log(log_event, {mod, fun}) do
-    apply(mod, fun, [log_event])
-  end
-
-  defp send_log_events([]), do: {:ok, ""}
-
-  defp send_log_events(log_events) do
-    client = Config.client()
-
-    request_retries =
-      Application.get_env(:sentry, :request_retries, Transport.default_retries())
-
-    log_events
-    |> Envelope.from_log_events()
-    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp sample_event(sample_rate) do

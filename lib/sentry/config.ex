@@ -394,17 +394,6 @@ defmodule Sentry.Config do
       Use `Sentry.LogsHandler` to capture log events from Erlang's `:logger`.
       *Available since 12.0.0*.
       """
-    ],
-    max_log_events: [
-      type: :non_neg_integer,
-      default: 100,
-      doc: """
-      The maximum number of log events to buffer before flushing to Sentry.
-      Log events are buffered and sent in batches to reduce network overhead.
-      When the buffer reaches this size, it will be flushed immediately.
-      Otherwise, logs are flushed every 5 seconds. Only applies when `:enable_logs`
-      is `true`. *Available since 12.0.0*.
-      """
     ]
   ]
 
@@ -485,6 +474,41 @@ defmodule Sentry.Config do
       The maximum number of
       connections to keep in the pool. Only applied if `:client` is set to
       `Sentry.HackneyClient`.
+      """
+    ],
+    telemetry_buffer_capacities: [
+      type: {:map, {:in, [:log]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{category => pos_integer()}`",
+      doc: """
+      Overrides for the maximum number of items each telemetry buffer can hold.
+      When a buffer reaches capacity, oldest items are dropped to make room.
+      Currently only the `:log` category is managed by the TelemetryProcessor.
+      Default: log=1000.
+      *Available since v12.0.0*.
+      """
+    ],
+    telemetry_scheduler_weights: [
+      type: {:map, {:in, [:low]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{priority => pos_integer()}`",
+      doc: """
+      Overrides for the weighted round-robin scheduler priority weights.
+      Higher weights mean more sending slots for that priority level.
+      Currently only the `:low` priority (logs) is managed by the TelemetryProcessor.
+      Default: low=2.
+      *Available since v12.0.0*.
+      """
+    ],
+    transport_capacity: [
+      type: :pos_integer,
+      default: 1000,
+      doc: """
+      Maximum number of items the transport queue can hold. For log envelopes,
+      each log event counts as one item toward capacity. When the queue is full,
+      the scheduler stops dequeuing from buffers until space becomes available.
+      The transport queue processes one envelope at a time.
+      *Available since v12.0.0*.
       """
     ]
   ]
@@ -827,8 +851,14 @@ defmodule Sentry.Config do
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
 
-  @spec max_log_events() :: non_neg_integer()
-  def max_log_events, do: fetch!(:max_log_events)
+  @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
+  def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
+
+  @spec telemetry_scheduler_weights() :: %{Sentry.Telemetry.Category.priority() => pos_integer()}
+  def telemetry_scheduler_weights, do: fetch!(:telemetry_scheduler_weights)
+
+  @spec transport_capacity() :: pos_integer()
+  def transport_capacity, do: fetch!(:transport_capacity)
 
   @spec before_send_log() ::
           (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil

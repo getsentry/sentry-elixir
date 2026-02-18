@@ -5,6 +5,7 @@ defmodule Sentry.TestTest do
 
   alias Sentry.Event
   alias Sentry.Test
+  alias Sentry.{LogEvent, TelemetryProcessor}
 
   doctest Test
 
@@ -187,5 +188,34 @@ defmodule Sentry.TestTest do
     end)
 
     assert {:ok, ""} = Sentry.capture_message("Oops")
+  end
+
+  test "pop_sentry_logs works with per-test TelemetryProcessor" do
+    uid = System.unique_integer([:positive])
+    processor_name = :"test_processor_logs_#{uid}"
+
+    {:ok, _pid} =
+      start_supervised(
+        {TelemetryProcessor, name: processor_name, buffer_configs: %{log: %{batch_size: 1}}},
+        id: processor_name
+      )
+
+    Process.put(:sentry_telemetry_processor, processor_name)
+
+    assert :ok = Test.start_collecting_sentry_reports()
+
+    log_event = %LogEvent{
+      level: :info,
+      body: "per-test log",
+      timestamp: System.system_time(:microsecond) / 1_000_000
+    }
+
+    TelemetryProcessor.add(processor_name, log_event)
+
+    # Give the scheduler time to process
+    Process.sleep(100)
+
+    logs = Test.pop_sentry_logs()
+    assert [%LogEvent{body: "per-test log"}] = logs
   end
 end

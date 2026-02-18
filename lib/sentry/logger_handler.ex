@@ -134,9 +134,9 @@ defmodule Sentry.LoggerHandler do
       If set to `:all`, all metadata will be included. This is independent from `:metadata`.
       """
     ],
-    logs_buffer: [
+    telemetry_processor: [
       type: {:or, [:atom, :pid, {:tuple, [:atom, :atom]}]},
-      default: Sentry.LogEventBuffer,
+      default: Sentry.TelemetryProcessor,
       type_doc: "`t:GenServer.server/0`",
       doc: false
     ]
@@ -287,7 +287,7 @@ defmodule Sentry.LoggerHandler do
     :logs_level,
     :logs_excluded_domains,
     :logs_metadata,
-    :logs_buffer,
+    :telemetry_processor,
     backends: []
   ]
 
