@@ -60,10 +60,12 @@ defmodule Sentry.Transport.Sender do
 
   @impl GenServer
   def handle_cast({:send, client, %Event{} = event, counter_key}, %__MODULE__{} = state) do
+    retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
     _ =
       event
       |> Envelope.from_event()
-      |> Transport.encode_and_post_envelope(client)
+      |> Transport.encode_and_post_envelope(client, retries)
 
     # We sent an event, so we can decrease the number of queued events.
     Transport.SenderPool.decrease_queued_events_counter(counter_key)
@@ -76,10 +78,12 @@ defmodule Sentry.Transport.Sender do
         {:send, client, %Transaction{} = transaction, counter_key},
         %__MODULE__{} = state
       ) do
+    retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
     _ =
       transaction
       |> Envelope.from_transaction()
-      |> Transport.encode_and_post_envelope(client)
+      |> Transport.encode_and_post_envelope(client, retries)
 
     # We sent a transaction, so we can decrease the number of queued transactions.
     Transport.SenderPool.decrease_queued_transactions_counter(counter_key)
