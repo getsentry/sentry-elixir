@@ -51,7 +51,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     assert trace.op == "queue.process"
     assert trace.description == "Sentry.Integrations.Phoenix.ObanTest.TestWorker"
     assert trace.data["oban.job.job_id"]
-    assert trace.data["messaging.destination"] == "default"
+    assert trace.data["messaging.destination.name"] == "default"
     assert trace.data["oban.job.attempt"] == 1
 
     assert [] = transaction.spans
