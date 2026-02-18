@@ -66,13 +66,6 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       Plug.Conn.resp(conn, 500, ~s<{"id": "340"}>)
     end)
 
-    original_retries =
-      Application.get_env(:sentry, :request_retries, Sentry.Transport.default_retries())
-
-    on_exit(fn -> Application.put_env(:sentry, :request_retries, original_retries) end)
-
-    Application.put_env(:sentry, :request_retries, [])
-
     put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     assert_raise Mix.Error, ~r/Error sending event/, fn ->

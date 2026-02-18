@@ -7,13 +7,6 @@ defmodule Sentry.ClientReportTest do
   alias Sentry.Event
 
   setup do
-    original_retries =
-      Application.get_env(:sentry, :request_retries, Sentry.Transport.default_retries())
-
-    on_exit(fn -> Application.put_env(:sentry, :request_retries, original_retries) end)
-
-    Application.put_env(:sentry, :request_retries, [])
-
     bypass = Bypass.open()
     put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
     %{bypass: bypass}

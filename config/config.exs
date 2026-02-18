@@ -13,6 +13,8 @@ if config_env() == :test do
     test_mode: true,
     traces_sample_rate: 1.0
 
+  config :sentry, request_retries: []
+
   if System.version() > "1.16.0" do
     config :logger, :default_handler, false
 
