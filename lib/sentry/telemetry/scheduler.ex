@@ -9,6 +9,7 @@ defmodule Sentry.Telemetry.Scheduler do
 
     * `:critical` - weight 5 (errors)
     * `:high` - weight 4 (check-ins)
+    * `:medium` - weight 3 (transactions)
     * `:low` - weight 2 (logs)
 
   ## Signal-Based Wake
@@ -34,13 +35,14 @@ defmodule Sentry.Telemetry.Scheduler do
   alias __MODULE__
 
   alias Sentry.Telemetry.{Buffer, Category}
-  alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transport}
+  alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transaction, Transport}
 
   @default_capacity 1000
 
   @type buffers :: %{
           error: GenServer.server(),
           check_in: GenServer.server(),
+          transaction: GenServer.server(),
           log: GenServer.server()
         }
 
@@ -79,7 +81,7 @@ defmodule Sentry.Telemetry.Scheduler do
   ## Examples
 
       iex> Sentry.Telemetry.Scheduler.build_priority_cycle()
-      [:error, :error, :error, :error, :error, :check_in, :check_in, :check_in, :check_in, :log, :log]
+      [:error, :error, :error, :error, :error, :check_in, :check_in, :check_in, :check_in, :transaction, :transaction, :transaction, :log, :log]
 
   """
   @spec build_priority_cycle(map() | nil) :: [Category.t()]
@@ -243,6 +245,10 @@ defmodule Sentry.Telemetry.Scheduler do
     process_and_send_check_in(state, check_in, &send_envelope/2)
   end
 
+  defp send_items(state, :transaction, [%Transaction{} = transaction]) do
+    process_and_send_transaction(state, transaction, &send_envelope/2)
+  end
+
   defp send_items(state, :log, log_events) do
     process_and_send_logs(state, log_events, &send_envelope/2)
   end
@@ -261,6 +267,11 @@ defmodule Sentry.Telemetry.Scheduler do
           :check_in ->
             Enum.each(items, fn check_in ->
               process_and_send_check_in(state, check_in, &send_envelope_direct/2)
+            end)
+
+          :transaction ->
+            Enum.each(items, fn transaction ->
+              process_and_send_transaction(state, transaction, &send_envelope_direct/2)
             end)
 
           :log ->
@@ -292,6 +303,27 @@ defmodule Sentry.Telemetry.Scheduler do
   defp process_and_send_check_in(state, %CheckIn{} = check_in, send_fn) do
     envelope = Envelope.from_check_in(check_in)
     send_fn.(state, envelope)
+  end
+
+  defp process_and_send_transaction(
+         %{on_envelope: on_envelope} = state,
+         %Transaction{} = transaction,
+         send_fn
+       ) do
+    # Skip test collection when on_envelope is set (used by unit tests)
+    if is_nil(on_envelope) do
+      case Sentry.Test.maybe_collect(transaction) do
+        :collected ->
+          state
+
+        :not_collecting ->
+          envelope = Envelope.from_transaction(transaction)
+          send_fn.(state, envelope)
+      end
+    else
+      envelope = Envelope.from_transaction(transaction)
+      send_fn.(state, envelope)
+    end
   end
 
   defp process_and_send_logs(%{on_envelope: on_envelope} = state, log_events, send_fn) do
@@ -468,6 +500,7 @@ defmodule Sentry.Telemetry.Scheduler do
     %{
       critical: Category.weight(:critical),
       high: Category.weight(:high),
+      medium: Category.weight(:medium),
       low: Category.weight(:low)
     }
   end
@@ -476,6 +509,7 @@ defmodule Sentry.Telemetry.Scheduler do
     [
       {:error, :critical},
       {:check_in, :high},
+      {:transaction, :medium},
       {:log, :low}
     ]
   end

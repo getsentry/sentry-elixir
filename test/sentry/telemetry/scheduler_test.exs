@@ -19,17 +19,17 @@ defmodule Sentry.Telemetry.SchedulerTest do
     test "builds cycle with correct weights for all categories" do
       cycle = Scheduler.build_priority_cycle()
 
-      # Default weights: critical=5, high=4, low=2
-      assert length(cycle) == 11
-      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, log: 2}
+      # Default weights: critical=5, high=4, medium=3, low=2
+      assert length(cycle) == 14
+      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, transaction: 3, log: 2}
     end
 
     test "builds cycle with custom weights" do
       custom_weights = %{low: 5}
       cycle = Scheduler.build_priority_cycle(custom_weights)
 
-      assert length(cycle) == 14
-      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, log: 5}
+      assert length(cycle) == 17
+      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, transaction: 3, log: 5}
     end
   end
 
