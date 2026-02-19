@@ -34,19 +34,15 @@ defmodule Sentry.Application do
         []
       end
 
-    maybe_telemetry_processor =
-      if Config.enable_logs?() do
-        [
-          {Sentry.TelemetryProcessor,
-           [
-             buffer_capacities: Config.telemetry_buffer_capacities(),
-             scheduler_weights: Config.telemetry_scheduler_weights(),
-             transport_capacity: Config.transport_capacity()
-           ]}
-        ]
-      else
-        []
-      end
+    telemetry_processor =
+      [
+        {Sentry.TelemetryProcessor,
+         [
+           buffer_capacities: Config.telemetry_buffer_capacities(),
+           scheduler_weights: Config.telemetry_scheduler_weights(),
+           transport_capacity: Config.transport_capacity()
+         ]}
+      ]
 
     children =
       [
@@ -62,7 +58,7 @@ defmodule Sentry.Application do
       ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
-        maybe_telemetry_processor ++
+        telemetry_processor ++
         maybe_rate_limiter() ++
         [Sentry.Transport.SenderPool]
 

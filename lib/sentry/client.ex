@@ -16,6 +16,7 @@ defmodule Sentry.Client do
     Interfaces,
     LoggerUtils,
     Options,
+    TelemetryProcessor,
     Transaction,
     Transport
   }
@@ -227,7 +228,12 @@ defmodule Sentry.Client do
         {:ok, ""}
 
       :not_collecting ->
-        :ok = Transport.Sender.send_async(client, event)
+        if Config.telemetry_processor_category?(:error) do
+          :ok = TelemetryProcessor.add(event)
+        else
+          :ok = Transport.Sender.send_async(client, event)
+        end
+
         {:ok, ""}
     end
   end

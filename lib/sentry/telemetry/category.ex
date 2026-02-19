@@ -5,25 +5,24 @@ defmodule Sentry.Telemetry.Category do
   The TelemetryProcessor uses categories to classify different types of telemetry data
   and prioritize their sending based on a weighted round-robin scheduler.
 
-  Currently, only the `:log` category is managed by the TelemetryProcessor.
-  Other categories (errors, transactions, check-ins) will be added in future versions.
-
   ## Categories
 
+    * `:error` - Error events (critical priority)
     * `:log` - Log entries (low priority)
 
   ## Priorities and Weights
 
+    * `:critical` - weight 5 (errors)
     * `:low` - weight 2 (logs)
 
   """
   @moduledoc since: "12.0.0"
 
   @typedoc "Telemetry category types."
-  @type t :: :log
+  @type t :: :error | :log
 
   @typedoc "Priority levels for categories."
-  @type priority :: :low
+  @type priority :: :critical | :low
 
   @typedoc "Buffer configuration for a category."
   @type config :: %{
@@ -32,14 +31,16 @@ defmodule Sentry.Telemetry.Category do
           timeout: pos_integer() | nil
         }
 
-  @priorities [:low]
-  @categories [:log]
+  @priorities [:critical, :low]
+  @categories [:error, :log]
 
   @weights %{
+    critical: 5,
     low: 2
   }
 
   @default_configs %{
+    error: %{capacity: 100, batch_size: 1, timeout: nil},
     log: %{capacity: 1000, batch_size: 100, timeout: 5000}
   }
 
@@ -48,11 +49,15 @@ defmodule Sentry.Telemetry.Category do
 
   ## Examples
 
+      iex> Sentry.Telemetry.Category.priority(:error)
+      :critical
+
       iex> Sentry.Telemetry.Category.priority(:log)
       :low
 
   """
   @spec priority(t()) :: priority()
+  def priority(:error), do: :critical
   def priority(:log), do: :low
 
   @doc """
@@ -82,6 +87,9 @@ defmodule Sentry.Telemetry.Category do
 
   ## Examples
 
+      iex> Sentry.Telemetry.Category.default_config(:error)
+      %{capacity: 100, batch_size: 1, timeout: nil}
+
       iex> Sentry.Telemetry.Category.default_config(:log)
       %{capacity: 1000, batch_size: 100, timeout: 5000}
 
@@ -97,7 +105,7 @@ defmodule Sentry.Telemetry.Category do
   ## Examples
 
       iex> Sentry.Telemetry.Category.all()
-      [:log]
+      [:error, :log]
 
   """
   @spec all() :: [t()]
@@ -109,7 +117,7 @@ defmodule Sentry.Telemetry.Category do
   ## Examples
 
       iex> Sentry.Telemetry.Category.priorities()
-      [:low]
+      [:critical, :low]
 
   """
   @spec priorities() :: [priority()]
