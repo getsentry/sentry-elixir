@@ -430,9 +430,9 @@ defmodule Sentry.Config do
       default: Sentry.FinchClient,
       doc: """
       A module that implements the `Sentry.HTTPClient`
-      behaviour. Defaults to `Sentry.FinchClient`, which uses
-      [Finch](https://github.com/sneako/finch) as the HTTP client.
-      *The default changed from Hackney to Finch in v10.11.0*.
+      behaviour. The default client uses
+      [Finch](https://github.com/sneako/finch) as the HTTP client;
+      this *changed from Hackney to Finch in v12.0.0*.
       """
     ],
     send_max_attempts: [
