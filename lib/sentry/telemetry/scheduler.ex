@@ -8,6 +8,7 @@ defmodule Sentry.Telemetry.Scheduler do
   ## Weights
 
     * `:critical` - weight 5 (errors)
+    * `:high` - weight 4 (check-ins)
     * `:low` - weight 2 (logs)
 
   ## Signal-Based Wake
@@ -33,12 +34,13 @@ defmodule Sentry.Telemetry.Scheduler do
   alias __MODULE__
 
   alias Sentry.Telemetry.{Buffer, Category}
-  alias Sentry.{ClientReport, Config, Envelope, Event, LogEvent, Transport}
+  alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transport}
 
   @default_capacity 1000
 
   @type buffers :: %{
           error: GenServer.server(),
+          check_in: GenServer.server(),
           log: GenServer.server()
         }
 
@@ -77,7 +79,7 @@ defmodule Sentry.Telemetry.Scheduler do
   ## Examples
 
       iex> Sentry.Telemetry.Scheduler.build_priority_cycle()
-      [:error, :error, :error, :error, :error, :log, :log]
+      [:error, :error, :error, :error, :error, :check_in, :check_in, :check_in, :check_in, :log, :log]
 
   """
   @spec build_priority_cycle(map() | nil) :: [Category.t()]
@@ -237,6 +239,10 @@ defmodule Sentry.Telemetry.Scheduler do
     process_and_send_event(state, event, &send_envelope/2)
   end
 
+  defp send_items(state, :check_in, [%CheckIn{} = check_in]) do
+    process_and_send_check_in(state, check_in, &send_envelope/2)
+  end
+
   defp send_items(state, :log, log_events) do
     process_and_send_logs(state, log_events, &send_envelope/2)
   end
@@ -250,6 +256,11 @@ defmodule Sentry.Telemetry.Scheduler do
           :error ->
             Enum.each(items, fn event ->
               process_and_send_event(state, event, &send_envelope_direct/2)
+            end)
+
+          :check_in ->
+            Enum.each(items, fn check_in ->
+              process_and_send_check_in(state, check_in, &send_envelope_direct/2)
             end)
 
           :log ->
@@ -276,6 +287,11 @@ defmodule Sentry.Telemetry.Scheduler do
       envelope = Envelope.from_event(event)
       send_fn.(state, envelope)
     end
+  end
+
+  defp process_and_send_check_in(state, %CheckIn{} = check_in, send_fn) do
+    envelope = Envelope.from_check_in(check_in)
+    send_fn.(state, envelope)
   end
 
   defp process_and_send_logs(%{on_envelope: on_envelope} = state, log_events, send_fn) do
@@ -451,6 +467,7 @@ defmodule Sentry.Telemetry.Scheduler do
   defp default_weights do
     %{
       critical: Category.weight(:critical),
+      high: Category.weight(:high),
       low: Category.weight(:low)
     }
   end
@@ -458,6 +475,7 @@ defmodule Sentry.Telemetry.Scheduler do
   defp category_priority_mapping do
     [
       {:error, :critical},
+      {:check_in, :high},
       {:log, :low}
     ]
   end
