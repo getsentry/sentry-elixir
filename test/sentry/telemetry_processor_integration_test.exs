@@ -269,6 +269,167 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  describe "buffer overflow client reports" do
+    setup ctx do
+      stop_supervised!(ctx.processor)
+
+      uid = System.unique_integer([:positive])
+      processor_name = :"test_overflow_#{uid}"
+
+      start_supervised!(
+        {TelemetryProcessor,
+         name: processor_name, buffer_configs: %{log: %{capacity: 2, batch_size: 1}}},
+        id: processor_name
+      )
+
+      Process.put(:sentry_telemetry_processor, processor_name)
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      Process.sleep(50)
+
+      flush_ref_messages(ctx.ref)
+
+      %{processor: processor_name}
+    end
+
+    test "sends cache_overflow client report when log buffer overflows", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-2"))
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-3"))
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+      _ = Buffer.size(log_buffer)
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      cache_overflow =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "cache_overflow"))
+
+      assert cache_overflow["category"] == "log_item"
+      assert cache_overflow["quantity"] == 1
+
+      :sys.resume(scheduler)
+    end
+  end
+
+  describe "scheduler rate limit checks" do
+    setup ctx do
+      # Flush any pre-existing client reports so they don't interfere
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      Process.sleep(50)
+      flush_ref_messages(ctx.ref)
+
+      # Clean up rate limit entries after test
+      on_exit(fn ->
+        try do
+          :ets.delete(Sentry.Transport.RateLimiter, "log_item")
+          :ets.delete(Sentry.Transport.RateLimiter, "error")
+        catch
+          _, _ -> :ok
+        end
+      end)
+
+      :ok
+    end
+
+    test "drops rate-limited log events before reaching transport", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+      assert Buffer.size(log_buffer) == 1
+
+      # Set rate limit on log_item category in the global RateLimiter ETS table
+      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+
+      # Synchronize - ensure scheduler has processed the pending signal.
+      # :sys.get_state is processed between regular messages, so this returns
+      # the state right after the :signal cast finishes but before :DOWN (if any).
+      scheduler_state = :sys.get_state(scheduler)
+
+      # Buffer should be drained (items were polled by the scheduler)
+      assert Buffer.size(log_buffer) == 0
+
+      # Items should have been dropped at the scheduler level, NOT forwarded
+      # to the transport queue. Without the scheduler-level rate limit check,
+      # items would be enqueued (size > 0) and a send process spawned (active_ref != nil).
+      assert scheduler_state.size == 0
+      assert scheduler_state.active_ref == nil
+
+      # Client report should be recorded for rate-limited items
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      ratelimit_event =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
+
+      assert ratelimit_event != nil
+      assert ratelimit_event["category"] == "log_item"
+      assert ratelimit_event["quantity"] == 1
+    end
+
+    test "drops rate-limited error events before reaching transport", ctx do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      Sentry.capture_message("rate-limited-error", result: :none)
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      # Set rate limit on error category
+      :ets.insert(Sentry.Transport.RateLimiter, {"error", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+      scheduler_state = :sys.get_state(scheduler)
+
+      # Buffer should be drained
+      assert Buffer.size(error_buffer) == 0
+
+      # Items should have been dropped at the scheduler level
+      assert scheduler_state.size == 0
+      assert scheduler_state.active_ref == nil
+
+      # Client report should be recorded for rate-limited items
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      ratelimit_event =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
+
+      assert ratelimit_event != nil
+      assert ratelimit_event["category"] == "error"
+      assert ratelimit_event["quantity"] == 1
+    end
+  end
+
   defp make_transaction do
     now = System.system_time(:microsecond)
 
@@ -279,6 +440,14 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       timestamp: now / 1_000_000,
       spans: []
     }
+  end
+
+  defp flush_ref_messages(ref) do
+    receive do
+      {^ref, _body} -> flush_ref_messages(ref)
+    after
+      100 -> :ok
+    end
   end
 
   defp make_log_event(body) do

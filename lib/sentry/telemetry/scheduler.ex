@@ -36,6 +36,7 @@ defmodule Sentry.Telemetry.Scheduler do
 
   alias Sentry.Telemetry.{Buffer, Category}
   alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transaction, Transport}
+  alias Sentry.Transport.RateLimiter
 
   @default_capacity 1000
 
@@ -226,9 +227,15 @@ defmodule Sentry.Telemetry.Scheduler do
 
       case Buffer.poll_if_ready(buffer) do
         {:ok, items} when items != [] ->
-          state = send_items(state, category, items)
-          state = advance_cycle(state)
-          process_cycle(state, attempts + 1, max_attempts)
+          if category_rate_limited?(state, category) do
+            record_rate_limited_discards(category, items)
+            state = advance_cycle(state)
+            process_cycle(state, attempts + 1, max_attempts)
+          else
+            state = send_items(state, category, items)
+            state = advance_cycle(state)
+            process_cycle(state, attempts + 1, max_attempts)
+          end
 
         _ ->
           state = advance_cycle(state)
@@ -493,6 +500,23 @@ defmodule Sentry.Telemetry.Scheduler do
     case :queue.out(queue) do
       {{:value, entry}, queue} -> drain_queue(queue, [entry | acc])
       {:empty, queue} -> {Enum.reverse(acc), queue}
+    end
+  end
+
+  # Skip rate limit checks when on_envelope callback is set (unit test mode)
+  defp category_rate_limited?(%{on_envelope: cb}, _category) when is_function(cb, 1), do: false
+
+  defp category_rate_limited?(_state, category) do
+    data_category = Category.data_category(category)
+    RateLimiter.rate_limited?(data_category)
+  end
+
+  defp record_rate_limited_discards(category, items) do
+    data_category = Category.data_category(category)
+    quantity = length(items)
+
+    for _ <- 1..quantity do
+      ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
     end
   end
 
