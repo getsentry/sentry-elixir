@@ -38,7 +38,9 @@ defmodule Sentry.TelemetryProcessor do
 
   use Supervisor
 
+  alias Sentry.ClientReport
   alias Sentry.Telemetry.{Buffer, Category, Scheduler}
+  alias Sentry.Transport.RateLimiter
   alias Sentry.{CheckIn, Event, LogEvent, Transaction}
 
   @default_name __MODULE__
@@ -122,58 +124,82 @@ defmodule Sentry.TelemetryProcessor do
   @spec add(Supervisor.supervisor(), Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
           :ok
   def add(processor, %Event{} = item) when is_atom(processor) do
-    Buffer.add(buffer_name(processor, :error), item)
-    Scheduler.signal(scheduler_name(processor))
+    unless rate_limited?(:error) do
+      Buffer.add(buffer_name(processor, :error), item)
+      Scheduler.signal(scheduler_name(processor))
+    end
+
     :ok
   end
 
   def add(processor, %Event{} = item) do
-    buffer = get_buffer(processor, :error)
-    Buffer.add(buffer, item)
-    scheduler = get_scheduler(processor)
-    Scheduler.signal(scheduler)
+    unless rate_limited?(:error) do
+      buffer = get_buffer(processor, :error)
+      Buffer.add(buffer, item)
+      scheduler = get_scheduler(processor)
+      Scheduler.signal(scheduler)
+    end
+
     :ok
   end
 
   def add(processor, %CheckIn{} = item) when is_atom(processor) do
-    Buffer.add(buffer_name(processor, :check_in), item)
-    Scheduler.signal(scheduler_name(processor))
+    unless rate_limited?(:check_in) do
+      Buffer.add(buffer_name(processor, :check_in), item)
+      Scheduler.signal(scheduler_name(processor))
+    end
+
     :ok
   end
 
   def add(processor, %CheckIn{} = item) do
-    buffer = get_buffer(processor, :check_in)
-    Buffer.add(buffer, item)
-    scheduler = get_scheduler(processor)
-    Scheduler.signal(scheduler)
+    unless rate_limited?(:check_in) do
+      buffer = get_buffer(processor, :check_in)
+      Buffer.add(buffer, item)
+      scheduler = get_scheduler(processor)
+      Scheduler.signal(scheduler)
+    end
+
     :ok
   end
 
   def add(processor, %Transaction{} = item) when is_atom(processor) do
-    Buffer.add(buffer_name(processor, :transaction), item)
-    Scheduler.signal(scheduler_name(processor))
+    unless rate_limited?(:transaction) do
+      Buffer.add(buffer_name(processor, :transaction), item)
+      Scheduler.signal(scheduler_name(processor))
+    end
+
     :ok
   end
 
   def add(processor, %Transaction{} = item) do
-    buffer = get_buffer(processor, :transaction)
-    Buffer.add(buffer, item)
-    scheduler = get_scheduler(processor)
-    Scheduler.signal(scheduler)
+    unless rate_limited?(:transaction) do
+      buffer = get_buffer(processor, :transaction)
+      Buffer.add(buffer, item)
+      scheduler = get_scheduler(processor)
+      Scheduler.signal(scheduler)
+    end
+
     :ok
   end
 
   def add(processor, %LogEvent{} = item) when is_atom(processor) do
-    Buffer.add(buffer_name(processor, :log), item)
-    Scheduler.signal(scheduler_name(processor))
+    unless rate_limited?(:log) do
+      Buffer.add(buffer_name(processor, :log), item)
+      Scheduler.signal(scheduler_name(processor))
+    end
+
     :ok
   end
 
   def add(processor, %LogEvent{} = item) do
-    buffer = get_buffer(processor, :log)
-    Buffer.add(buffer, item)
-    scheduler = get_scheduler(processor)
-    Scheduler.signal(scheduler)
+    unless rate_limited?(:log) do
+      buffer = get_buffer(processor, :log)
+      Buffer.add(buffer, item)
+      scheduler = get_scheduler(processor)
+      Scheduler.signal(scheduler)
+    end
+
     :ok
   end
 
@@ -254,6 +280,17 @@ defmodule Sentry.TelemetryProcessor do
     case safe_get_buffer(processor, category) do
       {:ok, buffer} -> Buffer.size(buffer)
       :error -> 0
+    end
+  end
+
+  defp rate_limited?(category) do
+    data_category = Category.data_category(category)
+
+    if RateLimiter.rate_limited?(data_category) do
+      ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+      true
+    else
+      false
     end
   end
 
