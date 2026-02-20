@@ -302,7 +302,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       TelemetryProcessor.add(ctx.processor, make_log_event("log-3"))
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
-
       _ = Buffer.size(log_buffer)
       _ = :sys.get_state(Sentry.ClientReport.Sender)
 
@@ -321,6 +320,100 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert cache_overflow["quantity"] == 1
 
       :sys.resume(scheduler)
+    end
+  end
+
+  describe "scheduler rate limit checks" do
+    setup ctx do
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+
+      flush_ref_messages(ctx.ref)
+
+      on_exit(fn ->
+        try do
+          :ets.delete(Sentry.Transport.RateLimiter, "log_item")
+          :ets.delete(Sentry.Transport.RateLimiter, "error")
+        catch
+          _, _ -> :ok
+        end
+      end)
+
+      :ok
+    end
+
+    test "drops rate-limited log events before reaching transport", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+      assert Buffer.size(log_buffer) == 1
+
+      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+
+      scheduler_state = :sys.get_state(scheduler)
+
+      assert Buffer.size(log_buffer) == 0
+
+      assert scheduler_state.size == 0
+      assert scheduler_state.active_ref == nil
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      ratelimit_event =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
+
+      assert ratelimit_event != nil
+      assert ratelimit_event["category"] == "log_item"
+      assert ratelimit_event["quantity"] == 1
+    end
+
+    test "drops rate-limited error events before reaching transport", ctx do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      Sentry.capture_message("rate-limited-error", result: :none)
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      :ets.insert(Sentry.Transport.RateLimiter, {"error", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+      scheduler_state = :sys.get_state(scheduler)
+
+      assert Buffer.size(error_buffer) == 0
+
+      assert scheduler_state.size == 0
+      assert scheduler_state.active_ref == nil
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      ratelimit_event =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
+
+      assert ratelimit_event != nil
+      assert ratelimit_event["category"] == "error"
+      assert ratelimit_event["quantity"] == 1
     end
   end
 
