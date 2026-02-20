@@ -442,6 +442,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     }
   end
 
+
   defp flush_ref_messages(ref) do
     receive do
       {^ref, _body} -> flush_ref_messages(ref)
