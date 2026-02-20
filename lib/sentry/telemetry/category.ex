@@ -150,4 +150,27 @@ defmodule Sentry.Telemetry.Category do
   """
   @spec priorities() :: [priority()]
   def priorities, do: @priorities
+
+  @doc """
+  Returns the Sentry data category string for a given telemetry category.
+
+  These strings are used in client reports and rate limiting.
+
+  ## Examples
+
+      iex> Sentry.Telemetry.Category.data_category(:error)
+      "error"
+
+      iex> Sentry.Telemetry.Category.data_category(:check_in)
+      "monitor"
+
+      iex> Sentry.Telemetry.Category.data_category(:log)
+      "log_item"
+
+  """
+  @spec data_category(t()) :: String.t()
+  def data_category(:error), do: "error"
+  def data_category(:check_in), do: "monitor"
+  def data_category(:transaction), do: "transaction"
+  def data_category(:log), do: "log_item"
 end

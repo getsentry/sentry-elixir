@@ -21,6 +21,8 @@ defmodule Sentry.Telemetry.Buffer do
   use GenServer
 
   alias __MODULE__
+
+  alias Sentry.ClientReport
   alias Sentry.Telemetry.Category
 
   @enforce_keys [:category, :capacity, :batch_size]
@@ -177,6 +179,12 @@ defmodule Sentry.Telemetry.Buffer do
   defp offer(%Buffer{size: size, capacity: capacity} = state, item)
        when size >= capacity do
     {{:value, _dropped}, items} = :queue.out(state.items)
+
+    ClientReport.Sender.record_discarded_events(
+      :cache_overflow,
+      Category.data_category(state.category)
+    )
+
     %{state | items: :queue.in(item, items)}
   end
 
