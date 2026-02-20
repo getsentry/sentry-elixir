@@ -223,23 +223,28 @@ defmodule Sentry.Telemetry.Scheduler do
       state
     else
       category = Enum.at(state.priority_cycle, state.cycle_position)
-      buffer = Map.fetch!(state.buffers, category)
 
-      case Buffer.poll_if_ready(buffer) do
-        {:ok, items} when items != [] ->
-          if category_rate_limited?(state, category) do
-            record_rate_limited_discards(category, items)
-            state = advance_cycle(state)
-            process_cycle(state, attempts + 1, max_attempts)
-          else
+      # When rate-limited, skip the category without polling the buffer. Items remain
+      # in the buffer and will be sent once the rate limit expires. No client report is
+      # recorded here because items are not discarded — they are retained for later retry.
+      # Note: if the buffer overflows while items are held back, the overflow will be
+      # reported as :cache_overflow rather than :ratelimit_backoff.
+      if category_rate_limited?(state, category) do
+        state = advance_cycle(state)
+        process_cycle(state, attempts + 1, max_attempts)
+      else
+        buffer = Map.fetch!(state.buffers, category)
+
+        case Buffer.poll_if_ready(buffer) do
+          {:ok, items} when items != [] ->
             state = send_items(state, category, items)
             state = advance_cycle(state)
             process_cycle(state, attempts + 1, max_attempts)
-          end
 
-        _ ->
-          state = advance_cycle(state)
-          process_cycle(state, attempts + 1, max_attempts)
+          _ ->
+            state = advance_cycle(state)
+            process_cycle(state, attempts + 1, max_attempts)
+        end
       end
     end
   end
@@ -509,15 +514,6 @@ defmodule Sentry.Telemetry.Scheduler do
   defp category_rate_limited?(_state, category) do
     data_category = Category.data_category(category)
     RateLimiter.rate_limited?(data_category)
-  end
-
-  defp record_rate_limited_discards(category, items) do
-    data_category = Category.data_category(category)
-    quantity = length(items)
-
-    Enum.each(1..quantity, fn _ ->
-      ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-    end)
   end
 
   defp default_weights do
