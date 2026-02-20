@@ -269,6 +269,61 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  describe "buffer overflow client reports" do
+    setup ctx do
+      stop_supervised!(ctx.processor)
+
+      uid = System.unique_integer([:positive])
+      processor_name = :"test_overflow_#{uid}"
+
+      start_supervised!(
+        {TelemetryProcessor,
+         name: processor_name, buffer_configs: %{log: %{capacity: 2, batch_size: 1}}},
+        id: processor_name
+      )
+
+      Process.put(:sentry_telemetry_processor, processor_name)
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+
+      flush_ref_messages(ctx.ref)
+
+      %{processor: processor_name}
+    end
+
+    test "sends cache_overflow client report when log buffer overflows", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-2"))
+      TelemetryProcessor.add(ctx.processor, make_log_event("log-3"))
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+
+      _ = Buffer.size(log_buffer)
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      ref = ctx.ref
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      cache_overflow =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "cache_overflow"))
+
+      assert cache_overflow["category"] == "log_item"
+      assert cache_overflow["quantity"] == 1
+
+      :sys.resume(scheduler)
+    end
+  end
+
   defp make_transaction do
     now = System.system_time(:microsecond)
 
@@ -279,6 +334,14 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       timestamp: now / 1_000_000,
       spans: []
     }
+  end
+
+  defp flush_ref_messages(ref) do
+    receive do
+      {^ref, _body} -> flush_ref_messages(ref)
+    after
+      100 -> :ok
+    end
   end
 
   defp make_log_event(body) do
