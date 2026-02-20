@@ -325,9 +325,9 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   describe "scheduler rate limit checks" do
     setup ctx do
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-
-      _ = :sys.get_state(Sentry.ClientReport.Sender)
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
 
       flush_ref_messages(ctx.ref)
 
@@ -336,14 +336,14 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
           :ets.delete(Sentry.Transport.RateLimiter, "log_item")
           :ets.delete(Sentry.Transport.RateLimiter, "error")
         catch
-          _, _ -> :ok
+          :error, :badarg -> :ok
         end
       end)
 
       :ok
     end
 
-    test "drops rate-limited log events before reaching transport", ctx do
+    test "keeps rate-limited log events in the buffer", ctx do
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
       :sys.suspend(scheduler)
 
@@ -355,13 +355,60 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
 
       :sys.resume(scheduler)
+      _ = :sys.get_state(scheduler)
 
-      scheduler_state = :sys.get_state(scheduler)
+      assert Buffer.size(log_buffer) == 1
+    end
+
+    test "keeps rate-limited error events in the buffer", ctx do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      Sentry.capture_message("rate-limited-error", result: :none)
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      :ets.insert(Sentry.Transport.RateLimiter, {"error", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+      _ = :sys.get_state(scheduler)
+
+      assert Buffer.size(error_buffer) == 1
+    end
+  end
+
+  describe "pre-buffer rate limit checks" do
+    setup ctx do
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+      flush_ref_messages(ctx.ref)
+
+      rate_limiter_table = Process.get(:rate_limiter_table_name)
+
+      on_exit(fn ->
+        try do
+          :ets.delete(rate_limiter_table, "log_item")
+          :ets.delete(rate_limiter_table, "error")
+        catch
+          _, _ -> :ok
+        end
+      end)
+
+      %{rate_limiter_table: rate_limiter_table}
+    end
+
+    test "drops rate-limited log events before they enter the buffer", ctx do
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+
+      :ets.insert(ctx.rate_limiter_table, {"log_item", System.system_time(:second) + 60})
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop"))
 
       assert Buffer.size(log_buffer) == 0
-
-      assert scheduler_state.size == 0
-      assert scheduler_state.active_ref == nil
 
       send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
 
@@ -379,26 +426,16 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert ratelimit_event["quantity"] == 1
     end
 
-    test "drops rate-limited error events before reaching transport", ctx do
+    test "drops rate-limited error events before they enter the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:error, :log])
 
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
-      Sentry.capture_message("rate-limited-error", result: :none)
-
       error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
-      assert Buffer.size(error_buffer) == 1
 
-      :ets.insert(Sentry.Transport.RateLimiter, {"error", System.system_time(:second) + 60})
+      :ets.insert(ctx.rate_limiter_table, {"error", System.system_time(:second) + 60})
 
-      :sys.resume(scheduler)
-      scheduler_state = :sys.get_state(scheduler)
+      Sentry.capture_message("pre-buffer-drop", result: :none)
 
       assert Buffer.size(error_buffer) == 0
-
-      assert scheduler_state.size == 0
-      assert scheduler_state.active_ref == nil
 
       send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
 
