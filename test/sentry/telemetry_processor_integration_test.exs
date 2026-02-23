@@ -466,7 +466,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
           :ets.delete(rate_limiter_table, "monitor")
           :ets.delete(rate_limiter_table, "transaction")
         catch
-          _, _ -> :ok
+          :error, :badarg -> :ok
         end
       end)
 
