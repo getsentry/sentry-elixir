@@ -10,51 +10,39 @@ defmodule Sentry.ApplicationTest do
       end)
     end
 
-    test "attaches :sentry_log_handler on application start" do
-      # Stop the Sentry application so we can restart it with enable_logs: true
-      Application.stop(:sentry)
-
-      original_enable_logs = Application.get_env(:sentry, :enable_logs)
-      Application.put_env(:sentry, :enable_logs, true)
-
-      on_exit(fn ->
-        Application.stop(:sentry)
-
-        if original_enable_logs do
-          Application.put_env(:sentry, :enable_logs, original_enable_logs)
-        else
-          Application.delete_env(:sentry, :enable_logs)
-        end
-
-        Application.ensure_all_started(:sentry)
-      end)
-
-      {:ok, _} = Application.ensure_all_started(:sentry)
+    test "attaches :sentry_log_handler with defaults" do
+      restart_sentry_with(enable_logs: true)
 
       assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert config.module == Sentry.LoggerHandler
       assert config.config.logs_level == :info
+      assert config.config.logs_excluded_domains == []
+      assert config.config.logs_metadata == []
+    end
+
+    test "respects logs.level config" do
+      restart_sentry_with(enable_logs: true, logs: [level: :warning])
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.logs_level == :warning
+    end
+
+    test "respects logs.excluded_domains config" do
+      restart_sentry_with(enable_logs: true, logs: [excluded_domains: [:cowboy, :ranch]])
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.logs_excluded_domains == [:cowboy, :ranch]
+    end
+
+    test "respects logs.metadata config" do
+      restart_sentry_with(enable_logs: true, logs: [metadata: [:request_id, :user_id]])
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.logs_metadata == [:request_id, :user_id]
     end
 
     test "does not attach handler when enable_logs is false" do
-      Application.stop(:sentry)
-
-      original_enable_logs = Application.get_env(:sentry, :enable_logs)
-      Application.put_env(:sentry, :enable_logs, false)
-
-      on_exit(fn ->
-        Application.stop(:sentry)
-
-        if original_enable_logs do
-          Application.put_env(:sentry, :enable_logs, original_enable_logs)
-        else
-          Application.delete_env(:sentry, :enable_logs)
-        end
-
-        Application.ensure_all_started(:sentry)
-      end)
-
-      {:ok, _} = Application.ensure_all_started(:sentry)
+      restart_sentry_with(enable_logs: false)
 
       assert {:error, {:not_found, :sentry_log_handler}} =
                :logger.get_handler_config(:sentry_log_handler)
@@ -72,24 +60,7 @@ defmodule Sentry.ApplicationTest do
         _ = :logger.remove_handler(existing_handler)
       end)
 
-      Application.stop(:sentry)
-
-      original_enable_logs = Application.get_env(:sentry, :enable_logs)
-      Application.put_env(:sentry, :enable_logs, true)
-
-      on_exit(fn ->
-        Application.stop(:sentry)
-
-        if original_enable_logs do
-          Application.put_env(:sentry, :enable_logs, original_enable_logs)
-        else
-          Application.delete_env(:sentry, :enable_logs)
-        end
-
-        Application.ensure_all_started(:sentry)
-      end)
-
-      {:ok, _} = Application.ensure_all_started(:sentry)
+      restart_sentry_with(enable_logs: true)
 
       assert {:error, {:not_found, :sentry_log_handler}} =
                :logger.get_handler_config(:sentry_log_handler)
@@ -98,24 +69,7 @@ defmodule Sentry.ApplicationTest do
     end
 
     test "auto-handler captures logs to the buffer" do
-      Application.stop(:sentry)
-
-      original_enable_logs = Application.get_env(:sentry, :enable_logs)
-      Application.put_env(:sentry, :enable_logs, true)
-
-      on_exit(fn ->
-        Application.stop(:sentry)
-
-        if original_enable_logs do
-          Application.put_env(:sentry, :enable_logs, original_enable_logs)
-        else
-          Application.delete_env(:sentry, :enable_logs)
-        end
-
-        Application.ensure_all_started(:sentry)
-      end)
-
-      {:ok, _} = Application.ensure_all_started(:sentry)
+      restart_sentry_with(enable_logs: true)
 
       assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
 
@@ -129,6 +83,33 @@ defmodule Sentry.ApplicationTest do
 
       assert Sentry.TelemetryProcessor.buffer_size(:log) > initial_size
     end
+  end
+
+  defp restart_sentry_with(config) do
+    Application.stop(:sentry)
+
+    originals =
+      for {key, val} <- config do
+        original = Application.get_env(:sentry, key)
+        Application.put_env(:sentry, key, val)
+        {key, original}
+      end
+
+    ExUnit.Callbacks.on_exit(fn ->
+      Application.stop(:sentry)
+
+      for {key, original} <- originals do
+        if original do
+          Application.put_env(:sentry, key, original)
+        else
+          Application.delete_env(:sentry, key)
+        end
+      end
+
+      Application.ensure_all_started(:sentry)
+    end)
+
+    {:ok, _} = Application.ensure_all_started(:sentry)
   end
 
   defp wait_until(condition_fn, timeout \\ 1000) do
