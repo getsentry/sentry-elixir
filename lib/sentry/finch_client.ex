@@ -14,7 +14,7 @@ defmodule Sentry.FinchClient do
   in the Finch documentation for details on the possible map values.
   [finch configuration options](https://hexdocs.pm/finch/Finch.html#start_link/1-pool-configuration-options)
   """
-  @moduledoc since: "10.11.0"
+  @moduledoc since: "12.0.0"
 
   @impl true
   def child_spec do
