@@ -36,6 +36,7 @@ defmodule Sentry.Telemetry.Scheduler do
 
   alias Sentry.Telemetry.{Buffer, Category}
   alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transaction, Transport}
+  alias Sentry.Transport.RateLimiter
 
   @default_capacity 1000
 
@@ -222,17 +223,28 @@ defmodule Sentry.Telemetry.Scheduler do
       state
     else
       category = Enum.at(state.priority_cycle, state.cycle_position)
-      buffer = Map.fetch!(state.buffers, category)
 
-      case Buffer.poll_if_ready(buffer) do
-        {:ok, items} when items != [] ->
-          state = send_items(state, category, items)
-          state = advance_cycle(state)
-          process_cycle(state, attempts + 1, max_attempts)
+      # When rate-limited, skip the category without polling the buffer. Items remain
+      # in the buffer and will be sent once the rate limit expires. No client report is
+      # recorded here because items are not discarded — they are retained for later retry.
+      # Note: if the buffer overflows while items are held back, the overflow will be
+      # reported as :cache_overflow rather than :ratelimit_backoff.
+      if category_rate_limited?(state, category) do
+        state = advance_cycle(state)
+        process_cycle(state, attempts + 1, max_attempts)
+      else
+        buffer = Map.fetch!(state.buffers, category)
 
-        _ ->
-          state = advance_cycle(state)
-          process_cycle(state, attempts + 1, max_attempts)
+        case Buffer.poll_if_ready(buffer) do
+          {:ok, items} when items != [] ->
+            state = send_items(state, category, items)
+            state = advance_cycle(state)
+            process_cycle(state, attempts + 1, max_attempts)
+
+          _ ->
+            state = advance_cycle(state)
+            process_cycle(state, attempts + 1, max_attempts)
+        end
       end
     end
   end
@@ -494,6 +506,14 @@ defmodule Sentry.Telemetry.Scheduler do
       {{:value, entry}, queue} -> drain_queue(queue, [entry | acc])
       {:empty, queue} -> {Enum.reverse(acc), queue}
     end
+  end
+
+  # Skip rate limit checks when on_envelope callback is set (unit test mode)
+  defp category_rate_limited?(%{on_envelope: cb}, _category) when is_function(cb, 1), do: false
+
+  defp category_rate_limited?(_state, category) do
+    data_category = Category.data_category(category)
+    RateLimiter.rate_limited?(data_category)
   end
 
   defp default_weights do

@@ -49,7 +49,13 @@ defmodule Sentry.LoggerHandler.LogsBackend do
     log_event_struct = LogEvent.from_logger_event(log_event, attributes, parameters)
 
     # Add to TelemetryProcessor buffer (use configured processor for test isolation)
-    TelemetryProcessor.add(config.telemetry_processor, log_event_struct)
+    case TelemetryProcessor.add(config.telemetry_processor, log_event_struct) do
+      {:ok, {:rate_limited, data_category}} ->
+        Sentry.ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+
+      :ok ->
+        :ok
+    end
 
     :ok
   end
