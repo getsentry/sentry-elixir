@@ -30,7 +30,14 @@ defmodule Sentry.Client do
           {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
     if Config.telemetry_processor_category?(:check_in) do
-      :ok = TelemetryProcessor.add(check_in)
+      case TelemetryProcessor.add(check_in) do
+        {:ok, {:rate_limited, data_category}} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+
+        :ok ->
+          :ok
+      end
+
       {:ok, check_in.check_in_id}
     else
       client = Keyword.get_lazy(opts, :client, &Config.client/0)
@@ -231,7 +238,13 @@ defmodule Sentry.Client do
 
       :not_collecting ->
         if Config.telemetry_processor_category?(:error) do
-          :ok = TelemetryProcessor.add(event)
+          case TelemetryProcessor.add(event) do
+            {:ok, {:rate_limited, data_category}} ->
+              ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+
+            :ok ->
+              :ok
+          end
         else
           :ok = Transport.Sender.send_async(client, event)
         end
@@ -272,7 +285,13 @@ defmodule Sentry.Client do
 
       :not_collecting ->
         if Config.telemetry_processor_category?(:transaction) do
-          :ok = TelemetryProcessor.add(transaction)
+          case TelemetryProcessor.add(transaction) do
+            {:ok, {:rate_limited, data_category}} ->
+              ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+
+            :ok ->
+              :ok
+          end
         else
           :ok = Transport.Sender.send_async(client, transaction)
         end

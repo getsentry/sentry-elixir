@@ -474,28 +474,18 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
 
     test "drops rate-limited log events before they enter the buffer", ctx do
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
 
       :ets.insert(ctx.rate_limiter_table, {"log_item", System.system_time(:second) + 60})
 
-      TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop"))
+      assert {:ok, {:rate_limited, "log_item"}} =
+               TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop"))
 
       assert Buffer.size(log_buffer) == 0
-
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-
-      ref = ctx.ref
-      assert_receive {^ref, body}, 2000
-
-      items = decode_envelope!(body)
-      assert [{%{"type" => "client_report"}, client_report}] = items
-
-      ratelimit_event =
-        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
-
-      assert ratelimit_event != nil
-      assert ratelimit_event["category"] == "log_item"
-      assert ratelimit_event["quantity"] == 1
     end
 
     test "drops rate-limited error events before they enter the buffer", ctx do
@@ -554,30 +544,20 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
 
     test "drops rate-limited transaction events before they enter the buffer", ctx do
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
       put_test_config(telemetry_processor_categories: [:transaction, :log])
 
       transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
 
       :ets.insert(ctx.rate_limiter_table, {"transaction", System.system_time(:second) + 60})
 
-      TelemetryProcessor.add(ctx.processor, make_transaction())
+      assert {:ok, {:rate_limited, "transaction"}} =
+               TelemetryProcessor.add(ctx.processor, make_transaction())
 
       assert Buffer.size(transaction_buffer) == 0
-
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-
-      ref = ctx.ref
-      assert_receive {^ref, body}, 2000
-
-      items = decode_envelope!(body)
-      assert [{%{"type" => "client_report"}, client_report}] = items
-
-      ratelimit_event =
-        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
-
-      assert ratelimit_event != nil
-      assert ratelimit_event["category"] == "transaction"
-      assert ratelimit_event["quantity"] == 1
     end
   end
 

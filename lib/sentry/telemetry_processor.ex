@@ -38,7 +38,6 @@ defmodule Sentry.TelemetryProcessor do
 
   use Supervisor
 
-  alias Sentry.ClientReport
   alias Sentry.Telemetry.{Buffer, Category, Scheduler}
   alias Sentry.Transport.RateLimiter
   alias Sentry.{CheckIn, Event, LogEvent, Transaction}
@@ -95,9 +94,11 @@ defmodule Sentry.TelemetryProcessor do
   Uses the processor from process dictionary or the default (`#{inspect(@default_name)}`).
   See `add/2` for the version accepting a custom processor.
 
-  Returns `:ok`.
+  Returns `:ok` when the item was added, or `{:ok, {:rate_limited, data_category}}` when
+  the item was dropped due to an active rate limit.
   """
-  @spec add(Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) :: :ok
+  @spec add(Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
+          :ok | {:ok, {:rate_limited, String.t()}}
   def add(%Event{} = item) do
     add(processor_name(), item)
   end
@@ -119,10 +120,11 @@ defmodule Sentry.TelemetryProcessor do
 
   After adding, the scheduler is signaled to wake and process items.
 
-  Returns `:ok`.
+  Returns `:ok` when the item was added, or `{:ok, {:rate_limited, data_category}}` when
+  the item was dropped due to an active rate limit.
   """
   @spec add(Supervisor.supervisor(), Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
-          :ok
+          :ok | {:ok, {:rate_limited, String.t()}}
   def add(processor, %Event{} = item) when is_atom(processor),
     do: add_to_buffer(processor, :error, item)
 
@@ -224,33 +226,28 @@ defmodule Sentry.TelemetryProcessor do
   end
 
   defp add_to_buffer(processor, category, item) when is_atom(processor) do
-    unless rate_limited?(category) do
+    data_category = Category.data_category(category)
+
+    if RateLimiter.rate_limited?(data_category) do
+      {:ok, {:rate_limited, data_category}}
+    else
       Buffer.add(buffer_name(processor, category), item)
       Scheduler.signal(scheduler_name(processor))
+      :ok
     end
-
-    :ok
   end
 
   defp add_to_buffer(processor, category, item) do
-    unless rate_limited?(category) do
+    data_category = Category.data_category(category)
+
+    if RateLimiter.rate_limited?(data_category) do
+      {:ok, {:rate_limited, data_category}}
+    else
       buffer = get_buffer(processor, category)
       Buffer.add(buffer, item)
       scheduler = get_scheduler(processor)
       Scheduler.signal(scheduler)
-    end
-
-    :ok
-  end
-
-  defp rate_limited?(category) do
-    data_category = Category.data_category(category)
-
-    if RateLimiter.rate_limited?(data_category) do
-      ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-      true
-    else
-      false
+      :ok
     end
   end
 
