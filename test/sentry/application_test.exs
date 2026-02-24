@@ -48,6 +48,16 @@ defmodule Sentry.ApplicationTest do
                :logger.get_handler_config(:sentry_log_handler)
     end
 
+    test "removes auto-handler when enable_logs becomes false" do
+      restart_sentry_with(enable_logs: true)
+      assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
+
+      restart_sentry_with(enable_logs: false)
+
+      assert {:error, {:not_found, :sentry_log_handler}} =
+               :logger.get_handler_config(:sentry_log_handler)
+    end
+
     test "skips auto-handler when a Sentry.LoggerHandler is already registered" do
       existing_handler = :"existing_sentry_handler_#{System.unique_integer([:positive])}"
 

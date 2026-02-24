@@ -3,6 +3,8 @@ defmodule Sentry.Application do
 
   use Application
 
+  require Logger
+
   alias Sentry.Config
 
   @impl true
@@ -113,8 +115,18 @@ defmodule Sentry.Application do
   end
 
   defp maybe_add_logger_handler do
-    if Config.enable_logs?() and not sentry_logger_handler_registered?() do
-      :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{config: %{}})
+    if Config.enable_logs?() do
+      unless sentry_logger_handler_registered?() do
+        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{config: %{}}) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
+        end
+      end
+    else
+      _ = :logger.remove_handler(:sentry_log_handler)
     end
 
     :ok
