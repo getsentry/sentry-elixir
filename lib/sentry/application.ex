@@ -114,15 +114,7 @@ defmodule Sentry.Application do
 
   defp maybe_add_logger_handler do
     if Config.enable_logs?() and not sentry_logger_handler_registered?() do
-      logs_config = Config.logs()
-
-      :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
-        config: %{
-          logs_level: Keyword.fetch!(logs_config, :level),
-          logs_excluded_domains: Keyword.fetch!(logs_config, :excluded_domains),
-          logs_metadata: Keyword.fetch!(logs_config, :metadata)
-        }
-      })
+      :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{config: %{}})
     end
 
     :ok

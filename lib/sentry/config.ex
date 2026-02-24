@@ -908,6 +908,15 @@ defmodule Sentry.Config do
   @spec logs() :: keyword()
   def logs, do: fetch!(:logs)
 
+  @spec logs_level() :: Logger.level()
+  def logs_level, do: Keyword.fetch!(logs(), :level)
+
+  @spec logs_excluded_domains() :: [atom()]
+  def logs_excluded_domains, do: Keyword.fetch!(logs(), :excluded_domains)
+
+  @spec logs_metadata() :: [atom()] | :all
+  def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
+
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
 

@@ -15,30 +15,30 @@ defmodule Sentry.ApplicationTest do
 
       assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert config.module == Sentry.LoggerHandler
-      assert config.config.logs_level == :info
-      assert config.config.logs_excluded_domains == []
-      assert config.config.logs_metadata == []
+      assert Sentry.Config.logs_level() == :info
+      assert Sentry.Config.logs_excluded_domains() == []
+      assert Sentry.Config.logs_metadata() == []
     end
 
     test "respects logs.level config" do
       restart_sentry_with(enable_logs: true, logs: [level: :warning])
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.logs_level == :warning
+      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert Sentry.Config.logs_level() == :warning
     end
 
     test "respects logs.excluded_domains config" do
       restart_sentry_with(enable_logs: true, logs: [excluded_domains: [:cowboy, :ranch]])
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.logs_excluded_domains == [:cowboy, :ranch]
+      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert Sentry.Config.logs_excluded_domains() == [:cowboy, :ranch]
     end
 
     test "respects logs.metadata config" do
       restart_sentry_with(enable_logs: true, logs: [metadata: [:request_id, :user_id]])
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.logs_metadata == [:request_id, :user_id]
+      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert Sentry.Config.logs_metadata() == [:request_id, :user_id]
     end
 
     test "does not attach handler when enable_logs is false" do
@@ -53,7 +53,7 @@ defmodule Sentry.ApplicationTest do
 
       :ok =
         :logger.add_handler(existing_handler, Sentry.LoggerHandler, %{
-          config: %{logs_level: :warning}
+          config: %{}
         })
 
       on_exit(fn ->
