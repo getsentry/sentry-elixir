@@ -3,6 +3,8 @@ defmodule Sentry.Application do
 
   use Application
 
+  require Logger
+
   alias Sentry.Config
 
   @impl true
@@ -67,6 +69,7 @@ defmodule Sentry.Application do
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
       start_integrations(integrations_config)
+      maybe_add_logger_handler()
       {:ok, pid}
     end
   end
@@ -109,6 +112,29 @@ defmodule Sentry.Application do
         _ -> []
       end
     end)
+  end
+
+  defp maybe_add_logger_handler do
+    if Config.enable_logs?() do
+      unless sentry_logger_handler_registered?() do
+        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{config: %{}}) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
+        end
+      end
+    else
+      _ = :logger.remove_handler(:sentry_log_handler)
+    end
+
+    :ok
+  end
+
+  defp sentry_logger_handler_registered? do
+    :logger.get_handler_config()
+    |> Enum.any?(fn %{module: module} -> module == Sentry.LoggerHandler end)
   end
 
   # In tests, we do not run a global rate limiter; tests start their own when

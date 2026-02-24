@@ -15,7 +15,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      enable_logs: true
+      enable_logs: true,
+      logs: [level: :info]
     )
 
     # TelemetryProcessor is already started by Sentry.Case
@@ -28,7 +29,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
     test "accepts configuration", %{handler_name: handler_name} do
       assert {:ok, config} = :logger.get_handler_config(handler_name)
       assert is_struct(config.config, Sentry.LoggerHandler)
-      assert config.config.logs_level == :info
     end
   end
 
@@ -67,10 +67,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters logs below configured level", %{handler_name: handler_name} do
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_level: :warning}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
+    test "filters logs below configured level" do
+      put_test_config(logs: [level: :warning])
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -83,7 +81,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
 
     test "accepts logs at or above configured level", %{
-      handler_name: handler_name,
       bypass: bypass
     } do
       test_pid = self()
@@ -113,10 +110,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_level: :info}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
-
       initial_size = TelemetryProcessor.buffer_size(:log)
 
       Logger.info("Info message")
@@ -130,10 +123,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "filters excluded domains", %{handler_name: handler_name} do
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
+    test "filters excluded domains" do
+      put_test_config(logs: [excluded_domains: [:cowboy]])
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -144,10 +135,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
-    test "includes logs from non-excluded domains", %{handler_name: handler_name} do
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_excluded_domains: [:cowboy]}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
+    test "includes logs from non-excluded domains" do
+      put_test_config(logs: [excluded_domains: [:cowboy]])
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -158,7 +147,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
 
     test "includes metadata as attributes", %{
-      handler_name: handler_name,
       bypass: bypass
     } do
       test_pid = self()
@@ -187,9 +175,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
       end)
 
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_metadata: [:request_id, :user_id]}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
+      put_test_config(logs: [metadata: [:request_id, :user_id]])
 
       TelemetryProcessor.flush()
 
@@ -203,12 +189,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_receive :envelope_sent, 1000
     end
 
-    test "includes all metadata when configured with :all", %{
-      handler_name: handler_name
-    } do
-      assert {:ok, config} = :logger.get_handler_config(handler_name)
-      updated_config = %{config.config | logs_metadata: :all}
-      assert :ok = :logger.update_handler_config(handler_name, :config, updated_config)
+    test "includes all metadata when configured with :all" do
+      put_test_config(logs: [metadata: :all])
 
       TelemetryProcessor.flush()
 
@@ -230,13 +212,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
       # Set enable_logs to false BEFORE adding a new handler
       put_test_config(enable_logs: false)
 
-      handler_config = %{
-        config: %{
-          logs_level: :info,
-          logs_excluded_domains: [],
-          logs_metadata: []
-        }
-      }
+      handler_config = %{config: %{}}
 
       # Add handler with enable_logs: false - LogsBackend should NOT be included
       assert :ok =
@@ -758,9 +734,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
     handler_config = %{
       config: %{
-        logs_level: :info,
-        logs_excluded_domains: [],
-        logs_metadata: [],
         telemetry_processor: telemetry_processor
       }
     }

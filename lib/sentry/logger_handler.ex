@@ -104,36 +104,6 @@ defmodule Sentry.LoggerHandler do
       set `:sync_threshold` to `nil`.
       """
     ],
-    logs_level: [
-      type:
-        {:in,
-         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
-      default: nil,
-      type_doc: "`t:Logger.level/0` or `nil`",
-      doc: """
-      (*since v12.0.0*) When set along with `enable_logs: true` in your Sentry config, logs at or above
-      this level will be sent to Sentry's Logs Protocol as structured log events. If `nil` (the default),
-      logs sending is disabled. This is independent from `:level`, which controls error reporting.
-      """
-    ],
-    logs_excluded_domains: [
-      type: {:list, :atom},
-      default: [],
-      type_doc: "list of `t:atom/0`",
-      doc: """
-      (*since v12.0.0*) Domains to exclude from logs sending (in addition to `:sentry` which is always excluded).
-      This is independent from `:excluded_domains`, which controls error reporting.
-      """
-    ],
-    logs_metadata: [
-      type: {:or, [{:list, :atom}, {:in, [:all]}]},
-      default: [],
-      type_doc: "list of `t:atom/0`, or `:all`",
-      doc: """
-      (*since v12.0.0*) Logger metadata keys to include as attributes in log events sent to Sentry's Logs Protocol.
-      If set to `:all`, all metadata will be included. This is independent from `:metadata`.
-      """
-    ],
     telemetry_processor: [
       type: {:or, [:atom, :pid, {:tuple, [:atom, :atom]}]},
       default: Sentry.TelemetryProcessor,
@@ -284,9 +254,6 @@ defmodule Sentry.LoggerHandler do
     :rate_limiting,
     :sync_threshold,
     :discard_threshold,
-    :logs_level,
-    :logs_excluded_domains,
-    :logs_metadata,
     :telemetry_processor,
     backends: []
   ]

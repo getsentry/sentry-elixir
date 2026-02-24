@@ -389,11 +389,49 @@ defmodule Sentry.Config do
       default: false,
       doc: """
       Whether to enable sending log events to Sentry. When enabled, the SDK will
-      capture and send structured log events according to the
-      [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
-      Use `Sentry.LogsHandler` to capture log events from Erlang's `:logger`.
+      automatically attach a `Sentry.LoggerHandler` to capture and send structured
+      log events according to the [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
+      The handler is not added if a `Sentry.LoggerHandler` is already registered.
+      Use the `:logs` option to configure the auto-attached handler.
       *Available since 12.0.0*.
       """
+    ],
+    logs: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for the auto-attached logger handler. Only used when `:enable_logs`
+      is `true`. *Available since 12.0.0*.
+      """,
+      keys: [
+        level: [
+          type:
+            {:in,
+             [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+          default: :info,
+          type_doc: "`t:Logger.level/0`",
+          doc: """
+          The minimum Logger level for log events sent to Sentry's Logs Protocol.
+          """
+        ],
+        excluded_domains: [
+          type: {:list, :atom},
+          default: [],
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          Domains to exclude from logs sent to Sentry's Logs Protocol.
+          """
+        ],
+        metadata: [
+          type: {:or, [{:list, :atom}, {:in, [:all]}]},
+          default: [],
+          type_doc: "list of `t:atom/0`, or `:all`",
+          doc: """
+          Logger metadata keys to include as attributes in log events. If set to `:all`,
+          all metadata will be included.
+          """
+        ]
+      ]
     ],
     telemetry_processor_categories: [
       type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
@@ -866,6 +904,18 @@ defmodule Sentry.Config do
 
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
+
+  @spec logs() :: keyword()
+  def logs, do: fetch!(:logs)
+
+  @spec logs_level() :: Logger.level()
+  def logs_level, do: Keyword.fetch!(logs(), :level)
+
+  @spec logs_excluded_domains() :: [atom()]
+  def logs_excluded_domains, do: Keyword.fetch!(logs(), :excluded_domains)
+
+  @spec logs_metadata() :: [atom()] | :all
+  def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
