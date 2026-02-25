@@ -224,12 +224,20 @@ defmodule Sentry.Telemetry.Scheduler do
     else
       category = Enum.at(state.priority_cycle, state.cycle_position)
 
-      # When rate-limited, skip the category without polling the buffer. Items remain
-      # in the buffer and will be sent once the rate limit expires. No client report is
-      # recorded here because items are not discarded — they are retained for later retry.
-      # Note: if the buffer overflows while items are held back, the overflow will be
-      # reported as :cache_overflow rather than :ratelimit_backoff.
+      # When rate-limited, drain the buffer and discard items. Client reports are
+      # recorded so Sentry knows data was dropped due to rate limiting.
       if category_rate_limited?(state, category) do
+        buffer = Map.fetch!(state.buffers, category)
+        items = Buffer.drain(buffer)
+
+        if items != [] do
+          data_category = Category.data_category(category)
+
+          Enum.each(items, fn _item ->
+            ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+          end)
+        end
+
         state = advance_cycle(state)
         process_cycle(state, attempts + 1, max_attempts)
       else

@@ -345,7 +345,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :ok
     end
 
-    test "keeps rate-limited log events in the buffer", ctx do
+    test "drains rate-limited log events from the buffer", ctx do
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
       :sys.suspend(scheduler)
 
@@ -359,7 +359,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :sys.resume(scheduler)
       _ = :sys.get_state(scheduler)
 
-      assert Buffer.size(log_buffer) == 1
+      assert Buffer.size(log_buffer) == 0
     end
 
     test "sends log events after rate limit expires", ctx do
@@ -392,7 +392,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert Buffer.size(log_buffer) == 0
     end
 
-    test "keeps rate-limited error events in the buffer", ctx do
+    test "drains rate-limited error events from the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:error, :log])
 
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
@@ -408,10 +408,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :sys.resume(scheduler)
       _ = :sys.get_state(scheduler)
 
-      assert Buffer.size(error_buffer) == 1
+      assert Buffer.size(error_buffer) == 0
     end
 
-    test "keeps rate-limited check-in events in the buffer", ctx do
+    test "drains rate-limited check-in events from the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:check_in, :log])
 
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
@@ -427,10 +427,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :sys.resume(scheduler)
       _ = :sys.get_state(scheduler)
 
-      assert Buffer.size(check_in_buffer) == 1
+      assert Buffer.size(check_in_buffer) == 0
     end
 
-    test "keeps rate-limited transaction events in the buffer", ctx do
+    test "drains rate-limited transaction events from the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:transaction, :log])
 
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
@@ -446,7 +446,53 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :sys.resume(scheduler)
       _ = :sys.get_state(scheduler)
 
-      assert Buffer.size(transaction_buffer) == 1
+      assert Buffer.size(transaction_buffer) == 0
+    end
+
+    test "records client reports when draining rate-limited items", ctx do
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.expect(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test_pid, {ref, body})
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      # Flush any pending client reports
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      _ = :sys.get_state(Sentry.ClientReport.Sender)
+      flush_ref_messages(ref)
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+      assert Buffer.size(log_buffer) == 1
+
+      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+      _ = :sys.get_state(scheduler)
+
+      assert Buffer.size(log_buffer) == 0
+
+      # Trigger client report sending
+      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+
+      assert_receive {^ref, body}, 2000
+
+      items = decode_envelope!(body)
+      assert [{%{"type" => "client_report"}, client_report}] = items
+
+      ratelimit_event =
+        Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
+
+      assert ratelimit_event != nil
+      assert ratelimit_event["category"] == "log_item"
+      assert ratelimit_event["quantity"] == 1
     end
   end
 
