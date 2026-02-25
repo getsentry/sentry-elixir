@@ -1,20 +1,59 @@
-## Unreleased
+## 12.0.0
 
-#### Features
+### Logs & Telemetry Processor
 
-- Add `should_report_error_callback` option to Oban.ErrorReporter for flexible error reporting logic ([#832](https://github.com/getsentry/sentry-elixir/pull/832))
+Support for Structured Logs is here! 🎉 To enable:
+
+```elixir
+config :sentry,
+  # your config...
+  enable_logs: true # <- add this!
+```
+
+Log events are sent to Sentry using the new `TelemetryProcessor` backend. You can enable it for other types of events via configuration:
+
+```elixir
+config :sentry,
+  # your config...
+  enable_logs: true,
+  telemetry_processor_categories: [:log, :error, :check_in, :transaction] # <- add this
+```
+
+This will become the default backend eventually, please try it out and report any issues!
+
+You can learn more about the Telemetry Processor in our [official documentation](https://develop.sentry.dev/sdk/foundations/processing/telemetry-processor/#telemetry-buffer).
+
+#### Related Pull Requests
+
 - Support for Structured Logs ([#969](https://github.com/getsentry/sentry-elixir/pull/969))
+- `TelemetryProcessor` based on [the spec](https://develop.sentry.dev/sdk/telemetry/telemetry-processor/) [#987](https://github.com/getsentry/sentry-elixir/pull/987))
+
+#### Other new features
+
 - Support for Distributed Tracing ([957](https://github.com/getsentry/sentry-elixir/pull/957))
 - Support for LiveView spans captured under single trace root ([#977](https://github.com/getsentry/sentry-elixir/pull/977))
+- Add `should_report_error_callback` option to `Oban.ErrorReporter` for flexible error reporting logic ([#832](https://github.com/getsentry/sentry-elixir/pull/832))
 - Handle HTTP 413 responses for oversized envelopes ([#982](https://github.com/getsentry/sentry-elixir/pull/982))
-- Introduced `TelemetryProcessor` according to [the spec](https://develop.sentry.dev/sdk/telemetry/telemetry-processor/) [#987](https://github.com/getsentry/sentry-elixir/pull/987))
 
 ### Bug Fixes
 
-- Wrong app_name used by Igniter in prod.exs ([#1](https://github.com/PJUllrich/sentry-elixir/pull/1))
+- Wrong app_name used by Igniter in prod.exs ([#972](https://github.com/getsentry/sentry-elixir/pull/972))
+
+  This requires configuring a custom propagator:
+
+  ```elixir
+  # Configure OpenTelemetry to use Sentry propagator for distributed tracing
+  config :opentelemetry,
+    text_map_propagators: [
+      :trace_context,
+      :baggage,
+      Sentry.OpenTelemetry.Propagator
+    ]
+  ```
 
 #### Various improvements
 
+- Switch default HTTP client from Hackney to Finch ([#897](https://github.com/getsentry/sentry-elixir/pull/897))
 - `:source_code_exclude_patterns` support for OTP-28.0 ([#965](https://github.com/getsentry/sentry-elixir/pull/965))
   ##### For people on OTP 28.1
 
