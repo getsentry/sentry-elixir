@@ -17,6 +17,14 @@ defmodule Sentry.ClientReport.Sender do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
+  @doc """
+  Synchronously sends any pending client reports and clears the accumulated state.
+  """
+  @spec flush(GenServer.server()) :: :ok
+  def flush(server \\ __MODULE__) do
+    GenServer.call(server, :flush)
+  end
+
   def record_discarded_events(reason, info, genserver \\ __MODULE__)
 
   @spec record_discarded_events(atom(), String.t(), GenServer.server()) :: :ok
@@ -68,8 +76,20 @@ defmodule Sentry.ClientReport.Sender do
   end
 
   @impl true
+  def handle_call(:flush, _from, state) do
+    send_pending_reports(state)
+    {:reply, :ok, %{}}
+  end
+
+  @impl true
   def handle_info(:send_report, state) do
-    _ =
+    send_pending_reports(state)
+    schedule_report()
+    {:noreply, %{}}
+  end
+
+  defp send_pending_reports(state) do
+    _result =
       if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
         client_report =
           %ClientReport{
@@ -91,8 +111,7 @@ defmodule Sentry.ClientReport.Sender do
         Client.send_client_report(client_report)
       end
 
-    schedule_report()
-    {:noreply, %{}}
+    :ok
   end
 
   defp schedule_report do
