@@ -284,10 +284,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       Process.put(:sentry_telemetry_processor, processor_name)
 
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-
-      _ = :sys.get_state(Sentry.ClientReport.Sender)
-
+      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       %{processor: processor_name}
@@ -303,9 +300,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
       _ = Buffer.size(log_buffer)
-      _ = :sys.get_state(Sentry.ClientReport.Sender)
 
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
       assert_receive {^ref, body}, 2000
@@ -323,167 +319,79 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
-  describe "scheduler rate limit checks" do
+  describe "scheduler rate limiting" do
     setup ctx do
+      put_test_config(telemetry_processor_categories: [:error, :check_in, :transaction, :log])
+
       Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      flush_ref_messages(ctx.ref)
+      Sentry.ClientReport.Sender.flush()
 
       on_exit(fn ->
-        try do
-          :ets.delete(Sentry.Transport.RateLimiter, "log_item")
-          :ets.delete(Sentry.Transport.RateLimiter, "error")
-          :ets.delete(Sentry.Transport.RateLimiter, "monitor")
-          :ets.delete(Sentry.Transport.RateLimiter, "transaction")
-        catch
-          :error, :badarg -> :ok
+        for category <- ~w(log_item error monitor transaction) do
+          try do
+            :ets.delete(Sentry.Transport.RateLimiter, category)
+          catch
+            :error, :badarg -> :ok
+          end
         end
       end)
 
       :ok
     end
 
-    test "drains rate-limited log events from the buffer", ctx do
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
-      TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
-
-      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
-      assert Buffer.size(log_buffer) == 1
-
-      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
-
-      :sys.resume(scheduler)
-      _ = :sys.get_state(scheduler)
-
-      assert Buffer.size(log_buffer) == 0
-    end
-
-    test "sends log events after rate limit expires", ctx do
+    test "rate-limited HTTP response causes subsequent items to be drained and client report sent",
+         ctx do
       test_pid = self()
       ref = make_ref()
+      request_count = :counters.new(1, [])
+
+      # Use HackneyClient because FinchClient (Mint) lowercases response headers,
+      # which prevents the transport from matching "X-Sentry-Rate-Limits".
+      put_test_config(client: Sentry.HackneyClient)
 
       Bypass.expect(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        count = :counters.get(request_count, 1)
+        :counters.add(request_count, 1, 1)
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         send(test_pid, {ref, body})
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+
+        if count == 0 do
+          conn
+          |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:log_item:organization")
+          |> Plug.Conn.resp(200, ~s<{"id": "340"}>)
+        else
+          Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+        end
       end)
 
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
-      TelemetryProcessor.add(ctx.processor, make_log_event("held-log"))
-
-      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
-      assert Buffer.size(log_buffer) == 1
-
-      # Set a rate limit that has already expired
-      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) - 1})
-
-      :sys.resume(scheduler)
+      TelemetryProcessor.add(ctx.processor, make_log_event("first-log"))
 
       assert_receive {^ref, body}, 2000
 
-      items = decode_envelope!(body)
-      assert [{%{"type" => "log"}, %{"items" => [%{"body" => "held-log"}]}}] = items
-      assert Buffer.size(log_buffer) == 0
-    end
-
-    test "drains rate-limited error events from the buffer", ctx do
-      put_test_config(telemetry_processor_categories: [:error, :log])
+      assert [{%{"type" => "log"}, %{"items" => [%{"body" => "first-log"}]}}] =
+               decode_envelope!(body)
 
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
 
-      Sentry.capture_message("rate-limited-error", result: :none)
-
-      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
-      assert Buffer.size(error_buffer) == 1
-
-      :ets.insert(Sentry.Transport.RateLimiter, {"error", System.system_time(:second) + 60})
-
-      :sys.resume(scheduler)
-      _ = :sys.get_state(scheduler)
-
-      assert Buffer.size(error_buffer) == 0
-    end
-
-    test "drains rate-limited check-in events from the buffer", ctx do
-      put_test_config(telemetry_processor_categories: [:check_in, :log])
-
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
-      {:ok, _id} = Sentry.capture_check_in(status: :ok, monitor_slug: "rate-limited-job")
-
-      check_in_buffer = TelemetryProcessor.get_buffer(ctx.processor, :check_in)
-      assert Buffer.size(check_in_buffer) == 1
-
-      :ets.insert(Sentry.Transport.RateLimiter, {"monitor", System.system_time(:second) + 60})
-
-      :sys.resume(scheduler)
-      _ = :sys.get_state(scheduler)
-
-      assert Buffer.size(check_in_buffer) == 0
-    end
-
-    test "drains rate-limited transaction events from the buffer", ctx do
-      put_test_config(telemetry_processor_categories: [:transaction, :log])
-
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
-      TelemetryProcessor.add(ctx.processor, make_transaction())
-
-      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
-      assert Buffer.size(transaction_buffer) == 1
-
-      :ets.insert(Sentry.Transport.RateLimiter, {"transaction", System.system_time(:second) + 60})
-
-      :sys.resume(scheduler)
-      _ = :sys.get_state(scheduler)
-
-      assert Buffer.size(transaction_buffer) == 0
-    end
-
-    test "records client reports when draining rate-limited items", ctx do
-      test_pid = self()
-      ref = make_ref()
-
-      Bypass.expect(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        send(test_pid, {ref, body})
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      poll_until(fn ->
+        %{active_ref: active_ref} = :sys.get_state(scheduler)
+        is_nil(active_ref)
       end)
 
-      # Flush any pending client reports
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-      _ = :sys.get_state(Sentry.ClientReport.Sender)
-      flush_ref_messages(ref)
-
-      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
-      :sys.suspend(scheduler)
-
       TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
-
-      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
-      assert Buffer.size(log_buffer) == 1
-
-      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
-
-      :sys.resume(scheduler)
       _ = :sys.get_state(scheduler)
 
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
       assert Buffer.size(log_buffer) == 0
 
-      # Trigger client report sending
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      refute_receive {^ref, _body}, 200
+
+      Sentry.ClientReport.Sender.flush()
 
       assert_receive {^ref, body}, 2000
-
       items = decode_envelope!(body)
       assert [{%{"type" => "client_report"}, client_report}] = items
 
@@ -498,9 +406,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   describe "pre-buffer rate limit checks" do
     setup ctx do
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
-
-      _ = :sys.get_state(Sentry.ClientReport.Sender)
+      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       rate_limiter_table = Process.get(:rate_limiter_table_name)
@@ -545,7 +451,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(error_buffer) == 0
 
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
       assert_receive {^ref, body}, 2000
@@ -561,7 +467,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert ratelimit_event["quantity"] == 1
     end
 
-    # check_in maps to "monitor" data category, which is non-obvious
     test "drops rate-limited check-in events before they enter the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:check_in, :log])
 
@@ -573,7 +478,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(check_in_buffer) == 0
 
-      send(Process.whereis(Sentry.ClientReport.Sender), :send_report)
+      Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
       assert_receive {^ref, body}, 2000
@@ -653,4 +558,22 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   defp decoded_envelope_category([{%{"type" => "check_in"}, _} | _]), do: :check_in
   defp decoded_envelope_category([{%{"type" => "transaction"}, _} | _]), do: :transaction
   defp decoded_envelope_category([{%{"type" => "log"}, _} | _]), do: :log
+
+  defp poll_until(fun, timeout \\ 2000) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    do_poll_until(fun, deadline)
+  end
+
+  defp do_poll_until(fun, deadline) do
+    if fun.() do
+      :ok
+    else
+      if System.monotonic_time(:millisecond) >= deadline do
+        raise "poll_until timed out"
+      else
+        Process.sleep(10)
+        do_poll_until(fun, deadline)
+      end
+    end
+  end
 end

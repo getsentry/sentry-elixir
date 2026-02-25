@@ -224,20 +224,8 @@ defmodule Sentry.Telemetry.Scheduler do
     else
       category = Enum.at(state.priority_cycle, state.cycle_position)
 
-      # When rate-limited, drain the buffer and discard items. Client reports are
-      # recorded so Sentry knows data was dropped due to rate limiting.
       if category_rate_limited?(state, category) do
-        buffer = Map.fetch!(state.buffers, category)
-        items = Buffer.drain(buffer)
-
-        if items != [] do
-          data_category = Category.data_category(category)
-
-          Enum.each(items, fn _item ->
-            ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-          end)
-        end
-
+        state = drain_rate_limited(state, category)
         state = advance_cycle(state)
         process_cycle(state, attempts + 1, max_attempts)
       else
@@ -514,6 +502,23 @@ defmodule Sentry.Telemetry.Scheduler do
       {{:value, entry}, queue} -> drain_queue(queue, [entry | acc])
       {:empty, queue} -> {Enum.reverse(acc), queue}
     end
+  end
+
+  # Drains all items from a rate-limited buffer and records client reports
+  # so Sentry knows data was dropped due to rate limiting.
+  defp drain_rate_limited(state, category) do
+    buffer = Map.fetch!(state.buffers, category)
+    items = Buffer.drain(buffer)
+
+    if items != [] do
+      data_category = Category.data_category(category)
+
+      Enum.each(items, fn _item ->
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+      end)
+    end
+
+    state
   end
 
   # Skip rate limit checks when on_envelope callback is set (unit test mode)
