@@ -342,7 +342,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       :ok
     end
 
-    test "rate-limited HTTP response causes subsequent items to be drained and client report sent",
+    test "rate-limited HTTP response causes subsequent events to be dropped with client report",
          ctx do
       test_pid = self()
       ref = make_ref()
@@ -360,19 +360,18 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
         if count == 0 do
           conn
-          |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:log_item:organization")
+          |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:error:organization")
           |> Plug.Conn.resp(200, ~s<{"id": "340"}>)
         else
           Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
         end
       end)
 
-      TelemetryProcessor.add(ctx.processor, make_log_event("first-log"))
+      Sentry.capture_message("first-error", result: :none)
 
       assert_receive {^ref, body}, 2000
-
-      assert [{%{"type" => "log"}, %{"items" => [%{"body" => "first-log"}]}}] =
-               decode_envelope!(body)
+      assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
+      assert event["message"]["formatted"] == "first-error"
 
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
 
@@ -381,11 +380,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
         is_nil(active_ref)
       end)
 
-      TelemetryProcessor.add(ctx.processor, make_log_event("rate-limited-log"))
-      _ = :sys.get_state(scheduler)
-
-      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
-      assert Buffer.size(log_buffer) == 0
+      Sentry.capture_message("rate-limited-error", result: :none)
 
       refute_receive {^ref, _body}, 200
 
@@ -399,7 +394,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
         Enum.find(client_report["discarded_events"], &(&1["reason"] == "ratelimit_backoff"))
 
       assert ratelimit_event != nil
-      assert ratelimit_event["category"] == "log_item"
+      assert ratelimit_event["category"] == "error"
       assert ratelimit_event["quantity"] == 1
     end
   end
