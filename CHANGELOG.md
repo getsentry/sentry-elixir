@@ -1,3 +1,9 @@
+## 12.0.1
+
+### Bug Fixes
+
+- Relax optional dependency on `finch` to `~> 0.21` ([1003](https://github.com/getsentry/sentry-elixir/pull/1003))
+
 ## 12.0.0
 
 ### Logs & Telemetry Processor
