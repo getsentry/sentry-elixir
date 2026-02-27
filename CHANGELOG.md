@@ -1,3 +1,9 @@
+## 12.0.1
+
+### Internal Changes 🔧
+
+- (deps) Update ver spec for finch by @solnic in [#1003](https://github.com/getsentry/sentry-elixir/pull/1003)
+
 ## 12.0.0
 
 ### Logs & Telemetry Processor
