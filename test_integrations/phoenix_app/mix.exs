@@ -43,6 +43,7 @@ defmodule PhoenixApp.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_ecto, "~> 4.6", optional: true},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.1.1",
