@@ -345,6 +345,33 @@ defmodule SentryTest do
 
       assert_receive {:after_send, "test-transaction", "340"}
     end
+
+    test "includes release in transaction payload when configured", %{bypass: bypass} do
+      put_test_config(release: "1.9.123")
+
+      transaction =
+        create_transaction(%{
+          transaction: "transaction-with-release",
+          contexts: %{
+            trace: %{
+              trace_id: "trace-id",
+              span_id: "root-span"
+            }
+          }
+        })
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{_headers, transaction_body}] = decode_envelope!(body)
+
+        assert transaction_body["transaction"] == "transaction-with-release"
+        assert transaction_body["release"] == "1.9.123"
+
+        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert {:ok, "340"} = Sentry.send_transaction(transaction)
+    end
   end
 
   describe "flush/1" do
