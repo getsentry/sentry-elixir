@@ -60,6 +60,7 @@ defmodule Sentry.Transaction do
             },
 
             # Optional
+            release: String.t(),
             environment: String.t(),
             transaction: String.t(),
             transaction_info: transaction_info(),
@@ -83,6 +84,7 @@ defmodule Sentry.Transaction do
                 :measurements,
                 :sdk,
                 :platform,
+                :release,
                 :environment,
                 :tags,
                 :data
@@ -94,6 +96,7 @@ defmodule Sentry.Transaction do
       __MODULE__,
       attrs
       |> Map.put(:event_id, UUID.uuid4_hex())
+      |> Map.put(:release, Config.release())
       |> Map.put(:environment, Config.environment_name())
       |> Map.put(:sdk, @sdk)
       |> Map.put(:platform, "elixir")
