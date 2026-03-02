@@ -1,3 +1,9 @@
+## 12.0.2
+
+### Bug Fixes 🐛
+
+- (tp) Skip sending if DSN is not set by @solnic in [#1008](https://github.com/getsentry/sentry-elixir/pull/1008)
+
 ## 12.0.1
 
 ### Internal Changes 🔧
