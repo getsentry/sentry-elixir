@@ -427,17 +427,23 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   defp send_direct(envelope) do
-    client = Config.client()
-    request_retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
+    if Config.dsn() do
+      client = Config.client()
 
-    case Transport.encode_and_post_envelope(envelope, client, request_retries) do
-      {:ok, _id} ->
-        :ok
+      request_retries =
+        Application.get_env(:sentry, :request_retries, Transport.default_retries())
 
-      {:error, error} ->
-        Logger.warning("Sentry: failed to send envelope: #{Exception.message(error)}")
+      case Transport.encode_and_post_envelope(envelope, client, request_retries) do
+        {:ok, _id} ->
+          :ok
 
-        {:error, error}
+        {:error, error} ->
+          Logger.warning("Sentry: failed to send envelope: #{Exception.message(error)}")
+
+          {:error, error}
+      end
+    else
+      :ok
     end
   end
 
@@ -460,9 +466,16 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   defp send(envelope) do
-    client = Config.client()
-    request_retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
-    Transport.encode_and_post_envelope(envelope, client, request_retries)
+    if Config.dsn() do
+      client = Config.client()
+
+      request_retries =
+        Application.get_env(:sentry, :request_retries, Transport.default_retries())
+
+      Transport.encode_and_post_envelope(envelope, client, request_retries)
+    else
+      :ok
+    end
   end
 
   defp wait_for_active(%{active_ref: nil} = state), do: state

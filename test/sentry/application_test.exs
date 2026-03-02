@@ -11,7 +11,7 @@ defmodule Sentry.ApplicationTest do
     end
 
     test "attaches :sentry_log_handler with defaults" do
-      restart_sentry_with(enable_logs: true)
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
 
       assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert config.module == Sentry.LoggerHandler
@@ -21,21 +21,33 @@ defmodule Sentry.ApplicationTest do
     end
 
     test "respects logs.level config" do
-      restart_sentry_with(enable_logs: true, logs: [level: :warning])
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [level: :warning]
+      )
 
       assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_level() == :warning
     end
 
     test "respects logs.excluded_domains config" do
-      restart_sentry_with(enable_logs: true, logs: [excluded_domains: [:cowboy, :ranch]])
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [excluded_domains: [:cowboy, :ranch]]
+      )
 
       assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_excluded_domains() == [:cowboy, :ranch]
     end
 
     test "respects logs.metadata config" do
-      restart_sentry_with(enable_logs: true, logs: [metadata: [:request_id, :user_id]])
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [metadata: [:request_id, :user_id]]
+      )
 
       assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_metadata() == [:request_id, :user_id]
@@ -49,10 +61,10 @@ defmodule Sentry.ApplicationTest do
     end
 
     test "removes auto-handler when enable_logs becomes false" do
-      restart_sentry_with(enable_logs: true)
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
       assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
 
-      restart_sentry_with(enable_logs: false)
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: false)
 
       assert {:error, {:not_found, :sentry_log_handler}} =
                :logger.get_handler_config(:sentry_log_handler)
@@ -70,7 +82,7 @@ defmodule Sentry.ApplicationTest do
         _ = :logger.remove_handler(existing_handler)
       end)
 
-      restart_sentry_with(enable_logs: true)
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
 
       assert {:error, {:not_found, :sentry_log_handler}} =
                :logger.get_handler_config(:sentry_log_handler)
@@ -79,7 +91,7 @@ defmodule Sentry.ApplicationTest do
     end
 
     test "auto-handler captures logs to the buffer" do
-      restart_sentry_with(enable_logs: true)
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
 
       assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
 

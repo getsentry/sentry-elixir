@@ -32,7 +32,7 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sentry,
-  dsn: nil,
+  dsn: "https://public@sentry.example.com/1",
   environment_name: :dev,
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
