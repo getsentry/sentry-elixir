@@ -820,5 +820,50 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       refute SpanStorage.span_exists?("parent_span", table_name: table_name)
       refute SpanStorage.span_exists?("completed_child", table_name: table_name)
     end
+
+    @tag span_storage: true
+    test "async continuation spans are emitted as their own transaction segments" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Sentry.Test.start_collecting_sentry_reports()
+
+      parent_ctx =
+        Tracer.with_span "sync_root" do
+          :otel_ctx.get_current()
+        end
+
+      Task.async(fn ->
+        Process.sleep(25)
+
+        token = :otel_ctx.attach(parent_ctx)
+
+        try do
+          Tracer.with_span "async_parent" do
+            Tracer.with_span "async_child" do
+              Process.sleep(1)
+            end
+          end
+        after
+          :otel_ctx.detach(token)
+        end
+      end)
+      |> Task.await()
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      assert Enum.any?(transactions, &(&1.transaction == "sync_root"))
+
+      async_parent_txn =
+        Enum.find(transactions, fn transaction ->
+          transaction.transaction == "async_parent"
+        end)
+
+      assert async_parent_txn != nil
+      assert length(async_parent_txn.spans) == 1
+
+      [async_child_span] = async_parent_txn.spans
+      assert async_child_span.op == "async_child"
+      assert async_child_span.parent_span_id == async_parent_txn.contexts.trace.span_id
+    end
   end
 end
