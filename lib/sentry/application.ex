@@ -28,6 +28,12 @@ defmodule Sentry.Application do
       end
 
     integrations_config = Config.integrations()
+    otel_config = Keyword.get(integrations_config, :opentelemetry, [])
+
+    # Configure OTel SDK before supervisor starts (and ideally before :opentelemetry starts)
+    if Config.tracing?() do
+      maybe_configure_otel_sdk(otel_config)
+    end
 
     maybe_span_storage =
       if Config.tracing?() do
@@ -69,6 +75,7 @@ defmodule Sentry.Application do
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
       start_integrations(integrations_config)
+      maybe_setup_otel_instrumentations(otel_config)
       maybe_add_logger_handler()
       {:ok, pid}
     end
@@ -135,6 +142,21 @@ defmodule Sentry.Application do
   defp sentry_logger_handler_registered? do
     :logger.get_handler_config()
     |> Enum.any?(fn %{module: module} -> module == Sentry.LoggerHandler end)
+  end
+
+  if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
+    defp maybe_configure_otel_sdk(otel_config) do
+      Sentry.OpenTelemetry.Setup.maybe_configure_otel_sdk(otel_config)
+    end
+
+    defp maybe_setup_otel_instrumentations(otel_config) do
+      if Config.tracing?() do
+        Sentry.OpenTelemetry.Setup.maybe_setup_instrumentations(otel_config)
+      end
+    end
+  else
+    defp maybe_configure_otel_sdk(_otel_config), do: :ok
+    defp maybe_setup_otel_instrumentations(_otel_config), do: :ok
   end
 
   # In tests, we do not run a global rate limiter; tests start their own when
