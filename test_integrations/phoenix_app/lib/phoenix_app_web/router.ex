@@ -34,6 +34,7 @@ defmodule PhoenixAppWeb.Router do
     get "/transaction", PageController, :transaction
     get "/nested-spans", PageController, :nested_spans
     get "/logs", PageController, :logs_demo
+    get "/logs-with-structs", PageController, :logs_with_structs
 
     live "/test-worker", TestWorkerLive
     live "/tracing-test", TracingTestLive

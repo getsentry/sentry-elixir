@@ -104,6 +104,44 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
     end
   end
 
+  describe "structured logging with complex metadata" do
+    test "GET /logs-with-structs safely serializes struct attributes for JSON encoding", %{
+      conn: conn
+    } do
+      put_test_config(logs: [level: :info, excluded_domains: [:cowboy, :ranch], metadata: :all])
+
+      get(conn, ~p"/logs-with-structs")
+
+      logs = Sentry.Test.pop_sentry_logs()
+
+      struct_log =
+        Enum.find(logs, fn log ->
+          String.contains?(log.body, "Log with struct metadata")
+        end)
+
+      assert struct_log != nil
+
+      log_map = Sentry.LogEvent.to_map(struct_log)
+      attrs = log_map.attributes
+
+      assert %{type: "string", value: uri_value} = attrs["uri"]
+      assert uri_value == inspect(URI.parse("https://example.com/path"))
+
+      assert %{type: "string", value: conn_value} = attrs["conn_info"]
+      assert conn_value =~ "method"
+
+      assert %{type: "string", value: tags_value} = attrs["tags"]
+      assert tags_value == "[:web, :test]"
+
+      assert {:ok, json} = Sentry.JSON.encode(log_map, Sentry.Config.json_library())
+      assert is_binary(json)
+
+      assert {:ok, decoded} = Sentry.JSON.decode(json, Sentry.Config.json_library())
+      assert decoded["attributes"]["uri"]["value"] == uri_value
+      assert decoded["attributes"]["tags"]["value"] == "[:web, :test]"
+    end
+  end
+
   defp filter_app_logs(logs) do
     Enum.filter(logs, fn log ->
       body = log.body

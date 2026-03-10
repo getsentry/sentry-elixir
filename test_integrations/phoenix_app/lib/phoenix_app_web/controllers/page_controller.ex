@@ -91,6 +91,20 @@ defmodule PhoenixAppWeb.PageController do
   # 1. Start the Phoenix app: cd test_integrations/phoenix_app && iex -S mix phx.server
   # 2. Visit: http://localhost:4000/logs
   # 3. Check Sentry logs - they should have trace_id matching the transaction traces
+  def logs_with_structs(conn, _params) do
+    Logger.metadata(
+      uri: URI.parse("https://example.com/path"),
+      conn_info: %{method: conn.method, path: conn.request_path},
+      tags: [:web, :test]
+    )
+
+    Logger.info("Log with struct metadata")
+
+    Sentry.flush()
+
+    json(conn, %{message: "ok"})
+  end
+
   def logs_demo(conn, params) do
     request_id =
       get_req_header(conn, "x-request-id") |> List.first() || "demo-#{:rand.uniform(10000)}"
