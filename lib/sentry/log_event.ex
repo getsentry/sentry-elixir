@@ -149,7 +149,7 @@ defmodule Sentry.LogEvent do
   # Positional parameters: %s placeholders
   defp interpolate_template(message, parameters) when is_list(parameters) do
     # Convert parameters to proper types for storage
-    processed_params = Enum.map(parameters, &stringify_parameter/1)
+    processed_params = Enum.map(parameters, &sanitize_attribute_value/1)
 
     # Interpolate %s placeholders
     body = interpolate_positional_placeholders(message, parameters)
@@ -166,7 +166,7 @@ defmodule Sentry.LogEvent do
     processed_params =
       Enum.map(keys, fn key ->
         value = Map.get(parameters, key) || Map.get(parameters, to_string(key))
-        stringify_parameter(value)
+        sanitize_attribute_value(value)
       end)
 
     # Interpolate %{key} placeholders
@@ -209,14 +209,18 @@ defmodule Sentry.LogEvent do
   defp to_string_for_interpolation(value) when is_float(value), do: Float.to_string(value)
   defp to_string_for_interpolation(value), do: inspect(value)
 
-  # Convert parameter values to a form suitable for Sentry attributes
+  # Converts values to JSON-safe attribute types.
+  # Primitives (string, boolean, integer, float) pass through unchanged.
+  # Atoms are converted to strings. All other types (structs, maps, lists,
+  # tuples, PIDs, etc.) are converted to their inspect() representation.
+  # Used for both message template parameters and user-provided attributes.
   # Note: is_boolean must come before is_atom since true/false are atoms
-  defp stringify_parameter(value) when is_binary(value), do: value
-  defp stringify_parameter(value) when is_boolean(value), do: value
-  defp stringify_parameter(value) when is_atom(value), do: Atom.to_string(value)
-  defp stringify_parameter(value) when is_integer(value), do: value
-  defp stringify_parameter(value) when is_float(value), do: value
-  defp stringify_parameter(value), do: inspect(value)
+  defp sanitize_attribute_value(value) when is_binary(value), do: value
+  defp sanitize_attribute_value(value) when is_boolean(value), do: value
+  defp sanitize_attribute_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp sanitize_attribute_value(value) when is_integer(value), do: value
+  defp sanitize_attribute_value(value) when is_float(value), do: value
+  defp sanitize_attribute_value(value), do: inspect(value)
 
   # Extract message body and optionally template/parameters
   # If user_params provided via metadata, use those for interpolation
@@ -248,7 +252,7 @@ defmodule Sentry.LogEvent do
        when is_list(format) and is_list(args) do
     body = format |> :io_lib.format(args) |> IO.chardata_to_string()
     template = IO.chardata_to_string(format)
-    processed_params = Enum.map(args, &stringify_parameter/1)
+    processed_params = Enum.map(args, &sanitize_attribute_value/1)
     {body, template, processed_params}
   end
 
@@ -270,10 +274,11 @@ defmodule Sentry.LogEvent do
   defp extract_trace_context(_log_event), do: {nil, nil}
 
   defp build_attributes(%__MODULE__{} = log_event) do
-    # Start with user-provided attributes
+    # Start with user-provided attributes, converting non-primitive values to strings
     formatted_attrs =
       Enum.into(log_event.attributes, %{}, fn {key, value} ->
-        {to_string(key), %{value: value, type: attribute_type(value)}}
+        safe_value = sanitize_attribute_value(value)
+        {to_string(key), %{value: safe_value, type: attribute_type(safe_value)}}
       end)
 
     # Add Sentry-specific attributes

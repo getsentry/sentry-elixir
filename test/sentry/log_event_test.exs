@@ -252,5 +252,108 @@ defmodule Sentry.LogEventTest do
       refute Map.has_key?(result.attributes, "sentry.message.template")
       refute Map.has_key?(result.attributes, "sentry.message.parameter.0")
     end
+
+    test "safely serializes struct attribute values" do
+      uri = URI.parse("https://example.com/path")
+
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{uri: uri}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["uri"] == %{value: inspect(uri), type: "string"}
+    end
+
+    test "safely serializes map attribute values" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{data: %{nested: "value"}}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["data"] == %{value: ~s(%{nested: "value"}), type: "string"}
+    end
+
+    test "safely serializes list attribute values" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{items: [1, "two", :three]}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["items"] == %{value: ~s([1, "two", :three]), type: "string"}
+    end
+
+    test "safely serializes tuple attribute values" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{pair: {:ok, "done"}}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["pair"] == %{value: ~s({:ok, "done"}), type: "string"}
+    end
+
+    test "safely serializes PID attribute values" do
+      pid = self()
+
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{pid: pid}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["pid"] == %{value: inspect(pid), type: "string"}
+    end
+
+    test "converts atom attribute values to strings" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{status: :active}
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["status"] == %{value: "active", type: "string"}
+    end
+
+    test "preserves primitive attribute values unchanged" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test",
+        timestamp: 1_000_000.5,
+        attributes: %{
+          name: "Alice",
+          count: 42,
+          price: 9.99,
+          active: true
+        }
+      }
+
+      result = LogEvent.to_map(log_event)
+
+      assert result.attributes["name"] == %{value: "Alice", type: "string"}
+      assert result.attributes["count"] == %{value: 42, type: "integer"}
+      assert result.attributes["price"] == %{value: 9.99, type: "double"}
+      assert result.attributes["active"] == %{value: true, type: "boolean"}
+    end
   end
 end

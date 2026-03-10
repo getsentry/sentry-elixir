@@ -189,6 +189,40 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_receive :envelope_sent, 1000
     end
 
+    test "safely serializes struct metadata as string attributes", %{bypass: bypass} do
+      test_pid = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        [_header, _item_header, item_body, _] = String.split(body, "\n")
+
+        item_body_map = decode!(item_body)
+        assert %{"items" => [log_event]} = item_body_map
+
+        assert %{"my_uri" => %{"type" => "string", "value" => value}} =
+                 log_event["attributes"]
+
+        assert value == inspect(URI.parse("https://example.com/path"))
+
+        send(test_pid, :envelope_sent)
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "test-123"}>)
+      end)
+
+      put_test_config(logs: [metadata: [:my_uri]])
+
+      TelemetryProcessor.flush()
+
+      Logger.metadata(my_uri: URI.parse("https://example.com/path"))
+      Logger.info("Request with struct metadata")
+
+      assert_buffer_size(nil, 1)
+
+      TelemetryProcessor.flush()
+
+      assert_receive :envelope_sent, 1000
+    end
+
     test "includes all metadata when configured with :all" do
       put_test_config(logs: [metadata: :all])
 
