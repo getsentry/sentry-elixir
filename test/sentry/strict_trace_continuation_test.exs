@@ -1,6 +1,8 @@
 defmodule Sentry.StrictTraceContinuationTest do
   use Sentry.Case, async: false
 
+  import Sentry.TestHelpers
+
   alias Sentry.Config
 
   describe "DSN org_id extraction" do
