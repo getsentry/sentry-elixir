@@ -1,6 +1,8 @@
 defmodule Sentry.OpenTelemetry.PropagatorTest do
   use ExUnit.Case, async: true
 
+  import Sentry.TestHelpers
+
   alias Sentry.OpenTelemetry.Propagator
 
   @moduletag skip: not Sentry.OpenTelemetry.VersionChecker.tracing_compatible?()
@@ -236,6 +238,10 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
     end
 
     describe "integration with OpenTelemetry" do
+      setup do
+        put_test_config(test_mode: true)
+      end
+
       test "round-trip inject and extract preserves trace context" do
         Tracer.with_span "test_span" do
           ctx = :otel_ctx.get_current()
