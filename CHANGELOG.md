@@ -1,3 +1,21 @@
+## 12.0.3
+
+### New Features ✨
+
+- (agents) Add AGENTS.md by @solnic in [#1013](https://github.com/getsentry/sentry-elixir/pull/1013)
+- (logs) Support non-primitives in the attributes by @solnic in [#1014](https://github.com/getsentry/sentry-elixir/pull/1014)
+
+### Bug Fixes 🐛
+
+- Set release metadata for traces by @FugiTech in [#1009](https://github.com/getsentry/sentry-elixir/pull/1009)
+
+### Internal Changes 🔧
+
+#### Deps Dev
+
+- Bump svelte from 5.53.0 to 5.53.6 in /test_integrations/tracing/svelte_mini by @dependabot in [#1006](https://github.com/getsentry/sentry-elixir/pull/1006)
+- Bump rollup from 4.53.5 to 4.59.0 in /test_integrations/tracing/svelte_mini by @dependabot in [#1007](https://github.com/getsentry/sentry-elixir/pull/1007)
+
 ## 12.0.2
 
 ### Bug Fixes 🐛
