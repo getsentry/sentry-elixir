@@ -35,7 +35,19 @@ defmodule Sentry.Telemetry.Scheduler do
   alias __MODULE__
 
   alias Sentry.Telemetry.{Buffer, Category}
-  alias Sentry.{CheckIn, ClientReport, Config, Envelope, Event, LogEvent, Transaction, Transport}
+
+  alias Sentry.{
+    CheckIn,
+    ClientReport,
+    Config,
+    Envelope,
+    Event,
+    LogEvent,
+    Metric,
+    Transaction,
+    Transport
+  }
+
   alias Sentry.Transport.RateLimiter
 
   @default_capacity 1000
@@ -44,7 +56,8 @@ defmodule Sentry.Telemetry.Scheduler do
           error: GenServer.server(),
           check_in: GenServer.server(),
           transaction: GenServer.server(),
-          log: GenServer.server()
+          log: GenServer.server(),
+          metric: GenServer.server()
         }
 
   defstruct [
@@ -82,7 +95,7 @@ defmodule Sentry.Telemetry.Scheduler do
   ## Examples
 
       iex> Sentry.Telemetry.Scheduler.build_priority_cycle()
-      [:error, :error, :error, :error, :error, :check_in, :check_in, :check_in, :check_in, :transaction, :transaction, :transaction, :log, :log]
+      [:error, :error, :error, :error, :error, :check_in, :check_in, :check_in, :check_in, :transaction, :transaction, :transaction, :log, :log, :metric, :metric]
 
   """
   @spec build_priority_cycle(map() | nil) :: [Category.t()]
@@ -261,6 +274,10 @@ defmodule Sentry.Telemetry.Scheduler do
     process_and_send_logs(state, log_events, &send_envelope/2)
   end
 
+  defp send_items(state, :metric, metrics) do
+    process_and_send_metrics(state, metrics, &send_envelope/2)
+  end
+
   defp flush_all_buffers(%Scheduler{} = state) do
     for {category, buffer} <- state.buffers do
       items = Buffer.drain(buffer)
@@ -284,6 +301,9 @@ defmodule Sentry.Telemetry.Scheduler do
 
           :log ->
             process_and_send_logs(state, items, &send_envelope_direct/2)
+
+          :metric ->
+            process_and_send_metrics(state, items, &send_envelope_direct/2)
         end
       end
     end
@@ -357,6 +377,28 @@ defmodule Sentry.Telemetry.Scheduler do
     end
   end
 
+  defp process_and_send_metrics(%{on_envelope: on_envelope} = state, metrics, send_fn) do
+    processed_metrics = apply_before_send_metric_callbacks(metrics)
+
+    if processed_metrics != [] do
+      if is_nil(on_envelope) do
+        case Sentry.Test.maybe_collect_metrics(processed_metrics) do
+          :collected ->
+            state
+
+          :not_collecting ->
+            envelope = Envelope.from_metric_events(processed_metrics)
+            send_fn.(state, envelope)
+        end
+      else
+        envelope = Envelope.from_metric_events(processed_metrics)
+        send_fn.(state, envelope)
+      end
+    else
+      state
+    end
+  end
+
   defp apply_before_send_log_callbacks(log_events) do
     callback = Config.before_send_log()
 
@@ -386,6 +428,19 @@ defmodule Sentry.Telemetry.Scheduler do
       Logger.warning("before_send_log callback failed: #{inspect(error)}")
 
       log_event
+  end
+
+  defp apply_before_send_metric_callbacks(metrics) do
+    callback = Config.before_send_metric()
+
+    if callback do
+      for metric <- metrics,
+          %Metric{} = modified_metric <- [Metric.call_before_send_callback(metric, callback)] do
+        modified_metric
+      end
+    else
+      metrics
+    end
   end
 
   defp advance_cycle(%Scheduler{} = state) do
@@ -556,7 +611,8 @@ defmodule Sentry.Telemetry.Scheduler do
       {:error, :critical},
       {:check_in, :high},
       {:transaction, :medium},
-      {:log, :low}
+      {:log, :low},
+      {:metric, :low}
     ]
   end
 end

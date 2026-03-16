@@ -323,6 +323,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await page.waitForSelector("[data-phx-main].phx-connected");
       await expect(page.locator("#counter-value")).toHaveText("0");
 
       await page.click("#increment-btn");
@@ -389,6 +390,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await page.waitForSelector("[data-phx-main].phx-connected");
       await expect(page.locator("#params-link")).toBeVisible();
 
       await page.click("#params-link");
@@ -423,6 +425,8 @@ test.describe("Tracing", () => {
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
       await expect(page.locator("#counter-value")).toHaveText("0");
+
+      await page.waitForSelector("[data-phx-main].phx-connected");
 
       await page.click("#increment-btn");
       await expect(page.locator("#counter-value")).toHaveText("1");
@@ -486,6 +490,7 @@ test.describe("Tracing", () => {
     test("LiveView handle_event records transaction with Ecto spans in correct hierarchy", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await page.waitForSelector("[data-phx-main].phx-connected");
 
       await expect(page.locator("#fetch-data-btn")).toBeVisible();
 

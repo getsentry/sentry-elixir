@@ -396,6 +396,17 @@ defmodule Sentry.Config do
       *Available since 12.0.0*.
       """
     ],
+    enable_metrics: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Whether to enable sending metric events to Sentry. When enabled, the SDK will
+      capture and send metrics (counters, gauges, distributions) according to the
+      [Sentry Metrics Protocol](https://develop.sentry.dev/sdk/telemetry/metrics/).
+      Use `Sentry.Metrics` functions to record metrics.
+      *Available since 13.0.0*.
+      """
+    ],
     logs: [
       type: :keyword_list,
       default: [],
@@ -434,8 +445,8 @@ defmodule Sentry.Config do
       ]
     ],
     telemetry_processor_categories: [
-      type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
-      default: [:log],
+      type: {:list, {:in, [:error, :check_in, :transaction, :log, :metric]}},
+      default: [:log, :metric],
       doc: """
       List of event categories that should be processed through the TelemetryProcessor.
       Categories in this list use the TelemetryProcessor's ring buffer and weighted
@@ -447,6 +458,7 @@ defmodule Sentry.Config do
         * `:check_in` - Cron check-ins (high priority, batch_size=1)
         * `:transaction` - Performance transactions (medium priority, batch_size=1)
         * `:log` - Log entries (low priority, batch_size=100, 5s timeout)
+        * `:metric` - Metric events (low priority, batch_size=100, 5s timeout)
 
       *Available since 12.0.0*.
       """
@@ -533,13 +545,13 @@ defmodule Sentry.Config do
       """
     ],
     telemetry_buffer_capacities: [
-      type: {:map, {:in, [:error, :check_in, :transaction, :log]}, :pos_integer},
+      type: {:map, {:in, [:error, :check_in, :transaction, :log, :metric]}, :pos_integer},
       default: %{},
       type_doc: "`%{category => pos_integer()}`",
       doc: """
       Overrides for the maximum number of items each telemetry buffer can hold.
       When a buffer reaches capacity, oldest items are dropped to make room.
-      Default: error=100, check_in=100, transaction=1000, log=1000.
+      Default: error=100, check_in=100, transaction=1000, log=1000, metric=1000.
       *Available since v12.0.0*.
       """
     ],
@@ -701,6 +713,17 @@ defmodule Sentry.Config do
       If the callback returns `nil` or `false`, the log event is not reported. If it returns a
       (potentially-updated) `Sentry.LogEvent`, then the updated log event is used instead.
       *Available since v12.0.0*.
+      """
+    ],
+    before_send_metric: [
+      type: {:or, [nil, {:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_metric_callback/0`",
+      doc: """
+      Allows performing operations on a metric *before* it is sent, as
+      well as filtering out the metric altogether.
+      If the callback returns `nil` or `false`, the metric is not reported. If it returns a
+      (potentially-updated) `Sentry.Metric`, then the updated metric is used instead.
+      *Available since v13.0.0*.
       """
     ]
   ]
@@ -905,6 +928,9 @@ defmodule Sentry.Config do
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
 
+  @spec enable_metrics?() :: boolean()
+  def enable_metrics?, do: fetch!(:enable_metrics)
+
   @spec logs() :: keyword()
   def logs, do: fetch!(:logs)
 
@@ -936,6 +962,10 @@ defmodule Sentry.Config do
   @spec before_send_log() ::
           (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil
   def before_send_log, do: get(:before_send_log)
+
+  @spec before_send_metric() ::
+          (Sentry.Metric.t() -> Sentry.Metric.t() | nil | false) | {module(), atom()} | nil
+  def before_send_metric, do: get(:before_send_metric)
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

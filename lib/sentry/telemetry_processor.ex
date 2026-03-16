@@ -30,6 +30,9 @@ defmodule Sentry.TelemetryProcessor do
       # Add log events to the buffer
       TelemetryProcessor.add(processor, %Sentry.LogEvent{...})
 
+      # Add metrics to the buffer
+      TelemetryProcessor.add(processor, %Sentry.Metric{...})
+
       # Flush all pending items
       TelemetryProcessor.flush(processor)
 
@@ -40,7 +43,7 @@ defmodule Sentry.TelemetryProcessor do
 
   alias Sentry.Telemetry.{Buffer, Category, Scheduler}
   alias Sentry.Transport.RateLimiter
-  alias Sentry.{CheckIn, Event, LogEvent, Transaction}
+  alias Sentry.{CheckIn, Event, LogEvent, Metric, Transaction}
 
   @default_name __MODULE__
 
@@ -97,7 +100,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns `:ok` when the item was added, or `{:ok, {:rate_limited, data_category}}` when
   the item was dropped due to an active rate limit.
   """
-  @spec add(Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
+  @spec add(Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t() | Metric.t()) ::
           :ok | {:ok, {:rate_limited, String.t()}}
   def add(%Event{} = item) do
     add(processor_name(), item)
@@ -115,6 +118,10 @@ defmodule Sentry.TelemetryProcessor do
     add(processor_name(), item)
   end
 
+  def add(%Metric{} = item) do
+    add(processor_name(), item)
+  end
+
   @doc """
   Adds an event to the appropriate buffer.
 
@@ -123,7 +130,10 @@ defmodule Sentry.TelemetryProcessor do
   Returns `:ok` when the item was added, or `{:ok, {:rate_limited, data_category}}` when
   the item was dropped due to an active rate limit.
   """
-  @spec add(Supervisor.supervisor(), Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t()) ::
+  @spec add(
+          Supervisor.supervisor(),
+          Event.t() | CheckIn.t() | Transaction.t() | LogEvent.t() | Metric.t()
+        ) ::
           :ok | {:ok, {:rate_limited, String.t()}}
   def add(processor, %Event{} = item) when is_atom(processor),
     do: add_to_buffer(processor, :error, item)
@@ -144,6 +154,11 @@ defmodule Sentry.TelemetryProcessor do
     do: add_to_buffer(processor, :log, item)
 
   def add(processor, %LogEvent{} = item), do: add_to_buffer(processor, :log, item)
+
+  def add(processor, %Metric{} = item) when is_atom(processor),
+    do: add_to_buffer(processor, :metric, item)
+
+  def add(processor, %Metric{} = item), do: add_to_buffer(processor, :metric, item)
 
   @doc """
   Flushes all buffers by draining their contents and sending all items.
@@ -178,7 +193,8 @@ defmodule Sentry.TelemetryProcessor do
   Returns the buffer pid for a given category.
   """
   @spec get_buffer(Supervisor.supervisor(), Category.t()) :: pid()
-  def get_buffer(processor, category) when category in [:error, :check_in, :transaction, :log] do
+  def get_buffer(processor, category)
+      when category in [:error, :check_in, :transaction, :log, :metric] do
     children = Supervisor.which_children(processor)
     buffer_id = buffer_id(category)
 
@@ -208,7 +224,7 @@ defmodule Sentry.TelemetryProcessor do
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Category.t()) :: non_neg_integer()
-  def buffer_size(category) when category in [:error, :check_in, :transaction, :log] do
+  def buffer_size(category) when category in [:error, :check_in, :transaction, :log, :metric] do
     buffer_size(processor_name(), category)
   end
 
@@ -218,7 +234,8 @@ defmodule Sentry.TelemetryProcessor do
   Returns 0 if the processor is not running.
   """
   @spec buffer_size(Supervisor.supervisor(), Category.t()) :: non_neg_integer()
-  def buffer_size(processor, category) when category in [:error, :check_in, :transaction, :log] do
+  def buffer_size(processor, category)
+      when category in [:error, :check_in, :transaction, :log, :metric] do
     case safe_get_buffer(processor, category) do
       {:ok, buffer} -> Buffer.size(buffer)
       :error -> 0
@@ -308,7 +325,8 @@ defmodule Sentry.TelemetryProcessor do
           error: Map.fetch!(buffer_names, :error),
           check_in: Map.fetch!(buffer_names, :check_in),
           transaction: Map.fetch!(buffer_names, :transaction),
-          log: Map.fetch!(buffer_names, :log)
+          log: Map.fetch!(buffer_names, :log),
+          metric: Map.fetch!(buffer_names, :metric)
         },
         name: scheduler_name(processor_name),
         capacity: transport_capacity
@@ -330,6 +348,7 @@ defmodule Sentry.TelemetryProcessor do
   defp buffer_id(:check_in), do: :check_in_buffer
   defp buffer_id(:transaction), do: :transaction_buffer
   defp buffer_id(:log), do: :log_buffer
+  defp buffer_id(:metric), do: :metric_buffer
 
   @doc false
   @spec buffer_name(atom(), Category.t()) :: atom()

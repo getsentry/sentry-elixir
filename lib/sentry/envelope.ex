@@ -10,6 +10,8 @@ defmodule Sentry.Envelope do
     Event,
     LogBatch,
     LogEvent,
+    Metric,
+    MetricBatch,
     Transaction,
     UUID
   }
@@ -22,6 +24,7 @@ defmodule Sentry.Envelope do
             | ClientReport.t()
             | Event.t()
             | LogBatch.t()
+            | MetricBatch.t()
             | Transaction.t(),
             ...
           ]
@@ -95,6 +98,25 @@ defmodule Sentry.Envelope do
   end
 
   @doc """
+  Creates a new envelope containing metric events.
+
+  According to the Sentry Metrics Protocol, metrics are sent in batches
+  within a single envelope item with content type `application/vnd.sentry.items.trace-metric+json`.
+  All metric events are wrapped in a single item with `{ items: [...] }`.
+  """
+  @doc since: "13.0.0"
+  @spec from_metric_events([Metric.t()]) :: t()
+  def from_metric_events(metrics) when is_list(metrics) do
+    # Create a single metric batch item that wraps all metrics
+    metric_batch = %MetricBatch{metrics: metrics}
+
+    %__MODULE__{
+      event_id: UUID.uuid4_hex(),
+      items: [metric_batch]
+    }
+  end
+
+  @doc """
   Returns the "data category" of the envelope's contents (to be used in client reports and more).
   """
   @doc since: "10.8.0"
@@ -104,6 +126,7 @@ defmodule Sentry.Envelope do
           | ClientReport.t()
           | Event.t()
           | LogBatch.t()
+          | MetricBatch.t()
           | Transaction.t()
         ) ::
           String.t()
@@ -113,17 +136,19 @@ defmodule Sentry.Envelope do
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
   def get_data_category(%LogBatch{}), do: "log_item"
+  def get_data_category(%MetricBatch{}), do: "trace_metric"
 
   @doc """
   Returns the total number of payload items in the envelope.
 
-  For log envelopes, this counts individual log events within the LogBatch.
+  For log and metric envelopes, this counts individual items within the batch.
   For other envelope types, each item counts as 1.
   """
   @spec item_count(t()) :: non_neg_integer()
   def item_count(%__MODULE__{items: items}) do
     Enum.reduce(items, 0, fn
       %LogBatch{log_events: log_events}, acc -> acc + length(log_events)
+      %MetricBatch{metrics: metrics}, acc -> acc + length(metrics)
       _other, acc -> acc + 1
     end)
   end
@@ -219,6 +244,26 @@ defmodule Sentry.Envelope do
           "type" => "log",
           "item_count" => length(items),
           "content_type" => "application/vnd.sentry.items.log+json"
+        }
+
+        {:ok, encoded_header} = Sentry.JSON.encode(header, json_library)
+        [encoded_header, ?\n, encoded_payload, ?\n]
+
+      {:error, _reason} = error ->
+        throw(error)
+    end
+  end
+
+  defp item_to_binary(json_library, %MetricBatch{metrics: metrics}) do
+    items = Enum.map(metrics, &Metric.to_map/1)
+    payload = %{items: items}
+
+    case Sentry.JSON.encode(payload, json_library) do
+      {:ok, encoded_payload} ->
+        header = %{
+          "type" => "trace_metric",
+          "item_count" => length(items),
+          "content_type" => "application/vnd.sentry.items.trace-metric+json"
         }
 
         {:ok, encoded_header} = Sentry.JSON.encode(header, json_library)

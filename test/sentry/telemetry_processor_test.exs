@@ -19,8 +19,8 @@ defmodule Sentry.TelemetryProcessorTest do
       assert Process.alive?(pid)
 
       children = Supervisor.which_children(pid)
-      # 4 buffers (error, check_in, transaction, log) + Scheduler = 5
-      assert length(children) == 5
+      # 5 buffers (error, check_in, transaction, log, metric) + Scheduler = 6
+      assert length(children) == 6
 
       Supervisor.stop(pid)
     end

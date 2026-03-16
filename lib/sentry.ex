@@ -235,6 +235,17 @@ defmodule Sentry do
           | {module(), function_name :: atom()}
 
   @typedoc """
+  A callback to use with the `:before_send_metric` configuration option.
+
+  If this is `{module, function_name}`, then `module.function_name(metric)` will
+  be called, where `metric` is of type `t:Sentry.Metric.t/0`.
+  """
+  @typedoc since: "13.0.0"
+  @type before_send_metric_callback() ::
+          (Sentry.Metric.t() -> as_boolean(Sentry.Metric.t()))
+          | {module(), function_name :: atom()}
+
+  @typedoc """
   The strategy to use when sending an event to Sentry.
   """
   @typedoc since: "9.0.0"
