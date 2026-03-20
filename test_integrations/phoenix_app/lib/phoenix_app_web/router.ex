@@ -54,6 +54,7 @@ defmodule PhoenixAppWeb.Router do
     get "/error", PageController, :api_error
     get "/health", PageController, :health
     get "/api/data", PageController, :api_data
+    post "/api/oban-job", PageController, :api_oban_job
   end
 
   # Other scopes may use custom stacks.

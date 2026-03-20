@@ -79,7 +79,7 @@ defmodule PhoenixAppWeb.TestWorkerLive do
       %{"sleep_time" => sleep_time, "should_fail" => should_fail},
       queue: queue
     )
-    |> Oban.insert()
+    |> OpentelemetryOban.insert()
   end
 
   defp list_jobs do

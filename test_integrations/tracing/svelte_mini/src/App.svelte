@@ -51,6 +51,25 @@
     }
   }
 
+  async function scheduleJob() {
+    loading = true;
+    result = "";
+    try {
+      const response = await makeRequest("POST", `${SENTRY_E2E_PHOENIX_APP_URL}/api/oban-job`);
+
+      if (response.ok) {
+        const data = await response.json();
+        result = `Job scheduled: ${JSON.stringify(data, null, 2)}`;
+      } else {
+        result = `Error: ${response.status} ${response.statusText}`;
+      }
+    } catch (error) {
+      result = `Error: ${error.message}`;
+    } finally {
+      loading = false;
+    }
+  }
+
   async function fetchData() {
     loading = true;
     result = "";
@@ -84,6 +103,10 @@
 
     <button id="trigger-error-btn" onclick={triggerError} disabled={loading}>
       {loading ? "Loading..." : "Trigger Error"}
+    </button>
+
+    <button id="schedule-job-btn" onclick={scheduleJob} disabled={loading}>
+      {loading ? "Loading..." : "Schedule Job"}
     </button>
   </div>
 
