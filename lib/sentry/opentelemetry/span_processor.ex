@@ -137,7 +137,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp build_trace_context(span_record) do
       {op, description} = get_op_description(span_record)
 
-      %{
+      context = %{
         trace_id: span_record.trace_id,
         span_id: span_record.span_id,
         parent_span_id: span_record.parent_span_id,
@@ -146,6 +146,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         origin: span_record.origin,
         data: filter_attributes(span_record.attributes)
       }
+
+      # Add links if present (for root spans, links go in trace context)
+      if span_record.links != [] do
+        Map.put(context, :links, format_links(span_record.links))
+      else
+        context
+      end
     end
 
     defp get_op_description(
@@ -204,7 +211,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       filtered_attributes = filter_attributes(span_record.attributes)
 
-      %Span{
+      span = %Span{
         op: op,
         description: description,
         start_timestamp: span_record.start_time,
@@ -216,6 +223,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         data: Map.put(filtered_attributes, "otel.kind", span_record.kind),
         status: span_status(span_record)
       }
+
+      # Add links if present (for child spans, links go in the span itself).
+      # When links is empty, the span retains links: nil (struct default), which is
+      # consistent with how other optional Span fields (status, tags, op) are handled —
+      # they are also sent as null via Map.from_struct/1 in Transaction.to_payload/1.
+      if span_record.links != [] do
+        %{span | links: format_links(span_record.links)}
+      else
+        span
+      end
     end
 
     defp span_status(%{
@@ -263,6 +280,29 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         end
       end)
       |> Map.new()
+    end
+
+    # Format span links according to Sentry spec
+    # https://develop.sentry.dev/sdk/telemetry/traces/span-links/
+    #
+    # Note: The spec defines an optional `sampled` boolean, but the OTel link record
+    # only exposes `tracestate` (vendor key-value pairs), not `trace_flags` (which
+    # contains the sampled bit). The sampled field cannot be extracted from the
+    # current OTel Erlang SDK link record structure.
+    defp format_links(links) do
+      Enum.map(links, fn link ->
+        formatted = %{
+          span_id: link.span_id,
+          trace_id: link.trace_id
+        }
+
+        # Add attributes if present
+        if map_size(link.attributes) > 0 do
+          Map.put(formatted, :attributes, link.attributes)
+        else
+          formatted
+        end
+      end)
     end
   end
 end

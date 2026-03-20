@@ -821,4 +821,196 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       refute SpanStorage.span_exists?("completed_child", table_name: table_name)
     end
   end
+
+  describe "span links" do
+    @tag span_storage: true
+    test "root span with links includes links in trace context" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      Sentry.Test.start_collecting_sentry_reports()
+
+      # Create a source span and capture its context
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx)
+
+      # Create a new root span with a link to the source span
+      Tracer.with_span "GET /api/linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/linked"
+        },
+        links: [link]
+      } do
+        Process.sleep(10)
+      end
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      linked_tx =
+        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/linked" end)
+
+      assert linked_tx != nil
+
+      trace_links = linked_tx.contexts.trace.links
+      assert is_list(trace_links)
+      assert length(trace_links) == 1
+
+      [span_link] = trace_links
+      assert String.match?(span_link.trace_id, ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link.span_id, ~r/^[a-f0-9]{16}$/)
+      refute Map.has_key?(span_link, :attributes)
+    end
+
+    @tag span_storage: true
+    test "root span with links preserves link attributes" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      Sentry.Test.start_collecting_sentry_reports()
+
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx, %{"my.key" => "my.value"})
+
+      Tracer.with_span "GET /api/linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/linked"
+        },
+        links: [link]
+      } do
+        Process.sleep(10)
+      end
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      linked_tx =
+        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/linked" end)
+
+      [span_link] = linked_tx.contexts.trace.links
+      assert span_link.attributes == %{"my.key" => "my.value"}
+    end
+
+    @tag span_storage: true
+    test "child span with links includes links in the span struct" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      Sentry.Test.start_collecting_sentry_reports()
+
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx)
+
+      Tracer.with_span "GET /api/parent", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/parent"
+        }
+      } do
+        Tracer.with_span "child_with_link", %{links: [link]} do
+          Process.sleep(10)
+        end
+      end
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      parent_tx =
+        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/parent" end)
+
+      assert length(parent_tx.spans) == 1
+      [child_span] = parent_tx.spans
+
+      assert is_list(child_span.links)
+      assert length(child_span.links) == 1
+
+      [span_link] = child_span.links
+      assert String.match?(span_link.trace_id, ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link.span_id, ~r/^[a-f0-9]{16}$/)
+    end
+
+    @tag span_storage: true
+    test "spans without links have nil links" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      Sentry.Test.start_collecting_sentry_reports()
+
+      Tracer.with_span "GET /api/no-links", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/no-links"
+        }
+      } do
+        Tracer.with_span "child_span" do
+          Process.sleep(10)
+        end
+      end
+
+      [transaction] = Sentry.Test.pop_sentry_transactions()
+
+      refute Map.has_key?(transaction.contexts.trace, :links)
+      assert [child_span] = transaction.spans
+      assert child_span.links == nil
+    end
+
+    @tag span_storage: true
+    test "span with multiple links preserves all links" do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      Sentry.Test.start_collecting_sentry_reports()
+
+      source_ctx_1 =
+        Tracer.with_span "source_1" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      source_ctx_2 =
+        Tracer.with_span "source_2" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link_1 = OpenTelemetry.link(source_ctx_1)
+      link_2 = OpenTelemetry.link(source_ctx_2, %{"order" => "second"})
+
+      Tracer.with_span "GET /api/multi-linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/multi-linked"
+        },
+        links: [link_1, link_2]
+      } do
+        Process.sleep(10)
+      end
+
+      transactions = Sentry.Test.pop_sentry_transactions()
+
+      linked_tx =
+        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/multi-linked" end)
+
+      trace_links = linked_tx.contexts.trace.links
+      assert length(trace_links) == 2
+
+      # Both links should have valid trace/span IDs
+      Enum.each(trace_links, fn link ->
+        assert String.match?(link.trace_id, ~r/^[a-f0-9]{32}$/)
+        assert String.match?(link.span_id, ~r/^[a-f0-9]{16}$/)
+      end)
+
+      # The two links should point to different spans
+      span_ids = Enum.map(trace_links, & &1.span_id)
+      assert length(Enum.uniq(span_ids)) == 2
+
+      # The link with attributes should preserve them
+      link_with_attrs = Enum.find(trace_links, &Map.has_key?(&1, :attributes))
+      assert link_with_attrs.attributes == %{"order" => "second"}
+    end
+  end
 end

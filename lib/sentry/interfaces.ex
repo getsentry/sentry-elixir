@@ -291,7 +291,8 @@ defmodule Sentry.Interfaces do
             status: String.t() | nil,
             tags: %{optional(String.t()) => term()} | nil,
             data: %{optional(String.t()) => term()} | nil,
-            origin: String.t() | nil
+            origin: String.t() | nil,
+            links: [map()] | nil
           }
 
     @enforce_keys [:trace_id, :span_id, :start_timestamp, :timestamp]
@@ -304,7 +305,8 @@ defmodule Sentry.Interfaces do
                   :status,
                   :tags,
                   :data,
-                  :origin
+                  :origin,
+                  :links
                 ]
   end
 end
