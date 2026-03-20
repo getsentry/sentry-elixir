@@ -422,6 +422,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await expect(page.locator("#counter-value")).toHaveText("0");
 
       await page.click("#increment-btn");
       await expect(page.locator("#counter-value")).toHaveText("1");
@@ -545,6 +546,181 @@ test.describe("Tracing", () => {
         ...dbTransaction.spans!.map((s) => s.span_id),
       ]);
       expect(allSpanIds.has(dbSpan.parent_span_id!)).toBe(true);
+    });
+  });
+
+  test.describe("Oban job tracing", () => {
+    const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
+
+    test("LiveView-scheduled Oban job generates transaction with valid trace context", async ({ page }) => {
+      await page.goto(`${PHOENIX_URL}/test-worker`);
+
+      await expect(page.locator("h3").first()).toContainText("Schedule Test Worker");
+      await expect(page.locator("#schedule-job-btn")).toBeVisible();
+
+      // Set a short sleep time so the job completes quickly
+      await page.fill("#sleep-time-input", "10");
+
+      clearLoggedEvents();
+
+      await page.click("#schedule-job-btn");
+      await expect(page.locator("#flash-info")).toContainText("Job scheduled successfully!");
+
+      // Wait for the Oban job transaction
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              e.contexts?.trace?.op === "queue.process"
+          ),
+        { timeout: 10000 }
+      );
+
+      const obanTransactions = logged.events.filter(
+        (event) =>
+          event.type === "transaction" &&
+          event.contexts?.trace?.op === "queue.process"
+      ) as TransactionWithSpans[];
+
+      expect(obanTransactions.length).toBeGreaterThan(0);
+
+      const obanTransaction = obanTransactions[0];
+      const traceContext = obanTransaction.contexts?.trace;
+
+      expect(obanTransaction.transaction).toBe("PhoenixApp.Workers.TestWorker");
+
+      expect(traceContext).toBeDefined();
+      expect(traceContext?.trace_id).toMatch(/^[a-f0-9]{32}$/);
+      expect(traceContext?.span_id).toMatch(/^[a-f0-9]{16}$/);
+      expect(traceContext?.op).toBe("queue.process");
+
+      const traceData = traceContext?.data as Record<string, any> | undefined;
+      expect(traceData).toBeDefined();
+      expect(traceData?.["messaging.destination.name"]).toBe("default");
+      expect(traceData?.["oban.job.attempt"]).toBe(1);
+    });
+
+    test("LiveView-scheduled Oban job has span link back to the LiveView trace", async ({ page }) => {
+      // Full distributed tracing path:
+      // LiveView WebSocket event → handle_event → OpentelemetryOban.insert() → Oban job
+      // The Oban job transaction should have a span link whose trace_id matches
+      // the LiveView transaction's trace_id, proving the causal relationship.
+      await page.goto(`${PHOENIX_URL}/test-worker`);
+
+      await expect(page.locator("#schedule-job-btn")).toBeVisible();
+      await page.fill("#sleep-time-input", "10");
+
+      clearLoggedEvents();
+
+      await page.click("#schedule-job-btn");
+      await expect(page.locator("#flash-info")).toContainText("Job scheduled successfully!");
+
+      // Wait for both the LiveView transaction and the Oban job transaction
+      const logged = await waitForEvents(
+        (events) => {
+          const transactions = events.events.filter((e) => e.type === "transaction");
+          const hasLiveView = transactions.some(
+            (e) => e.transaction?.includes("handle_event")
+          );
+          const hasOban = transactions.some(
+            (e) =>
+              e.type === "transaction" &&
+              e.contexts?.trace?.op === "queue.process"
+          );
+          return hasLiveView && hasOban;
+        },
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (event) => event.type === "transaction"
+      );
+
+      // Find the LiveView transaction that handled the form submission
+      const liveViewTransactions = transactions.filter(
+        (t) =>
+          t.transaction?.includes("handle_event") ||
+          (t.contexts?.trace?.data as any)?.["url.path"]?.includes("/live/websocket")
+      );
+      expect(liveViewTransactions.length).toBeGreaterThan(0);
+
+      // Collect all LiveView trace IDs (the job could be linked to any of them)
+      const liveViewTraceIds = new Set(
+        liveViewTransactions
+          .map((t) => t.contexts?.trace?.trace_id)
+          .filter(Boolean) as string[]
+      );
+
+      // Find the Oban job transaction
+      const obanTransaction = transactions.find(
+        (t) => t.contexts?.trace?.op === "queue.process"
+      );
+      expect(obanTransaction).toBeDefined();
+
+      const obanTrace = obanTransaction!.contexts?.trace;
+      expect(obanTrace?.op).toBe("queue.process");
+      expect(obanTrace?.trace_id).toMatch(/^[a-f0-9]{32}$/);
+
+      // The span link should connect the Oban transaction back to one of the LiveView traces
+      const links = obanTrace?.links;
+      expect(links).toBeDefined();
+      expect(links!.length).toBeGreaterThan(0);
+
+      for (const link of links!) {
+        expect(link.span_id).toMatch(/^[a-f0-9]{16}$/);
+        expect(link.trace_id).toMatch(/^[a-f0-9]{32}$/);
+      }
+      expect(links!.some((link) => liveViewTraceIds.has(link.trace_id))).toBe(true);
+    });
+
+    test("Multiple LiveView-scheduled Oban jobs create independent transactions", async ({ page }) => {
+      await page.goto(`${PHOENIX_URL}/test-worker`);
+
+      await expect(page.locator("#schedule-job-btn")).toBeVisible();
+      await page.fill("#sleep-time-input", "10");
+
+      clearLoggedEvents();
+
+      // Schedule multiple jobs via the LiveView form
+      for (let i = 0; i < 3; i++) {
+        await page.click("#schedule-job-btn");
+        await expect(page.locator("#flash-info")).toContainText("Job scheduled successfully!");
+      }
+
+      // Wait for all Oban job transactions
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.filter(
+            (e) =>
+              e.type === "transaction" &&
+              e.contexts?.trace?.op === "queue.process"
+          ).length >= 3,
+        { timeout: 10000 }
+      );
+
+      const obanTransactions = logged.events.filter(
+        (event) =>
+          event.type === "transaction" &&
+          event.contexts?.trace?.op === "queue.process"
+      );
+
+      expect(obanTransactions.length).toBeGreaterThanOrEqual(3);
+
+      // Each job should have its own trace_id (independent traces)
+      const traceIds = obanTransactions
+        .map((t) => t.contexts?.trace?.trace_id)
+        .filter(Boolean);
+
+      const uniqueTraceIds = [...new Set(traceIds)];
+      expect(uniqueTraceIds.length).toBeGreaterThanOrEqual(3);
+
+      obanTransactions.forEach((transaction) => {
+        const traceContext = transaction.contexts?.trace;
+        expect(traceContext?.trace_id).toMatch(/^[a-f0-9]{32}$/);
+        expect(traceContext?.span_id).toMatch(/^[a-f0-9]{16}$/);
+        expect(traceContext?.op).toBe("queue.process");
+      });
     });
   });
 });

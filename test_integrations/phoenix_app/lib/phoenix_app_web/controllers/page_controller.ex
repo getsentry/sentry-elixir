@@ -172,4 +172,24 @@ defmodule PhoenixAppWeb.PageController do
       }
     })
   end
+
+  def api_oban_job(conn, params) do
+    alias PhoenixApp.Workers.TestWorker
+
+    sleep_time = Map.get(params, "sleep_time", "100") |> String.to_integer()
+    should_fail = Map.get(params, "should_fail", "false") == "true"
+
+    {:ok, job} =
+      %{"sleep_time" => sleep_time, "should_fail" => should_fail}
+      |> TestWorker.new()
+      |> OpentelemetryOban.insert()
+
+    json(conn, %{
+      job_id: job.id,
+      worker: job.worker,
+      queue: job.queue,
+      args: job.args,
+      enqueued: true
+    })
+  end
 end

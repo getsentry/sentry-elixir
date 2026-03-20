@@ -71,11 +71,7 @@ defmodule PhoenixApp.MixProject do
       {:opentelemetry_semantic_conventions, "~> 1.27"},
       {:opentelemetry_bandit, "~> 0.1"},
       {:opentelemetry_phoenix, "~> 2.0"},
-      # TODO: Update once merged
-      {:opentelemetry_oban, "~> 1.1",
-       github: "open-telemetry/opentelemetry-erlang-contrib",
-       branch: "main",
-       sparse: "instrumentation/opentelemetry_oban"},
+      {:opentelemetry_oban, "~> 1.2"},
       {:opentelemetry_ecto, "~> 1.2"},
       {:opentelemetry_logger_metadata, "~> 0.2.0"},
       {:hackney, "~> 1.18"},
