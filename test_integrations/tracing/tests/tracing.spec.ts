@@ -671,6 +671,7 @@ test.describe("Tracing", () => {
         expect(link.span_id).toMatch(/^[a-f0-9]{16}$/);
         expect(link.trace_id).toMatch(/^[a-f0-9]{32}$/);
       }
+      expect(links!.some((link) => liveViewTraceIds.has(link.trace_id))).toBe(true);
     });
 
     test("Multiple LiveView-scheduled Oban jobs create independent transactions", async ({ page }) => {
