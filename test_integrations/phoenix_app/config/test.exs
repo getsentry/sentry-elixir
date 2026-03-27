@@ -37,16 +37,20 @@ config :sentry,
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
-  send_result: :sync,
   traces_sample_rate: 1.0,
   enable_logs: true,
   logs: [
     level: :info,
     excluded_domains: [:cowboy, :ranch],
     metadata: [:request_id, :user_id]
+  ],
+  integrations: [
+    opentelemetry: [
+      sampler_opts: [drop: ["Elixir.Oban.Stager process"]],
+      phoenix: [adapter: :bandit],
+      ecto: [repos: [[:phoenix_app, :repo]], db_statement: :enabled]
+    ]
   ]
-
-config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,

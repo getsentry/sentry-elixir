@@ -9,16 +9,8 @@ defmodule PhoenixApp.Application do
   def start(_type, _args) do
     :ok = Application.ensure_started(:inets)
 
-    OpentelemetryBandit.setup()
-
-    # Set up Sentry's LiveView context propagation BEFORE OpentelemetryPhoenix
-    # This enables distributed tracing context to flow from HTTP requests to LiveView WebSocket processes
-    Sentry.OpenTelemetry.LiveViewPropagator.setup()
-
-    OpentelemetryPhoenix.setup(adapter: :bandit)
-    OpentelemetryOban.setup()
-    OpentelemetryEcto.setup([:phoenix_app, :repo], db_statement: :enabled)
-    OpentelemetryLoggerMetadata.setup()
+    # OpenTelemetry instrumentation libraries are now auto-configured by Sentry
+    # via the `integrations: [opentelemetry: [...]]` config.
 
     children = [
       PhoenixAppWeb.Telemetry,

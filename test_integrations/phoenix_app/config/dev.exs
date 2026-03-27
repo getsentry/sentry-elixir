@@ -94,6 +94,13 @@ config :sentry,
   logs: [
     level: :info,
     metadata: :all
+  ],
+  integrations: [
+    opentelemetry: [
+      sampler_opts: [drop: ["Elixir.Oban.Stager process"]],
+      phoenix: [adapter: :bandit],
+      ecto: [repos: [[:phoenix_app, :repo]], db_statement: :enabled]
+    ]
   ]
 
 config :phoenix_app, Oban,

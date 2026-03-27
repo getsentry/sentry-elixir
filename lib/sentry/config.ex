@@ -168,6 +168,94 @@ defmodule Sentry.Config do
           """
         ]
       ]
+    ],
+    opentelemetry: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for automatic OpenTelemetry setup when tracing is enabled
+      (`:traces_sample_rate` or `:traces_sampler` is set). When tracing is enabled, the SDK
+      automatically configures the OpenTelemetry SDK (span processor, sampler, propagator)
+      and sets up available instrumentation libraries.
+
+      The SDK only sets OpenTelemetry application config if the user hasn't already configured
+      it via `config :opentelemetry` entries, ensuring backward compatibility.
+
+      *Available since 12.1.0*.
+      """,
+      keys: [
+        auto_setup: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Whether to auto-configure the OpenTelemetry SDK with Sentry's span processor,
+          sampler, and propagator. Set to `false` if you want to configure the OTel SDK manually
+          via `config :opentelemetry` entries.
+          """
+        ],
+        sampler_opts: [
+          type: :keyword_list,
+          default: [],
+          doc: """
+          Options passed to `Sentry.OpenTelemetry.Sampler`. For example, use `drop: ["span_name"]`
+          to drop specific spans from sampling.
+          """
+        ],
+        phoenix: [
+          type: {:or, [:boolean, :keyword_list]},
+          default: true,
+          doc: """
+          Auto-setup `OpentelemetryPhoenix` if available. Pass a keyword list to provide options
+          (e.g., `[adapter: :bandit]`). Set to `false` to disable.
+          """
+        ],
+        bandit: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Auto-setup `OpentelemetryBandit` if available. Set to `false` to disable.
+          """
+        ],
+        cowboy: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Auto-setup `OpentelemetryCowboy` if available. Set to `false` to disable.
+          """
+        ],
+        oban: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Auto-setup `OpentelemetryOban` if available. Set to `false` to disable.
+          """
+        ],
+        ecto: [
+          type: {:or, [:boolean, :keyword_list]},
+          default: false,
+          doc: """
+          Auto-setup `OpentelemetryEcto` if available. Requires the `:repos` option with a list
+          of repo telemetry prefixes (e.g., `[repos: [[:my_app, :repo]]]`). Additional options
+          are passed through to `OpentelemetryEcto.setup/2`. Defaults to `false` since repo
+          names cannot be auto-detected.
+          """
+        ],
+        live_view: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Auto-setup `Sentry.OpenTelemetry.LiveViewPropagator` for distributed tracing context
+          propagation to LiveView processes. Set to `false` to disable.
+          """
+        ],
+        logger_metadata: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Auto-setup `OpentelemetryLoggerMetadata` if available. Set to `false` to disable.
+          """
+        ]
+      ]
     ]
   ]
 
