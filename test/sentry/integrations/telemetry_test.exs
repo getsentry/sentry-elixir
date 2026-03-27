@@ -1,60 +1,91 @@
 defmodule Sentry.Integrations.TelemetryTest do
   use ExUnit.Case, async: true
 
+  import Sentry.TestHelpers
+
   alias Sentry.Integrations.Telemetry
 
   describe "handle_event/4" do
-    test "reports errors" do
-      Sentry.Test.start_collecting()
+    setup do
+      setup_bypass()
+    end
+
+    test "reports errors", %{bypass: bypass} do
+      ref = setup_bypass_event_collector(bypass)
 
       handle_failure_event(:error, %RuntimeError{message: "oops"}, [])
 
-      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert [event] = collect_envelopes(ref, 1) |> extract_events()
 
-      assert event.tags == %{
-               telemetry_handler_id: "my_handler",
-               event_name: "[:my_app, :some_event]"
+      assert event["tags"] == %{
+               "telemetry_handler_id" => "my_handler",
+               "event_name" => "[:my_app, :some_event]"
              }
 
-      assert event.original_exception == %RuntimeError{message: "oops"}
+      assert [exception] = event["exception"]
+      assert exception["type"] == "RuntimeError"
+      assert exception["value"] == "oops"
     end
 
-    test "reports Erlang errors (normalized)" do
-      Sentry.Test.start_collecting()
+    test "reports Erlang errors (normalized)", %{bypass: bypass} do
+      ref = setup_bypass_event_collector(bypass)
 
       handle_failure_event(:error, {:badmap, :foo}, [])
 
-      assert [event] = Sentry.Test.pop_sentry_reports()
+      assert [event] = collect_envelopes(ref, 1) |> extract_events()
 
-      assert event.tags == %{
-               telemetry_handler_id: "my_handler",
-               event_name: "[:my_app, :some_event]"
+      assert event["tags"] == %{
+               "telemetry_handler_id" => "my_handler",
+               "event_name" => "[:my_app, :some_event]"
              }
 
-      assert event.original_exception == %BadMapError{term: :foo}
+      assert [exception] = event["exception"]
+      assert exception["type"] == "BadMapError"
+      assert exception["value"] =~ "expected a map, got:"
+      assert exception["value"] =~ ":foo"
     end
 
     for kind <- [:throw, :exit] do
-      test "reports #{kind}s" do
-        Sentry.Test.start_collecting()
+      test "reports #{kind}s", %{bypass: bypass} do
+        ref = setup_bypass_event_collector(bypass)
 
         handle_failure_event(unquote(kind), :foo, [])
 
-        assert [event] = Sentry.Test.pop_sentry_reports()
+        assert [event] = collect_envelopes(ref, 1) |> extract_events()
 
-        assert event.message.message == "Telemetry handler %s failed"
-        assert event.message.formatted == "Telemetry handler my_handler failed"
+        assert event["message"]["message"] == "Telemetry handler %s failed"
+        assert event["message"]["formatted"] == "Telemetry handler my_handler failed"
 
-        assert event.tags == %{
-                 telemetry_handler_id: "my_handler",
-                 event_name: "[:my_app, :some_event]"
+        assert event["tags"] == %{
+                 "telemetry_handler_id" => "my_handler",
+                 "event_name" => "[:my_app, :some_event]"
                }
 
-        assert event.extra == %{kind: inspect(unquote(kind)), reason: ":foo"}
+        assert event["extra"] == %{"kind" => inspect(unquote(kind)), "reason" => ":foo"}
 
-        assert event.original_exception == nil
+        assert event["exception"] == []
       end
     end
+  end
+
+  # Sets up a Bypass collector that only forwards error event envelopes.
+  # This filters out stray transaction envelopes from background processes
+  # that may hit this Bypass due to concurrent persistent_term DSN writes in async tests.
+  defp setup_bypass_event_collector(bypass) do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      if body =~ ~r/"type":\s*"event"/ do
+        send(test_pid, {:bypass_envelope, ref, body})
+      end
+
+      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+    end)
+
+    ref
   end
 
   defp handle_failure_event(kind, reason, stacktrace) do

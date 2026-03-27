@@ -22,6 +22,5 @@ config :sentry,
   environment_name: Mix.env(),
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
-  test_mode: true,
   send_result: :sync,
   in_app_otp_apps: [:public, :admin]

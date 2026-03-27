@@ -179,8 +179,6 @@ defmodule Sentry.Config do
       doc: """
       The DSN for your Sentry project. If this is not set, Sentry will not be enabled.
       If the `SENTRY_DSN` environment variable is set, it will be used as the default value.
-      If `:test_mode` is `true`, the `:dsn` option is sometimes ignored; see `Sentry.Test`
-      for more information.
       """
     ],
     environment_name: [
@@ -363,16 +361,6 @@ defmodule Sentry.Config do
       within the past 30 seconds. If it has, then it will not report the event again, and will
       log a message instead. Events are deduplicated by comparing their message, exception,
       stacktrace, and fingerprint. *Available since v10.0.0*.
-      """
-    ],
-    test_mode: [
-      type: :boolean,
-      default: false,
-      doc: """
-      Whether to enable *test mode*. When test mode is enabled, the SDK will check whether
-      there is a process **collecting events** and avoid sending those events if that's the
-      case. This is useful for testing—see `Sentry.Test`. `:test_mode` works in tandem
-      with `:dsn`; this is described in detail in `Sentry.Test`.
       """
     ],
     integrations: [
@@ -914,9 +902,6 @@ defmodule Sentry.Config do
 
   @spec send_client_reports?() :: boolean()
   def send_client_reports?, do: fetch!(:send_client_reports)
-
-  @spec test_mode?() :: boolean()
-  def test_mode?, do: fetch!(:test_mode)
 
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)

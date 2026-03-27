@@ -380,10 +380,6 @@ defmodule Sentry do
         ClientReport.Sender.record_discarded_events(:event_processor, [event])
         :ignored
 
-      # If we're in test mode, let's send the event down the pipeline anyway.
-      Config.test_mode?() ->
-        Client.send_event(event, options)
-
       !Config.dsn() ->
         # We still validate options even if we're not sending the event. This aims at catching
         # configuration issues during development instead of only when deploying to production.
@@ -403,9 +399,6 @@ defmodule Sentry do
     included_envs = Config.included_environments()
 
     cond do
-      Config.test_mode?() ->
-        Client.send_transaction(transaction, options)
-
       !Config.dsn() ->
         # We still validate options even if we're not sending the event. This aims at catching
         # configuration issues during development instead of only when deploying to production.

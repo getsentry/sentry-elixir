@@ -123,6 +123,127 @@ defmodule Sentry.TestHelpers do
     )
   end
 
+  @doc """
+  Opens a Bypass instance and configures the DSN to point to it.
+  Returns a map with `:bypass` for use in test context.
+
+  ## Options
+
+    * Any extra config options to pass to `put_test_config/1`.
+
+  ## Examples
+
+      setup do
+        setup_bypass()
+      end
+
+      setup do
+        setup_bypass(dedup_events: false)
+      end
+
+  """
+  @spec setup_bypass(keyword()) :: %{bypass: Bypass.t()}
+  def setup_bypass(extra_config \\ []) do
+    bypass = Bypass.open()
+
+    # Stub all envelope requests by default so tests that don't explicitly
+    # collect envelopes won't fail from background span sends.
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+    end)
+
+    config =
+      [dsn: "http://public:secret@localhost:#{bypass.port}/1", finch_request_opts: [receive_timeout: 2000]]
+      |> Keyword.merge(extra_config)
+
+    put_test_config(config)
+    %{bypass: bypass}
+  end
+
+  @doc """
+  Sets up a Bypass envelope collector that forwards all envelope bodies
+  to the test process as messages. Returns a reference for collecting results.
+
+  Uses `Bypass.stub` (not `Bypass.expect`) to be resilient to stray requests
+  from background processes (e.g., OpenTelemetry span processor) that may
+  hit this Bypass due to concurrent persistent_term DSN writes in async tests.
+
+  Use with `collect_envelopes/2` to retrieve the decoded envelopes.
+  """
+  @spec setup_bypass_envelope_collector(Bypass.t()) :: reference()
+  def setup_bypass_envelope_collector(bypass) do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:bypass_envelope, ref, body})
+      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+    end)
+
+    ref
+  end
+
+  @doc """
+  Collects decoded envelopes sent to a Bypass collector.
+
+  Returns a list of decoded envelope item lists. Each element is the result
+  of `decode_envelope!/1` for one HTTP request.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  """
+  @spec collect_envelopes(reference(), pos_integer(), keyword()) :: [[{map(), map()}]]
+  def collect_envelopes(ref, expected_count, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 1000)
+    do_collect_envelopes(ref, expected_count, [], timeout)
+  end
+
+  defp do_collect_envelopes(_ref, 0, acc, _timeout), do: Enum.reverse(acc)
+
+  defp do_collect_envelopes(ref, remaining, acc, timeout) do
+    receive do
+      {:bypass_envelope, ^ref, body} ->
+        items = decode_envelope!(body)
+        do_collect_envelopes(ref, remaining - 1, [items | acc], timeout)
+    after
+      timeout ->
+        Enum.reverse(acc)
+    end
+  end
+
+  @doc """
+  Extracts event payloads from decoded envelope item lists.
+  """
+  @spec extract_events([[{map(), map()}]]) :: [map()]
+  def extract_events(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "event"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Extracts transaction payloads from decoded envelope item lists.
+  """
+  @spec extract_transactions([[{map(), map()}]]) :: [map()]
+  def extract_transactions(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "transaction"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Extracts log item payloads from decoded envelope item lists.
+  """
+  @spec extract_log_items([[{map(), map()}]]) :: [map()]
+  def extract_log_items(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "log"}, payload} <- items,
+        do: payload
+  end
+
   defp decode_envelope_items(items) do
     items
     |> Enum.chunk_every(2)

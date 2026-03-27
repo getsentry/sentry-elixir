@@ -6,11 +6,11 @@ if config_env() == :test do
     tags: %{},
     enable_source_code_context: true,
     root_source_code_paths: [File.cwd!()],
-    finch_request_opts: [receive_timeout: 50],
+    dsn: "http://public:secret@localhost:8999/1",
+    finch_request_opts: [receive_timeout: 2000],
     send_result: :sync,
     send_max_attempts: 1,
     dedup_events: false,
-    test_mode: true,
     traces_sample_rate: 1.0
 
   config :sentry, request_retries: []

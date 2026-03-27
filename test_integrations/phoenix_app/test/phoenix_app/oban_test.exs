@@ -10,10 +10,10 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
   alias Sentry.Integrations.Oban.ErrorReporter
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", traces_sample_rate: 1.0, send_result: :sync)
+    %{bypass: bypass} = setup_bypass(traces_sample_rate: 1.0)
+    ref = setup_bypass_envelope_collector(bypass)
 
-    %{bypass: bypass}
+    %{bypass: bypass, ref: ref}
   end
 
   defmodule TestWorker do
@@ -47,27 +47,27 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     end
   end
 
-  test "captures Oban worker execution as transaction", %{bypass: bypass} do
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, transaction_body}] = decode_envelope!(body)
-
-      assert headers["type"] == "transaction"
-      assert transaction_body["transaction"] == "Sentry.Integrations.Phoenix.ObanTest.TestWorker"
-      
-      trace = transaction_body["contexts"]["trace"]
-      assert trace["origin"] == "opentelemetry_oban"
-      assert trace["op"] == "queue.process"
-      assert trace["data"]["oban.job.job_id"]
-      assert trace["data"]["messaging.destination.name"] == "default"
-      assert trace["data"]["oban.job.attempt"] == 1
-
-      assert transaction_body["spans"] == []
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "captures Oban worker execution as transaction", %{ref: ref} do
     :ok = perform_job(TestWorker, %{test: "args"})
+
+    envelopes = collect_envelopes(ref, 1)
+    transactions = extract_transactions(envelopes)
+    assert length(transactions) == 1
+
+    [tx] = transactions
+
+    assert tx["transaction"] == "Sentry.Integrations.Phoenix.ObanTest.TestWorker"
+    assert tx["transaction_info"] == %{"source" => "custom"}
+
+    trace = tx["contexts"]["trace"]
+    assert trace["origin"] == "opentelemetry_oban"
+    assert trace["op"] == "queue.process"
+    assert trace["description"] == "Sentry.Integrations.Phoenix.ObanTest.TestWorker"
+    assert trace["data"]["oban.job.job_id"]
+    assert trace["data"]["messaging.destination.name"] == "default"
+    assert trace["data"]["oban.job.attempt"] == 1
+
+    assert tx["spans"] == []
   end
 
   test "captures Oban worker with trace links", %{bypass: bypass} do
@@ -116,27 +116,25 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     end
   end
 
-  test "captures Oban worker with child spans", %{bypass: bypass} do
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, transaction_body}] = decode_envelope!(body)
-
-      assert headers["type"] == "transaction"
-      assert transaction_body["transaction"] ==
-               "Sentry.Integrations.Phoenix.ObanTest.WorkerWithDatabaseQuery"
-
-      # Should have child spans from the database query
-      assert length(transaction_body["spans"]) > 0
-
-      # Verify at least one db span exists
-      assert Enum.any?(transaction_body["spans"], fn span ->
-               span["op"] == "db"
-             end)
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "captures Oban worker with child spans", %{ref: ref} do
     :ok = perform_job(WorkerWithDatabaseQuery, %{})
+
+    envelopes = collect_envelopes(ref, 1)
+    transactions = extract_transactions(envelopes)
+    assert length(transactions) == 1
+
+    [tx] = transactions
+
+    assert tx["transaction"] ==
+             "Sentry.Integrations.Phoenix.ObanTest.WorkerWithDatabaseQuery"
+
+    # Should have child spans from the database query
+    assert length(tx["spans"]) > 0
+
+    # Verify at least one db span exists
+    assert Enum.any?(tx["spans"], fn span ->
+             span["op"] == "db"
+           end)
   end
 
   defp receive_oban_transaction do
@@ -164,7 +162,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       %{bypass: bypass}
     end
 
-    test "skips error reporting when callback returns false", %{bypass: bypass} do
+    test "skips error reporting when callback returns false", %{bypass: bypass, ref: ref} do
       test_pid = self()
 
       # Allow transaction envelopes through but assert no error events are sent
@@ -198,22 +196,13 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert worker == FailingWorker
       assert %Oban.Job{} = received_job
       assert received_job.args == %{"should_fail" => true}
+
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      assert extract_events(envelopes) == []
     end
 
-    test "reports error when callback returns true", %{bypass: bypass} do
+    test "reports error when callback returns true", %{ref: ref} do
       test_pid = self()
-
-      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        for {headers, item_body} <- decode_envelope!(body) do
-          if headers["type"] == "event" do
-            send(test_pid, {:error_event, item_body})
-          end
-        end
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
 
       ErrorReporter.attach(
         should_report_error_callback: fn worker, job ->
@@ -231,21 +220,19 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
       assert_receive {:callback_invoked, _worker, _job}
 
-      assert_receive {:error_event, event_body}
-      exception = event_body["exception"] |> List.first()
-      assert exception["type"] == "RuntimeError"
-      assert exception["value"] == "intentional failure for testing"
-      assert event_body["tags"]["oban_worker"] ==
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      events = extract_events(envelopes)
+      assert [event] = events
+
+      assert [%{"type" => "RuntimeError", "value" => "intentional failure for testing"} | _] =
+               event["exception"]
+
+      assert event["tags"]["oban_worker"] ==
                "Sentry.Integrations.Phoenix.ObanTest.FailingWorker"
     end
 
-    test "callback receives worker module and full job struct", %{bypass: bypass} do
+    test "callback receives worker module and full job struct", %{ref: ref} do
       test_pid = self()
-
-      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, _body, conn} = Plug.Conn.read_body(conn)
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
 
       ErrorReporter.attach(
         should_report_error_callback: fn worker, job ->
@@ -273,9 +260,12 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert job.max_attempts == 3
       assert is_integer(job.attempt)
       assert is_integer(job.id)
+
+      # Drain envelopes to avoid Bypass errors
+      collect_envelopes(ref, 10, timeout: 500)
     end
 
-    test "callback can make decisions based on attempt number", %{bypass: bypass} do
+    test "callback can make decisions based on attempt number", %{bypass: bypass, ref: ref} do
       test_pid = self()
 
       # Allow transaction envelopes through but assert no error events are sent
@@ -310,23 +300,12 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert attempt == 1
       assert max_attempts == 3
       assert should_report == false
+
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      assert extract_events(envelopes) == []
     end
 
-    test "handles callback errors gracefully and defaults to reporting", %{bypass: bypass} do
-      test_pid = self()
-
-      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        for {headers, item_body} <- decode_envelope!(body) do
-          if headers["type"] == "event" do
-            send(test_pid, {:error_event, item_body})
-          end
-        end
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
+    test "handles callback errors gracefully and defaults to reporting", %{ref: ref} do
       log =
         capture_log(fn ->
           ErrorReporter.attach(
@@ -347,27 +326,15 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert log =~ "FailingWorker"
       assert log =~ "callback crashed!"
 
-      assert_receive {:error_event, event_body}
-      exception = event_body["exception"] |> List.first()
-      assert exception["type"] == "RuntimeError"
-      assert exception["value"] == "intentional failure for testing"
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      events = extract_events(envelopes)
+      assert [event] = events
+
+      assert [%{"type" => "RuntimeError", "value" => "intentional failure for testing"} | _] =
+               event["exception"]
     end
 
-    test "reports error when no callback is configured", %{bypass: bypass} do
-      test_pid = self()
-
-      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        for {headers, item_body} <- decode_envelope!(body) do
-          if headers["type"] == "event" do
-            send(test_pid, {:error_event, item_body})
-          end
-        end
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
+    test "reports error when no callback is configured", %{ref: ref} do
       ErrorReporter.attach([])
 
       {:ok, _job} =
@@ -377,13 +344,15 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
       Oban.drain_queue(queue: :default)
 
-      assert_receive {:error_event, event_body}
-      exception = event_body["exception"] |> List.first()
-      assert exception["type"] == "RuntimeError"
-      assert exception["value"] == "intentional failure for testing"
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      events = extract_events(envelopes)
+      assert [event] = events
+
+      assert [%{"type" => "RuntimeError", "value" => "intentional failure for testing"} | _] =
+               event["exception"]
     end
 
-    test "callback can filter based on worker type", %{bypass: bypass} do
+    test "callback can filter based on worker type", %{bypass: bypass, ref: ref} do
       test_pid = self()
 
       # Allow transaction envelopes through but assert no error events are sent
@@ -415,22 +384,13 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       Oban.drain_queue(queue: :default)
 
       assert_receive {:worker_check, FailingWorker, false}
+
+      envelopes = collect_envelopes(ref, 10, timeout: 500)
+      assert extract_events(envelopes) == []
     end
 
-    test "callback receives nil and logs warning for non-existent worker module", %{bypass: bypass} do
+    test "callback receives nil and logs warning for non-existent worker module", %{ref: ref} do
       test_pid = self()
-
-      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        for {headers, item_body} <- decode_envelope!(body) do
-          if headers["type"] == "event" do
-            send(test_pid, {:error_event, item_body})
-          end
-        end
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
 
       log =
         capture_log(fn ->
@@ -470,8 +430,10 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert worker == nil
       assert received_job.worker == "NonExistent.Worker.Module"
 
-      assert_receive {:error_event, event_body}
-      assert event_body["tags"]["oban_worker"] == "NonExistent.Worker.Module"
+      envelopes = collect_envelopes(ref, 1)
+      events = extract_events(envelopes)
+      assert [event] = events
+      assert event["tags"]["oban_worker"] == "NonExistent.Worker.Module"
     end
   end
 end
