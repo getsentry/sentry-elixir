@@ -37,50 +37,24 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp process_span(span_record) do
-      transaction_root? =
-        cond do
-          # No parent = definitely a root
-          span_record.parent_span_id == nil ->
-            true
+      parent_id = span_record.parent_span_id
 
-          # Has a parent - check if it's local or remote
-          has_local_parent_span?(span_record.parent_span_id) ->
-            # Parent exists locally - this is a child span, not a transaction root
-            false
-
-          true ->
-            # Parent is remote (distributed tracing) - treat server spans as transaction roots
-            server_span?(span_record)
-        end
-
-      if transaction_root? do
-        build_and_send_transaction(span_record)
-      else
+      # Only skip spans that have a local parent span, as it will be bundled up when the parent span is processed.
+      # Spans with remote parents (e.g. from another service) or spans whose parent has already been processed
+      # (e.g. async continuations) should still be processed as their own transaction segments to avoid dropping them.
+      if parent_id && SpanStorage.span_exists?(parent_id) do
         true
+      else
+        build_and_send_transaction(span_record)
       end
     end
 
-    defp has_local_parent_span?(parent_span_id) do
-      SpanStorage.span_exists?(parent_span_id)
-    end
-
-    # Check if it's an HTTP server request span or a LiveView span
-    defp server_span?(%{kind: :server} = span_record) do
-      http_server_span?(span_record) or liveview_span?(span_record)
-    end
-
-    defp server_span?(_), do: false
-
-    defp http_server_span?(%{kind: :server, attributes: attributes}) do
-      Map.has_key?(attributes, to_string(HTTPAttributes.http_request_method()))
-    end
-
-    # Check if span name matches LiveView lifecycle patterns
-    defp liveview_span?(%{origin: "opentelemetry_phoenix"}), do: true
-    defp liveview_span?(_), do: false
-
     defp build_and_send_transaction(span_record) do
-      child_span_records = SpanStorage.get_child_spans(span_record.span_id)
+      child_span_records =
+        span_record.span_id
+        |> SpanStorage.get_child_spans()
+        |> Enum.filter(&span_complete?/1)
+
       transaction = build_transaction(span_record, child_span_records)
 
       result =
@@ -107,6 +81,8 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       result
     end
+
+    defp span_complete?(span_record), do: not is_nil(span_record.end_time)
 
     defp build_transaction(root_span_record, child_span_records) do
       root_span = build_span(root_span_record)
