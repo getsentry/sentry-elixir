@@ -21,7 +21,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "reports the correct error to Sentry", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [])
 
@@ -44,7 +44,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "unwraps Oban.PerformErrors and reports the wrapped error", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(
         :error,
@@ -73,7 +73,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "reports normalized non-exception errors to Sentry", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, :undef, [])
 
@@ -100,7 +100,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "reports exits to Sentry", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:exit, :oops, [])
 
@@ -120,7 +120,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "reports throws to Sentry", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:throw, :this_was_not_caught, [])
 
@@ -172,7 +172,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
     test "includes custom tags when oban_tags_to_sentry_tags function config option is set and returns non empty map",
          %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
         oban_tags_to_sentry_tags: fn _job -> %{custom_tag: "custom_value"} end
@@ -183,7 +183,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "handles oban_tags_to_sentry_tags errors gracefully", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
         oban_tags_to_sentry_tags: fn _job -> raise "tag transform error" end
@@ -193,7 +193,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "handles invalid oban_tags_to_sentry_tags return values gracefully", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       test_cases = [
         1,
@@ -218,7 +218,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
         def transform(_job), do: %{custom_tag: "custom_value"}
       end
 
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
         oban_tags_to_sentry_tags: {TestTagsTransform, :transform}
@@ -314,7 +314,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "should_report_error_callback reports when callback returns true", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
         should_report_error_callback: fn _worker, _job -> true end
@@ -328,7 +328,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
     test "should_report_error_callback handles errors gracefully and defaults to reporting",
          %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       log =
         capture_log(fn ->
@@ -349,27 +349,6 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
   end
 
   ## Helpers
-
-  # Sets up a Bypass collector that only forwards error event envelopes.
-  # This filters out stray transaction envelopes from background processes
-  # (e.g., OpenTelemetry span processor) that may hit this Bypass due to
-  # concurrent persistent_term DSN writes in async tests.
-  defp setup_bypass_event_collector(bypass) do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      if body =~ ~r/"type":\s*"event"/ do
-        send(test_pid, {:bypass_envelope, ref, body})
-      end
-
-      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
-    end)
-
-    ref
-  end
 
   defp emit_telemetry_for_failed_job(kind, reason, stacktrace, config \\ []) do
     job =

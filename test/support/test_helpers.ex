@@ -161,7 +161,7 @@ defmodule Sentry.TestHelpers do
   end
 
   @doc """
-  Sets up a Bypass envelope collector that forwards all envelope bodies
+  Sets up a Bypass envelope collector that forwards envelope bodies
   to the test process as messages. Returns a reference for collecting results.
 
   Uses `Bypass.stub` (not `Bypass.expect`) to be resilient to stray requests
@@ -169,15 +169,29 @@ defmodule Sentry.TestHelpers do
   hit this Bypass due to concurrent persistent_term DSN writes in async tests.
 
   Use with `collect_envelopes/2` to retrieve the decoded envelopes.
+
+  ## Options
+
+    * `:type` - when set, only envelopes containing an item of this type
+      (e.g., `"event"`, `"transaction"`, `"log"`) are forwarded to the test
+      process. Envelopes not matching the type are silently dropped. This is
+      useful in async tests where stray envelopes of other types may arrive
+      from background processes.
+
   """
-  @spec setup_bypass_envelope_collector(Bypass.t()) :: reference()
-  def setup_bypass_envelope_collector(bypass) do
+  @spec setup_bypass_envelope_collector(Bypass.t(), keyword()) :: reference()
+  def setup_bypass_envelope_collector(bypass, opts \\ []) do
     test_pid = self()
     ref = make_ref()
+    type_filter = Keyword.get(opts, :type)
 
     Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {:bypass_envelope, ref, body})
+
+      if is_nil(type_filter) or body =~ ~s("type":"#{type_filter}") do
+        send(test_pid, {:bypass_envelope, ref, body})
+      end
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
     end)
 

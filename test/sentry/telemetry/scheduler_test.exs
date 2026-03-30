@@ -395,9 +395,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
 
   describe "transport send failure logging" do
     test "logs warning when direct transport send fails during flush" do
-      bypass = Bypass.open()
-
-      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      %{bypass: bypass} = setup_bypass()
       prev_retries = Application.get_env(:sentry, :request_retries)
       Application.put_env(:sentry, :request_retries, [])
 
@@ -409,7 +407,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
         end
       end)
 
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 500, ~s<{"error": "internal"}>)
       end)
 

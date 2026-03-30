@@ -11,7 +11,7 @@ defmodule Sentry.Integrations.TelemetryTest do
     end
 
     test "reports errors", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       handle_failure_event(:error, %RuntimeError{message: "oops"}, [])
 
@@ -28,7 +28,7 @@ defmodule Sentry.Integrations.TelemetryTest do
     end
 
     test "reports Erlang errors (normalized)", %{bypass: bypass} do
-      ref = setup_bypass_event_collector(bypass)
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
 
       handle_failure_event(:error, {:badmap, :foo}, [])
 
@@ -47,7 +47,7 @@ defmodule Sentry.Integrations.TelemetryTest do
 
     for kind <- [:throw, :exit] do
       test "reports #{kind}s", %{bypass: bypass} do
-        ref = setup_bypass_event_collector(bypass)
+        ref = setup_bypass_envelope_collector(bypass, type: "event")
 
         handle_failure_event(unquote(kind), :foo, [])
 
@@ -66,26 +66,6 @@ defmodule Sentry.Integrations.TelemetryTest do
         assert event["exception"] == []
       end
     end
-  end
-
-  # Sets up a Bypass collector that only forwards error event envelopes.
-  # This filters out stray transaction envelopes from background processes
-  # that may hit this Bypass due to concurrent persistent_term DSN writes in async tests.
-  defp setup_bypass_event_collector(bypass) do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-      if body =~ ~r/"type":\s*"event"/ do
-        send(test_pid, {:bypass_envelope, ref, body})
-      end
-
-      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
-    end)
-
-    ref
   end
 
   defp handle_failure_event(kind, reason, stacktrace) do

@@ -12,17 +12,13 @@ defmodule SentryTest do
   end
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", dedup_events: false)
-    %{bypass: bypass}
+    setup_bypass(dedup_events: false)
   end
 
   test "excludes events properly", %{bypass: bypass} do
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "RuntimeError"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -48,7 +44,9 @@ defmodule SentryTest do
 
   @tag :capture_log
   test "errors when taking too long to receive response", %{bypass: bypass} do
-    Bypass.expect(bypass, fn _conn -> Process.sleep(:infinity) end)
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn _conn ->
+      Process.sleep(:infinity)
+    end)
 
     put_test_config(finch_request_opts: [receive_timeout: 50])
 
@@ -62,7 +60,7 @@ defmodule SentryTest do
   end
 
   test "sets last_event_id_and_source when an event is sent", %{bypass: bypass} do
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -85,7 +83,7 @@ defmodule SentryTest do
     put_test_config(dedup_events: true)
     message_to_report = "Hello #{System.unique_integer([:positive])}"
 
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
