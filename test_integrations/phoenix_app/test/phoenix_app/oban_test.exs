@@ -154,13 +154,15 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     setup %{bypass: bypass} do
       :telemetry.detach(ErrorReporter)
 
+      ref = setup_bypass_envelope_collector(bypass, type: "event")
+
       on_exit(fn ->
         _ = :telemetry.detach(ErrorReporter)
         ErrorReporter.attach([])
       end)
 
-      %{bypass: bypass}
-    end
+        %{ref: ref}
+      end
 
     test "skips error reporting when callback returns false", %{bypass: bypass, ref: ref} do
       test_pid = self()

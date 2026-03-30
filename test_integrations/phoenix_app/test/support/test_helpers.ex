@@ -107,14 +107,19 @@ defmodule Sentry.TestHelpers do
     %{bypass: bypass}
   end
 
-  @spec setup_bypass_envelope_collector(Bypass.t()) :: reference()
-  def setup_bypass_envelope_collector(bypass) do
+  @spec setup_bypass_envelope_collector(Bypass.t(), keyword()) :: reference()
+  def setup_bypass_envelope_collector(bypass, opts \\ []) do
     test_pid = self()
     ref = make_ref()
+    type_filter = Keyword.get(opts, :type)
 
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {:bypass_envelope, ref, body})
+
+      if is_nil(type_filter) or body =~ ~s("type":"#{type_filter}") do
+        send(test_pid, {:bypass_envelope, ref, body})
+      end
+
       Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
     end)
 
