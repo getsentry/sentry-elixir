@@ -363,6 +363,19 @@ defmodule Sentry.Config do
       stacktrace, and fingerprint. *Available since v10.0.0*.
       """
     ],
+    test_mode: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable *test mode*.
+
+      > #### Deprecated {: .warning}
+      >
+      > This option is deprecated and will be removed in v13.0.0. The new `Sentry.Test`
+      > module uses Bypass-based HTTP testing and works regardless of this setting.
+      > See `Sentry.Test` for the updated testing guide.
+      """
+    ],
     integrations: [
       type: :keyword_list,
       doc: """
@@ -912,6 +925,10 @@ defmodule Sentry.Config do
        not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
   end
 
+  @doc deprecated: "Use Sentry.Test instead. This option will be removed in v13.0.0."
+  @spec test_mode?() :: boolean()
+  def test_mode?, do: fetch!(:test_mode)
+
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
 
@@ -1060,11 +1077,14 @@ defmodule Sentry.Config do
   @compile {:inline, fetch!: 1}
   defp fetch!(key) do
     # Check process dictionary first for test-specific config overrides.
-    # This allows tests to use put_test_config/1 for isolated configuration
-    # without affecting other tests, even when running async: true.
     case Process.get({:sentry_test_config, key}, :__not_set__) do
       :__not_set__ ->
-        :persistent_term.get({:sentry_config, key})
+        # Walk $callers chain via config registry for child process isolation.
+        # Falls back to :persistent_term for production and non-test processes.
+        case Sentry.Test.fetch_test_config(key) do
+          {:ok, value} -> value
+          :error -> :persistent_term.get({:sentry_config, key})
+        end
 
       value ->
         value
@@ -1081,11 +1101,14 @@ defmodule Sentry.Config do
   @compile {:inline, get: 1}
   defp get(key) do
     # Check process dictionary first for test-specific config overrides.
-    # This allows tests to use put_test_config/1 for isolated configuration
-    # without affecting other tests, even when running async: true.
     case Process.get({:sentry_test_config, key}, :__not_set__) do
       :__not_set__ ->
-        :persistent_term.get({:sentry_config, key}, nil)
+        # Walk $callers chain via config registry for child process isolation.
+        # Falls back to :persistent_term for production and non-test processes.
+        case Sentry.Test.fetch_test_config(key) do
+          {:ok, value} -> value
+          :error -> :persistent_term.get({:sentry_config, key}, nil)
+        end
 
       value ->
         value
