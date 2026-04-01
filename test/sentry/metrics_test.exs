@@ -3,7 +3,7 @@ defmodule Sentry.MetricsTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Metric, Metrics}
+  alias Sentry.{Metric, Metrics, TelemetryProcessor}
 
   setup do
     put_test_config(dsn: nil)
@@ -61,6 +61,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       Metrics.count("test.counter", 42, unit: "item")
+      TelemetryProcessor.flush()
 
       assert_receive {:callback_called, %Metric{} = metric}
       assert metric.type == :counter
@@ -85,6 +86,7 @@ defmodule Sentry.MetricsTest do
       )
 
       Metrics.count("test.counter", 1)
+      TelemetryProcessor.flush()
 
       assert_receive {:callback_with_attrs, attrs}
       # Verify default attributes are present before callback
@@ -121,6 +123,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       Metrics.count("test.counter", 5)
+      TelemetryProcessor.flush()
 
       assert_receive {:original_value, 5}
     end
@@ -152,6 +155,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       Metrics.count("test.counter", 1)
+      TelemetryProcessor.flush()
 
       assert_receive {:trace_id, trace_id}
       # trace_id is REQUIRED per spec, should never be nil
@@ -220,6 +224,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       Metrics.count("test.counter", 1)
+      TelemetryProcessor.flush()
 
       assert_receive {:metric, %Metric{} = metric}
       # trace_id is REQUIRED per spec - should always be present, even without active span
@@ -243,6 +248,7 @@ defmodule Sentry.MetricsTest do
       log =
         capture_log(fn ->
           assert :ok = Metrics.count("test.counter", 42)
+          TelemetryProcessor.flush()
         end)
 
       assert log =~ "before_send_metric callback failed"
@@ -260,6 +266,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       assert :ok = Metrics.count("test.counter", 1)
+      TelemetryProcessor.flush()
       assert_receive :callback_called
     end
   end
@@ -276,6 +283,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       assert :ok = Metrics.count("test.zero", 0)
+      TelemetryProcessor.flush()
       assert_receive {:metric, %Metric{value: 0}}
     end
 
@@ -290,6 +298,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       assert :ok = Metrics.gauge("test.negative", -42)
+      TelemetryProcessor.flush()
       assert_receive {:metric, %Metric{value: -42}}
     end
 
@@ -304,6 +313,7 @@ defmodule Sentry.MetricsTest do
       put_test_config(enable_metrics: true, before_send_metric: callback)
 
       assert :ok = Metrics.distribution("test.float", 0.001)
+      TelemetryProcessor.flush()
       assert_receive {:metric, %Metric{value: 0.001}}
     end
   end

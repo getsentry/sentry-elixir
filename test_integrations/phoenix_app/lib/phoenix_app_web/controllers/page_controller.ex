@@ -107,6 +107,8 @@ defmodule PhoenixAppWeb.PageController do
       Sentry.Metrics.distribution("db.query_time", duration, unit: "millisecond")
     end
 
+    Sentry.flush()
+
     json(conn, %{message: "Metrics recorded"})
   end
 

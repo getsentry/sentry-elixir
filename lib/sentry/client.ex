@@ -15,7 +15,6 @@ defmodule Sentry.Client do
     Event,
     Interfaces,
     LoggerUtils,
-    Metric,
     Options,
     TelemetryProcessor,
     Transaction,
@@ -142,83 +141,6 @@ defmodule Sentry.Client do
     else
       :excluded ->
         :excluded
-    end
-  end
-
-  @spec send_metric(Metric.t()) :: :ok
-  def send_metric(%Metric{} = metric) do
-    result_type = Config.send_result()
-
-    case result_type do
-      :sync ->
-        case apply_before_send_metric(metric) do
-          [%Metric{} = filtered_metric] ->
-            case Sentry.Test.maybe_collect_metrics([filtered_metric]) do
-              :collected ->
-                :ok
-
-              :not_collecting ->
-                _result =
-                  if Config.dsn() do
-                    client = Config.client()
-
-                    request_retries =
-                      Application.get_env(:sentry, :request_retries, Transport.default_retries())
-
-                    filtered_metric
-                    |> List.wrap()
-                    |> Envelope.from_metric_events()
-                    |> Transport.encode_and_post_envelope(client, request_retries)
-                  end
-
-                :ok
-            end
-
-          [] ->
-            :ok
-        end
-
-      :none ->
-        # Buffered mode (production): add to TelemetryProcessor
-        if Config.telemetry_processor_category?(:metric) do
-          case TelemetryProcessor.add(metric) do
-            {:ok, {:rate_limited, data_category}} ->
-              ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-
-            :ok ->
-              :ok
-          end
-        else
-          case apply_before_send_metric(metric) do
-            [%Metric{} = filtered_metric] ->
-              case Sentry.Test.maybe_collect_metrics([filtered_metric]) do
-                :collected ->
-                  :ok
-
-                :not_collecting ->
-                  client = Config.client()
-                  :ok = Transport.Sender.send_async(client, filtered_metric)
-              end
-
-            [] ->
-              :ok
-          end
-        end
-
-        :ok
-    end
-  end
-
-  defp apply_before_send_metric(metric) do
-    callback = Config.before_send_metric()
-
-    if callback do
-      case Metric.call_before_send_callback(metric, callback) do
-        %Metric{} = modified -> [modified]
-        _ -> []
-      end
-    else
-      [metric]
     end
   end
 

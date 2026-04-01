@@ -42,7 +42,7 @@ defmodule Sentry.Metrics do
   """
   @moduledoc since: "13.0.0"
 
-  alias Sentry.{Config, Client, Metric}
+  alias Sentry.{ClientReport, Config, Metric, TelemetryProcessor}
 
   @doc """
   Records a counter metric.
@@ -133,7 +133,14 @@ defmodule Sentry.Metrics do
       }
 
       metric = Metric.attach_default_attributes(metric)
-      Client.send_metric(metric)
+
+      case TelemetryProcessor.add(metric) do
+        {:ok, {:rate_limited, data_category}} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+
+        :ok ->
+          :ok
+      end
     end
 
     :ok

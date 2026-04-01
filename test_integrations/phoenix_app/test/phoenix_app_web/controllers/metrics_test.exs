@@ -16,8 +16,7 @@ defmodule Sentry.Integrations.Phoenix.MetricsTest do
 
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      enable_metrics: true,
-      send_result: :sync
+      enable_metrics: true
     )
 
     %{ref: ref, bypass: bypass}

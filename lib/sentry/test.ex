@@ -553,6 +553,8 @@ defmodule Sentry.Test do
       :ok
       iex> Sentry.Metrics.count("button.clicks", 1)
       :ok
+      iex> Sentry.TelemetryProcessor.flush()
+      :ok
       iex> [%Sentry.Metric{} = metric] = Sentry.Test.pop_sentry_metrics()
       iex> metric.name
       "button.clicks"

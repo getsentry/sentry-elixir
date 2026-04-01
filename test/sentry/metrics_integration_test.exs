@@ -167,36 +167,7 @@ defmodule Sentry.MetricsIntegrationTest do
     end
   end
 
-  describe "sync mode" do
-    setup do
-      put_test_config(send_result: :sync)
-      :ok
-    end
-
-    test "metrics sent directly via transport in sync mode", ctx do
-      flush_ref_messages(ctx.ref)
-
-      Metrics.count("sync.metric", 42)
-
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
-
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      [{_header, %{"items" => [metric]}}] = items
-      assert metric["name"] == "sync.metric"
-      assert metric["value"] == 42
-    end
-  end
-
   # Helper functions
-
-  defp flush_ref_messages(ref) do
-    receive do
-      {^ref, _body} -> flush_ref_messages(ref)
-    after
-      100 -> :ok
-    end
-  end
 
   defp collect_envelope_bodies(ref, expected_count) do
     collect_envelope_bodies(ref, expected_count, [])
