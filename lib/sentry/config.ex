@@ -445,20 +445,22 @@ defmodule Sentry.Config do
       ]
     ],
     telemetry_processor_categories: [
-      type: {:list, {:in, [:error, :check_in, :transaction, :log, :metric]}},
-      default: [:log, :metric],
+      type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
+      default: [],
       doc: """
       List of event categories that should be processed through the TelemetryProcessor.
       Categories in this list use the TelemetryProcessor's ring buffer and weighted
       round-robin scheduler, which provides prioritized scheduling and backpressure.
       Categories not in this list use the original sender-based approach.
 
+      Log and metric events always use the TelemetryProcessor regardless of this setting.
+
       Available categories:
         * `:error` - Error events (critical priority, batch_size=1)
         * `:check_in` - Cron check-ins (high priority, batch_size=1)
         * `:transaction` - Performance transactions (medium priority, batch_size=1)
-        * `:log` - Log entries (low priority, batch_size=100, 5s timeout)
-        * `:metric` - Metric events (low priority, batch_size=100, 5s timeout)
+        * `:log` - Log events (accepted for backward compatibility, logs always use
+          the TelemetryProcessor regardless of this setting)
 
       *Available since 12.0.0*.
       """

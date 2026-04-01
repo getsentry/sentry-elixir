@@ -512,7 +512,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      put_test_config(telemetry_processor_categories: [:metric, :log])
+      put_test_config(telemetry_processor_categories: [])
 
       metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
 
