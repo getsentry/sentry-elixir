@@ -33,6 +33,7 @@ defmodule PhoenixAppWeb.Router do
     get "/exception", PageController, :exception
     get "/transaction", PageController, :transaction
     get "/nested-spans", PageController, :nested_spans
+    get "/metrics", PageController, :metrics
     get "/logs", PageController, :logs_demo
     get "/logs-with-structs", PageController, :logs_with_structs
 

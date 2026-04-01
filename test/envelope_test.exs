@@ -3,7 +3,7 @@ defmodule Sentry.EnvelopeTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent}
+  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent, Metric}
 
   describe "to_binary/1" do
     test "encodes an envelope" do
@@ -245,5 +245,95 @@ defmodule Sentry.EnvelopeTest do
              event_id: Sentry.UUID.uuid4_hex(),
              timestamp: "2024-10-12T13:21:13"
            }) == "error"
+  end
+
+  describe "from_metric_events/1" do
+    test "creates an envelope with metric batch" do
+      put_test_config(environment_name: "production", release: "1.0.0")
+
+      metrics = [
+        %Metric{
+          type: :counter,
+          name: "test.counter",
+          value: 1,
+          timestamp: 1_588_601_261.535_386
+        },
+        %Metric{
+          type: :gauge,
+          name: "test.gauge",
+          value: 42.5,
+          timestamp: 1_588_601_261.544_196,
+          unit: "ms"
+        }
+      ]
+
+      # Attach default attributes (as done in the Metrics module)
+      metrics = Enum.map(metrics, &Metric.attach_default_attributes/1)
+
+      envelope = Envelope.from_metric_events(metrics)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, payload_line] = String.split(encoded, "\n", trim: true)
+      assert %{"event_id" => _} = decode!(id_line)
+
+      decoded_header = decode!(header_line)
+      assert decoded_header["type"] == "trace_metric"
+      assert decoded_header["item_count"] == 2
+      assert decoded_header["content_type"] == "application/vnd.sentry.items.trace-metric+json"
+
+      decoded_payload = decode!(payload_line)
+      assert %{"items" => items} = decoded_payload
+      assert length(items) == 2
+
+      [counter, gauge] = items
+
+      # Verify counter metric
+      assert counter["type"] == "counter"
+      assert counter["name"] == "test.counter"
+      assert counter["value"] == 1
+      assert counter["timestamp"] == 1_588_601_261.535_386
+      assert counter["unit"] == nil
+      assert is_map(counter["attributes"])
+      assert counter["attributes"]["sentry.environment"]["value"] == "production"
+      assert counter["attributes"]["sentry.release"]["value"] == "1.0.0"
+
+      # Verify gauge metric
+      assert gauge["type"] == "gauge"
+      assert gauge["name"] == "test.gauge"
+      assert gauge["value"] == 42.5
+      assert gauge["timestamp"] == 1_588_601_261.544_196
+      assert gauge["unit"] == "ms"
+      assert is_map(gauge["attributes"])
+    end
+
+    test "counts metric events in a metric envelope" do
+      metrics =
+        Enum.map(1..10, fn i ->
+          %Metric{
+            type: :counter,
+            name: "test.metric.#{i}",
+            value: i,
+            timestamp: System.system_time(:nanosecond) / 1_000_000_000
+          }
+        end)
+
+      envelope = Envelope.from_metric_events(metrics)
+      assert Envelope.item_count(envelope) == 10
+    end
+
+    test "returns trace_metric data category" do
+      metrics = [
+        %Metric{
+          type: :counter,
+          name: "test.counter",
+          value: 1,
+          timestamp: 1_588_601_261.535_386
+        }
+      ]
+
+      metric_batch = %Sentry.MetricBatch{metrics: metrics}
+      assert Envelope.get_data_category(metric_batch) == "trace_metric"
+    end
   end
 end

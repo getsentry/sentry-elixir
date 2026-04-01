@@ -20,16 +20,33 @@ defmodule Sentry.Telemetry.SchedulerTest do
       cycle = Scheduler.build_priority_cycle()
 
       # Default weights: critical=5, high=4, medium=3, low=2
-      assert length(cycle) == 14
-      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, transaction: 3, log: 2}
+      # Categories: error=5, check_in=4, transaction=3, log=2, metric=2
+      assert length(cycle) == 16
+
+      assert Enum.frequencies(cycle) == %{
+               error: 5,
+               check_in: 4,
+               transaction: 3,
+               log: 2,
+               metric: 2
+             }
     end
 
     test "builds cycle with custom weights" do
       custom_weights = %{low: 5}
       cycle = Scheduler.build_priority_cycle(custom_weights)
 
-      assert length(cycle) == 17
-      assert Enum.frequencies(cycle) == %{error: 5, check_in: 4, transaction: 3, log: 5}
+      # Custom: low=5, others default (critical=5, high=4, medium=3)
+      # Categories: error=5, check_in=4, transaction=3, log=5, metric=5
+      assert length(cycle) == 22
+
+      assert Enum.frequencies(cycle) == %{
+               error: 5,
+               check_in: 4,
+               transaction: 3,
+               log: 5,
+               metric: 5
+             }
     end
   end
 

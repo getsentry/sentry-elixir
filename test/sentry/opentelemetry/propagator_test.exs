@@ -1,5 +1,7 @@
 defmodule Sentry.OpenTelemetry.PropagatorTest do
-  use ExUnit.Case, async: true
+  use Sentry.Case, async: false
+
+  import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.Propagator
 
@@ -236,6 +238,11 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
     end
 
     describe "integration with OpenTelemetry" do
+      setup do
+        put_test_config(send_result: :none)
+        :ok
+      end
+
       test "round-trip inject and extract preserves trace context" do
         Tracer.with_span "test_span" do
           ctx = :otel_ctx.get_current()

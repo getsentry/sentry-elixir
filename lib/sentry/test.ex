@@ -80,6 +80,7 @@ defmodule Sentry.Test do
   @events_key :events
   @transactions_key :transactions
   @logs_key :logs
+  @metrics_key :metrics
 
   # Used internally when reporting an event, *before* reporting the actual event.
   @doc false
@@ -122,6 +123,48 @@ defmodule Sentry.Test do
             {:error, error} ->
               raise ArgumentError,
                     "cannot collect Sentry logs: #{Exception.message(error)}"
+          end
+
+        :error when dsn_set? ->
+          :not_collecting
+
+        # If the :dsn option is not set and we didn't capture the item, it's alright,
+        # we can just swallow it.
+        :error ->
+          :collected
+      end
+    else
+      :not_collecting
+    end
+  end
+
+  # Used internally when reporting metric events, *before* reporting the actual metric events.
+  @doc false
+  @spec maybe_collect_metrics([Sentry.Metric.t()]) :: :collected | :not_collecting
+  def maybe_collect_metrics(metrics) when is_list(metrics) do
+    if Sentry.Config.test_mode?() do
+      dsn_set? = not is_nil(Sentry.Config.dsn())
+      ensure_ownership_server_started()
+
+      case NimbleOwnership.fetch_owner(@server, callers(), @metrics_key) do
+        {:ok, owner_pid} ->
+          result =
+            NimbleOwnership.get_and_update(
+              @server,
+              owner_pid,
+              @metrics_key,
+              fn metrics_list ->
+                {:collected, (metrics_list || []) ++ metrics}
+              end
+            )
+
+          case result do
+            {:ok, :collected} ->
+              :collected
+
+            {:error, error} ->
+              raise ArgumentError,
+                    "cannot collect Sentry metrics: #{Exception.message(error)}"
           end
 
         :error when dsn_set? ->
@@ -200,6 +243,7 @@ defmodule Sentry.Test do
     start_collecting(key: @events_key)
     start_collecting(key: @transactions_key)
     start_collecting(key: @logs_key)
+    start_collecting(key: @metrics_key)
 
     # Allow the TelemetryProcessor scheduler to collect log events on behalf of this process.
     # Logs flow through the scheduler (a separate process) and need explicit
@@ -213,6 +257,12 @@ defmodule Sentry.Test do
 
       if scheduler_pid do
         case NimbleOwnership.allow(@server, self(), scheduler_pid, @logs_key) do
+          :ok -> :ok
+          {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
+          {:error, _} -> :ok
+        end
+
+        case NimbleOwnership.allow(@server, self(), scheduler_pid, @metrics_key) do
           :ok -> :ok
           {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
           {:error, _} -> :ok
@@ -484,6 +534,55 @@ defmodule Sentry.Test do
 
       {:error, error} when is_exception(error) ->
         raise ArgumentError, "cannot pop Sentry logs: #{Exception.message(error)}"
+    end
+  end
+
+  @doc """
+  Pops all the collected metric events from the current process.
+
+  This function returns a list of all the metric events that have been collected from the current
+  process and all the processes that were allowed through it. If the current process
+  is not collecting metric events, this function raises an error.
+
+  After this function returns, the current process will still be collecting metric events, but
+  the collected metric events will be reset to `[]`.
+
+  ## Examples
+
+      iex> Sentry.Test.start_collecting_sentry_reports()
+      :ok
+      iex> Sentry.Metrics.count("button.clicks", 1)
+      :ok
+      iex> Sentry.TelemetryProcessor.flush()
+      :ok
+      iex> [%Sentry.Metric{} = metric] = Sentry.Test.pop_sentry_metrics()
+      iex> metric.name
+      "button.clicks"
+
+  """
+  @doc since: "13.0.0"
+  @spec pop_sentry_metrics(pid()) :: [Sentry.Metric.t()]
+  def pop_sentry_metrics(owner_pid \\ self()) when is_pid(owner_pid) do
+    result =
+      try do
+        NimbleOwnership.get_and_update(@server, owner_pid, @metrics_key, fn
+          nil -> {:not_collecting, []}
+          metrics when is_list(metrics) -> {metrics, []}
+        end)
+      catch
+        :exit, {:noproc, _} ->
+          raise ArgumentError, "not collecting reported metrics from #{inspect(owner_pid)}"
+      end
+
+    case result do
+      {:ok, :not_collecting} ->
+        raise ArgumentError, "not collecting reported metrics from #{inspect(owner_pid)}"
+
+      {:ok, metrics} ->
+        metrics
+
+      {:error, error} when is_exception(error) ->
+        raise ArgumentError, "cannot pop Sentry metrics: #{Exception.message(error)}"
     end
   end
 

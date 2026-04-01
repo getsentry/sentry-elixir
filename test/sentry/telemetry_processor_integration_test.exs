@@ -5,7 +5,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   alias Sentry.TelemetryProcessor
   alias Sentry.Telemetry.Buffer
-  alias Sentry.{LogEvent, Transaction}
+  alias Sentry.{LogEvent, Metric, Transaction}
 
   setup context do
     bypass = Bypass.open()
@@ -412,6 +412,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
           :ets.delete(rate_limiter_table, "error")
           :ets.delete(rate_limiter_table, "monitor")
           :ets.delete(rate_limiter_table, "transaction")
+          :ets.delete(rate_limiter_table, "trace_metric")
         catch
           :error, :badarg -> :ok
         end
@@ -505,6 +506,23 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(transaction_buffer) == 0
     end
+
+    test "drops rate-limited metric events before they enter the buffer", ctx do
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      put_test_config(telemetry_processor_categories: [])
+
+      metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
+
+      :ets.insert(ctx.rate_limiter_table, {"trace_metric", System.system_time(:second) + 60})
+
+      assert {:ok, {:rate_limited, "trace_metric"}} =
+               TelemetryProcessor.add(ctx.processor, make_metric("pre-buffer-drop", 1))
+
+      assert Buffer.size(metric_buffer) == 0
+    end
   end
 
   defp make_transaction do
@@ -516,6 +534,16 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       start_timestamp: (now - 1_000_000) / 1_000_000,
       timestamp: now / 1_000_000,
       spans: []
+    }
+  end
+
+  defp make_metric(name, value) do
+    %Metric{
+      type: :counter,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
     }
   end
 

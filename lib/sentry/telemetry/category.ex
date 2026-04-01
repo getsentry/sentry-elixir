@@ -11,19 +11,20 @@ defmodule Sentry.Telemetry.Category do
     * `:check_in` - Cron check-ins (high priority)
     * `:transaction` - Performance transactions (medium priority)
     * `:log` - Log entries (low priority)
+    * `:metric` - Metric events (low priority)
 
   ## Priorities and Weights
 
     * `:critical` - weight 5 (errors)
     * `:high` - weight 4 (check-ins)
     * `:medium` - weight 3 (transactions)
-    * `:low` - weight 2 (logs)
+    * `:low` - weight 2 (logs, metrics)
 
   """
   @moduledoc since: "12.0.0"
 
   @typedoc "Telemetry category types."
-  @type t :: :error | :check_in | :transaction | :log
+  @type t :: :error | :check_in | :transaction | :log | :metric
 
   @typedoc "Priority levels for categories."
   @type priority :: :critical | :high | :medium | :low
@@ -36,7 +37,7 @@ defmodule Sentry.Telemetry.Category do
         }
 
   @priorities [:critical, :high, :medium, :low]
-  @categories [:error, :check_in, :transaction, :log]
+  @categories [:error, :check_in, :transaction, :log, :metric]
 
   @weights %{
     critical: 5,
@@ -49,7 +50,8 @@ defmodule Sentry.Telemetry.Category do
     error: %{capacity: 100, batch_size: 1, timeout: nil},
     check_in: %{capacity: 100, batch_size: 1, timeout: nil},
     transaction: %{capacity: 1000, batch_size: 1, timeout: nil},
-    log: %{capacity: 1000, batch_size: 100, timeout: 5000}
+    log: %{capacity: 1000, batch_size: 100, timeout: 5000},
+    metric: %{capacity: 1000, batch_size: 100, timeout: 5000}
   }
 
   @doc """
@@ -69,12 +71,16 @@ defmodule Sentry.Telemetry.Category do
       iex> Sentry.Telemetry.Category.priority(:log)
       :low
 
+      iex> Sentry.Telemetry.Category.priority(:metric)
+      :low
+
   """
   @spec priority(t()) :: priority()
   def priority(:error), do: :critical
   def priority(:check_in), do: :high
   def priority(:transaction), do: :medium
   def priority(:log), do: :low
+  def priority(:metric), do: :low
 
   @doc """
   Returns the weight for a given priority level.
@@ -121,6 +127,9 @@ defmodule Sentry.Telemetry.Category do
       iex> Sentry.Telemetry.Category.default_config(:log)
       %{capacity: 1000, batch_size: 100, timeout: 5000}
 
+      iex> Sentry.Telemetry.Category.default_config(:metric)
+      %{capacity: 1000, batch_size: 100, timeout: 5000}
+
   """
   @spec default_config(t()) :: config()
   def default_config(category) when category in @categories do
@@ -133,7 +142,7 @@ defmodule Sentry.Telemetry.Category do
   ## Examples
 
       iex> Sentry.Telemetry.Category.all()
-      [:error, :check_in, :transaction, :log]
+      [:error, :check_in, :transaction, :log, :metric]
 
   """
   @spec all() :: [t()]
@@ -167,10 +176,14 @@ defmodule Sentry.Telemetry.Category do
       iex> Sentry.Telemetry.Category.data_category(:log)
       "log_item"
 
+      iex> Sentry.Telemetry.Category.data_category(:metric)
+      "trace_metric"
+
   """
   @spec data_category(t()) :: String.t()
   def data_category(:error), do: "error"
   def data_category(:check_in), do: "monitor"
   def data_category(:transaction), do: "transaction"
   def data_category(:log), do: "log_item"
+  def data_category(:metric), do: "trace_metric"
 end

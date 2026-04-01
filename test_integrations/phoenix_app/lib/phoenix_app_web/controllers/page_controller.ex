@@ -81,6 +81,37 @@ defmodule PhoenixAppWeb.PageController do
     end
   end
 
+  def metrics(conn, _params) do
+    # Counter: track incoming requests with attributes
+    Sentry.Metrics.count("http.requests", 1,
+      unit: "request",
+      attributes: %{method: conn.method, path: "/metrics"}
+    )
+
+    # Distribution: track request payload size
+    content_length =
+      case get_req_header(conn, "content-length") do
+        [size] -> String.to_integer(size)
+        _ -> 0
+      end
+
+    Sentry.Metrics.distribution("request.payload_size", content_length, unit: "byte")
+
+    # Metrics inside a traced span get trace context automatically
+    Tracer.with_span "fetch_users" do
+      start_time = System.monotonic_time(:millisecond)
+      users = Repo.all(User)
+      duration = System.monotonic_time(:millisecond) - start_time
+
+      Sentry.Metrics.gauge("users.count", length(users), unit: "user")
+      Sentry.Metrics.distribution("db.query_time", duration, unit: "millisecond")
+    end
+
+    Sentry.flush()
+
+    json(conn, %{message: "Metrics recorded"})
+  end
+
   # Test endpoint for structured logging with OpenTelemetry trace context
   #
   # This endpoint demonstrates how logs automatically include trace context

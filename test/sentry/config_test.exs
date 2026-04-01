@@ -376,4 +376,34 @@ defmodule Sentry.ConfigTest do
       end
     end
   end
+
+  describe ":enable_metrics" do
+    test "defaults to true" do
+      config = Config.validate!([])
+      assert config[:enable_metrics] == true
+    end
+
+    test "can be set to false" do
+      config = Config.validate!(enable_metrics: false)
+      assert config[:enable_metrics] == false
+    end
+  end
+
+  describe ":before_send_metric" do
+    test "accepts a function callback" do
+      callback = fn metric -> metric end
+      config = Config.validate!(before_send_metric: callback)
+      assert is_function(config[:before_send_metric], 1)
+    end
+
+    test "accepts a {module, function} tuple" do
+      config = Config.validate!(before_send_metric: {MyModule, :my_function})
+      assert config[:before_send_metric] == {MyModule, :my_function}
+    end
+
+    test "defaults to nil" do
+      config = Config.validate!([])
+      assert config[:before_send_metric] == nil
+    end
+  end
 end
