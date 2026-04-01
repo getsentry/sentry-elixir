@@ -337,23 +337,12 @@ defmodule Sentry.Telemetry.Scheduler do
     end
   end
 
-  defp process_and_send_metrics(%{on_envelope: on_envelope} = state, metrics, send_fn) do
+  defp process_and_send_metrics(state, metrics, send_fn) do
     processed_metrics = apply_before_send_metric_callbacks(metrics)
 
     if processed_metrics != [] do
-      if is_nil(on_envelope) do
-        case Sentry.Test.maybe_collect_metrics(processed_metrics) do
-          :collected ->
-            state
-
-          :not_collecting ->
-            envelope = Envelope.from_metric_events(processed_metrics)
-            send_fn.(state, envelope)
-        end
-      else
-        envelope = Envelope.from_metric_events(processed_metrics)
-        send_fn.(state, envelope)
-      end
+      envelope = Envelope.from_metric_events(processed_metrics)
+      send_fn.(state, envelope)
     else
       state
     end
