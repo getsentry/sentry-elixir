@@ -32,12 +32,12 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sentry,
-  dsn: "https://public@sentry.example.com/1",
+  dsn: nil,
   environment_name: :dev,
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
   test_mode: true,
-  send_result: :sync,
+  send_result: :none,
   traces_sample_rate: 1.0,
   enable_logs: true,
   logs: [

@@ -64,9 +64,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       SpanStorage.span_exists?(parent_span_id)
     end
 
-    # Check if it's an HTTP server request span or a LiveView span
+    # Check if it's an HTTP server request span, a LiveView span, or an Oban consumer span
     defp server_span?(%{kind: :server} = span_record) do
       http_server_span?(span_record) or liveview_span?(span_record)
+    end
+
+    defp server_span?(%{kind: :consumer} = span_record) do
+      oban_consumer_span?(span_record)
     end
 
     defp server_span?(_), do: false
@@ -78,6 +82,10 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     # Check if span name matches LiveView lifecycle patterns
     defp liveview_span?(%{origin: "opentelemetry_phoenix"}), do: true
     defp liveview_span?(_), do: false
+
+    defp oban_consumer_span?(%{kind: :consumer, attributes: attributes}) do
+      Map.get(attributes, to_string(MessagingAttributes.messaging_system())) == :oban
+    end
 
     defp build_and_send_transaction(span_record) do
       child_span_records = SpanStorage.get_child_spans(span_record.span_id)

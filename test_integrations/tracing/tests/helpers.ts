@@ -23,6 +23,11 @@ export interface SentryEvent {
       parent_span_id?: string;
       op?: string;
       data?: Record<string, any>;
+      links?: Array<{
+        trace_id: string;
+        span_id: string;
+        attributes?: Record<string, any>;
+      }>;
     };
   };
   _meta?: {
