@@ -31,79 +31,86 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
   end
 
+  setup do
+    setup_bypass()
+  end
+
   @tag span_storage: true
-  test "sends captured root spans as transactions" do
+  test "sends captured root spans as transactions", %{bypass: bypass} do
     put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-    Sentry.Test.start_collecting_sentry_reports()
+    ref = setup_bypass_envelope_collector(bypass)
 
     TestEndpoint.child_instrumented_function("one")
 
-    assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-    assert transaction.event_id
-    assert transaction.environment == "test"
-    assert transaction.transaction_info == %{source: :custom}
-    assert_valid_iso8601(transaction.timestamp)
-    assert_valid_iso8601(transaction.start_timestamp)
-    assert transaction.timestamp > transaction.start_timestamp
-    assert_valid_trace_id(transaction.contexts.trace.trace_id)
-    assert length(transaction.spans) == 0
+    assert tx["event_id"]
+    assert tx["environment"] == "test"
+    assert tx["transaction_info"] == %{"source" => "custom"}
+    assert_valid_iso8601(tx["timestamp"])
+    assert_valid_iso8601(tx["start_timestamp"])
+    assert tx["timestamp"] > tx["start_timestamp"]
+    assert_valid_trace_id(tx["contexts"]["trace"]["trace_id"])
+    assert length(tx["spans"]) == 0
   end
 
   @tag span_storage: true
-  test "sends captured spans as transactions with child spans" do
+  test "sends captured spans as transactions with child spans", %{bypass: bypass} do
     put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-    Sentry.Test.start_collecting_sentry_reports()
+    ref = setup_bypass_envelope_collector(bypass)
 
     TestEndpoint.instrumented_function()
 
-    assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-    assert_valid_iso8601(transaction.timestamp)
-    assert_valid_iso8601(transaction.start_timestamp)
-    assert transaction.timestamp > transaction.start_timestamp
-    assert length(transaction.spans) == 2
+    assert_valid_iso8601(tx["timestamp"])
+    assert_valid_iso8601(tx["start_timestamp"])
+    assert tx["timestamp"] > tx["start_timestamp"]
+    assert length(tx["spans"]) == 2
 
-    [child_span_one, child_span_two] = transaction.spans
-    assert child_span_one.op == "child_instrumented_function_one"
-    assert child_span_two.op == "child_instrumented_function_two"
-    assert child_span_one.parent_span_id == transaction.contexts.trace.span_id
-    assert child_span_two.parent_span_id == transaction.contexts.trace.span_id
+    [child_span_one, child_span_two] = tx["spans"]
+    assert child_span_one["op"] == "child_instrumented_function_one"
+    assert child_span_two["op"] == "child_instrumented_function_two"
+    assert child_span_one["parent_span_id"] == tx["contexts"]["trace"]["span_id"]
+    assert child_span_two["parent_span_id"] == tx["contexts"]["trace"]["span_id"]
 
-    assert_valid_iso8601(child_span_one.timestamp)
-    assert_valid_iso8601(child_span_one.start_timestamp)
-    assert_valid_iso8601(child_span_two.timestamp)
-    assert_valid_iso8601(child_span_two.start_timestamp)
+    assert_valid_iso8601(child_span_one["timestamp"])
+    assert_valid_iso8601(child_span_one["start_timestamp"])
+    assert_valid_iso8601(child_span_two["timestamp"])
+    assert_valid_iso8601(child_span_two["start_timestamp"])
 
-    assert child_span_one.timestamp > child_span_one.start_timestamp
-    assert child_span_two.timestamp > child_span_two.start_timestamp
-    assert transaction.timestamp >= child_span_one.timestamp
-    assert transaction.timestamp >= child_span_two.timestamp
-    assert transaction.start_timestamp <= child_span_one.start_timestamp
-    assert transaction.start_timestamp <= child_span_two.start_timestamp
+    assert child_span_one["timestamp"] > child_span_one["start_timestamp"]
+    assert child_span_two["timestamp"] > child_span_two["start_timestamp"]
+    assert tx["timestamp"] >= child_span_one["timestamp"]
+    assert tx["timestamp"] >= child_span_two["timestamp"]
+    assert tx["start_timestamp"] <= child_span_one["start_timestamp"]
+    assert tx["start_timestamp"] <= child_span_two["start_timestamp"]
 
-    assert_valid_trace_id(transaction.contexts.trace.trace_id)
-    assert_valid_trace_id(child_span_one.trace_id)
-    assert_valid_trace_id(child_span_two.trace_id)
+    assert_valid_trace_id(tx["contexts"]["trace"]["trace_id"])
+    assert_valid_trace_id(child_span_one["trace_id"])
+    assert_valid_trace_id(child_span_two["trace_id"])
   end
 
   @tag span_storage: true
-  test "removes span records from storage after sending a transaction", %{table_name: table_name} do
+  test "removes span records from storage after sending a transaction", %{
+    table_name: table_name,
+    bypass: bypass
+  } do
     put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-    Sentry.Test.start_collecting_sentry_reports()
+    ref = setup_bypass_envelope_collector(bypass)
 
     TestEndpoint.instrumented_function()
 
-    assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-    assert SpanStorage.get_root_span(transaction.contexts.trace.span_id, table_name: table_name) ==
+    assert SpanStorage.get_root_span(tx["contexts"]["trace"]["span_id"], table_name: table_name) ==
              nil
 
     assert [] ==
-             SpanStorage.get_child_spans(transaction.contexts.trace.span_id,
+             SpanStorage.get_child_spans(tx["contexts"]["trace"]["span_id"],
                table_name: table_name
              )
   end
@@ -130,70 +137,76 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   describe "sampling behavior with root and child spans" do
     @tag span_storage: true
-    test "drops entire trace when root span is not sampled" do
+    test "drops entire trace when root span is not sampled", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 0.0)
 
       original_sampler = Application.get_env(:opentelemetry, :sampler)
       Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
 
-      Sentry.Test.start_collecting_sentry_reports()
+      test_pid = self()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, :unexpected_envelope)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
 
       Enum.each(1..5, fn _ ->
         TestEndpoint.instrumented_function()
       end)
 
-      assert [] = Sentry.Test.pop_sentry_transactions()
+      refute_receive :unexpected_envelope, 200
 
       Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
 
     @tag span_storage: true
-    test "samples entire trace when root span is sampled" do
+    test "samples entire trace when root span is sampled", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       TestEndpoint.instrumented_function()
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
-      assert length(transaction.spans) == 2
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      assert length(tx["spans"]) == 2
 
-      [child_span_one, child_span_two] = transaction.spans
-      assert transaction.contexts.trace.trace_id == child_span_one.trace_id
-      assert transaction.contexts.trace.trace_id == child_span_two.trace_id
+      [child_span_one, child_span_two] = tx["spans"]
+      assert tx["contexts"]["trace"]["trace_id"] == child_span_one["trace_id"]
+      assert tx["contexts"]["trace"]["trace_id"] == child_span_two["trace_id"]
     end
 
     @tag span_storage: true
-    test "child spans inherit parent sampling decision" do
+    test "child spans inherit parent sampling decision", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 0.5)
 
       original_sampler = Application.get_env(:opentelemetry, :sampler)
       Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Enum.each(1..10, fn _ ->
         TestEndpoint.instrumented_function()
       end)
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      Enum.each(transactions, fn transaction ->
-        assert length(transaction.spans) == 2
+      Enum.each(transactions, fn tx ->
+        assert length(tx["spans"]) == 2
 
-        [child_span_one, child_span_two] = transaction.spans
-        assert transaction.contexts.trace.trace_id == child_span_one.trace_id
-        assert transaction.contexts.trace.trace_id == child_span_two.trace_id
+        [child_span_one, child_span_two] = tx["spans"]
+        assert tx["contexts"]["trace"]["trace_id"] == child_span_one["trace_id"]
+        assert tx["contexts"]["trace"]["trace_id"] == child_span_two["trace_id"]
       end)
 
       Application.put_env(:opentelemetry, :sampler, original_sampler)
     end
 
     @tag span_storage: true
-    test "nested child spans maintain hierarchy" do
+    test "nested child spans maintain hierarchy", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "root_span" do
         Tracer.with_span "level_1_child" do
@@ -211,43 +224,43 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert length(transaction.spans) == 4
+      assert length(tx["spans"]) == 4
 
-      trace_id = transaction.contexts.trace.trace_id
+      trace_id = tx["contexts"]["trace"]["trace_id"]
 
-      Enum.each(transaction.spans, fn span ->
-        assert span.trace_id == trace_id
+      Enum.each(tx["spans"], fn span ->
+        assert span["trace_id"] == trace_id
       end)
 
-      span_names = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      span_names = Enum.map(tx["spans"], & &1["op"]) |> Enum.sort()
       expected_names = ["level_1_child", "level_1_sibling", "level_2_child", "level_2_sibling"]
       assert span_names == expected_names
     end
 
     @tag span_storage: true
-    test "child-only spans without root are handled correctly" do
+    test "child-only spans without root are handled correctly", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       TestEndpoint.child_instrumented_function("standalone")
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert length(transaction.spans) == 0
-      assert transaction.transaction == "child_instrumented_function_standalone"
+      assert length(tx["spans"]) == 0
+      assert tx["transaction"] == "child_instrumented_function_standalone"
     end
 
     @tag span_storage: true
-    test "concurrent traces maintain independent sampling decisions" do
+    test "concurrent traces maintain independent sampling decisions", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 0.5)
 
       original_sampler = Application.get_env(:opentelemetry, :sampler)
       Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       tasks =
         Enum.map(1..20, fn i ->
@@ -262,12 +275,13 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       Enum.each(tasks, &Task.await/1)
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      Enum.each(transactions, fn transaction ->
-        assert length(transaction.spans) == 1
-        [child_span] = transaction.spans
-        assert child_span.trace_id == transaction.contexts.trace.trace_id
+      Enum.each(transactions, fn tx ->
+        assert length(tx["spans"]) == 1
+        [child_span] = tx["spans"]
+        assert child_span["trace_id"] == tx["contexts"]["trace"]["trace_id"]
       end)
 
       assert length(transactions) < 20
@@ -276,7 +290,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
 
     @tag span_storage: true
-    test "span processor respects sampler drop configuration" do
+    test "span processor respects sampler drop configuration", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
       original_sampler = Application.get_env(:opentelemetry, :sampler)
@@ -287,7 +301,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         {Sentry.OpenTelemetry.Sampler, [drop: ["child_instrumented_function_one"]]}
       )
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "root_span" do
         Tracer.with_span "child_instrumented_function_one" do
@@ -299,13 +313,14 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      Enum.each(transactions, fn transaction ->
-        trace_id = transaction.contexts.trace.trace_id
+      Enum.each(transactions, fn tx ->
+        trace_id = tx["contexts"]["trace"]["trace_id"]
 
-        Enum.each(transaction.spans, fn span ->
-          assert span.trace_id == trace_id
+        Enum.each(tx["spans"], fn span ->
+          assert span["trace_id"] == trace_id
         end)
       end)
 
@@ -313,10 +328,12 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
 
     @tag span_storage: true
-    test "treats HTTP server request spans as transaction roots for distributed tracing" do
+    test "treats HTTP server request spans as transaction roots for distributed tracing", %{
+      bypass: bypass
+    } do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
       # This represents a distributed trace where the client started the trace
@@ -362,45 +379,46 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       # Should capture the HTTP request span as a transaction root despite having an external parent
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
       # Verify transaction properties
-      assert transaction.transaction == "POST /api/users"
-      assert transaction.transaction_info == %{source: :custom}
-      assert length(transaction.spans) == 2
+      assert tx["transaction"] == "POST /api/users"
+      assert tx["transaction_info"] == %{"source" => "custom"}
+      assert length(tx["spans"]) == 2
 
       # Verify child spans are properly included
-      span_ops = Enum.map(transaction.spans, & &1.op) |> Enum.sort()
+      span_ops = Enum.map(tx["spans"], & &1["op"]) |> Enum.sort()
       assert span_ops == ["db", "db"]
 
       # Verify child spans have detailed data (like SQL queries)
-      [span1, span2] = transaction.spans
-      assert span1.description =~ "INSERT INTO"
-      assert span2.description =~ "INSERT INTO"
-      assert span1.data["db.system"] == :postgresql
-      assert span2.data["db.system"] == :postgresql
-      assert span1.data["db.statement"] =~ "INSERT INTO users"
-      assert span2.data["db.statement"] =~ "INSERT INTO notifications"
+      [span1, span2] = tx["spans"]
+      assert span1["description"] =~ "INSERT INTO"
+      assert span2["description"] =~ "INSERT INTO"
+      assert span1["data"]["db.system"] == "postgresql"
+      assert span2["data"]["db.system"] == "postgresql"
+      assert span1["data"]["db.statement"] =~ "INSERT INTO users"
+      assert span2["data"]["db.statement"] =~ "INSERT INTO notifications"
 
       # Verify all spans share the same trace ID (from the external parent)
-      trace_id = transaction.contexts.trace.trace_id
+      trace_id = tx["contexts"]["trace"]["trace_id"]
 
-      Enum.each(transaction.spans, fn span ->
-        assert span.trace_id == trace_id
+      Enum.each(tx["spans"], fn span ->
+        assert span["trace_id"] == trace_id
       end)
 
       # The transaction should have the external parent's trace ID
-      assert transaction.contexts.trace.trace_id ==
+      assert tx["contexts"]["trace"]["trace_id"] ==
                "1234567890abcdef1234567890abcdef"
     end
 
     @tag span_storage: true
     test "cleans up HTTP server span and children after sending distributed trace transaction", %{
-      table_name: table_name
+      table_name: table_name,
+      bypass: bypass
     } do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
       external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
@@ -430,11 +448,11 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       # Should capture the HTTP request span as a transaction
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
       # Verify the HTTP server span was removed from storage
       # (even though it was stored as a child span due to having a remote parent)
-      http_server_span_id = transaction.contexts.trace.span_id
+      http_server_span_id = tx["contexts"]["trace"]["span_id"]
       remote_parent_span_id_str = "abcdef1234567890"
 
       # The HTTP server span should not exist in storage anymore
@@ -455,10 +473,10 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   describe "get_op_description/1" do
     @tag span_storage: true
-    test "HTTP server span with url.path includes path in description" do
+    test "HTTP server span with url.path includes path in description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "GET /api/users", %{
         kind: :server,
@@ -470,17 +488,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "http.server"
-      assert transaction.contexts.trace.description == "GET /api/users"
+      assert tx["contexts"]["trace"]["op"] == "http.server"
+      assert tx["contexts"]["trace"]["description"] == "GET /api/users"
     end
 
     @tag span_storage: true
-    test "HTTP server span without url.path uses only method in description" do
+    test "HTTP server span without url.path uses only method in description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "GET", %{
         kind: :server,
@@ -491,17 +509,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "http.server"
-      assert transaction.contexts.trace.description == "GET"
+      assert tx["contexts"]["trace"]["op"] == "http.server"
+      assert tx["contexts"]["trace"]["description"] == "GET"
     end
 
     @tag span_storage: true
-    test "HTTP client span with url.path includes path in description" do
+    test "HTTP client span with url.path includes path in description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "GET /external/api", %{
         kind: :client,
@@ -513,17 +531,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "http.client"
-      assert transaction.contexts.trace.description == "GET /external/api"
+      assert tx["contexts"]["trace"]["op"] == "http.client"
+      assert tx["contexts"]["trace"]["description"] == "GET /external/api"
     end
 
     @tag span_storage: true
-    test "HTTP server span with client.address includes address in description" do
+    test "HTTP server span with client.address includes address in description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "POST /api/login", %{
         kind: :server,
@@ -536,17 +554,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "http.server"
-      assert transaction.contexts.trace.description == "POST /api/login from 192.168.1.100"
+      assert tx["contexts"]["trace"]["op"] == "http.server"
+      assert tx["contexts"]["trace"]["description"] == "POST /api/login from 192.168.1.100"
     end
 
     @tag span_storage: true
-    test "database span uses db op and query as description" do
+    test "database span uses db op and query as description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "SELECT users", %{
         kind: :client,
@@ -558,17 +576,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "db"
-      assert transaction.contexts.trace.description == "SELECT * FROM users WHERE id = $1"
+      assert tx["contexts"]["trace"]["op"] == "db"
+      assert tx["contexts"]["trace"]["description"] == "SELECT * FROM users WHERE id = $1"
     end
 
     @tag span_storage: true
-    test "database span without statement has nil description" do
+    test "database span without statement has nil description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "db.connect", %{
         kind: :client,
@@ -579,17 +597,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "db"
-      assert transaction.contexts.trace.description == nil
+      assert tx["contexts"]["trace"]["op"] == "db"
+      assert tx["contexts"]["trace"]["description"] == nil
     end
 
     @tag span_storage: true
-    test "Oban span uses queue.process op and worker as description" do
+    test "Oban span uses queue.process op and worker as description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "MyApp.Workers.EmailWorker process", %{
         kind: :consumer,
@@ -601,35 +619,34 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "queue.process"
-      assert transaction.contexts.trace.description == "MyApp.Workers.EmailWorker"
-      # Also verify transaction name uses worker name for Oban spans
-      assert transaction.transaction == "MyApp.Workers.EmailWorker"
+      assert tx["contexts"]["trace"]["op"] == "queue.process"
+      assert tx["contexts"]["trace"]["description"] == "MyApp.Workers.EmailWorker"
+      assert tx["transaction"] == "MyApp.Workers.EmailWorker"
     end
 
     @tag span_storage: true
-    test "generic span uses span name for both op and description" do
+    test "generic span uses span name for both op and description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "custom_operation" do
         Process.sleep(1)
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert transaction.contexts.trace.op == "custom_operation"
-      assert transaction.contexts.trace.description == "custom_operation"
+      assert tx["contexts"]["trace"]["op"] == "custom_operation"
+      assert tx["contexts"]["trace"]["description"] == "custom_operation"
     end
 
     @tag span_storage: true
-    test "child HTTP span has correct op and description" do
+    test "child HTTP span has correct op and description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "parent_operation" do
         Tracer.with_span "GET /external/service", %{
@@ -643,20 +660,20 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert length(transaction.spans) == 1
-      [child_span] = transaction.spans
+      assert length(tx["spans"]) == 1
+      [child_span] = tx["spans"]
 
-      assert child_span.op == "http.client"
-      assert child_span.description == "GET /external/service"
+      assert child_span["op"] == "http.client"
+      assert child_span["description"] == "GET /external/service"
     end
 
     @tag span_storage: true
-    test "child database span has correct op and description" do
+    test "child database span has correct op and description", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "parent_operation" do
         Tracer.with_span "db.query", %{
@@ -670,13 +687,13 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      assert [%Sentry.Transaction{} = transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      assert length(transaction.spans) == 1
-      [child_span] = transaction.spans
+      assert length(tx["spans"]) == 1
+      [child_span] = tx["spans"]
 
-      assert child_span.op == "db"
-      assert child_span.description == "INSERT INTO orders (user_id) VALUES (?)"
+      assert child_span["op"] == "db"
+      assert child_span["description"] == "INSERT INTO orders (user_id) VALUES (?)"
     end
   end
 
@@ -684,14 +701,14 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     @tag span_storage: true
     test "in-progress child span is preserved and becomes transaction root when parent finishes first",
          %{
-           table_name: table_name
+           table_name: table_name,
+           bypass: bypass
          } do
-      # This test reproduces the race condition where a parent span (HTTP request)
-      # finishes and sends its transaction before a child span (LiveView mount)
-      # has completed. The child span data should NOT be lost.
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 
-      Sentry.Test.start_collecting_sentry_reports()
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
 
       alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
 
@@ -824,9 +841,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
   describe "span links" do
     @tag span_storage: true
-    test "root span with links includes links in trace context" do
+    test "root span with links includes links in trace context", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       # Create a source span and capture its context
       source_ctx =
@@ -848,27 +865,28 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(10)
       end
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
       linked_tx =
-        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/linked" end)
+        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/linked" end)
 
       assert linked_tx != nil
 
-      trace_links = linked_tx.contexts.trace.links
+      trace_links = linked_tx["contexts"]["trace"]["links"]
       assert is_list(trace_links)
       assert length(trace_links) == 1
 
       [span_link] = trace_links
-      assert String.match?(span_link.trace_id, ~r/^[a-f0-9]{32}$/)
-      assert String.match?(span_link.span_id, ~r/^[a-f0-9]{16}$/)
-      refute Map.has_key?(span_link, :attributes)
+      assert String.match?(span_link["trace_id"], ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link["span_id"], ~r/^[a-f0-9]{16}$/)
+      refute Map.has_key?(span_link, "attributes")
     end
 
     @tag span_storage: true
-    test "root span with links preserves link attributes" do
+    test "root span with links preserves link attributes", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       source_ctx =
         Tracer.with_span "source_span" do
@@ -888,19 +906,20 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(10)
       end
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
       linked_tx =
-        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/linked" end)
+        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/linked" end)
 
-      [span_link] = linked_tx.contexts.trace.links
-      assert span_link.attributes == %{"my.key" => "my.value"}
+      [span_link] = linked_tx["contexts"]["trace"]["links"]
+      assert span_link["attributes"] == %{"my.key" => "my.value"}
     end
 
     @tag span_storage: true
-    test "child span with links includes links in the span struct" do
+    test "child span with links includes links in the span struct", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       source_ctx =
         Tracer.with_span "source_span" do
@@ -921,26 +940,27 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
       parent_tx =
-        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/parent" end)
+        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/parent" end)
 
-      assert length(parent_tx.spans) == 1
-      [child_span] = parent_tx.spans
+      assert length(parent_tx["spans"]) == 1
+      [child_span] = parent_tx["spans"]
 
-      assert is_list(child_span.links)
-      assert length(child_span.links) == 1
+      assert is_list(child_span["links"])
+      assert length(child_span["links"]) == 1
 
-      [span_link] = child_span.links
-      assert String.match?(span_link.trace_id, ~r/^[a-f0-9]{32}$/)
-      assert String.match?(span_link.span_id, ~r/^[a-f0-9]{16}$/)
+      [span_link] = child_span["links"]
+      assert String.match?(span_link["trace_id"], ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link["span_id"], ~r/^[a-f0-9]{16}$/)
     end
 
     @tag span_storage: true
-    test "spans without links have nil links" do
+    test "spans without links have nil links", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       Tracer.with_span "GET /api/no-links", %{
         kind: :server,
@@ -954,17 +974,17 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      [transaction] = Sentry.Test.pop_sentry_transactions()
+      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
 
-      refute Map.has_key?(transaction.contexts.trace, :links)
-      assert [child_span] = transaction.spans
-      assert child_span.links == nil
+      refute Map.has_key?(tx["contexts"]["trace"], "links")
+      assert [child_span] = tx["spans"]
+      assert child_span["links"] == nil
     end
 
     @tag span_storage: true
-    test "span with multiple links preserves all links" do
+    test "span with multiple links preserves all links", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
-      Sentry.Test.start_collecting_sentry_reports()
+      ref = setup_bypass_envelope_collector(bypass)
 
       source_ctx_1 =
         Tracer.with_span "source_1" do
@@ -990,27 +1010,28 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(10)
       end
 
-      transactions = Sentry.Test.pop_sentry_transactions()
+      Process.sleep(200)
+      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
       linked_tx =
-        Enum.find(transactions, fn tx -> tx.transaction == "GET /api/multi-linked" end)
+        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/multi-linked" end)
 
-      trace_links = linked_tx.contexts.trace.links
+      trace_links = linked_tx["contexts"]["trace"]["links"]
       assert length(trace_links) == 2
 
       # Both links should have valid trace/span IDs
       Enum.each(trace_links, fn link ->
-        assert String.match?(link.trace_id, ~r/^[a-f0-9]{32}$/)
-        assert String.match?(link.span_id, ~r/^[a-f0-9]{16}$/)
+        assert String.match?(link["trace_id"], ~r/^[a-f0-9]{32}$/)
+        assert String.match?(link["span_id"], ~r/^[a-f0-9]{16}$/)
       end)
 
       # The two links should point to different spans
-      span_ids = Enum.map(trace_links, & &1.span_id)
+      span_ids = Enum.map(trace_links, & &1["span_id"])
       assert length(Enum.uniq(span_ids)) == 2
 
       # The link with attributes should preserve them
-      link_with_attrs = Enum.find(trace_links, &Map.has_key?(&1, :attributes))
-      assert link_with_attrs.attributes == %{"order" => "second"}
+      link_with_attrs = Enum.find(trace_links, &Map.has_key?(&1, "attributes"))
+      assert link_with_attrs["attributes"] == %{"order" => "second"}
     end
   end
 end

@@ -12,15 +12,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   setup do
-    bypass = Bypass.open()
-
-    put_test_config(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      dedup_events: false,
-      environment_name: "test"
-    )
-
-    %{bypass: bypass}
+    setup_bypass(dedup_events: false, environment_name: "test")
   end
 
   for event_type <- [:start, :stop, :exception] do

@@ -4,353 +4,183 @@ defmodule Sentry.Test do
 
   ## Usage
 
-  This module is based on **collecting** reported events and then retrieving
-  them to perform assertions. The functionality here is only available if the
-  `:test_mode` configuration option is set to `true`—see
-  [`Sentry`'s configuration section](sentry.html#module-configuration).
-  You can start collecting events from a process
-  by calling `start_collecting_sentry_reports/0`. Then, you can use Sentry
-  as normal and report events (through functions such as `Sentry.capture_message/1`
-  or `Sentry.capture_exception/1`). Finally, you can retrieve the collected events
-  by calling `pop_sentry_reports/0`.
+  This module provides helpers that set up a local HTTP server (via Bypass) so that
+  Sentry SDK calls in your tests hit a local endpoint instead of the real Sentry API.
+  Events are captured via the existing `before_send` and `before_send_log` callbacks
+  and stored in an isolated ETS table per test, preserving the full struct data.
 
-  > #### Test Mode and DSN {: .info}
+  > #### Bypass Required {: .info}
   >
-  > If `:test_mode` is `true`, the `:dsn` option behaves differently. When `:dsn` is
-  > not set or `nil` and you're collecting events, you'll still be able to collect
-  > events—even if under normal circumstances a missing `:dsn` means events don't get
-  > reported. If `:dsn` is `nil` and you're not collecting events, the event is simply
-  > ignored. See the table below for a summary for this behavior.
-
-  | `:test_mode` | `:dsn` | Collecting events? | Behavior                                               |
-  |--------------|--------|--------------------|--------------------------------------------------------|
-  | `true`       | `nil`  | yes                | Event is collected                                     |
-  | `true`       | `nil`  | no                 | Event is ignored (silently)                            |
-  | `true`       | set    | yes                | Event is collected                                     |
-  | `true`       | set    | no                 | Makes HTTP request to configured DSN (could be Bypass) |
-  | `false`      | `nil`  | irrelevant         | Ignores event                                          |
-  | `false`      | set    | irrelevant         | Makes HTTP request to configured DSN (could be Bypass) |
+  > This module requires `bypass` as a test dependency:
+  >
+  >     {:bypass, "~> 2.0", only: [:test]}
 
   ## Examples
 
-  Let's imagine writing a test using the functions in this module. First, we need to
-  start collecting events:
+  The simplest way to use this module is with the `setup_sentry/1` function:
 
-      test "reporting from child processes" do
-        parent_pid = self()
+      defmodule MyApp.ErrorReportingTest do
+        use ExUnit.Case, async: true
 
-        # Collect reports from self().
-        assert :ok = Test.start_collecting_sentry_reports()
+        setup do
+          Sentry.Test.setup_sentry()
+        end
 
-        # <we'll fill this in below...>
+        test "reports exceptions to Sentry" do
+          try do
+            raise "boom"
+          rescue
+            e -> Sentry.capture_exception(e)
+          end
+
+          assert [%Sentry.Event{} = event] = Sentry.Test.pop_sentry_reports()
+          assert event.original_exception == %RuntimeError{message: "boom"}
+        end
       end
 
-  Now, we can report events as normal. For example, we can report an event from the
-  parent process:
+  You can also use `start_collecting_sentry_reports/0` as an ExUnit setup callback
+  for backwards compatibility:
 
-      assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
-
-  We can also report events from "child" processes.
-
-      # Spawn a child that waits for the :go message and then reports an event.
-      {:ok, child_pid} =
-        Task.start_link(fn ->
-          receive do
-            :go ->
-              assert {:ok, ""} = Sentry.capture_message("Oops from child process")
-              send(parent_pid, :done)
-          end
-        end)
-
-      # Start the child and wait for it to finish.
-      send(child_pid, :go)
-      assert_receive :done
-
-  Now, we can retrieve the collected events and perform assertions on them:
-
-      assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-      assert event1.message.formatted == "Oops from parent process"
-      assert event2.message.formatted == "Oops from child process"
+      setup :start_collecting_sentry_reports
 
   """
 
   @moduledoc since: "10.2.0"
 
-  @server __MODULE__.OwnershipServer
-  @events_key :events
-  @transactions_key :transactions
-  @logs_key :logs
-  @metrics_key :metrics
+  @compile {:no_warn_undefined, [Bypass, Plug.Conn]}
 
-  # Used internally when reporting an event, *before* reporting the actual event.
-  @doc false
-  @spec maybe_collect(Sentry.Event.t()) :: :collected | :not_collecting
-  def maybe_collect(%Sentry.Event{} = event) do
-    maybe_collect(event, @events_key)
-  end
+  @registry_table :sentry_test_collectors
 
-  # Used internally when reporting a transaction, *before* reporting the actual transaction.
-  @doc false
-  @spec maybe_collect(Sentry.Transaction.t()) :: :collected | :not_collecting
-  def maybe_collect(%Sentry.Transaction{} = transaction) do
-    maybe_collect(transaction, @transactions_key)
-  end
+  # Public API
 
-  # Used internally when reporting log events, *before* reporting the actual log events.
-  @doc false
-  @spec maybe_collect_logs([Sentry.LogEvent.t()]) :: :collected | :not_collecting
-  def maybe_collect_logs(log_events) when is_list(log_events) do
-    if Sentry.Config.test_mode?() do
-      dsn_set? = not is_nil(Sentry.Config.dsn())
-      ensure_ownership_server_started()
+  @doc """
+  Sets up a Bypass instance and configures Sentry for testing.
 
-      case NimbleOwnership.fetch_owner(@server, callers(), @logs_key) do
-        {:ok, owner_pid} ->
-          result =
-            NimbleOwnership.get_and_update(
-              @server,
-              owner_pid,
-              @logs_key,
-              fn logs ->
-                {:collected, (logs || []) ++ log_events}
-              end
-            )
+  Opens a Bypass on a random port, configures the DSN to point to it,
+  and wires up `before_send` / `before_send_log` callbacks to capture
+  structs in an isolated ETS table.
 
-          case result do
-            {:ok, :collected} ->
-              :collected
+  Returns a map with `:bypass` for use in test context.
 
-            {:error, error} ->
-              raise ArgumentError,
-                    "cannot collect Sentry logs: #{Exception.message(error)}"
-          end
+  ## Options
 
-        :error when dsn_set? ->
-          :not_collecting
+  Any extra Sentry config options (e.g., `dedup_events: false`, `traces_sample_rate: 1.0`)
+  will be forwarded to the test config.
 
-        # If the :dsn option is not set and we didn't capture the item, it's alright,
-        # we can just swallow it.
-        :error ->
-          :collected
+  ## Examples
+
+      setup do
+        Sentry.Test.setup_sentry()
       end
-    else
-      :not_collecting
-    end
-  end
 
-  # Used internally when reporting metric events, *before* reporting the actual metric events.
-  @doc false
-  @spec maybe_collect_metrics([Sentry.Metric.t()]) :: :collected | :not_collecting
-  def maybe_collect_metrics(metrics) when is_list(metrics) do
-    if Sentry.Config.test_mode?() do
-      dsn_set? = not is_nil(Sentry.Config.dsn())
-      ensure_ownership_server_started()
-
-      case NimbleOwnership.fetch_owner(@server, callers(), @metrics_key) do
-        {:ok, owner_pid} ->
-          result =
-            NimbleOwnership.get_and_update(
-              @server,
-              owner_pid,
-              @metrics_key,
-              fn metrics_list ->
-                {:collected, (metrics_list || []) ++ metrics}
-              end
-            )
-
-          case result do
-            {:ok, :collected} ->
-              :collected
-
-            {:error, error} ->
-              raise ArgumentError,
-                    "cannot collect Sentry metrics: #{Exception.message(error)}"
-          end
-
-        :error when dsn_set? ->
-          :not_collecting
-
-        # If the :dsn option is not set and we didn't capture the item, it's alright,
-        # we can just swallow it.
-        :error ->
-          :collected
+      setup do
+        Sentry.Test.setup_sentry(dedup_events: false)
       end
-    else
-      :not_collecting
-    end
-  end
 
-  @doc false
-  def maybe_collect(item, collection_key) do
-    if Sentry.Config.test_mode?() do
-      dsn_set? = not is_nil(Sentry.Config.dsn())
-      ensure_ownership_server_started()
+  """
+  @doc since: "12.1.0"
+  @spec setup_sentry(keyword()) :: %{bypass: term()}
+  def setup_sentry(extra_config \\ []) do
+    ensure_bypass_loaded!()
+    ensure_registry!()
 
-      case NimbleOwnership.fetch_owner(@server, callers(), collection_key) do
-        {:ok, owner_pid} ->
-          result =
-            NimbleOwnership.get_and_update(
-              @server,
-              owner_pid,
-              collection_key,
-              fn items ->
-                {:collected, (items || []) ++ [item]}
-              end
-            )
+    # Create a unique collector ETS table for this test
+    uid = System.unique_integer([:positive])
+    collector_table = :"sentry_test_collector_#{uid}"
+    :ets.new(collector_table, [:ordered_set, :public, :named_table])
 
-          case result do
-            {:ok, :collected} ->
-              :collected
+    # Register this test's collector
+    :ets.insert(@registry_table, {self(), collector_table})
 
-            {:error, error} ->
-              raise ArgumentError,
-                    "cannot collect Sentry #{collection_key}: #{Exception.message(error)}"
-          end
+    # Store in process dict for pop_* lookups
+    Process.put(:sentry_test_collector, collector_table)
 
-        :error when dsn_set? ->
-          :not_collecting
+    # Open Bypass and stub the envelope endpoint
+    bypass = Bypass.open()
 
-        # If the :dsn option is not set and we didn't capture the item, it's alright,
-        # we can just swallow it.
-        :error ->
-          :collected
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+    end)
+
+    # Extract user-provided callbacks from extra_config (if any), falling back to current config
+    {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
+    {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
+    {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
+
+    original_before_send =
+      user_before_send || user_before_send_event || Sentry.Config.before_send()
+
+    original_before_send_log = user_before_send_log || Sentry.Config.before_send_log()
+
+    # Build collecting callbacks that wrap the originals
+    new_before_send = build_collecting_callback(original_before_send)
+    new_before_send_log = build_collecting_callback(original_before_send_log)
+
+    # Configure DSN + callbacks + any extra config.
+    # Default to a 2s receive_timeout so localhost Bypass requests don't time out
+    # under parallel test load; extra_config can override this.
+    config =
+      [finch_request_opts: [receive_timeout: 2000]]
+      |> Keyword.merge(extra_config)
+      |> Keyword.merge(
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        before_send: new_before_send,
+        before_send_log: new_before_send_log
+      )
+
+    put_test_config(config)
+
+    # Register cleanup
+    test_pid = self()
+
+    ExUnit.Callbacks.on_exit(fn ->
+      if :ets.whereis(@registry_table) != :undefined do
+        :ets.delete(@registry_table, test_pid)
       end
-    else
-      :not_collecting
-    end
+
+      if :ets.whereis(collector_table) != :undefined do
+        :ets.delete(collector_table)
+      end
+    end)
+
+    %{bypass: bypass}
   end
 
   @doc """
   Starts collecting events from the current process.
 
-  This function starts collecting events reported from the current process. If you want to
-  allow other processes to report events, you need to *allow* them to report events back
-  to the current process. See `allow/2` for more information on allowances. If the current
-  process is already *allowed by another process*, this function raises an error.
-
-  The `context` parameter is ignored. It's there so that this function can be used
-  as an ExUnit **setup callback**. For example:
-
-      import Sentry.Test
+  This function sets up Bypass and configures Sentry for testing.
+  It can be used as an ExUnit setup callback:
 
       setup :start_collecting_sentry_reports
 
-  For a more flexible way to start collecting events, see `start_collecting/1`.
+  The `context` parameter is ignored — it exists so this function can be used
+  as an ExUnit setup callback.
   """
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
-    start_collecting(key: @events_key)
-    start_collecting(key: @transactions_key)
-    start_collecting(key: @logs_key)
-    start_collecting(key: @metrics_key)
-
-    # Allow the TelemetryProcessor scheduler to collect log events on behalf of this process.
-    # Logs flow through the scheduler (a separate process) and need explicit
-    # permission in NimbleOwnership to store collected items for the test process.
-    try do
-      processor =
-        Process.get(:sentry_telemetry_processor, Sentry.TelemetryProcessor.default_name())
-
-      scheduler_name = Sentry.TelemetryProcessor.scheduler_name(processor)
-      scheduler_pid = GenServer.whereis(scheduler_name)
-
-      if scheduler_pid do
-        case NimbleOwnership.allow(@server, self(), scheduler_pid, @logs_key) do
-          :ok -> :ok
-          {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
-          {:error, _} -> :ok
-        end
-
-        case NimbleOwnership.allow(@server, self(), scheduler_pid, @metrics_key) do
-          :ok -> :ok
-          {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} -> :ok
-          {:error, _} -> :ok
-        end
-      end
-    catch
-      :exit, _ -> :ok
-    end
-
+    setup_sentry()
     :ok
   end
 
   @doc """
   Starts collecting events.
 
-  This function starts collecting events reported from the given (*owner*) process. If you want to
-  allow other processes to report events, you need to *allow* them to report events back
-  to the owner process. See `allow/2` for more information on allowances. If the owner
-  process is already *allowed by another process*, this function raises an error.
+  > #### Deprecated {: .warning}
+  >
+  > This function is deprecated and will be removed in v13.0.0.
+  > Use `setup_sentry/1` or `start_collecting_sentry_reports/0` instead.
 
-  ## Options
-
-    * `:owner` - the PID of the owner process that will collect the events. Defaults to `self/0`.
-
-    * `:cleanup` - a boolean that controls whether collected resources around the owner process
-      should be cleaned up when the owner process exits. Defaults to `true`. If `false`, you'll
-      need to manually call `cleanup/1` to clean up the resources.
-
-  ## Examples
-
-  The `:cleanup` option can be used to implement expectation-based tests, akin to something
-  like [`Mox.expect/4`](https://hexdocs.pm/mox/1.1.0/Mox.html#expect/4).
-
-      test "implementing an expectation-based test workflow" do
-        test_pid = self()
-
-        Test.start_collecting(owner: test_pid, cleanup: false)
-
-        on_exit(fn ->
-          assert [%Event{} = event] = Test.pop_sentry_reports(test_pid)
-          assert event.message.formatted == "Oops"
-          assert :ok = Test.cleanup(test_pid)
-        end)
-
-        assert {:ok, ""} = Sentry.capture_message("Oops")
-      end
-
+  The `:owner`, `:cleanup`, and `:key` options are no longer supported and are ignored.
   """
   @doc since: "10.2.0"
+  @doc deprecated: "Use setup_sentry/1 or start_collecting_sentry_reports/0 instead"
   @spec start_collecting(keyword()) :: :ok
-  def start_collecting(options \\ []) when is_list(options) do
-    key = Keyword.get(options, :key, @events_key)
-    owner_pid = Keyword.get(options, :owner, self())
-    cleanup? = Keyword.get(options, :cleanup, true)
-
-    callers =
-      if owner_pid == self() do
-        callers()
-      else
-        [owner_pid]
-      end
-
-    # Make sure the ownership server is started (this is idempotent).
-    ensure_ownership_server_started()
-
-    case NimbleOwnership.fetch_owner(@server, callers, key) do
-      # No-op
-      {tag, ^owner_pid} when tag in [:ok, :shared_owner] ->
-        :ok
-
-      {:shared_owner, _other_pid} ->
-        raise ArgumentError,
-              "Sentry.Test is in global mode and is already collecting reported events"
-
-      {:ok, other_pid} ->
-        raise ArgumentError, "already collecting reported events from #{inspect(other_pid)}"
-
-      :error ->
-        :ok
-    end
-
-    {:ok, _} =
-      NimbleOwnership.get_and_update(@server, self(), key, fn events ->
-        {:ignored, events || []}
-      end)
-
-    if not cleanup? do
-      :ok = NimbleOwnership.set_owner_to_manual_cleanup(@server, owner_pid)
+  def start_collecting(_options \\ []) do
+    # Ensure setup has been called; if not, set it up now
+    unless Process.get(:sentry_test_collector) do
+      setup_sentry()
     end
 
     :ok
@@ -359,49 +189,40 @@ defmodule Sentry.Test do
   @doc """
   Cleans up test resources associated with `owner_pid`.
 
-  See the `:cleanup` option in `start_collecting/1` and the corresponding
-  example for more information.
+  > #### Deprecated {: .warning}
+  >
+  > This function is deprecated and will be removed in v13.0.0.
+  > Cleanup is now handled automatically via `on_exit` callbacks.
   """
   @doc since: "10.2.0"
+  @doc deprecated: "Cleanup is now automatic via on_exit callbacks"
   @spec cleanup(pid()) :: :ok
   def cleanup(owner_pid) when is_pid(owner_pid) do
-    :ok = NimbleOwnership.cleanup_owner(@server, owner_pid)
+    :ok
   end
 
   @doc """
   Allows `pid_to_allow` to collect events back to the root process via `owner_pid`.
 
-  `owner_pid` must be a PID that is currently collecting events or has been allowed
-  to collect events. If that's not the case, this function raises an error.
-
-  `pid_to_allow` can also be a **function** that returns a PID. This is useful when
-  you want to allow a registered process that is not yet started to collect events. For example:
-
-      Sentry.Test.allow_sentry_reports(self(), fn -> Process.whereis(:my_process) end)
-
+  > #### Deprecated {: .warning}
+  >
+  > This function is deprecated and will be removed in v13.0.0.
+  > Child processes are automatically tracked via the `$callers` mechanism.
+  > There is no need to explicitly allow processes.
   """
   @doc since: "10.2.0"
+  @doc deprecated: "Child processes are now automatically tracked via $callers"
   @spec allow_sentry_reports(pid(), pid() | (-> pid())) :: :ok
-  def allow_sentry_reports(owner_pid, pid_to_allow)
-      when is_pid(owner_pid) and (is_pid(pid_to_allow) or is_function(pid_to_allow, 0)) do
-    case NimbleOwnership.allow(@server, owner_pid, pid_to_allow, @events_key) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        raise "failed to allow #{inspect(pid_to_allow)} to collect events: #{Exception.message(reason)}"
-    end
+  def allow_sentry_reports(_owner_pid, _pid_to_allow) do
+    :ok
   end
 
   @doc """
   Pops all the collected events from the current process.
 
-  This function returns a list of all the events that have been collected from the current
-  process and all the processes that were allowed through it. If the current process
-  is not collecting events, this function raises an error.
-
-  After this function returns, the current process will still be collecting events, but
-  the collected events will be reset to `[]`.
+  Returns a list of all `Sentry.Event` structs that have been collected from the
+  current process and all child processes spawned from it. After this function
+  returns, the collected events are cleared but collection continues.
 
   ## Examples
 
@@ -417,38 +238,15 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec pop_sentry_reports(pid()) :: [Sentry.Event.t()]
   def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
-    result =
-      try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @events_key, fn
-          nil -> {:not_collecting, []}
-          events when is_list(events) -> {events, []}
-        end)
-      catch
-        :exit, {:noproc, _} ->
-          raise ArgumentError, "not collecting reported events from #{inspect(owner_pid)}"
-      end
-
-    case result do
-      {:ok, :not_collecting} ->
-        raise ArgumentError, "not collecting reported events from #{inspect(owner_pid)}"
-
-      {:ok, events} ->
-        events
-
-      {:error, error} when is_exception(error) ->
-        raise ArgumentError, "cannot pop Sentry reports: #{Exception.message(error)}"
-    end
+    pop_by_struct_type(Sentry.Event)
   end
 
   @doc """
   Pops all the collected transactions from the current process.
 
-  This function returns a list of all the transactions that have been collected from the current
-  process and all the processes that were allowed through it. If the current process
-  is not collecting transactions, this function raises an error.
-
-  After this function returns, the current process will still be collecting transactions, but
-  the collected transactions will be reset to `[]`.
+  Returns a list of all `Sentry.Transaction` structs that have been collected.
+  After this function returns, the collected transactions are cleared but
+  collection continues.
 
   ## Examples
 
@@ -462,146 +260,154 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec pop_sentry_transactions(pid()) :: [Sentry.Transaction.t()]
   def pop_sentry_transactions(owner_pid \\ self()) when is_pid(owner_pid) do
-    result =
-      try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @transactions_key, fn
-          nil -> {:not_collecting, []}
-          transactions when is_list(transactions) -> {transactions, []}
-        end)
-      catch
-        :exit, {:noproc, _} ->
-          raise ArgumentError, "not collecting reported transactions from #{inspect(owner_pid)}"
-      end
-
-    case result do
-      {:ok, :not_collecting} ->
-        raise ArgumentError, "not collecting reported transactions from #{inspect(owner_pid)}"
-
-      {:ok, transactions} ->
-        transactions
-
-      {:error, error} when is_exception(error) ->
-        raise ArgumentError, "cannot pop Sentry transactions: #{Exception.message(error)}"
-    end
+    pop_by_struct_type(Sentry.Transaction)
   end
 
   @doc """
   Pops all the collected log events from the current process.
 
-  This function returns a list of all the log events that have been collected from the current
-  process and all the processes that were allowed through it. If the current process
-  is not collecting log events, this function raises an error.
+  Returns a list of all `Sentry.LogEvent` structs that have been collected.
+  After this function returns, the collected log events are cleared but
+  collection continues.
 
-  After this function returns, the current process will still be collecting log events, but
-  the collected log events will be reset to `[]`.
-
-  ## Examples
-
-      iex> Sentry.Test.start_collecting_sentry_reports()
-      :ok
-      iex> log_event = %Sentry.LogEvent{
-      ...>   level: :info,
-      ...>   body: "Test log message",
-      ...>   timestamp: System.system_time(:microsecond) / 1_000_000
-      ...> }
-      iex> Sentry.Test.maybe_collect_logs([log_event])
-      :collected
-      iex> [%Sentry.LogEvent{} = collected] = Sentry.Test.pop_sentry_logs()
-      iex> collected.body
-      "Test log message"
+  > #### Logs are Asynchronous {: .info}
+  >
+  > Log events flow through the `TelemetryProcessor` pipeline asynchronously.
+  > You may need to add a small delay before calling this function to ensure
+  > all log events have been processed by the `before_send_log` callback.
 
   """
   @doc since: "11.0.0"
   @spec pop_sentry_logs(pid()) :: [Sentry.LogEvent.t()]
   def pop_sentry_logs(owner_pid \\ self()) when is_pid(owner_pid) do
-    result =
-      try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @logs_key, fn
-          nil -> {:not_collecting, []}
-          logs when is_list(logs) -> {logs, []}
-        end)
-      catch
-        :exit, {:noproc, _} ->
-          raise ArgumentError, "not collecting reported logs from #{inspect(owner_pid)}"
+    pop_by_struct_type(Sentry.LogEvent)
+  end
+
+  # Private helpers
+
+  defp ensure_bypass_loaded! do
+    unless Code.ensure_loaded?(Bypass) do
+      raise """
+      Bypass is required for Sentry.Test but is not available.
+
+      Add it to your test dependencies in mix.exs:
+
+          {:bypass, "~> 2.0", only: [:test]}
+      """
+    end
+  end
+
+  defp ensure_registry! do
+    ensure_named_table!(@registry_table, [:named_table, :public, :set])
+  end
+
+  defp ensure_named_table!(name, opts) do
+    if :ets.whereis(name) == :undefined do
+      # Spawn a long-lived process to own the table.
+      # ETS tables are destroyed when their owner exits, so we need a process
+      # that outlives individual test processes.
+      spawn(fn ->
+        :ets.new(name, opts)
+        Process.hibernate(Function, :identity, [:ok])
+      end)
+
+      wait_for_table(name)
+    end
+  end
+
+  defp wait_for_table(name) do
+    if :ets.whereis(name) == :undefined do
+      Process.sleep(1)
+      wait_for_table(name)
+    end
+  end
+
+  defp find_collector do
+    pids = [self() | Process.get(:"$callers", [])]
+
+    Enum.find_value(pids, fn pid ->
+      case :ets.lookup(@registry_table, pid) do
+        [{^pid, table}] -> table
+        [] -> nil
       end
+    end)
+  end
 
-    case result do
-      {:ok, :not_collecting} ->
-        raise ArgumentError, "not collecting reported logs from #{inspect(owner_pid)}"
-
-      {:ok, logs} ->
-        logs
-
-      {:error, error} when is_exception(error) ->
-        raise ArgumentError, "cannot pop Sentry logs: #{Exception.message(error)}"
+  defp build_collecting_callback(nil) do
+    fn struct ->
+      collect_struct(struct)
+      struct
     end
   end
 
-  @doc """
-  Pops all the collected metric events from the current process.
+  defp build_collecting_callback(original) when is_function(original, 1) do
+    fn struct ->
+      # Guard on find_collector/0 so that a test-specific callback stored in
+      # :persistent_term is never invoked from an unrelated async test's process.
+      # When a collector IS found, call the original first so user-defined
+      # filtering/modification is applied before we collect the result.
+      case find_collector() do
+        nil ->
+          struct
 
-  This function returns a list of all the metric events that have been collected from the current
-  process and all the processes that were allowed through it. If the current process
-  is not collecting metric events, this function raises an error.
-
-  After this function returns, the current process will still be collecting metric events, but
-  the collected metric events will be reset to `[]`.
-
-  ## Examples
-
-      iex> Sentry.Test.start_collecting_sentry_reports()
-      :ok
-      iex> Sentry.Metrics.count("button.clicks", 1)
-      :ok
-      iex> Sentry.TelemetryProcessor.flush()
-      :ok
-      iex> [%Sentry.Metric{} = metric] = Sentry.Test.pop_sentry_metrics()
-      iex> metric.name
-      "button.clicks"
-
-  """
-  @doc since: "13.0.0"
-  @spec pop_sentry_metrics(pid()) :: [Sentry.Metric.t()]
-  def pop_sentry_metrics(owner_pid \\ self()) when is_pid(owner_pid) do
-    result =
-      try do
-        NimbleOwnership.get_and_update(@server, owner_pid, @metrics_key, fn
-          nil -> {:not_collecting, []}
-          metrics when is_list(metrics) -> {metrics, []}
-        end)
-      catch
-        :exit, {:noproc, _} ->
-          raise ArgumentError, "not collecting reported metrics from #{inspect(owner_pid)}"
+        _table ->
+          result = original.(struct)
+          if not is_nil(result), do: collect_struct(result)
+          result
       end
-
-    case result do
-      {:ok, :not_collecting} ->
-        raise ArgumentError, "not collecting reported metrics from #{inspect(owner_pid)}"
-
-      {:ok, metrics} ->
-        metrics
-
-      {:error, error} when is_exception(error) ->
-        raise ArgumentError, "cannot pop Sentry metrics: #{Exception.message(error)}"
     end
   end
 
-  ## Helpers
+  defp build_collecting_callback({mod, fun}) do
+    fn struct ->
+      case find_collector() do
+        nil ->
+          struct
 
-  defp ensure_ownership_server_started do
-    case Supervisor.start_child(Sentry.Supervisor, NimbleOwnership.child_spec(name: @server)) do
-      {:ok, pid} ->
-        pid
-
-      {:error, {:already_started, pid}} ->
-        pid
-
-      {:error, reason} ->
-        raise "could not start required processes for Sentry.Test: #{inspect(reason)}"
+        _table ->
+          result = apply(mod, fun, [struct])
+          if not is_nil(result), do: collect_struct(result)
+          result
+      end
     end
   end
 
-  defp callers do
-    [self()] ++ Process.get(:"$callers", [])
+  defp collect_struct(struct) do
+    case find_collector() do
+      nil ->
+        :not_collecting
+
+      table ->
+        :ets.insert(table, {System.unique_integer([:monotonic]), struct})
+        :collected
+    end
+  end
+
+  defp pop_by_struct_type(struct_module) do
+    table =
+      Process.get(:sentry_test_collector) ||
+        raise ArgumentError,
+              "not collecting Sentry reports. Call setup_sentry/1 or start_collecting_sentry_reports/0 first."
+
+    # Read all entries, filter by struct type, delete matched entries
+    entries = :ets.tab2list(table)
+
+    {matched, _rest} =
+      Enum.split_with(entries, fn {_key, struct} ->
+        is_struct(struct, struct_module)
+      end)
+
+    # Delete matched entries from ETS
+    for {key, _struct} <- matched do
+      :ets.delete(table, key)
+    end
+
+    # Return structs in insertion order (ordered_set ensures this)
+    Enum.map(matched, fn {_key, struct} -> struct end)
+  end
+
+  defp put_test_config(config) when is_list(config) do
+    Sentry.Test.Config.put(config)
+    :ok
   end
 end
