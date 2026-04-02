@@ -7,9 +7,7 @@ defmodule Sentry.ClientReportTest do
   alias Sentry.Event
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    %{bypass: bypass}
+    setup_bypass()
   end
 
   @span_id Sentry.UUID.uuid4_hex()
@@ -69,7 +67,7 @@ defmodule Sentry.ClientReportTest do
 
       send(Process.whereis(:test_client_report), :send_report)
 
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         assert [{%{"type" => "client_report", "length" => _}, client_report}] =

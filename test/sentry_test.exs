@@ -12,17 +12,13 @@ defmodule SentryTest do
   end
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", dedup_events: false)
-    %{bypass: bypass}
+    setup_bypass(dedup_events: false)
   end
 
   test "excludes events properly", %{bypass: bypass} do
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert body =~ "RuntimeError"
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -48,7 +44,9 @@ defmodule SentryTest do
 
   @tag :capture_log
   test "errors when taking too long to receive response", %{bypass: bypass} do
-    Bypass.expect(bypass, fn _conn -> Process.sleep(:infinity) end)
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn _conn ->
+      Process.sleep(:infinity)
+    end)
 
     put_test_config(finch_request_opts: [receive_timeout: 50])
 
@@ -62,7 +60,7 @@ defmodule SentryTest do
   end
 
   test "sets last_event_id_and_source when an event is sent", %{bypass: bypass} do
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -85,7 +83,7 @@ defmodule SentryTest do
     put_test_config(dedup_events: true)
     message_to_report = "Hello #{System.unique_integer([:positive])}"
 
-    Bypass.expect(bypass, fn conn ->
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
     end)
 
@@ -122,7 +120,7 @@ defmodule SentryTest do
   end
 
   test "raises error with validate_and_ignore/1 in dev mode if opts passed are invalid " do
-    put_test_config(dsn: nil, test_mode: false)
+    put_test_config(dsn: nil)
 
     assert_raise NimbleOptions.ValidationError, fn ->
       NimbleOptions.validate!(
@@ -138,16 +136,10 @@ defmodule SentryTest do
              )
   end
 
-  test "does not send events if :dsn is not configured or nil (if not in test mode)" do
-    put_test_config(dsn: nil, test_mode: false)
+  test "does not send events if :dsn is not configured or nil" do
+    put_test_config(dsn: nil)
     event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
     assert :ignored = Sentry.send_event(event)
-  end
-
-  test "if in test mode, swallows events if the :dsn is nil" do
-    put_test_config(dsn: nil, test_mode: true)
-    event = Sentry.Event.transform_exception(%RuntimeError{message: "oops"}, [])
-    assert {:ok, ""} = Sentry.send_event(event)
   end
 
   describe "send_check_in/1" do
@@ -287,7 +279,7 @@ defmodule SentryTest do
     end
 
     test "ignores transaction when dsn is not configured", %{transaction: transaction} do
-      put_test_config(dsn: nil, test_mode: false)
+      put_test_config(dsn: nil)
 
       assert :ignored = Sentry.send_transaction(transaction)
     end

@@ -11,16 +11,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
   @moduletag :capture_log
 
   setup do
-    bypass = Bypass.open()
-
-    put_test_config(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      enable_logs: true,
-      logs: [level: :info]
-    )
-
-    # TelemetryProcessor is already started by Sentry.Case
-    %{bypass: bypass}
+    setup_bypass(enable_logs: true, logs: [level: :info])
   end
 
   setup :add_logs_handler

@@ -8,8 +8,7 @@ defmodule Sentry.TransportTest do
 
   describe "encode_and_post_envelope/2" do
     setup do
-      bypass = Bypass.open()
-      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      result = setup_bypass()
 
       # Ensure Hackney is started for tests that use HackneyClient
       # Since the default client is now FinchClient, Hackney won't be started automatically
@@ -17,17 +16,14 @@ defmodule Sentry.TransportTest do
         {:ok, _} = Application.ensure_all_started(:hackney)
       end
 
-      %{bypass: bypass}
+      result
     end
 
     test "sends a POST request with the right headers and payload", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello 1"))
 
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        assert conn.method == "POST"
-        assert conn.request_path == "/api/1/envelope/"
 
         assert ["sentry-elixir/" <> _] = Plug.Conn.get_req_header(conn, "user-agent")
         assert [sentry_auth_header] = Plug.Conn.get_req_header(conn, "x-sentry-auth")
