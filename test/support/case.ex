@@ -1,7 +1,8 @@
 defmodule Sentry.Case do
   # We use this module mostly to add some additional checks before and after tests, especially
-  # related to configuration. Configuration is isolated per-process via the process dictionary,
-  # so tests using put_test_config/1 will have their own view without affecting other tests.
+  # related to configuration. Configuration is isolated per-test via `Sentry.Test.Config`, which
+  # stores overrides in `:persistent_term` keyed by the test process PID. Tests using
+  # put_test_config/1 will have their own view without affecting other tests.
 
   use ExUnit.CaseTemplate
 
@@ -43,6 +44,9 @@ defmodule Sentry.Case do
       {Sentry.TelemetryProcessor, name: processor_name},
       id: processor_name
     )
+
+    scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
+    Sentry.Test.Config.allow(self(), scheduler_pid)
 
     Process.put(:sentry_telemetry_processor, processor_name)
     processor_name
