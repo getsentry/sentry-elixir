@@ -11,6 +11,7 @@ defmodule Sentry.Application do
   def start(_type, _opts) do
     config = Config.validate!()
     :ok = Config.persist(config)
+    :ok = Sentry.Test.Config.maybe_activate()
 
     Config.put_config(
       :in_app_module_allow_list,

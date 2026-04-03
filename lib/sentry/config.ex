@@ -464,6 +464,23 @@ defmodule Sentry.Config do
 
       *Available since 12.0.0*.
       """
+    ],
+    namespace: [
+      type: {:custom, __MODULE__, :__validate_namespace__, []},
+      type_doc: "`{module(), atom()}`",
+      default: {Sentry.Config, :namespace},
+      doc: """
+      A `{module, function}` tuple that resolves scoped configuration overrides.
+      The function receives a config key and must return `{:ok, value}` to override
+      the global value, or `:default` to fall back to the global configuration.
+
+      The default resolver (`{Sentry.Config, :namespace}`) always returns `:default`,
+      meaning global configuration is used as-is.
+
+      When `test_mode: true` is enabled, the SDK automatically uses
+      `{Sentry.Test.Config, :namespace}` as the resolver to enable per-test
+      configuration isolation via `Sentry.Test.Config.put/1`.
+      """
     ]
   ]
 
@@ -1072,17 +1089,22 @@ defmodule Sentry.Config do
     Keyword.update!(config, :environment_name, &to_string/1)
   end
 
+  @doc false
+  @spec namespace() :: {module(), atom()}
+  def namespace, do: fetch!(:namespace)
+
+  @doc """
+  Default scope resolver. Always returns `:default`, meaning the global
+  configuration stored in `:persistent_term` is used.
+  """
+  @spec namespace(atom()) :: :default
+  def namespace(_), do: :default
+
   @compile {:inline, fetch!: 1}
   defp fetch!(key) do
-    # Check process dictionary first for test-specific config overrides.
-    # This allows tests to use put_test_config/1 for isolated configuration
-    # without affecting other tests, even when running async: true.
-    case Process.get({:sentry_test_config, key}, :__not_set__) do
-      :__not_set__ ->
-        :persistent_term.get({:sentry_config, key})
-
-      value ->
-        value
+    case resolve(key) do
+      {:ok, value} -> value
+      :default -> :persistent_term.get({:sentry_config, key})
     end
   rescue
     ArgumentError ->
@@ -1095,15 +1117,18 @@ defmodule Sentry.Config do
 
   @compile {:inline, get: 1}
   defp get(key) do
-    # Check process dictionary first for test-specific config overrides.
-    # This allows tests to use put_test_config/1 for isolated configuration
-    # without affecting other tests, even when running async: true.
-    case Process.get({:sentry_test_config, key}, :__not_set__) do
-      :__not_set__ ->
-        :persistent_term.get({:sentry_config, key}, nil)
+    case resolve(key) do
+      {:ok, value} -> value
+      :default -> :persistent_term.get({:sentry_config, key}, nil)
+    end
+  end
 
-      value ->
-        value
+  defp resolve(:namespace), do: :default
+
+  defp resolve(key) do
+    case :persistent_term.get({:sentry_config, :namespace}, nil) do
+      {mod, fun} -> apply(mod, fun, [key])
+      nil -> :default
     end
   end
 
@@ -1230,5 +1255,27 @@ defmodule Sentry.Config do
   def __validate_oban_tags_to_sentry_tags__(other) do
     {:error,
      "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_namespace__({mod, fun}) when is_atom(mod) and is_atom(fun) do
+    case Code.ensure_loaded(mod) do
+      {:module, ^mod} ->
+        if function_exported?(mod, fun, 1) do
+          {:ok, {mod, fun}}
+        else
+          {:error,
+           "namespace resolver #{inspect(mod)}.#{fun}/1 is not exported. " <>
+             "Ensure the module exports a function with arity 1."}
+        end
+
+      {:error, _reason} ->
+        {:error,
+         "namespace resolver module #{inspect(mod)} could not be loaded. " <>
+           "Ensure the module is compiled and available."}
+    end
+  end
+
+  def __validate_namespace__(other) do
+    {:error, "expected :namespace to be a {module, function} tuple, got: #{inspect(other)}"}
   end
 end

@@ -312,6 +312,29 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":namespace with valid resolver" do
+      assert Config.validate!(namespace: {Sentry.Config, :namespace})[:namespace] ==
+               {Sentry.Config, :namespace}
+    end
+
+    test ":namespace with non-existent module" do
+      assert_raise ArgumentError, ~r/could not be loaded/, fn ->
+        Config.validate!(namespace: {NonExistentModule, :resolve})
+      end
+    end
+
+    test ":namespace with module that doesn't export the function" do
+      assert_raise ArgumentError, ~r/is not exported/, fn ->
+        Config.validate!(namespace: {Sentry.Config, :non_existent_function})
+      end
+    end
+
+    test ":namespace with invalid value" do
+      assert_raise ArgumentError, ~r/invalid value for :namespace option/, fn ->
+        Config.validate!(namespace: :not_a_tuple)
+      end
+    end
+
     test ":telemetry_scheduler_weights" do
       # Default value is empty map
       assert Config.validate!([])[:telemetry_scheduler_weights] == %{}
