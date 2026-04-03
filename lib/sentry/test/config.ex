@@ -195,12 +195,22 @@ defmodule Sentry.Test.Config do
   end
 
   defp register_scope(pid) do
+    already_registered? = :persistent_term.get({:sentry_test_config_scope, pid}, false)
     :persistent_term.put({:sentry_test_config_scope, pid}, true)
-    :counters.add(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
+
+    unless already_registered? do
+      :counters.add(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
+    end
   end
 
   defp unregister_scope(pid) do
-    :persistent_term.erase({:sentry_test_config_scope, pid})
-    :counters.sub(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
+    case :persistent_term.get({:sentry_test_config_scope, pid}, false) do
+      true ->
+        :persistent_term.erase({:sentry_test_config_scope, pid})
+        :counters.sub(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
+
+      false ->
+        :ok
+    end
   end
 end
