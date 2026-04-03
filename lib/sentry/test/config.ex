@@ -172,7 +172,6 @@ defmodule Sentry.Test.Config do
           Process.alive?(pid),
           value = :persistent_term.get({:sentry_config, pid, key}, :__not_set__),
           value != :__not_set__,
-          uniq: true,
           do: value
 
     case overrides do

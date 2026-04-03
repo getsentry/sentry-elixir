@@ -1126,8 +1126,10 @@ defmodule Sentry.Config do
   defp resolve(:namespace), do: :default
 
   defp resolve(key) do
-    {mod, fun} = :persistent_term.get({:sentry_config, :namespace})
-    apply(mod, fun, [key])
+    case :persistent_term.get({:sentry_config, :namespace}, nil) do
+      {mod, fun} -> apply(mod, fun, [key])
+      nil -> :default
+    end
   end
 
   def __validate_path__(nil), do: {:ok, nil}
