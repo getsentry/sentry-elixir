@@ -40,6 +40,7 @@ defmodule Sentry.Test.Config do
   def maybe_activate do
     if Sentry.Config.test_mode?() and Sentry.Config.namespace() == {Sentry.Config, :namespace} do
       :persistent_term.put({:sentry_config, :namespace}, {__MODULE__, :namespace})
+      :persistent_term.put(:sentry_test_config_scope_counter, :counters.new(1, [:atomics]))
     end
 
     :ok
@@ -167,7 +168,9 @@ defmodule Sentry.Test.Config do
   end
 
   defp resolve_from_active_scopes(key) do
-    if :persistent_term.get(:sentry_test_config_scope_count, 0) == 0 do
+    # Short-circuit when no test scopes are registered to avoid scanning
+    # all persistent terms via :persistent_term.get() on every config read.
+    if scope_count() == 0 do
       :default
     else
       overrides =
@@ -184,15 +187,20 @@ defmodule Sentry.Test.Config do
     end
   end
 
+  defp scope_count do
+    case :persistent_term.get(:sentry_test_config_scope_counter, nil) do
+      nil -> 0
+      ref -> :counters.get(ref, 1)
+    end
+  end
+
   defp register_scope(pid) do
     :persistent_term.put({:sentry_test_config_scope, pid}, true)
-    count = :persistent_term.get(:sentry_test_config_scope_count, 0)
-    :persistent_term.put(:sentry_test_config_scope_count, count + 1)
+    :counters.add(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
   end
 
   defp unregister_scope(pid) do
     :persistent_term.erase({:sentry_test_config_scope, pid})
-    count = :persistent_term.get(:sentry_test_config_scope_count, 0)
-    :persistent_term.put(:sentry_test_config_scope_count, max(count - 1, 0))
+    :counters.sub(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
   end
 end
