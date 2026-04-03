@@ -167,24 +167,32 @@ defmodule Sentry.Test.Config do
   end
 
   defp resolve_from_active_scopes(key) do
-    overrides =
-      for {{:sentry_test_config_scope, pid}, true} <- :persistent_term.get(),
-          Process.alive?(pid),
-          value = :persistent_term.get({:sentry_config, pid, key}, :__not_set__),
-          value != :__not_set__,
-          do: value
+    if :persistent_term.get(:sentry_test_config_scope_count, 0) == 0 do
+      :default
+    else
+      overrides =
+        for {{:sentry_test_config_scope, pid}, true} <- :persistent_term.get(),
+            Process.alive?(pid),
+            value = :persistent_term.get({:sentry_config, pid, key}, :__not_set__),
+            value != :__not_set__,
+            do: value
 
-    case overrides do
-      [single_value] -> {:ok, single_value}
-      _zero_or_ambiguous -> :default
+      case overrides do
+        [single_value] -> {:ok, single_value}
+        _zero_or_ambiguous -> :default
+      end
     end
   end
 
   defp register_scope(pid) do
     :persistent_term.put({:sentry_test_config_scope, pid}, true)
+    count = :persistent_term.get(:sentry_test_config_scope_count, 0)
+    :persistent_term.put(:sentry_test_config_scope_count, count + 1)
   end
 
   defp unregister_scope(pid) do
     :persistent_term.erase({:sentry_test_config_scope, pid})
+    count = :persistent_term.get(:sentry_test_config_scope_count, 0)
+    :persistent_term.put(:sentry_test_config_scope_count, max(count - 1, 0))
   end
 end
