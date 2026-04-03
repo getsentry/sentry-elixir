@@ -8,7 +8,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   alias Sentry.{LogEvent, Metric, Transaction}
 
   setup context do
-    bypass = Bypass.open()
+    %{bypass: bypass} = setup_bypass()
     test_pid = self()
     ref = make_ref()
 
@@ -29,7 +29,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     )
 
     Process.put(:sentry_telemetry_processor, processor_name)
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
 
     %{processor: processor_name, ref: ref, bypass: bypass}
   end

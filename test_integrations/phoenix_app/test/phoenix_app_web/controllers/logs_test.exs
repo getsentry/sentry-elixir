@@ -11,94 +11,129 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
       Logger.configure(level: original_level)
     end)
 
-    put_test_config(dsn: "http://public:secret@localhost:8080/1", enable_logs: true)
+    %{bypass: bypass} = setup_bypass(enable_logs: true)
 
-    Sentry.Test.start_collecting_sentry_reports()
-
-    _ = Sentry.Test.pop_sentry_logs()
-
-    :ok
+    %{bypass: bypass}
   end
 
   describe "structured logging from HTTP requests" do
-    test "GET /logs captures logs with trace context", %{conn: conn} do
+    test "GET /logs captures logs with trace context", %{conn: conn, bypass: bypass} do
+      ref = setup_bypass_envelope_collector(bypass)
+
       conn = get(conn, ~p"/logs")
 
       assert json_response(conn, 200)["message"] ==
                "Logs demo completed - check your Sentry logs!"
 
-      logs = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads = extract_log_items(envelopes)
+      logs = Enum.flat_map(log_payloads, fn payload -> payload["items"] end)
 
       app_logs = filter_app_logs(logs)
       assert length(app_logs) >= 4
 
       for log <- app_logs do
-        assert is_binary(log.trace_id)
-        assert String.length(log.trace_id) == 32
+        assert is_binary(log["trace_id"])
+        assert String.length(log["trace_id"]) == 32
       end
 
-      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
+      traced_logs = Enum.filter(app_logs, &(&1["span_id"] != nil))
       assert length(traced_logs) >= 2
 
-      log_bodies = Enum.map(app_logs, & &1.body)
+      log_bodies = Enum.map(app_logs, & &1["body"])
       assert Enum.any?(log_bodies, &String.contains?(&1, "User session started"))
       assert Enum.any?(log_bodies, &String.contains?(&1, "Inside traced span"))
       assert Enum.any?(log_bodies, &String.contains?(&1, "Database query completed"))
     end
 
-    test "GET /logs app logs share trace_id within same request", %{conn: conn} do
+    test "GET /logs app logs share trace_id within same request", %{conn: conn, bypass: bypass} do
+      ref = setup_bypass_envelope_collector(bypass)
+
       get(conn, ~p"/logs")
 
-      logs = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads = extract_log_items(envelopes)
+      logs = Enum.flat_map(log_payloads, fn payload -> payload["items"] end)
+
       app_logs = filter_app_logs(logs)
 
       assert length(app_logs) >= 2
 
-      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
-      trace_ids = traced_logs |> Enum.map(& &1.trace_id) |> Enum.uniq()
+      traced_logs = Enum.filter(app_logs, &(&1["span_id"] != nil))
+      trace_ids = traced_logs |> Enum.map(& &1["trace_id"]) |> Enum.uniq()
       assert length(trace_ids) == 1
     end
 
-    test "GET /logs captures logs at different levels", %{conn: conn} do
+    test "GET /logs captures logs at different levels", %{conn: conn, bypass: bypass} do
+      ref = setup_bypass_envelope_collector(bypass)
+
       get(conn, ~p"/logs")
 
-      logs = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads = extract_log_items(envelopes)
+      logs = Enum.flat_map(log_payloads, fn payload -> payload["items"] end)
+
       app_logs = filter_app_logs(logs)
 
-      levels = Enum.map(app_logs, & &1.level) |> Enum.uniq()
+      levels = Enum.map(app_logs, & &1["level"]) |> Enum.uniq()
 
-      assert :info in levels
-      assert :warn in levels
-      assert :error in levels
+      assert "info" in levels
+      assert "warn" in levels
+      assert "error" in levels
     end
 
-    test "GET /logs logs have proper span hierarchy", %{conn: conn} do
+    test "GET /logs logs have proper span hierarchy", %{conn: conn, bypass: bypass} do
+      ref = setup_bypass_envelope_collector(bypass)
+
       get(conn, ~p"/logs")
 
-      logs = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads = extract_log_items(envelopes)
+      logs = Enum.flat_map(log_payloads, fn payload -> payload["items"] end)
+
       app_logs = filter_app_logs(logs)
 
-      traced_logs = Enum.filter(app_logs, &(&1.span_id != nil))
+      traced_logs = Enum.filter(app_logs, &(&1["span_id"] != nil))
 
-      span_ids = traced_logs |> Enum.map(& &1.span_id) |> Enum.uniq()
+      span_ids = traced_logs |> Enum.map(& &1["span_id"]) |> Enum.uniq()
 
       assert length(span_ids) >= 2
     end
 
-    test "separate requests have different trace_ids", %{conn: conn} do
-      get(conn, ~p"/logs")
-      logs1 = Sentry.Test.pop_sentry_logs()
-      app_logs1 = filter_app_logs(logs1)
+    test "separate requests have different trace_ids", %{conn: conn, bypass: bypass} do
+      ref = setup_bypass_envelope_collector(bypass)
 
       get(conn, ~p"/logs")
-      logs2 = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes1 = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads1 = extract_log_items(envelopes1)
+      logs1 = Enum.flat_map(log_payloads1, fn payload -> payload["items"] end)
+      app_logs1 = filter_app_logs(logs1)
+
+      ref2 = setup_bypass_envelope_collector(bypass)
+
+      get(conn, ~p"/logs")
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes2 = collect_envelopes(ref2, 10, timeout: 2000)
+      log_payloads2 = extract_log_items(envelopes2)
+      logs2 = Enum.flat_map(log_payloads2, fn payload -> payload["items"] end)
       app_logs2 = filter_app_logs(logs2)
 
       assert length(app_logs1) >= 1
       assert length(app_logs2) >= 1
 
-      trace_id_1 = hd(app_logs1).trace_id
-      trace_id_2 = hd(app_logs2).trace_id
+      trace_id_1 = hd(app_logs1)["trace_id"]
+      trace_id_2 = hd(app_logs2)["trace_id"]
 
       assert trace_id_1 != trace_id_2
     end
@@ -106,45 +141,44 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
 
   describe "structured logging with complex metadata" do
     test "GET /logs-with-structs safely serializes struct attributes for JSON encoding", %{
-      conn: conn
+      conn: conn,
+      bypass: bypass
     } do
       put_test_config(logs: [level: :info, excluded_domains: [:cowboy, :ranch], metadata: :all])
 
+      ref = setup_bypass_envelope_collector(bypass)
+
       get(conn, ~p"/logs-with-structs")
 
-      logs = Sentry.Test.pop_sentry_logs()
+      Sentry.TelemetryProcessor.flush()
+
+      envelopes = collect_envelopes(ref, 10, timeout: 2000)
+      log_payloads = extract_log_items(envelopes)
+      logs = Enum.flat_map(log_payloads, fn payload -> payload["items"] end)
 
       struct_log =
         Enum.find(logs, fn log ->
-          String.contains?(log.body, "Log with struct metadata")
+          String.contains?(log["body"], "Log with struct metadata")
         end)
 
       assert struct_log != nil
 
-      log_map = Sentry.LogEvent.to_map(struct_log)
-      attrs = log_map.attributes
+      attrs = struct_log["attributes"]
 
-      assert %{type: "string", value: uri_value} = attrs["uri"]
+      assert %{"type" => "string", "value" => uri_value} = attrs["uri"]
       assert uri_value == inspect(URI.parse("https://example.com/path"))
 
-      assert %{type: "string", value: conn_value} = attrs["conn_info"]
+      assert %{"type" => "string", "value" => conn_value} = attrs["conn_info"]
       assert conn_value =~ "method"
 
-      assert %{type: "string", value: tags_value} = attrs["tags"]
+      assert %{"type" => "string", "value" => tags_value} = attrs["tags"]
       assert tags_value == "[:web, :test]"
-
-      assert {:ok, json} = Sentry.JSON.encode(log_map, Sentry.Config.json_library())
-      assert is_binary(json)
-
-      assert {:ok, decoded} = Sentry.JSON.decode(json, Sentry.Config.json_library())
-      assert decoded["attributes"]["uri"]["value"] == uri_value
-      assert decoded["attributes"]["tags"]["value"] == "[:web, :test]"
     end
   end
 
   defp filter_app_logs(logs) do
     Enum.filter(logs, fn log ->
-      body = log.body
+      body = log["body"]
 
       String.contains?(body, "User session started") or
         String.contains?(body, "Processing user request") or

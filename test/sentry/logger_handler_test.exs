@@ -687,17 +687,10 @@ defmodule Sentry.LoggerHandlerTest do
   end
 
   defp register_delay do
-    bypass = Bypass.open()
+    %{bypass: bypass} =
+      setup_bypass(dedup_events: false, finch_request_opts: [receive_timeout: 500])
 
-    put_test_config(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      dedup_events: false,
-      finch_request_opts: [receive_timeout: 500]
-    )
-
-    Bypass.expect(bypass, fn conn ->
-      assert conn.request_path == "/api/1/envelope/"
-      assert conn.method == "POST"
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
       Process.sleep(150)
       Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
     end)

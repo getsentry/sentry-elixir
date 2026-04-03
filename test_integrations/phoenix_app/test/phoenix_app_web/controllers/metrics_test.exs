@@ -5,14 +5,7 @@ defmodule Sentry.Integrations.Phoenix.MetricsTest do
 
   setup do
     bypass = Bypass.open()
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {ref, body})
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+    ref = setup_bypass_envelope_collector(bypass)
 
     put_test_config(
       dsn: "http://public:secret@localhost:#{bypass.port}/1",
@@ -100,25 +93,10 @@ defmodule Sentry.Integrations.Phoenix.MetricsTest do
     end
   end
 
-  # Collect envelope bodies from Bypass
-  defp collect_envelopes(ref, expected) do
-    collect_envelopes(ref, expected, [])
-  end
-
-  defp collect_envelopes(_ref, 0, acc), do: Enum.reverse(acc)
-
-  defp collect_envelopes(ref, remaining, acc) do
-    receive do
-      {^ref, body} -> collect_envelopes(ref, remaining - 1, [body | acc])
-    after
-      2000 -> Enum.reverse(acc)
-    end
-  end
-
-  # Decode envelopes and extract the metric items
+  # Extract metric items from collected envelopes (already decoded by collect_envelopes/2)
   defp extract_metrics(envelopes) do
     envelopes
-    |> Enum.flat_map(&decode_envelope!/1)
+    |> List.flatten()
     |> Enum.filter(fn {header, _payload} -> header["type"] == "trace_metric" end)
     |> Enum.flat_map(fn {_header, %{"items" => items}} -> items end)
   end

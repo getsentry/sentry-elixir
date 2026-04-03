@@ -179,8 +179,6 @@ defmodule Sentry.Config do
       doc: """
       The DSN for your Sentry project. If this is not set, Sentry will not be enabled.
       If the `SENTRY_DSN` environment variable is set, it will be used as the default value.
-      If `:test_mode` is `true`, the `:dsn` option is sometimes ignored; see `Sentry.Test`
-      for more information.
       """
     ],
     environment_name: [
@@ -369,10 +367,13 @@ defmodule Sentry.Config do
       type: :boolean,
       default: false,
       doc: """
-      Whether to enable *test mode*. When test mode is enabled, the SDK will check whether
-      there is a process **collecting events** and avoid sending those events if that's the
-      case. This is useful for testing—see `Sentry.Test`. `:test_mode` works in tandem
-      with `:dsn`; this is described in detail in `Sentry.Test`.
+      Whether to enable *test mode*.
+
+      > #### Deprecated {: .warning}
+      >
+      > This option is deprecated and will be removed in v13.0.0. The new `Sentry.Test`
+      > module uses Bypass-based HTTP testing and works regardless of this setting.
+      > See `Sentry.Test` for the updated testing guide.
       """
     ],
     integrations: [
@@ -932,9 +933,6 @@ defmodule Sentry.Config do
   @spec send_client_reports?() :: boolean()
   def send_client_reports?, do: fetch!(:send_client_reports)
 
-  @spec test_mode?() :: boolean()
-  def test_mode?, do: fetch!(:test_mode)
-
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)
 
@@ -943,6 +941,10 @@ defmodule Sentry.Config do
     (Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
        not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
   end
+
+  @doc deprecated: "Use Sentry.Test instead. This option will be removed in v13.0.0."
+  @spec test_mode?() :: boolean()
+  def test_mode?, do: fetch!(:test_mode)
 
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
