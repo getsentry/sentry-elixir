@@ -35,6 +35,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           carrier = setter.(@sentry_trace_key, sentry_trace_header, carrier)
 
           baggage_value = :otel_ctx.get_value(ctx, @sentry_baggage_ctx_key, :not_found)
+          baggage_value = ensure_org_id_in_baggage(baggage_value)
 
           if is_binary(baggage_value) and baggage_value != :not_found do
             setter.(@sentry_baggage_key, baggage_value, carrier)
@@ -56,19 +57,27 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         header when is_binary(header) ->
           case decode_sentry_trace(header) do
             {:ok, {trace_hex, span_hex, sampled}} ->
-              ctx =
+              raw_baggage = getter.(@sentry_baggage_key, carrier)
+
+              if should_continue_trace?(raw_baggage) do
+                ctx =
+                  ctx
+                  |> :otel_ctx.set_value(@sentry_trace_ctx_key, {trace_hex, span_hex, sampled})
+                  |> maybe_set_baggage(raw_baggage)
+
+                trace_id = hex_to_int(trace_hex)
+                span_id = hex_to_int(span_hex)
+
+                # Create a remote, sampled parent span in the OTEL context.
+                # We will set to "always sample" because Sentry will decide real sampling
+                remote_span_ctx = :otel_tracer.from_remote_span(trace_id, span_id, 1)
+
+                Tracer.set_current_span(ctx, remote_span_ctx)
+              else
+                require Logger
+                Logger.debug("[Sentry] Not continuing trace due to org ID mismatch")
                 ctx
-                |> :otel_ctx.set_value(@sentry_trace_ctx_key, {trace_hex, span_hex, sampled})
-                |> maybe_set_baggage(getter.(@sentry_baggage_key, carrier))
-
-              trace_id = hex_to_int(trace_hex)
-              span_id = hex_to_int(span_hex)
-
-              # Create a remote, sampled parent span in the OTEL context.
-              # We will set to "always sample" because Sentry will decide real sampling
-              remote_span_ctx = :otel_tracer.from_remote_span(trace_id, span_id, 1)
-
-              Tracer.set_current_span(ctx, remote_span_ctx)
+              end
 
             {:error, _reason} ->
               ctx
@@ -130,6 +139,66 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp bin_pad_left(bin, total_bytes) do
       missing = total_bytes - byte_size(bin)
       if missing > 0, do: :binary.copy(<<0>>, missing) <> bin, else: bin
+    end
+
+    # Ensure sentry-org_id is present in the baggage string
+    defp ensure_org_id_in_baggage(baggage) when is_binary(baggage) do
+      org_id = Sentry.Config.effective_org_id()
+
+      if org_id != nil and not String.contains?(baggage, "sentry-org_id=") do
+        baggage <> ",sentry-org_id=" <> org_id
+      else
+        baggage
+      end
+    end
+
+    defp ensure_org_id_in_baggage(_baggage) do
+      case Sentry.Config.effective_org_id() do
+        nil -> :not_found
+        org_id -> "sentry-org_id=" <> org_id
+      end
+    end
+
+    # Extract sentry-org_id from a baggage header string
+    defp extract_baggage_org_id(baggage) when is_binary(baggage) do
+      baggage
+      |> String.split(",")
+      |> Enum.find_value(fn entry ->
+        case String.split(String.trim(entry), "=", parts: 2) do
+          ["sentry-org_id", value] ->
+            trimmed = String.trim(value)
+            if trimmed == "", do: nil, else: trimmed
+
+          _ ->
+            nil
+        end
+      end)
+    end
+
+    defp extract_baggage_org_id(_), do: nil
+
+    # Determine whether to continue an incoming trace based on org_id validation
+    @doc false
+    def should_continue_trace?(raw_baggage) do
+      sdk_org_id = Sentry.Config.effective_org_id()
+      baggage_org_id = extract_baggage_org_id(raw_baggage)
+      strict = Sentry.Config.strict_trace_continuation?()
+
+      cond do
+        # Mismatched org IDs always reject
+        sdk_org_id != nil and baggage_org_id != nil and sdk_org_id != baggage_org_id ->
+          false
+
+        # In strict mode, both must be present and match (unless both are missing)
+        strict and sdk_org_id == nil and baggage_org_id == nil ->
+          true
+
+        strict ->
+          sdk_org_id != nil and sdk_org_id == baggage_org_id
+
+        true ->
+          true
+      end
     end
   end
 end

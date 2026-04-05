@@ -5,14 +5,16 @@ defmodule Sentry.DSN do
           original_dsn: String.t(),
           endpoint_uri: String.t(),
           public_key: String.t(),
-          secret_key: String.t() | nil
+          secret_key: String.t() | nil,
+          org_id: String.t() | nil
         }
 
   defstruct [
     :original_dsn,
     :endpoint_uri,
     :public_key,
-    :secret_key
+    :secret_key,
+    :org_id
   ]
 
   # {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
@@ -65,7 +67,8 @@ defmodule Sentry.DSN do
         endpoint_uri: URI.to_string(endpoint_uri),
         public_key: public_key,
         secret_key: secret_key,
-        original_dsn: dsn
+        original_dsn: dsn,
+        org_id: extract_org_id(uri.host)
       }
 
       {:ok, parsed_dsn}
@@ -79,6 +82,16 @@ defmodule Sentry.DSN do
   end
 
   ## Helpers
+
+  # Extract org ID from host (e.g., "o123.ingest.sentry.io" -> "123")
+  defp extract_org_id(host) when is_binary(host) do
+    case Regex.run(~r/^o(\d+)\./, host) do
+      [_, org_id] -> org_id
+      _ -> nil
+    end
+  end
+
+  defp extract_org_id(_host), do: nil
 
   defp pop_project_id(uri_path) do
     path = String.split(uri_path, "/")
