@@ -439,7 +439,11 @@ defmodule Sentry.Test do
 
   defp build_collecting_callback(nil) do
     fn struct ->
-      collect_struct(struct)
+      case find_collector() do
+        nil -> :ok
+        table -> collect_struct(table, struct)
+      end
+
       struct
     end
   end
@@ -458,23 +462,16 @@ defmodule Sentry.Test do
         nil ->
           struct
 
-        _table ->
+        table ->
           result = original.(struct)
-          unless is_nil(result), do: collect_struct(result)
+          unless is_nil(result), do: collect_struct(table, result)
           result
       end
     end
   end
 
-  defp collect_struct(struct) do
-    case find_collector() do
-      nil ->
-        :not_collecting
-
-      table ->
-        :ets.insert(table, {System.unique_integer([:monotonic]), struct})
-        :collected
-    end
+  defp collect_struct(table, struct) do
+    :ets.insert(table, {System.unique_integer([:monotonic]), struct})
   end
 
   defp pop_by_struct_type(struct_module) do
