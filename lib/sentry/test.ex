@@ -298,9 +298,7 @@ defmodule Sentry.Test do
 
   @doc false
   def ensure_registry! do
-    if :ets.whereis(@registry_table) == :undefined do
-      :ets.new(@registry_table, [:named_table, :public, :set])
-    end
+    :ets.new(@registry_table, [:named_table, :public, :set])
   end
 
   defp find_collector do
