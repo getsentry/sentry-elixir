@@ -282,6 +282,131 @@ defmodule Sentry.Test do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
+  # Bypass envelope helpers
+
+  @doc """
+  Sets up a Bypass envelope collector that forwards envelope bodies
+  to the test process as messages.
+
+  Uses `Bypass.stub` (not `Bypass.expect`) to be resilient to stray requests
+  from background processes (e.g., OpenTelemetry span processor).
+
+  Use with `collect_envelopes/3` to retrieve the decoded envelopes.
+
+  ## Options
+
+    * `:type` - when set, only envelopes containing an item of this type
+      (e.g., `"event"`, `"transaction"`, `"log"`) are forwarded to the test
+      process. Envelopes not matching the type are silently dropped.
+
+  """
+  @doc since: "12.1.0"
+  @spec setup_bypass_envelope_collector(term(), keyword()) :: reference()
+  def setup_bypass_envelope_collector(bypass, opts \\ []) do
+    test_pid = self()
+    ref = make_ref()
+    type_filter = Keyword.get(opts, :type)
+
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      if is_nil(type_filter) or body =~ ~s("type":"#{type_filter}") do
+        send(test_pid, {:bypass_envelope, ref, body})
+      end
+
+      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+    end)
+
+    ref
+  end
+
+  @doc """
+  Collects decoded envelopes sent to a Bypass collector.
+
+  Returns a list of decoded envelope item lists. Each element is the result
+  of `decode_envelope!/1` for one HTTP request.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  """
+  @doc since: "12.1.0"
+  @spec collect_envelopes(reference(), pos_integer(), keyword()) :: [[{map(), map()}]]
+  def collect_envelopes(ref, expected_count, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 1000)
+    do_collect_envelopes(ref, expected_count, [], timeout)
+  end
+
+  defp do_collect_envelopes(_ref, 0, acc, _timeout), do: Enum.reverse(acc)
+
+  defp do_collect_envelopes(ref, remaining, acc, timeout) do
+    receive do
+      {:bypass_envelope, ^ref, body} ->
+        items = decode_envelope!(body)
+        do_collect_envelopes(ref, remaining - 1, [items | acc], timeout)
+    after
+      timeout ->
+        Enum.reverse(acc)
+    end
+  end
+
+  @doc """
+  Extracts event payloads from decoded envelope item lists.
+  """
+  @doc since: "12.1.0"
+  @spec extract_events([[{map(), map()}]]) :: [map()]
+  def extract_events(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "event"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Extracts transaction payloads from decoded envelope item lists.
+  """
+  @doc since: "12.1.0"
+  @spec extract_transactions([[{map(), map()}]]) :: [map()]
+  def extract_transactions(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "transaction"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Extracts log item payloads from decoded envelope item lists.
+  """
+  @doc since: "12.1.0"
+  @spec extract_log_items([[{map(), map()}]]) :: [map()]
+  def extract_log_items(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "log"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Decodes a raw envelope binary into a list of `{header, item}` tuples.
+  """
+  @doc since: "12.1.0"
+  @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
+  def decode_envelope!(binary) do
+    json_library = Sentry.Config.json_library()
+    [id_line | rest] = String.split(binary, "\n")
+    {:ok, %{"event_id" => _}} = Sentry.JSON.decode(id_line, json_library)
+
+    rest
+    |> Enum.chunk_every(2)
+    |> Enum.flat_map(fn
+      [header, item] ->
+        {:ok, decoded_header} = Sentry.JSON.decode(header, json_library)
+        {:ok, decoded_item} = Sentry.JSON.decode(item, json_library)
+        [{decoded_header, decoded_item}]
+
+      [""] ->
+        []
+    end)
+  end
+
   # Private helpers
 
   defp ensure_bypass_loaded! do
