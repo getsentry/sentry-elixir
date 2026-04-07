@@ -444,6 +444,10 @@ defmodule Sentry.Test do
     end
   end
 
+  defp build_collecting_callback({mod, fun}) do
+    build_collecting_callback(Function.capture(mod, fun, 1))
+  end
+
   defp build_collecting_callback(original) when is_function(original, 1) do
     fn struct ->
       # Guard on find_collector/0 so that a test-specific callback stored in
@@ -456,21 +460,7 @@ defmodule Sentry.Test do
 
         _table ->
           result = original.(struct)
-          if not is_nil(result), do: collect_struct(result)
-          result
-      end
-    end
-  end
-
-  defp build_collecting_callback({mod, fun}) do
-    fn struct ->
-      case find_collector() do
-        nil ->
-          struct
-
-        _table ->
-          result = apply(mod, fun, [struct])
-          if not is_nil(result), do: collect_struct(result)
+          unless is_nil(result), do: collect_struct(result)
           result
       end
     end
