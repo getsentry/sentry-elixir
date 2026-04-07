@@ -369,11 +369,10 @@ defmodule Sentry.Config do
       doc: """
       Whether to enable *test mode*.
 
-      > #### Deprecated {: .warning}
-      >
-      > This option is deprecated and will be removed in v13.0.0. The new `Sentry.Test`
-      > module uses Bypass-based HTTP testing and works regardless of this setting.
-      > See `Sentry.Test` for the updated testing guide.
+      When `test_mode: true` is set, the SDK automatically activates per-test
+      configuration isolation and ensures the test registry is started at
+      application boot. See `Sentry.Test` for the full testing guide.
+      *Available since v10.8.0*.
       """
     ],
     integrations: [
