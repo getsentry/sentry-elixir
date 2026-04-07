@@ -184,5 +184,30 @@ defmodule Sentry.TestTest do
       # And the event should still be collected
       assert [%Sentry.Event{}] = SentryTest.pop_sentry_reports()
     end
+
+    test "does not collect event when before_send returns nil" do
+      SentryTest.setup_sentry(
+        before_send: fn _event -> nil end
+      )
+
+      assert :excluded = Sentry.capture_message("dropped", result: :sync)
+
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "wraps {module, function} callback" do
+      defmodule BeforeSendMFA do
+        def callback(event) do
+          %{event | fingerprint: ["custom"]}
+        end
+      end
+
+      SentryTest.setup_sentry(before_send: {BeforeSendMFA, :callback})
+
+      assert {:ok, _} = Sentry.capture_message("mfa test", result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.fingerprint == ["custom"]
+    end
   end
 end
