@@ -12,6 +12,7 @@ defmodule Sentry.Application do
     config = Config.validate!()
     :ok = Config.persist(config)
     :ok = Sentry.Test.Config.maybe_activate()
+    if Config.test_mode?(), do: Sentry.Test.ensure_registry!()
 
     Config.put_config(
       :in_app_module_allow_list,

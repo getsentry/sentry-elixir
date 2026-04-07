@@ -82,7 +82,6 @@ defmodule Sentry.Test do
   @spec setup_sentry(keyword()) :: %{bypass: term()}
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
-    ensure_registry!()
 
     # Create a unique collector ETS table for this test
     uid = System.unique_integer([:positive])
@@ -297,28 +296,29 @@ defmodule Sentry.Test do
     end
   end
 
-  defp ensure_registry! do
-    ensure_named_table!(@registry_table, [:named_table, :public, :set])
-  end
-
-  defp ensure_named_table!(name, opts) do
-    if :ets.whereis(name) == :undefined do
+  @doc false
+  def ensure_registry! do
+    if :ets.whereis(@registry_table) == :undefined do
       # Spawn a long-lived process to own the table.
       # ETS tables are destroyed when their owner exits, so we need a process
       # that outlives individual test processes.
       spawn(fn ->
-        :ets.new(name, opts)
+        :ets.new(@registry_table, [:named_table, :public, :set])
         Process.hibernate(Function, :identity, [:ok])
       end)
 
-      wait_for_table(name)
+      wait_for_table(@registry_table)
     end
   end
 
-  defp wait_for_table(name) do
+  defp wait_for_table(name, attempts \\ 0) do
     if :ets.whereis(name) == :undefined do
+      if attempts >= 1000 do
+        raise "Sentry.Test: timed out waiting for ETS table #{inspect(name)} to be created"
+      end
+
       Process.sleep(1)
-      wait_for_table(name)
+      wait_for_table(name, attempts + 1)
     end
   end
 
