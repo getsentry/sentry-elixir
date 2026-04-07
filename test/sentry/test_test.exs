@@ -186,9 +186,7 @@ defmodule Sentry.TestTest do
     end
 
     test "does not collect event when before_send returns nil" do
-      SentryTest.setup_sentry(
-        before_send: fn _event -> nil end
-      )
+      SentryTest.setup_sentry(before_send: fn _event -> nil end)
 
       assert :excluded = Sentry.capture_message("dropped", result: :sync)
 
