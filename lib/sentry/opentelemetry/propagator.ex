@@ -10,6 +10,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     import Bitwise
 
     require Record
+    require Logger
     require OpenTelemetry.Tracer, as: Tracer
 
     @behaviour :otel_propagator_text_map
@@ -74,8 +75,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
                 Tracer.set_current_span(ctx, remote_span_ctx)
               else
-                require Logger
-                Logger.debug("[Sentry] Not continuing trace due to org ID mismatch")
+                sdk_org_id = Sentry.Config.effective_org_id()
+                baggage_org_id = extract_baggage_org_id(raw_baggage)
+
+                Logger.warning(
+                  "[Sentry] Not continuing trace due to org ID mismatch (sdk: #{sdk_org_id}, incoming: #{baggage_org_id})"
+                )
+
                 ctx
               end
 
@@ -145,7 +151,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp ensure_org_id_in_baggage(baggage) when is_binary(baggage) do
       org_id = Sentry.Config.effective_org_id()
 
-      if org_id != nil and not String.contains?(baggage, "sentry-org_id=") do
+      if org_id != nil and extract_baggage_org_id(baggage) == nil do
         baggage <> ",sentry-org_id=" <> org_id
       else
         baggage
