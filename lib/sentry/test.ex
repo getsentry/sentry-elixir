@@ -223,6 +223,9 @@ defmodule Sentry.Test do
   current process and all child processes spawned from it. After this function
   returns, the collected events are cleared but collection continues.
 
+  The `owner_pid` parameter is deprecated and ignored — child processes are now
+  automatically tracked via `$callers`. Always call this function without arguments.
+
   ## Examples
 
       iex> Sentry.Test.start_collecting_sentry_reports()
@@ -236,7 +239,7 @@ defmodule Sentry.Test do
   """
   @doc since: "10.2.0"
   @spec pop_sentry_reports(pid()) :: [Sentry.Event.t()]
-  def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
+  def pop_sentry_reports(_owner_pid \\ self()) do
     pop_by_struct_type(Sentry.Event)
   end
 
@@ -258,7 +261,7 @@ defmodule Sentry.Test do
   """
   @doc since: "10.2.0"
   @spec pop_sentry_transactions(pid()) :: [Sentry.Transaction.t()]
-  def pop_sentry_transactions(owner_pid \\ self()) when is_pid(owner_pid) do
+  def pop_sentry_transactions(_owner_pid \\ self()) do
     pop_by_struct_type(Sentry.Transaction)
   end
 
@@ -278,7 +281,7 @@ defmodule Sentry.Test do
   """
   @doc since: "11.0.0"
   @spec pop_sentry_logs(pid()) :: [Sentry.LogEvent.t()]
-  def pop_sentry_logs(owner_pid \\ self()) when is_pid(owner_pid) do
+  def pop_sentry_logs(_owner_pid \\ self()) do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
