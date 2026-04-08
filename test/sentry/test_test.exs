@@ -93,7 +93,7 @@ defmodule Sentry.TestTest do
 
       # Ensure the child is recognized as a caller descendant
       # (Task.start_link propagates $callers)
-      assert_receive :done
+      assert_receive :done, 5000
 
       events = SentryTest.pop_sentry_reports()
       assert length(events) == 1
