@@ -421,11 +421,6 @@ defmodule Sentry.Test do
     end
   end
 
-  @doc false
-  def ensure_registry! do
-    :ets.new(@registry_table, [:named_table, :public, :set])
-  end
-
   defp find_collector do
     pids = [self() | Process.get(:"$callers", [])]
 
