@@ -208,4 +208,43 @@ defmodule Sentry.TestTest do
       assert event.fingerprint == ["custom"]
     end
   end
+
+  describe "pop_sentry_logs/0" do
+    @describetag :capture_log
+
+    setup %{telemetry_processor: telemetry_processor} do
+      ctx = SentryTest.setup_sentry(enable_logs: true, logs: [level: :info])
+
+      handler_name = :"sentry_logs_test_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        config: %{
+          telemetry_processor: telemetry_processor
+        }
+      }
+
+      :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
+
+      on_exit(fn ->
+        _ = :logger.remove_handler(handler_name)
+      end)
+
+      ctx
+    end
+
+    test "collects log events via the TelemetryProcessor pipeline" do
+      require Logger
+
+      Logger.info("pop_sentry_logs test message")
+
+      Sentry.TelemetryProcessor.flush()
+
+      logs = SentryTest.pop_sentry_logs()
+
+      # Filter for our specific message since the logger handler is global and may
+      # pick up log events from other concurrent async tests.
+      assert %Sentry.LogEvent{body: "pop_sentry_logs test message", level: :info} =
+               Enum.find(logs, &(&1.body == "pop_sentry_logs test message"))
+    end
+  end
 end

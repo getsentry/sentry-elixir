@@ -428,12 +428,28 @@ defmodule Sentry.Test do
 
     put_test_config(config)
 
+    scheduler_pid = get_scheduler_pid()
+
+    if scheduler_pid do
+      :ets.insert_new(@registry_table, {scheduler_pid, collector_table})
+    end
+
     # Register cleanup
     test_pid = self()
 
     ExUnit.Callbacks.on_exit(fn ->
       if :ets.whereis(@registry_table) != :undefined do
         :ets.delete(@registry_table, test_pid)
+
+        if scheduler_pid do
+          case :ets.lookup(@registry_table, scheduler_pid) do
+            [{^scheduler_pid, ^collector_table}] ->
+              :ets.delete(@registry_table, scheduler_pid)
+
+            _ ->
+              :ok
+          end
+        end
       end
 
       if :ets.whereis(collector_table) != :undefined do
@@ -442,6 +458,18 @@ defmodule Sentry.Test do
     end)
 
     :ok
+  end
+
+  defp get_scheduler_pid do
+    processor =
+      Process.get(:sentry_telemetry_processor, Sentry.TelemetryProcessor.default_name())
+
+    scheduler_name = Sentry.TelemetryProcessor.scheduler_name(processor)
+    GenServer.whereis(scheduler_name)
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
   end
 
   defp find_collector do
