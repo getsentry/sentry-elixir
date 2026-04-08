@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Elixir and Erlang
-        uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9
+        uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
         with:
           elixir-version: "1.18"
           otp-version: "27.2"
@@ -29,7 +29,7 @@ jobs:
           node-version: "20"
 
       - name: Cache Elixir dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             deps
@@ -41,7 +41,7 @@ jobs:
             ${{ runner.os }}-elixir-1.18-otp-27.2-mix-
 
       - name: Cache Node.js dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             test_integrations/tracing/node_modules
