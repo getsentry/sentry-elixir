@@ -238,8 +238,14 @@ defmodule Sentry.Test do
 
   """
   @doc since: "10.2.0"
+  @spec pop_sentry_reports() :: [Sentry.Event.t()]
+  def pop_sentry_reports do
+    pop_by_struct_type(Sentry.Event)
+  end
+
+  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_reports/0 instead"
   @spec pop_sentry_reports(pid()) :: [Sentry.Event.t()]
-  def pop_sentry_reports(_owner_pid \\ self()) do
+  def pop_sentry_reports(_owner_pid) do
     pop_by_struct_type(Sentry.Event)
   end
 
@@ -260,8 +266,14 @@ defmodule Sentry.Test do
 
   """
   @doc since: "10.2.0"
+  @spec pop_sentry_transactions() :: [Sentry.Transaction.t()]
+  def pop_sentry_transactions do
+    pop_by_struct_type(Sentry.Transaction)
+  end
+
+  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_transactions/0 instead"
   @spec pop_sentry_transactions(pid()) :: [Sentry.Transaction.t()]
-  def pop_sentry_transactions(_owner_pid \\ self()) do
+  def pop_sentry_transactions(_owner_pid) do
     pop_by_struct_type(Sentry.Transaction)
   end
 
@@ -280,8 +292,14 @@ defmodule Sentry.Test do
 
   """
   @doc since: "11.0.0"
+  @spec pop_sentry_logs() :: [Sentry.LogEvent.t()]
+  def pop_sentry_logs do
+    pop_by_struct_type(Sentry.LogEvent)
+  end
+
+  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_logs/0 instead"
   @spec pop_sentry_logs(pid()) :: [Sentry.LogEvent.t()]
-  def pop_sentry_logs(_owner_pid \\ self()) do
+  def pop_sentry_logs(_owner_pid) do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
