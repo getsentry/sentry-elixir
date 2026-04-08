@@ -179,6 +179,8 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
 
     describe "baggage propagation" do
       test "injects baggage from context" do
+        put_test_config(dsn: "http://public:secret@localhost:9000/1")
+
         trace_id = 0x1234567890ABCDEF1234567890ABCDEF
         span_id = 0x1234567890ABCDEF
         trace_flags = 1
@@ -210,6 +212,8 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
       end
 
       test "does not inject baggage when not in context" do
+        put_test_config(dsn: "http://public:secret@localhost:9000/1")
+
         trace_id = 0x1234567890ABCDEF1234567890ABCDEF
         span_id = 0x1234567890ABCDEF
         trace_flags = 1
@@ -266,6 +270,105 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
 
           assert span_ctx(new_span_ctx, :trace_id) == original_trace_id
           assert span_ctx(new_span_ctx, :span_id) == original_span_id
+        end
+      end
+    end
+
+    describe "strict trace continuation integration" do
+      test "org IDs match: trace is continued end-to-end" do
+        put_test_config(
+          dsn: "https://key@o99.ingest.sentry.io/123",
+          strict_trace_continuation: false
+        )
+
+        sentry_trace = "1234567890abcdef1234567890abcdef-1234567890abcdef-1"
+        baggage = "sentry-org_id=99,sentry-public_key=key"
+
+        getter = fn
+          "sentry-trace", _ -> sentry_trace
+          "baggage", _ -> baggage
+          _, _ -> :undefined
+        end
+
+        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+
+        assert Tracer.current_span_ctx(ctx) != :undefined
+      end
+
+      test "org ID mismatch: trace is NOT continued and a fresh context is returned" do
+        put_test_config(
+          dsn: "https://key@o99.ingest.sentry.io/123",
+          strict_trace_continuation: false
+        )
+
+        sentry_trace = "1234567890abcdef1234567890abcdef-1234567890abcdef-1"
+        baggage = "sentry-org_id=42,sentry-public_key=key"
+
+        getter = fn
+          "sentry-trace", _ -> sentry_trace
+          "baggage", _ -> baggage
+          _, _ -> :undefined
+        end
+
+        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+
+        assert Tracer.current_span_ctx(ctx) == :undefined
+      end
+
+      test "strict=true, baggage missing org ID: trace is NOT continued" do
+        put_test_config(
+          dsn: "https://key@o99.ingest.sentry.io/123",
+          strict_trace_continuation: true
+        )
+
+        sentry_trace = "1234567890abcdef1234567890abcdef-1234567890abcdef-1"
+        baggage = "sentry-public_key=key"
+
+        getter = fn
+          "sentry-trace", _ -> sentry_trace
+          "baggage", _ -> baggage
+          _, _ -> :undefined
+        end
+
+        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+
+        assert Tracer.current_span_ctx(ctx) == :undefined
+      end
+
+      test "inject adds sentry-org_id to outgoing baggage when SDK org is configured" do
+        put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
+
+        Tracer.with_span "test_span" do
+          baggage_value = "sentry-trace_id=abc,sentry-public_key=key"
+
+          ctx =
+            :otel_ctx.get_current()
+            |> :otel_ctx.set_value(:"sentry-baggage", baggage_value)
+
+          setter = fn key, value, carrier -> Map.put(carrier, key, value) end
+          carrier = Propagator.inject(ctx, %{}, setter, [])
+
+          assert String.contains?(Map.get(carrier, "baggage", ""), "sentry-org_id=99")
+        end
+      end
+
+      test "inject does not duplicate sentry-org_id when already present in baggage" do
+        put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
+
+        Tracer.with_span "test_span" do
+          baggage_value = "sentry-trace_id=abc,sentry-org_id=99"
+
+          ctx =
+            :otel_ctx.get_current()
+            |> :otel_ctx.set_value(:"sentry-baggage", baggage_value)
+
+          setter = fn key, value, carrier -> Map.put(carrier, key, value) end
+          carrier = Propagator.inject(ctx, %{}, setter, [])
+
+          injected_baggage = Map.get(carrier, "baggage", "")
+
+          assert String.contains?(injected_baggage, "sentry-org_id=99")
+          assert length(String.split(injected_baggage, "sentry-org_id=")) == 2
         end
       end
     end
