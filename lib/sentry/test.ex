@@ -83,64 +83,16 @@ defmodule Sentry.Test do
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
 
-    # Create a unique collector ETS table for this test
-    uid = System.unique_integer([:positive])
-    collector_table = :"sentry_test_collector_#{uid}"
-    :ets.new(collector_table, [:ordered_set, :public, :named_table])
-
-    # Register this test's collector
-    :ets.insert(@registry_table, {self(), collector_table})
-
-    # Store in process dict for pop_* lookups
-    Process.put(:sentry_test_collector, collector_table)
-
-    # Open Bypass and stub the envelope endpoint
+    # Open a per-test Bypass and stub the envelope endpoint
     bypass = Bypass.open()
 
     Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
       Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
     end)
 
-    # Extract user-provided callbacks from extra_config (if any), falling back to current config
-    {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
-    {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
-    {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
-
-    original_before_send =
-      user_before_send || user_before_send_event || Sentry.Config.before_send()
-
-    original_before_send_log = user_before_send_log || Sentry.Config.before_send_log()
-
-    # Build collecting callbacks that wrap the originals
-    new_before_send = build_collecting_callback(original_before_send)
-    new_before_send_log = build_collecting_callback(original_before_send_log)
-
-    # Configure DSN + callbacks + any extra config.
-    # Default to a 2s receive_timeout so localhost Bypass requests don't time out
-    # under parallel test load; extra_config can override this.
-    config =
-      [finch_request_opts: [receive_timeout: 2000]]
-      |> Keyword.merge(extra_config)
-      |> Keyword.merge(
-        dsn: "http://public:secret@localhost:#{bypass.port}/1",
-        before_send: new_before_send,
-        before_send_log: new_before_send_log
-      )
-
-    put_test_config(config)
-
-    # Register cleanup
-    test_pid = self()
-
-    ExUnit.Callbacks.on_exit(fn ->
-      if :ets.whereis(@registry_table) != :undefined do
-        :ets.delete(@registry_table, test_pid)
-      end
-
-      if :ets.whereis(collector_table) != :undefined do
-        :ets.delete(collector_table)
-      end
-    end)
+    # Set up collector with DSN pointing to this test's Bypass
+    bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
+    setup_collector(bypass_config ++ extra_config)
 
     %{bypass: bypass}
   end
@@ -148,8 +100,9 @@ defmodule Sentry.Test do
   @doc """
   Starts collecting events from the current process.
 
-  This function sets up Bypass and configures Sentry for testing.
-  It can be used as an ExUnit setup callback:
+  This function configures Sentry for testing using the default Bypass
+  instance (started at application boot). It can be used as an ExUnit
+  setup callback:
 
       setup :start_collecting_sentry_reports
 
@@ -159,7 +112,10 @@ defmodule Sentry.Test do
   @doc since: "10.2.0"
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
-    setup_sentry()
+    unless Process.get(:sentry_test_collector) do
+      setup_collector([])
+    end
+
     :ok
   end
 
@@ -179,7 +135,7 @@ defmodule Sentry.Test do
   def start_collecting(_options \\ []) do
     # Ensure setup has been called; if not, set it up now
     unless Process.get(:sentry_test_collector) do
-      setup_sentry()
+      setup_collector([])
     end
 
     :ok
@@ -223,9 +179,6 @@ defmodule Sentry.Test do
   current process and all child processes spawned from it. After this function
   returns, the collected events are cleared but collection continues.
 
-  The `owner_pid` parameter is deprecated and ignored — child processes are now
-  automatically tracked via `$callers`. Always call this function without arguments.
-
   ## Examples
 
       iex> Sentry.Test.start_collecting_sentry_reports()
@@ -238,14 +191,8 @@ defmodule Sentry.Test do
 
   """
   @doc since: "10.2.0"
-  @spec pop_sentry_reports() :: [Sentry.Event.t()]
-  def pop_sentry_reports do
-    pop_by_struct_type(Sentry.Event)
-  end
-
-  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_reports/0 instead"
   @spec pop_sentry_reports(pid()) :: [Sentry.Event.t()]
-  def pop_sentry_reports(_owner_pid) do
+  def pop_sentry_reports(owner_pid \\ self()) when is_pid(owner_pid) do
     pop_by_struct_type(Sentry.Event)
   end
 
@@ -266,14 +213,8 @@ defmodule Sentry.Test do
 
   """
   @doc since: "10.2.0"
-  @spec pop_sentry_transactions() :: [Sentry.Transaction.t()]
-  def pop_sentry_transactions do
-    pop_by_struct_type(Sentry.Transaction)
-  end
-
-  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_transactions/0 instead"
   @spec pop_sentry_transactions(pid()) :: [Sentry.Transaction.t()]
-  def pop_sentry_transactions(_owner_pid) do
+  def pop_sentry_transactions(owner_pid \\ self()) when is_pid(owner_pid) do
     pop_by_struct_type(Sentry.Transaction)
   end
 
@@ -292,14 +233,8 @@ defmodule Sentry.Test do
 
   """
   @doc since: "11.0.0"
-  @spec pop_sentry_logs() :: [Sentry.LogEvent.t()]
-  def pop_sentry_logs do
-    pop_by_struct_type(Sentry.LogEvent)
-  end
-
-  @doc deprecated: "Passing owner_pid is deprecated, call pop_sentry_logs/0 instead"
   @spec pop_sentry_logs(pid()) :: [Sentry.LogEvent.t()]
-  def pop_sentry_logs(_owner_pid) do
+  def pop_sentry_logs(owner_pid \\ self()) when is_pid(owner_pid) do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
@@ -440,6 +375,73 @@ defmodule Sentry.Test do
           {:bypass, "~> 2.0", only: [:test]}
       """
     end
+  end
+
+  # Sets up collection infrastructure (ETS table, before_send wrapping, config)
+  # without opening a new Bypass. When no :dsn is provided in extra_config,
+  # falls back to the default Bypass DSN from Registry.
+  defp setup_collector(extra_config) do
+    uid = System.unique_integer([:positive])
+    collector_table = :"sentry_test_collector_#{uid}"
+    :ets.new(collector_table, [:ordered_set, :public, :named_table])
+
+    # Register this test's collector
+    :ets.insert(@registry_table, {self(), collector_table})
+
+    # Store in process dict for pop_* lookups
+    Process.put(:sentry_test_collector, collector_table)
+
+    # Extract user-provided callbacks from extra_config (if any), falling back to current config
+    {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
+    {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
+    {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
+
+    original_before_send =
+      user_before_send || user_before_send_event || Sentry.Config.before_send()
+
+    original_before_send_log = user_before_send_log || Sentry.Config.before_send_log()
+
+    # Build collecting callbacks that wrap the originals
+    new_before_send = build_collecting_callback(original_before_send)
+    new_before_send_log = build_collecting_callback(original_before_send_log)
+
+    # Always set a per-test DSN override so that config resolution never falls
+    # through to resolve_from_active_scopes (which could pick up another async
+    # test's DSN). When no DSN is provided, use the default Bypass DSN.
+    extra_config =
+      if Keyword.has_key?(extra_config, :dsn) do
+        extra_config
+      else
+        case Sentry.Test.Registry.default_dsn() do
+          nil -> extra_config
+          dsn -> Keyword.put(extra_config, :dsn, dsn)
+        end
+      end
+
+    config =
+      [finch_request_opts: [receive_timeout: 2000]]
+      |> Keyword.merge(extra_config)
+      |> Keyword.merge(
+        before_send: new_before_send,
+        before_send_log: new_before_send_log
+      )
+
+    put_test_config(config)
+
+    # Register cleanup
+    test_pid = self()
+
+    ExUnit.Callbacks.on_exit(fn ->
+      if :ets.whereis(@registry_table) != :undefined do
+        :ets.delete(@registry_table, test_pid)
+      end
+
+      if :ets.whereis(collector_table) != :undefined do
+        :ets.delete(collector_table)
+      end
+    end)
+
+    :ok
   end
 
   defp find_collector do

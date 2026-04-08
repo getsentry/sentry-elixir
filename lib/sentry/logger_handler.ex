@@ -335,9 +335,15 @@ defmodule Sentry.LoggerHandler do
   @doc false
   @spec log(:logger.log_event(), :logger.handler_config()) :: :ok
   def log(log_event, %{config: %__MODULE__{backends: backends} = config, id: handler_id}) do
-    # Dispatch to all configured backends
+    # Dispatch to all configured backends.
+    # Rescue any exceptions to prevent OTP from removing the handler entirely
+    # when a single event fails to process.
     Enum.each(backends, fn backend ->
-      backend.handle_event(log_event, config, handler_id)
+      try do
+        backend.handle_event(log_event, config, handler_id)
+      rescue
+        _ -> :ok
+      end
     end)
 
     :ok
