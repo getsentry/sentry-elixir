@@ -217,40 +217,25 @@ defmodule Sentry.Client do
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :sync, client, request_retries) do
-    case Sentry.Test.maybe_collect(event) do
-      :collected ->
-        {:ok, ""}
-
-      :not_collecting ->
-        send_result =
-          event
-          |> Envelope.from_event()
-          |> Transport.encode_and_post_envelope(client, request_retries)
-
-        send_result
-    end
+    event
+    |> Envelope.from_event()
+    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
-    case Sentry.Test.maybe_collect(event) do
-      :collected ->
-        {:ok, ""}
+    if Config.telemetry_processor_category?(:error) do
+      case TelemetryProcessor.add(event) do
+        {:ok, {:rate_limited, data_category}} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
 
-      :not_collecting ->
-        if Config.telemetry_processor_category?(:error) do
-          case TelemetryProcessor.add(event) do
-            {:ok, {:rate_limited, data_category}} ->
-              ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-
-            :ok ->
-              :ok
-          end
-        else
-          :ok = Transport.Sender.send_async(client, event)
-        end
-
-        {:ok, ""}
+        :ok ->
+          :ok
+      end
+    else
+      :ok = Transport.Sender.send_async(client, event)
     end
+
+    {:ok, ""}
   end
 
   defp encode_and_send(
@@ -259,18 +244,9 @@ defmodule Sentry.Client do
          client,
          request_retries
        ) do
-    case Sentry.Test.maybe_collect(transaction) do
-      :collected ->
-        {:ok, ""}
-
-      :not_collecting ->
-        send_result =
-          transaction
-          |> Envelope.from_transaction()
-          |> Transport.encode_and_post_envelope(client, request_retries)
-
-        send_result
-    end
+    transaction
+    |> Envelope.from_transaction()
+    |> Transport.encode_and_post_envelope(client, request_retries)
   end
 
   defp encode_and_send(
@@ -279,25 +255,19 @@ defmodule Sentry.Client do
          client,
          _request_retries
        ) do
-    case Sentry.Test.maybe_collect(transaction) do
-      :collected ->
-        {:ok, ""}
+    if Config.telemetry_processor_category?(:transaction) do
+      case TelemetryProcessor.add(transaction) do
+        {:ok, {:rate_limited, data_category}} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
 
-      :not_collecting ->
-        if Config.telemetry_processor_category?(:transaction) do
-          case TelemetryProcessor.add(transaction) do
-            {:ok, {:rate_limited, data_category}} ->
-              ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-
-            :ok ->
-              :ok
-          end
-        else
-          :ok = Transport.Sender.send_async(client, transaction)
-        end
-
-        {:ok, ""}
+        :ok ->
+          :ok
+      end
+    else
+      :ok = Transport.Sender.send_async(client, transaction)
     end
+
+    {:ok, ""}
   end
 
   @spec render_event(Event.t()) :: map()

@@ -187,14 +187,12 @@ defmodule Sentry.ClientTest do
 
   describe "send_event/2" do
     setup do
-      bypass = Bypass.open()
-      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
-      %{bypass: bypass}
+      setup_bypass()
     end
 
     test "respects the :sample_rate option", %{bypass: bypass} do
       # Always sends with sample rate of 1.
-      Bypass.expect_once(bypass, fn conn ->
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -204,7 +202,7 @@ defmodule Sentry.ClientTest do
       assert :unsampled = Client.send_event(Event.create_event([]), sample_rate: 0.0)
 
       # Either sends or doesn't with :sample_rate of 0.5.
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -216,7 +214,7 @@ defmodule Sentry.ClientTest do
     end
 
     test "calls anonymous :before_send callback", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
@@ -294,7 +292,7 @@ defmodule Sentry.ClientTest do
 
     test "calls anonymous :after_send_event callback synchronously",
          %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
@@ -427,7 +425,7 @@ defmodule Sentry.ClientTest do
       ]
 
       for {event, dup_event} <- events do
-        Bypass.expect_once(bypass, fn conn ->
+        Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
           Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
         end)
 
@@ -445,8 +443,7 @@ defmodule Sentry.ClientTest do
 
   describe "send_client_report/1" do
     test "succefully sends discarded events to Sentry" do
-      bypass = Bypass.open()
-      put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
+      %{bypass: bypass} = setup_bypass()
 
       client_report =
         %Sentry.ClientReport{
@@ -456,7 +453,7 @@ defmodule Sentry.ClientTest do
           ]
         }
 
-      Bypass.expect_once(bypass, fn conn ->
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         assert [{_headers, client_report_body}] = decode_envelope!(body)
 

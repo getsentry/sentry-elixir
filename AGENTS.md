@@ -21,7 +21,6 @@ This is the official Sentry SDK for Elixir. It captures errors, monitors cron jo
 | `lib/sentry/logger_handler.ex` | Erlang logger handler |
 | `lib/sentry/plug_capture.ex` | Plug exception capture |
 | `lib/sentry/live_view_hook.ex` | Phoenix LiveView hook |
-| `lib/sentry/test.ex` | Testing utilities |
 | `lib/mix/tasks/` | Mix tasks (install, test event, source packaging) |
 | `test/` | Unit and integration tests |
 | `test/support/` | Test helpers and shared utilities |
@@ -97,14 +96,13 @@ Configuration is validated at application start using NimbleOptions, then cached
 
 ### Key Patterns
 
-- **HTTP testing:** Use `Bypass` for HTTP-level tests with `send_result: :sync`
-- **Buffered path testing:** Use `Sentry.Test.start_collecting_sentry_reports/0` + `assert_receive`/`pop_sentry_*` helpers
+- **HTTP testing:** Use `Bypass` for HTTP-level tests with `send_result: :sync`. Use `setup_bypass/1` to open a Bypass instance and configure DSN, `setup_bypass_envelope_collector/1` to forward envelopes to the test process, and `collect_envelopes/3` + `extract_events/1` / `extract_transactions/1` / `extract_log_items/1` to retrieve and filter decoded envelope items.
 - **Test isolation:** Each test gets uniquely-named components (rate limiter, processor, span storage) via process dictionary and `:persistent_term`
 - **Config isolation:** Use `put_test_config/1` from test helpers for isolated config changes with automatic cleanup
 
 ### Test Configuration
 
-Tests run with `send_result: :sync` and `test_mode: true` (set in `config/config.exs`). This bypasses the TelemetryProcessor pipeline for direct, synchronous event sending.
+Tests run with `send_result: :sync` (set in `config/config.exs`). This bypasses the TelemetryProcessor pipeline for direct, synchronous event sending. All tests that send events use Bypass to capture HTTP requests — there is no in-memory event collection.
 
 ### Integration Tests
 

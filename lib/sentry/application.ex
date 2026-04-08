@@ -30,6 +30,13 @@ defmodule Sentry.Application do
 
     integrations_config = Config.integrations()
 
+    maybe_test_registry =
+      if Config.test_mode?() do
+        [Sentry.Test.Registry]
+      else
+        []
+      end
+
     maybe_span_storage =
       if Config.tracing?() do
         [Sentry.OpenTelemetry.SpanStorage]
@@ -48,17 +55,18 @@ defmodule Sentry.Application do
       ]
 
     children =
-      [
-        {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
-        Sentry.Sources,
-        Sentry.Dedupe,
-        Sentry.ClientReport.Sender,
-        {Sentry.Integrations.CheckInIDMappings,
-         [
-           max_expected_check_in_time:
-             Keyword.fetch!(integrations_config, :max_expected_check_in_time)
-         ]}
-      ] ++
+      maybe_test_registry ++
+        [
+          {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
+          Sentry.Sources,
+          Sentry.Dedupe,
+          Sentry.ClientReport.Sender,
+          {Sentry.Integrations.CheckInIDMappings,
+           [
+             max_expected_check_in_time:
+               Keyword.fetch!(integrations_config, :max_expected_check_in_time)
+           ]}
+        ] ++
         maybe_http_client_spec ++
         maybe_span_storage ++
         telemetry_processor ++

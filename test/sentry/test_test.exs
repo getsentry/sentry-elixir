@@ -1,221 +1,250 @@
 defmodule Sentry.TestTest do
-  use ExUnit.Case, async: false
+  use Sentry.Case, async: true
 
-  import Sentry.TestHelpers
+  alias Sentry.Test, as: SentryTest
 
-  alias Sentry.Event
-  alias Sentry.Test
-  alias Sentry.{LogEvent, TelemetryProcessor}
+  describe "setup_sentry/1" do
+    test "opens Bypass and configures DSN" do
+      %{bypass: bypass} = SentryTest.setup_sentry()
 
-  doctest Test
-
-  setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1", dedup_events: false)
-    %{bypass: bypass}
-  end
-
-  test "within a single process" do
-    assert :ok = Test.start_collecting_sentry_reports()
-
-    # Start with a clean slate.
-    assert Test.pop_sentry_reports() == []
-
-    assert {:ok, ""} = Sentry.capture_message("Oops")
-    assert {:ok, ""} = Sentry.capture_message("Another one")
-
-    assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-    assert event1.message.formatted == "Oops"
-    assert event2.message.formatted == "Another one"
-
-    # Make sure that popping actually removes the events.
-    assert Test.pop_sentry_reports() == []
-  end
-
-  test "collecting, reporting, and popping from different processes" do
-    process_count = Enum.random(5..10)
-
-    fun = fn index ->
-      assert :ok = Test.start_collecting_sentry_reports()
-
-      assert Test.pop_sentry_reports() == []
-
-      assert {:ok, ""} = Sentry.capture_message("Oops #{index}")
-      assert {:ok, ""} = Sentry.capture_message("Another one #{index}")
-
-      assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-      assert event1.message.formatted == "Oops #{index}"
-      assert event2.message.formatted == "Another one #{index}"
-
-      assert Test.pop_sentry_reports() == []
-
-      :ok
+      dsn = Sentry.Config.dsn()
+      assert dsn.endpoint_uri =~ "localhost:#{bypass.port}"
     end
 
-    assert 1..process_count
-           |> Enum.map(fn index -> Task.async(fn -> fun.(index) end) end)
-           |> Task.await_many(2000) == List.duplicate(:ok, process_count)
+    test "accepts extra config options" do
+      SentryTest.setup_sentry(dedup_events: false)
+
+      assert Sentry.Config.dedup_events?() == false
+    end
   end
 
-  test "reporting from child processes (that have $callers) is allowed even without explicit allowance" do
-    parent_pid = self()
+  describe "start_collecting_sentry_reports/0" do
+    test "works as ExUnit setup callback" do
+      assert :ok = SentryTest.start_collecting_sentry_reports()
+    end
 
-    # Collect from self().
-    assert :ok = Test.start_collecting_sentry_reports()
+    test "accepts context map for ExUnit setup compatibility" do
+      assert :ok = SentryTest.start_collecting_sentry_reports(%{})
+    end
+  end
 
-    {:ok, child_pid} =
-      Task.start_link(fn ->
-        receive do
-          :go ->
-            assert {:ok, ""} = Sentry.capture_message("Oops from child process")
-            send(parent_pid, :done)
+  describe "pop_sentry_reports/0" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "returns events from capture_exception" do
+      assert {:ok, _} =
+               Sentry.capture_exception(%RuntimeError{message: "boom"}, result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.original_exception == %RuntimeError{message: "boom"}
+    end
+
+    test "returns events from capture_message" do
+      assert {:ok, _} = Sentry.capture_message("hello", result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.message.formatted == "hello"
+    end
+
+    test "returns full struct data including non-payload fields" do
+      assert {:ok, _} =
+               Sentry.capture_exception(%RuntimeError{message: "test"},
+                 result: :sync,
+                 event_source: :plug
+               )
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.original_exception == %RuntimeError{message: "test"}
+      assert event.source == :plug
+    end
+
+    test "returns multiple events" do
+      assert {:ok, _} = Sentry.capture_message("first", result: :sync)
+      assert {:ok, _} = Sentry.capture_message("second", result: :sync)
+
+      events = SentryTest.pop_sentry_reports()
+      assert length(events) == 2
+      assert [first, second] = events
+      assert first.message.formatted == "first"
+      assert second.message.formatted == "second"
+    end
+
+    test "clears events after pop" do
+      assert {:ok, _} = Sentry.capture_message("hello", result: :sync)
+
+      assert [_event] = SentryTest.pop_sentry_reports()
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "returns empty list when no events" do
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "captures events from child processes" do
+      test_pid = self()
+
+      {:ok, _child_pid} =
+        Task.start_link(fn ->
+          assert {:ok, _} = Sentry.capture_message("from child", result: :sync)
+          send(test_pid, :done)
+        end)
+
+      # Ensure the child is recognized as a caller descendant
+      # (Task.start_link propagates $callers)
+      assert_receive :done, 5000
+
+      events = SentryTest.pop_sentry_reports()
+      assert length(events) == 1
+      assert [event] = events
+      assert event.message.formatted == "from child"
+    end
+  end
+
+  describe "pop_sentry_transactions/0" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "returns transactions" do
+      transaction =
+        Sentry.Transaction.new(%{
+          span_id: "parent-312",
+          start_timestamp: "2025-01-01T00:00:00Z",
+          timestamp: "2025-01-02T02:03:00Z",
+          contexts: %{
+            trace: %{
+              trace_id: "trace-312",
+              span_id: "parent-312"
+            }
+          },
+          spans: []
+        })
+
+      assert {:ok, _} = Sentry.send_transaction(transaction, result: :sync)
+
+      assert [%Sentry.Transaction{} = collected] = SentryTest.pop_sentry_transactions()
+      assert collected.span_id == "parent-312"
+    end
+
+    test "does not mix events and transactions" do
+      assert {:ok, _} = Sentry.capture_message("event", result: :sync)
+
+      transaction =
+        Sentry.Transaction.new(%{
+          span_id: "tx-1",
+          start_timestamp: "2025-01-01T00:00:00Z",
+          timestamp: "2025-01-02T02:03:00Z",
+          contexts: %{trace: %{trace_id: "t-1", span_id: "tx-1"}},
+          spans: []
+        })
+
+      assert {:ok, _} = Sentry.send_transaction(transaction, result: :sync)
+
+      assert [%Sentry.Event{}] = SentryTest.pop_sentry_reports()
+      assert [%Sentry.Transaction{}] = SentryTest.pop_sentry_transactions()
+    end
+  end
+
+  describe "deprecated functions" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "allow_sentry_reports/2 is a no-op" do
+      assert :ok = SentryTest.allow_sentry_reports(self(), self())
+    end
+
+    test "start_collecting/1 is a no-op when already collecting" do
+      assert :ok = SentryTest.start_collecting()
+    end
+
+    test "cleanup/1 is a no-op" do
+      assert :ok = SentryTest.cleanup(self())
+    end
+  end
+
+  describe "before_send wrapping" do
+    test "wraps existing before_send callback" do
+      test_pid = self()
+
+      SentryTest.setup_sentry(
+        before_send: fn event ->
+          send(test_pid, {:before_send_called, event.message.formatted})
+          event
         end
-      end)
-
-    assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
-
-    send(child_pid, :go)
-    assert_receive :done
-
-    assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-    assert event1.message.formatted == "Oops from parent process"
-    assert event2.message.formatted == "Oops from child process"
-  end
-
-  test "explicitly allowing other processes" do
-    parent_pid = self()
-
-    # Collect from self().
-    assert :ok = Test.start_collecting_sentry_reports()
-
-    {:ok, child_pid} =
-      Task.start_link(fn ->
-        Process.delete(:"$callers")
-
-        receive do
-          :go ->
-            assert {:ok, ""} = Sentry.capture_message("Oops from child process")
-            send(parent_pid, :done)
-        end
-      end)
-
-    Test.allow_sentry_reports(parent_pid, child_pid)
-
-    assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
-
-    send(child_pid, :go)
-    assert_receive :done
-
-    assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-    assert event1.message.formatted == "Oops from parent process"
-    assert event2.message.formatted == "Oops from child process"
-  end
-
-  test "explicitly allowing other processes with a lazy PID" do
-    parent_pid = self()
-
-    # Collect from self() and allow the lazy child PID.
-    assert :ok = Test.start_collecting_sentry_reports()
-    Test.allow_sentry_reports(parent_pid, fn -> Process.whereis(:child) end)
-
-    {:ok, child_pid} =
-      Task.start_link(fn ->
-        Process.delete(:"$callers")
-
-        receive do
-          :go ->
-            assert {:ok, ""} = Sentry.capture_message("Oops from child process")
-            send(parent_pid, :done)
-        end
-      end)
-
-    Process.register(child_pid, :child)
-
-    Test.allow_sentry_reports(parent_pid, fn -> Process.whereis(:child) end)
-
-    assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
-
-    send(child_pid, :go)
-    assert_receive :done
-
-    assert [%Event{} = event1, %Event{} = event2] = Test.pop_sentry_reports()
-    assert event1.message.formatted == "Oops from parent process"
-    assert event2.message.formatted == "Oops from child process"
-  end
-
-  test "reporting from non-allowed child processes", %{bypass: bypass} do
-    parent_pid = self()
-
-    Bypass.expect(bypass, fn conn ->
-      assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "Oops from child process"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    # Collect from self().
-    assert :ok = Test.start_collecting_sentry_reports()
-
-    {:ok, child_pid} =
-      Task.start_link(fn ->
-        Process.delete(:"$callers")
-
-        receive do
-          :go ->
-            send(parent_pid, {:done, Sentry.capture_message("Oops from child process")})
-        end
-      end)
-
-    monitor_ref = Process.monitor(child_pid)
-    assert {:ok, ""} = Sentry.capture_message("Oops from parent process")
-
-    send(child_pid, :go)
-    assert_receive {:DOWN, ^monitor_ref, _, _, :normal}, 5000
-    assert_receive {:done, {:ok, "340"}}, 1000
-
-    assert [%Event{} = event] = Test.pop_sentry_reports()
-    assert event.message.formatted == "Oops from parent process"
-  end
-
-  test "implementing an expectation-based test workflow" do
-    test_pid = self()
-
-    Test.start_collecting(owner: test_pid, cleanup: false)
-
-    on_exit(fn ->
-      assert [%Event{} = event] = Test.pop_sentry_reports(test_pid)
-      assert event.message.formatted == "Oops"
-      assert :ok = Test.cleanup(test_pid)
-    end)
-
-    assert {:ok, ""} = Sentry.capture_message("Oops")
-  end
-
-  test "pop_sentry_logs works with per-test TelemetryProcessor" do
-    uid = System.unique_integer([:positive])
-    processor_name = :"test_processor_logs_#{uid}"
-
-    {:ok, _pid} =
-      start_supervised(
-        {TelemetryProcessor, name: processor_name, buffer_configs: %{log: %{batch_size: 1}}},
-        id: processor_name
       )
 
-    Process.put(:sentry_telemetry_processor, processor_name)
+      assert {:ok, _} = Sentry.capture_message("wrapped", result: :sync)
 
-    assert :ok = Test.start_collecting_sentry_reports()
+      # The original callback should have been called
+      assert_receive {:before_send_called, "wrapped"}
 
-    log_event = %LogEvent{
-      level: :info,
-      body: "per-test log",
-      timestamp: System.system_time(:microsecond) / 1_000_000
-    }
+      # And the event should still be collected
+      assert [%Sentry.Event{}] = SentryTest.pop_sentry_reports()
+    end
 
-    TelemetryProcessor.add(processor_name, log_event)
+    test "does not collect event when before_send returns nil" do
+      SentryTest.setup_sentry(before_send: fn _event -> nil end)
 
-    # Give the scheduler time to process
-    Process.sleep(100)
+      assert :excluded = Sentry.capture_message("dropped", result: :sync)
 
-    logs = Test.pop_sentry_logs()
-    assert [%LogEvent{body: "per-test log"}] = logs
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "wraps {module, function} callback" do
+      defmodule BeforeSendMFA do
+        def callback(event) do
+          %{event | fingerprint: ["custom"]}
+        end
+      end
+
+      SentryTest.setup_sentry(before_send: {BeforeSendMFA, :callback})
+
+      assert {:ok, _} = Sentry.capture_message("mfa test", result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.fingerprint == ["custom"]
+    end
+  end
+
+  describe "pop_sentry_logs/0" do
+    @describetag :capture_log
+
+    setup %{telemetry_processor: telemetry_processor} do
+      ctx = SentryTest.setup_sentry(enable_logs: true, logs: [level: :info])
+
+      handler_name = :"sentry_logs_test_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        config: %{
+          telemetry_processor: telemetry_processor
+        }
+      }
+
+      :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
+
+      on_exit(fn ->
+        _ = :logger.remove_handler(handler_name)
+      end)
+
+      ctx
+    end
+
+    test "collects log events via the TelemetryProcessor pipeline" do
+      require Logger
+
+      Logger.info("pop_sentry_logs test message")
+
+      Sentry.TelemetryProcessor.flush()
+
+      logs = SentryTest.pop_sentry_logs()
+
+      # Filter for our specific message since the logger handler is global and may
+      # pick up log events from other concurrent async tests.
+      assert %Sentry.LogEvent{body: "pop_sentry_logs test message", level: :info} =
+               Enum.find(logs, &(&1.body == "pop_sentry_logs test message"))
+    end
   end
 end

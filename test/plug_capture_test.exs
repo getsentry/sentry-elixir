@@ -55,16 +55,14 @@ defmodule Sentry.PlugCaptureTest do
   end
 
   setup do
-    bypass = Bypass.open()
-    put_test_config(dsn: "http://public:secret@localhost:#{bypass.port}/1")
-    %{bypass: bypass}
+    setup_bypass()
   end
 
   describe "with a Plug application" do
     test "sends error to Sentry and uses Sentry.PlugContext to fill in context", %{
       bypass: bypass
     } do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         event = decode_event_from_envelope!(body)
@@ -83,7 +81,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "sends throws to Sentry", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         _event = decode_event_from_envelope!(body)
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -93,7 +91,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "sends exits to Sentry", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         _event = decode_event_from_envelope!(body)
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -110,7 +108,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "can render feedback form", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         _event = decode_event_from_envelope!(body)
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -146,7 +144,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "reports raised exceptions", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         event = decode_event_from_envelope!(body)
@@ -166,7 +164,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "reports exits", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         event = decode_event_from_envelope!(body)
@@ -180,7 +178,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "reports throws", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         event = decode_event_from_envelope!(body)
@@ -202,7 +200,7 @@ defmodule Sentry.PlugCaptureTest do
       test_pid = self()
       ref = make_ref()
 
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         send(test_pid, {ref, body})
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -226,7 +224,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "can render feedback form in Phoenix ErrorView", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         _event = decode_event_from_envelope!(body)
@@ -248,7 +246,7 @@ defmodule Sentry.PlugCaptureTest do
     end
 
     test "handles Erlang error in Plug.Conn.WrapperError", %{bypass: bypass} do
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         event = decode_event_from_envelope!(body)
         assert event["culprit"] == "Sentry.PlugCaptureTest.PhoenixController.assigns/2"
@@ -270,7 +268,7 @@ defmodule Sentry.PlugCaptureTest do
       pid = start_supervised!(PhoenixEndpointWithScrubber)
       Process.link(pid)
 
-      Bypass.expect(bypass, fn conn ->
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         event = decode_event_from_envelope!(body)

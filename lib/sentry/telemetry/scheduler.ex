@@ -311,21 +311,9 @@ defmodule Sentry.Telemetry.Scheduler do
     state
   end
 
-  defp process_and_send_event(%{on_envelope: on_envelope} = state, %Event{} = event, send_fn) do
-    # Skip test collection when on_envelope is set (used by unit tests)
-    if is_nil(on_envelope) do
-      case Sentry.Test.maybe_collect(event) do
-        :collected ->
-          state
-
-        :not_collecting ->
-          envelope = Envelope.from_event(event)
-          send_fn.(state, envelope)
-      end
-    else
-      envelope = Envelope.from_event(event)
-      send_fn.(state, envelope)
-    end
+  defp process_and_send_event(state, %Event{} = event, send_fn) do
+    envelope = Envelope.from_event(event)
+    send_fn.(state, envelope)
   end
 
   defp process_and_send_check_in(state, %CheckIn{} = check_in, send_fn) do
@@ -333,67 +321,28 @@ defmodule Sentry.Telemetry.Scheduler do
     send_fn.(state, envelope)
   end
 
-  defp process_and_send_transaction(
-         %{on_envelope: on_envelope} = state,
-         %Transaction{} = transaction,
-         send_fn
-       ) do
-    # Skip test collection when on_envelope is set (used by unit tests)
-    if is_nil(on_envelope) do
-      case Sentry.Test.maybe_collect(transaction) do
-        :collected ->
-          state
-
-        :not_collecting ->
-          envelope = Envelope.from_transaction(transaction)
-          send_fn.(state, envelope)
-      end
-    else
-      envelope = Envelope.from_transaction(transaction)
-      send_fn.(state, envelope)
-    end
+  defp process_and_send_transaction(state, %Transaction{} = transaction, send_fn) do
+    envelope = Envelope.from_transaction(transaction)
+    send_fn.(state, envelope)
   end
 
-  defp process_and_send_logs(%{on_envelope: on_envelope} = state, log_events, send_fn) do
+  defp process_and_send_logs(state, log_events, send_fn) do
     processed_logs = apply_before_send_log_callbacks(log_events)
 
     if processed_logs != [] do
-      # Skip test collection when on_envelope is set (used by unit tests)
-      if is_nil(on_envelope) do
-        case Sentry.Test.maybe_collect_logs(processed_logs) do
-          :collected ->
-            state
-
-          :not_collecting ->
-            envelope = Envelope.from_log_events(processed_logs)
-            send_fn.(state, envelope)
-        end
-      else
-        envelope = Envelope.from_log_events(processed_logs)
-        send_fn.(state, envelope)
-      end
+      envelope = Envelope.from_log_events(processed_logs)
+      send_fn.(state, envelope)
     else
       state
     end
   end
 
-  defp process_and_send_metrics(%{on_envelope: on_envelope} = state, metrics, send_fn) do
+  defp process_and_send_metrics(state, metrics, send_fn) do
     processed_metrics = apply_before_send_metric_callbacks(metrics)
 
     if processed_metrics != [] do
-      if is_nil(on_envelope) do
-        case Sentry.Test.maybe_collect_metrics(processed_metrics) do
-          :collected ->
-            state
-
-          :not_collecting ->
-            envelope = Envelope.from_metric_events(processed_metrics)
-            send_fn.(state, envelope)
-        end
-      else
-        envelope = Envelope.from_metric_events(processed_metrics)
-        send_fn.(state, envelope)
-      end
+      envelope = Envelope.from_metric_events(processed_metrics)
+      send_fn.(state, envelope)
     else
       state
     end

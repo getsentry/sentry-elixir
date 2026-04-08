@@ -4,9 +4,13 @@ defmodule Sentry.Integrations.Phoenix.ExceptionTest do
   import Sentry.TestHelpers
 
   setup do
-    put_test_config(dsn: "http://public:secret@localhost:8080/1", traces_sample_rate: 1.0)
+    %{bypass: bypass} = setup_bypass(traces_sample_rate: 1.0)
 
-    Sentry.Test.start_collecting_sentry_reports()
+    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    :ok
   end
 
   test "GET /exception sends exception to Sentry", %{conn: conn} do
