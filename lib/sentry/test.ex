@@ -43,6 +43,11 @@ defmodule Sentry.Test do
 
       setup :start_collecting_sentry_reports
 
+  ## Assertion Helpers
+
+  See `Sentry.Test.Assertions` for convenient assertion functions that reduce
+  boilerplate when validating captured events, transactions, and logs.
+
   """
 
   @moduledoc since: "10.2.0"

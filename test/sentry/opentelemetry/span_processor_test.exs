@@ -8,6 +8,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
   require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.SpanStorage
@@ -488,10 +489,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "http.server"
-      assert tx["contexts"]["trace"]["description"] == "GET /api/users"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{"trace" => %{"op" => "http.server", "description" => "GET /api/users"}}
+      )
     end
 
     @tag span_storage: true
@@ -509,10 +509,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "http.server"
-      assert tx["contexts"]["trace"]["description"] == "GET"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{"trace" => %{"op" => "http.server", "description" => "GET"}}
+      )
     end
 
     @tag span_storage: true
@@ -531,10 +530,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "http.client"
-      assert tx["contexts"]["trace"]["description"] == "GET /external/api"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{"trace" => %{"op" => "http.client", "description" => "GET /external/api"}}
+      )
     end
 
     @tag span_storage: true
@@ -554,10 +552,14 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "http.server"
-      assert tx["contexts"]["trace"]["description"] == "POST /api/login from 192.168.1.100"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{
+          "trace" => %{
+            "op" => "http.server",
+            "description" => "POST /api/login from 192.168.1.100"
+          }
+        }
+      )
     end
 
     @tag span_storage: true
@@ -576,10 +578,11 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "db"
-      assert tx["contexts"]["trace"]["description"] == "SELECT * FROM users WHERE id = $1"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{
+          "trace" => %{"op" => "db", "description" => "SELECT * FROM users WHERE id = $1"}
+        }
+      )
     end
 
     @tag span_storage: true
@@ -597,10 +600,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "db"
-      assert tx["contexts"]["trace"]["description"] == nil
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{"trace" => %{"op" => "db", "description" => nil}}
+      )
     end
 
     @tag span_storage: true
@@ -619,11 +621,12 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "queue.process"
-      assert tx["contexts"]["trace"]["description"] == "MyApp.Workers.EmailWorker"
-      assert tx["transaction"] == "MyApp.Workers.EmailWorker"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{
+          "trace" => %{"op" => "queue.process", "description" => "MyApp.Workers.EmailWorker"}
+        },
+        transaction: "MyApp.Workers.EmailWorker"
+      )
     end
 
     @tag span_storage: true
@@ -636,10 +639,9 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
-
-      assert tx["contexts"]["trace"]["op"] == "custom_operation"
-      assert tx["contexts"]["trace"]["description"] == "custom_operation"
+      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+        contexts: %{"trace" => %{"op" => "custom_operation", "description" => "custom_operation"}}
+      )
     end
 
     @tag span_storage: true
@@ -868,10 +870,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Process.sleep(200)
       transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      linked_tx =
-        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/linked" end)
-
-      assert linked_tx != nil
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
 
       trace_links = linked_tx["contexts"]["trace"]["links"]
       assert is_list(trace_links)
@@ -909,8 +908,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Process.sleep(200)
       transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      linked_tx =
-        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/linked" end)
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
 
       [span_link] = linked_tx["contexts"]["trace"]["links"]
       assert span_link["attributes"] == %{"my.key" => "my.value"}
@@ -943,8 +941,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Process.sleep(200)
       transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      parent_tx =
-        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/parent" end)
+      parent_tx = find_sentry_report!(transactions, transaction: "GET /api/parent")
 
       assert length(parent_tx["spans"]) == 1
       [child_span] = parent_tx["spans"]
@@ -1013,8 +1010,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Process.sleep(200)
       transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
 
-      linked_tx =
-        Enum.find(transactions, fn tx -> tx["transaction"] == "GET /api/multi-linked" end)
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/multi-linked")
 
       trace_links = linked_tx["contexts"]["trace"]["links"]
       assert length(trace_links) == 2

@@ -1,6 +1,8 @@
 defmodule Sentry.TestTest do
   use Sentry.Case, async: false
 
+  import Sentry.Test.Assertions
+
   alias Sentry.Test, as: SentryTest
 
   describe "setup_sentry/1" do
@@ -240,12 +242,7 @@ defmodule Sentry.TestTest do
 
       Sentry.TelemetryProcessor.flush()
 
-      logs = SentryTest.pop_sentry_logs()
-
-      # Filter for our specific message since the logger handler is global and may
-      # pick up log events from other concurrent async tests.
-      assert %Sentry.LogEvent{body: "pop_sentry_logs test message", level: :info} =
-               Enum.find(logs, &(&1.body == "pop_sentry_logs test message"))
+      assert_sentry_log(:info, "pop_sentry_logs test message")
     end
   end
 end
