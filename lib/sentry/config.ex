@@ -445,7 +445,7 @@ defmodule Sentry.Config do
       ]
     ],
     org_id: [
-      type: {:or, [:string, nil]},
+      type: {:custom, __MODULE__, :__validate_org_id__, []},
       default: nil,
       type_doc: "`t:String.t/0` or `nil`",
       doc: """
@@ -1324,5 +1324,19 @@ defmodule Sentry.Config do
 
   def __validate_namespace__(other) do
     {:error, "expected :namespace to be a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_org_id__(nil), do: {:ok, nil}
+
+  def __validate_org_id__(value) when is_binary(value) and value != "" do
+    {:ok, value}
+  end
+
+  def __validate_org_id__("") do
+    {:error, "expected :org_id to be a non-empty string or nil, got empty string"}
+  end
+
+  def __validate_org_id__(other) do
+    {:error, "expected :org_id to be a non-empty string or nil, got: #{inspect(other)}"}
   end
 end
