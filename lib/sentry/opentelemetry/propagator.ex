@@ -159,7 +159,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       org_id = Sentry.Config.effective_org_id()
 
       if org_id != nil and extract_baggage_org_id(baggage) == nil do
-        baggage <> ",sentry-org_id=" <> org_id
+        if baggage == "" do
+          "sentry-org_id=" <> org_id
+        else
+          baggage <> ",sentry-org_id=" <> org_id
+        end
       else
         baggage
       end

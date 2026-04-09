@@ -352,6 +352,24 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
         end
       end
 
+      test "inject does not produce leading comma when baggage is empty string" do
+        put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
+
+        Tracer.with_span "test_span" do
+          ctx =
+            :otel_ctx.get_current()
+            |> :otel_ctx.set_value(:"sentry-baggage", "")
+
+          setter = fn key, value, carrier -> Map.put(carrier, key, value) end
+          carrier = Propagator.inject(ctx, %{}, setter, [])
+
+          injected_baggage = Map.get(carrier, "baggage", "")
+
+          refute String.starts_with?(injected_baggage, ",")
+          assert injected_baggage == "sentry-org_id=99"
+        end
+      end
+
       test "inject does not duplicate sentry-org_id when already present in baggage" do
         put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
 
