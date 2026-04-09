@@ -370,6 +370,30 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
         end
       end
 
+      test "inject does not append sentry-org_id when baggage already has an empty sentry-org_id entry" do
+        put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
+
+        Tracer.with_span "test_span" do
+          # A downstream service may forward baggage with sentry-org_id= (empty value).
+          # We must not append a second sentry-org_id entry; the empty one should be
+          # replaced (or at minimum, no duplicate should be produced).
+          baggage_value = "sentry-trace_id=abc,sentry-org_id=,sentry-public_key=key"
+
+          ctx =
+            :otel_ctx.get_current()
+            |> :otel_ctx.set_value(:"sentry-baggage", baggage_value)
+
+          setter = fn key, value, carrier -> Map.put(carrier, key, value) end
+          carrier = Propagator.inject(ctx, %{}, setter, [])
+
+          injected_baggage = Map.get(carrier, "baggage", "")
+
+          # Must not produce two sentry-org_id entries
+          assert length(String.split(injected_baggage, "sentry-org_id=")) == 2,
+                 "expected exactly one sentry-org_id entry, got: #{inspect(injected_baggage)}"
+        end
+      end
+
       test "inject does not duplicate sentry-org_id when already present in baggage" do
         put_test_config(dsn: "https://key@o99.ingest.sentry.io/123")
 

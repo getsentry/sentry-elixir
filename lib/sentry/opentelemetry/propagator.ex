@@ -159,10 +159,23 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       org_id = Sentry.Config.effective_org_id()
 
       if org_id != nil and extract_baggage_org_id(baggage) == nil do
-        if baggage == "" do
+        # Strip any existing sentry-org_id entries with empty values before appending
+        # to avoid producing duplicate keys (e.g. "sentry-org_id=,sentry-org_id=99").
+        stripped =
+          baggage
+          |> String.split(",")
+          |> Enum.reject(fn entry ->
+            case String.split(String.trim(entry), "=", parts: 2) do
+              ["sentry-org_id", value] -> String.trim(value) == ""
+              _ -> false
+            end
+          end)
+          |> Enum.join(",")
+
+        if stripped == "" do
           "sentry-org_id=" <> org_id
         else
-          baggage <> ",sentry-org_id=" <> org_id
+          stripped <> ",sentry-org_id=" <> org_id
         end
       else
         baggage
