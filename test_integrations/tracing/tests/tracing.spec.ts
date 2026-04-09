@@ -738,6 +738,18 @@ test.describe("Tracing", () => {
       clearLoggedEvents();
     });
 
+    // Restore strict_trace_continuation to false after each test so any test
+    // that enables strict mode doesn't bleed into the next one.
+    test.afterEach(async ({ page }) => {
+      await page.evaluate(async (phoenixUrl) => {
+        await fetch(`${phoenixUrl}/sentry-test-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict_trace_continuation: false }),
+        });
+      }, PHOENIX_URL);
+    });
+
     test("continues incoming trace when baggage org_id matches SDK's org_id", async ({
       page,
     }) => {
@@ -884,6 +896,62 @@ test.describe("Tracing", () => {
 
       // No org_id in baggage with strict=false → trace is continued
       expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).toBe(
+        incomingTraceId
+      );
+    });
+
+    test("starts new trace when baggage carries no org_id and strict=true", async ({
+      page,
+    }) => {
+      const incomingTraceId = "d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3";
+      const incomingSpanId = "0123456789abcdef";
+
+      // Enable strict mode for this test
+      await page.evaluate(async (phoenixUrl) => {
+        await fetch(`${phoenixUrl}/sentry-test-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict_trace_continuation: true }),
+        });
+      }, PHOENIX_URL);
+
+      clearLoggedEvents();
+
+      await page.evaluate(
+        async ({ traceId, spanId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-1`,
+              // Baggage has no sentry-org_id
+              baggage: `sentry-trace_id=${traceId},sentry-public_key=public`,
+            },
+          });
+        },
+        { traceId: incomingTraceId, spanId: incomingSpanId, phoenixUrl: PHOENIX_URL }
+      );
+
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              (e.transaction?.includes("/api/data") ||
+                e.transaction?.includes("fetch_data"))
+          ),
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (e) =>
+          e.type === "transaction" &&
+          (e.transaction?.includes("/api/data") ||
+            e.transaction?.includes("fetch_data") ||
+            (e.contexts?.trace?.data as any)?.["http.route"] === "/api/data")
+      );
+      expect(transactions.length).toBeGreaterThan(0);
+
+      // No org_id in baggage with strict=true → new trace started
+      expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).not.toBe(
         incomingTraceId
       );
     });
