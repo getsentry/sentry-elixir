@@ -2,7 +2,10 @@ defmodule SentryTest do
   use Sentry.Case
 
   import ExUnit.CaptureLog
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
+
+  alias Sentry.Test, as: SentryTest
 
   defmodule TestFilter do
     @behaviour Sentry.EventFilter
@@ -12,16 +15,10 @@ defmodule SentryTest do
   end
 
   setup do
-    setup_bypass(dedup_events: false)
+    SentryTest.setup_sentry(dedup_events: false)
   end
 
-  test "excludes events properly", %{bypass: bypass} do
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "RuntimeError"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "excludes events properly" do
     put_test_config(filter: TestFilter)
 
     assert {:ok, _} =
@@ -40,6 +37,10 @@ defmodule SentryTest do
 
     assert {:ok, _} =
              Sentry.capture_message("RuntimeError: error", event_source: :plug, result: :sync)
+
+    events = SentryTest.pop_sentry_reports()
+    assert length(events) == 2
+    find_sentry_report!(events, original_exception: %RuntimeError{message: "error"})
   end
 
   @tag :capture_log
@@ -59,13 +60,10 @@ defmodule SentryTest do
     Bypass.pass(bypass)
   end
 
-  test "sets last_event_id_and_source when an event is sent", %{bypass: bypass} do
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "sets last_event_id_and_source when an event is sent" do
     Sentry.capture_message("test")
 
+    assert_sentry_report(:event, message: %{formatted: "test"})
     assert {event_id, nil} = Sentry.get_last_event_id_and_source()
     assert is_binary(event_id)
   end
