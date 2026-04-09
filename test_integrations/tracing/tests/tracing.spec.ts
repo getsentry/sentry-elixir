@@ -9,6 +9,11 @@ import {
   type Span,
 } from "./helpers";
 
+const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL;
+if (!PHOENIX_URL) {
+  throw new Error("Required environment variable SENTRY_E2E_PHOENIX_APP_URL is not set.");
+}
+
 test.describe("Tracing", () => {
   test.beforeEach(() => {
     clearLoggedEvents();
@@ -155,15 +160,15 @@ test.describe("Tracing", () => {
 
       await expect(page.locator("h1")).toContainText("Svelte Mini App");
 
-      await page.evaluate(async () => {
-        const response = await fetch("http://localhost:4000/api/data", {
+      await page.evaluate(async (phoenixUrl) => {
+        const response = await fetch(`${phoenixUrl}/api/data`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
         });
         return response.json();
-      });
+      }, PHOENIX_URL);
 
       await page.waitForTimeout(2000);
 
@@ -225,8 +230,6 @@ test.describe("Tracing", () => {
   });
 
   test.describe("LiveView tracing", () => {
-    const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
-
     test("generates transaction for LiveView page mount with valid trace context", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
@@ -555,8 +558,6 @@ test.describe("Tracing", () => {
   });
 
   test.describe("Oban job tracing", () => {
-    const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
-
     test("LiveView-scheduled Oban job generates transaction with valid trace context", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/test-worker`);
 
