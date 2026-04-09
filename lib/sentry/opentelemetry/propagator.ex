@@ -78,8 +78,15 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
                 sdk_org_id = Sentry.Config.effective_org_id()
                 baggage_org_id = extract_baggage_org_id(raw_baggage)
 
+                reason =
+                  if sdk_org_id != nil and baggage_org_id != nil do
+                    "org ID mismatch"
+                  else
+                    "org ID missing (strict mode)"
+                  end
+
                 Logger.warning(
-                  "[Sentry] Not continuing trace due to org ID mismatch (sdk: #{sdk_org_id}, incoming: #{baggage_org_id})"
+                  "[Sentry] Not continuing trace: #{reason} (sdk: #{inspect(sdk_org_id)}, incoming: #{inspect(baggage_org_id)})"
                 )
 
                 ctx
