@@ -479,4 +479,18 @@ defmodule Sentry.ConfigTest do
       assert Config.effective_org_id() == "9999999"
     end
   end
+
+  describe ":strict_trace_continuation" do
+    test "defaults to false" do
+      assert Config.validate!([])[:strict_trace_continuation] == false
+    end
+
+    test "accepts true" do
+      assert Config.validate!(strict_trace_continuation: true)[:strict_trace_continuation] == true
+    end
+
+    test "accepts false" do
+      assert Config.validate!(strict_trace_continuation: false)[:strict_trace_continuation] == false
+    end
+  end
 end

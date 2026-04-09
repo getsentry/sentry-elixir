@@ -3,8 +3,6 @@ defmodule Sentry.StrictTraceContinuationTest do
 
   import Sentry.TestHelpers
 
-  alias Sentry.Config
-
   describe "DSN org_id extraction" do
     test "extracts org_id from standard DSN host" do
       {:ok, dsn} = Sentry.DSN.parse("https://key@o1234.ingest.sentry.io/123")
@@ -29,48 +27,6 @@ defmodule Sentry.StrictTraceContinuationTest do
     test "returns nil for localhost DSN" do
       {:ok, dsn} = Sentry.DSN.parse("http://key@localhost:9000/123")
       assert dsn.org_id == nil
-    end
-  end
-
-  describe "Config options" do
-    test ":org_id defaults to nil" do
-      assert Config.org_id() == nil
-    end
-
-    test ":strict_trace_continuation defaults to false" do
-      assert Config.strict_trace_continuation?() == false
-    end
-
-    test ":org_id can be set" do
-      put_test_config(org_id: "999")
-      assert Config.org_id() == "999"
-    end
-
-    test ":strict_trace_continuation can be set" do
-      put_test_config(strict_trace_continuation: true)
-      assert Config.strict_trace_continuation?() == true
-    end
-  end
-
-  describe "effective_org_id/0" do
-    test "returns nil when no org_id configured and DSN has no org" do
-      put_test_config(dsn: "https://key@sentry.io/123")
-      assert Config.effective_org_id() == nil
-    end
-
-    test "returns DSN-derived org_id" do
-      put_test_config(dsn: "https://key@o123.ingest.sentry.io/456")
-      assert Config.effective_org_id() == "123"
-    end
-
-    test "explicit org_id takes precedence over DSN" do
-      put_test_config(dsn: "https://key@o123.ingest.sentry.io/456", org_id: "999")
-      assert Config.effective_org_id() == "999"
-    end
-
-    test "returns nil when DSN is nil" do
-      put_test_config(dsn: nil)
-      assert Config.effective_org_id() == nil
     end
   end
 
