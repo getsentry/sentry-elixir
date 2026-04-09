@@ -490,7 +490,8 @@ defmodule Sentry.ConfigTest do
     end
 
     test "accepts false" do
-      assert Config.validate!(strict_trace_continuation: false)[:strict_trace_continuation] == false
+      assert Config.validate!(strict_trace_continuation: false)[:strict_trace_continuation] ==
+               false
     end
   end
 end
