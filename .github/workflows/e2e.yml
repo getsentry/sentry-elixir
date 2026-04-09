@@ -77,7 +77,7 @@ jobs:
         working-directory: test_integrations/phoenix_app
         run: |
           rm -f tmp/sentry_debug_events.log
-          SENTRY_E2E_TEST_MODE=true mix phx.server &
+          SENTRY_E2E_TEST_MODE=true SENTRY_ORG_ID=123 mix phx.server &
           echo $! > /tmp/phoenix.pid
           echo "Phoenix server started with PID $(cat /tmp/phoenix.pid)"
 
