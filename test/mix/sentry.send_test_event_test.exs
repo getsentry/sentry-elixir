@@ -2,10 +2,13 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
   use Sentry.Case
 
   import ExUnit.CaptureIO
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
+  alias Sentry.Test, as: SentryTest
+
   setup do
-    setup_bypass()
+    SentryTest.setup_sentry()
   end
 
   test "prints if :dsn is not set" do
@@ -26,12 +29,6 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
   end
 
   test "sends event successfully when configured to", %{bypass: bypass} do
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "Testing sending Sentry event"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
     put_test_config(
       environment_name: "test",
       finch_pool_opts: []
@@ -41,6 +38,10 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
       capture_io(fn ->
         Mix.Tasks.Sentry.SendTestEvent.run([])
       end)
+
+    assert_sentry_report(:event,
+      original_exception: %RuntimeError{message: "Testing sending Sentry event"}
+    )
 
     assert output =~ """
            Client configuration:
@@ -53,7 +54,7 @@ defmodule Mix.Tasks.Sentry.SendTestEventTest do
 
     assert output =~ "Sending test event..."
     assert output =~ "Test event sent"
-    assert output =~ "Event ID: 340"
+    assert output =~ ~r/Event ID: [0-9a-f]+/
   end
 
   @tag :capture_log
