@@ -9,6 +9,11 @@ import {
   type Span,
 } from "./helpers";
 
+const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL;
+if (!PHOENIX_URL) {
+  throw new Error("Required environment variable SENTRY_E2E_PHOENIX_APP_URL is not set.");
+}
+
 test.describe("Tracing", () => {
   test.beforeEach(() => {
     clearLoggedEvents();
@@ -155,15 +160,15 @@ test.describe("Tracing", () => {
 
       await expect(page.locator("h1")).toContainText("Svelte Mini App");
 
-      await page.evaluate(async () => {
-        const response = await fetch("http://localhost:4000/api/data", {
+      await page.evaluate(async (phoenixUrl) => {
+        const response = await fetch(`${phoenixUrl}/api/data`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
         });
         return response.json();
-      });
+      }, PHOENIX_URL);
 
       await page.waitForTimeout(2000);
 
@@ -225,8 +230,6 @@ test.describe("Tracing", () => {
   });
 
   test.describe("LiveView tracing", () => {
-    const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
-
     test("generates transaction for LiveView page mount with valid trace context", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
@@ -555,8 +558,6 @@ test.describe("Tracing", () => {
   });
 
   test.describe("Oban job tracing", () => {
-    const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
-
     test("LiveView-scheduled Oban job generates transaction with valid trace context", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/test-worker`);
 
@@ -726,6 +727,233 @@ test.describe("Tracing", () => {
         expect(traceContext?.span_id).toMatch(/^[a-f0-9]{16}$/);
         expect(traceContext?.op).toBe("queue.process");
       });
+    });
+  });
+
+  test.describe("Strict trace continuation", () => {
+    // Must match SENTRY_ORG_ID set in playwright.config.ts webServer command
+    const SDK_ORG_ID = "123";
+
+    test.beforeEach(() => {
+      clearLoggedEvents();
+    });
+
+    // Restore strict_trace_continuation to false after each test so any test
+    // that enables strict mode doesn't bleed into the next one.
+    test.afterEach(async ({ page }) => {
+      await page.evaluate(async (phoenixUrl) => {
+        await fetch(`${phoenixUrl}/sentry-test-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict_trace_continuation: false }),
+        });
+      }, PHOENIX_URL);
+    });
+
+    test("continues incoming trace when baggage org_id matches SDK's org_id", async ({
+      page,
+    }) => {
+      const incomingTraceId = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6";
+      const incomingSpanId = "1234567890abcdef";
+
+      await page.goto(`${PHOENIX_URL}/health`);
+
+      await page.evaluate(
+        async ({ traceId, spanId, orgId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-1`,
+              baggage: `sentry-org_id=${orgId},sentry-trace_id=${traceId},sentry-public_key=public`,
+            },
+          });
+        },
+        {
+          traceId: incomingTraceId,
+          spanId: incomingSpanId,
+          orgId: SDK_ORG_ID,
+          phoenixUrl: PHOENIX_URL,
+        }
+      );
+
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              (e.transaction?.includes("/api/data") ||
+                e.transaction?.includes("fetch_data"))
+          ),
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (e) =>
+          e.type === "transaction" &&
+          (e.transaction?.includes("/api/data") ||
+            e.transaction?.includes("fetch_data") ||
+            (e.contexts?.trace?.data as any)?.["http.route"] === "/api/data")
+      );
+      expect(transactions.length).toBeGreaterThan(0);
+
+      // Matching org_id → trace is continued; trace_id preserved from sentry-trace header
+      expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).toBe(
+        incomingTraceId
+      );
+    });
+
+    test("starts new trace when baggage org_id does not match SDK's org_id", async ({
+      page,
+    }) => {
+      const incomingTraceId = "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1";
+      const incomingSpanId = "abcdef1234567890";
+      const wrongOrgId = "456";
+
+      await page.goto(`${PHOENIX_URL}/health`);
+
+      await page.evaluate(
+        async ({ traceId, spanId, orgId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-1`,
+              baggage: `sentry-org_id=${orgId},sentry-trace_id=${traceId},sentry-public_key=public`,
+            },
+          });
+        },
+        {
+          traceId: incomingTraceId,
+          spanId: incomingSpanId,
+          orgId: wrongOrgId,
+          phoenixUrl: PHOENIX_URL,
+        }
+      );
+
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              (e.transaction?.includes("/api/data") ||
+                e.transaction?.includes("fetch_data"))
+          ),
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (e) =>
+          e.type === "transaction" &&
+          (e.transaction?.includes("/api/data") ||
+            e.transaction?.includes("fetch_data") ||
+            (e.contexts?.trace?.data as any)?.["http.route"] === "/api/data")
+      );
+      expect(transactions.length).toBeGreaterThan(0);
+
+      // Mismatched org_id → new trace started regardless of strict setting
+      expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).not.toBe(
+        incomingTraceId
+      );
+    });
+
+    test("continues incoming trace when baggage carries no org_id (strict=false)", async ({
+      page,
+    }) => {
+      const incomingTraceId = "c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2";
+      const incomingSpanId = "fedcba9876543210";
+
+      await page.goto(`${PHOENIX_URL}/health`);
+
+      await page.evaluate(
+        async ({ traceId, spanId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-1`,
+              // Baggage has no sentry-org_id
+              baggage: `sentry-trace_id=${traceId},sentry-public_key=public`,
+            },
+          });
+        },
+        { traceId: incomingTraceId, spanId: incomingSpanId, phoenixUrl: PHOENIX_URL }
+      );
+
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              (e.transaction?.includes("/api/data") ||
+                e.transaction?.includes("fetch_data"))
+          ),
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (e) =>
+          e.type === "transaction" &&
+          (e.transaction?.includes("/api/data") ||
+            e.transaction?.includes("fetch_data") ||
+            (e.contexts?.trace?.data as any)?.["http.route"] === "/api/data")
+      );
+      expect(transactions.length).toBeGreaterThan(0);
+
+      // No org_id in baggage with strict=false → trace is continued
+      expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).toBe(
+        incomingTraceId
+      );
+    });
+
+    test("starts new trace when baggage carries no org_id and strict=true", async ({
+      page,
+    }) => {
+      const incomingTraceId = "d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3";
+      const incomingSpanId = "0123456789abcdef";
+
+      // Enable strict mode for this test
+      await page.evaluate(async (phoenixUrl) => {
+        await fetch(`${phoenixUrl}/sentry-test-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strict_trace_continuation: true }),
+        });
+      }, PHOENIX_URL);
+
+      clearLoggedEvents();
+
+      await page.evaluate(
+        async ({ traceId, spanId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-1`,
+              // Baggage has no sentry-org_id
+              baggage: `sentry-trace_id=${traceId},sentry-public_key=public`,
+            },
+          });
+        },
+        { traceId: incomingTraceId, spanId: incomingSpanId, phoenixUrl: PHOENIX_URL }
+      );
+
+      const logged = await waitForEvents(
+        (events) =>
+          events.events.some(
+            (e) =>
+              e.type === "transaction" &&
+              (e.transaction?.includes("/api/data") ||
+                e.transaction?.includes("fetch_data"))
+          ),
+        { timeout: 10000 }
+      );
+
+      const transactions = logged.events.filter(
+        (e) =>
+          e.type === "transaction" &&
+          (e.transaction?.includes("/api/data") ||
+            e.transaction?.includes("fetch_data") ||
+            (e.contexts?.trace?.data as any)?.["http.route"] === "/api/data")
+      );
+      expect(transactions.length).toBeGreaterThan(0);
+
+      // No org_id in baggage with strict=true → new trace started
+      expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).not.toBe(
+        incomingTraceId
+      );
     });
   });
 });

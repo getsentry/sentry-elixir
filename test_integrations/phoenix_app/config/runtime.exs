@@ -23,9 +23,25 @@ end
 # For e2e tracing tests, use the TestClient to log events to a file
 # This must be in runtime.exs because the env var is set at runtime, not compile time
 if System.get_env("SENTRY_E2E_TEST_MODE") == "true" do
-  config :sentry,
-    dsn: "https://public@sentry.example.com/1",
-    client: PhoenixApp.TestClient
+  sentry_e2e_opts =
+    [
+      dsn: "https://public@sentry.example.com/1",
+      client: PhoenixApp.TestClient
+    ]
+    |> then(fn opts ->
+      case System.get_env("SENTRY_ORG_ID") do
+        nil -> opts
+        org_id -> Keyword.put(opts, :org_id, org_id)
+      end
+    end)
+    |> then(fn opts ->
+      case System.get_env("SENTRY_STRICT_TRACE") do
+        "true" -> Keyword.put(opts, :strict_trace_continuation, true)
+        _ -> opts
+      end
+    end)
+
+  config :sentry, sentry_e2e_opts
 else
   # Allow runtime configuration of Sentry DSN and environment
   if dsn = System.get_env("SENTRY_DSN") do

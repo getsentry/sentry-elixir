@@ -444,6 +444,29 @@ defmodule Sentry.Config do
         ]
       ]
     ],
+    org_id: [
+      type: {:custom, __MODULE__, :__validate_org_id__, []},
+      default: nil,
+      type_doc: "`t:String.t/0` or `nil`",
+      doc: """
+      An explicit organization ID for trace continuation validation. If not set, the SDK
+      will extract it from the DSN host (e.g., `o1234` from `o1234.ingest.sentry.io` gives `"1234"`).
+      This is useful for self-hosted Sentry or Relay setups where the org ID cannot be extracted
+      from the DSN. *Available since 12.1.0*.
+      """
+    ],
+    strict_trace_continuation: [
+      type: :boolean,
+      default: false,
+      doc: """
+      When `true`, both the SDK's org ID and the incoming baggage `sentry-org_id` must be present
+      and match for a trace to be continued. Traces with a missing org ID on either side are rejected
+      and a new trace is started. When `false` (the default), only a mismatch between two present
+      org IDs will cause a new trace to be started. See the
+      [SDK spec](https://develop.sentry.dev/sdk/foundations/trace-propagation/#strict-trace-continuation)
+      for the full decision matrix. *Available since 12.1.0*.
+      """
+    ],
     telemetry_processor_categories: [
       type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
       default: [],
@@ -972,6 +995,29 @@ defmodule Sentry.Config do
   @spec transport_capacity() :: pos_integer()
   def transport_capacity, do: fetch!(:transport_capacity)
 
+  @spec org_id() :: String.t() | nil
+  def org_id, do: get(:org_id)
+
+  @spec strict_trace_continuation?() :: boolean()
+  def strict_trace_continuation?, do: fetch!(:strict_trace_continuation)
+
+  @doc """
+  Returns the effective org ID, preferring the explicit `:org_id` config over the DSN-derived value.
+  """
+  @spec effective_org_id() :: String.t() | nil
+  def effective_org_id do
+    case org_id() do
+      nil ->
+        case dsn() do
+          %Sentry.DSN{org_id: org_id} -> org_id
+          _ -> nil
+        end
+
+      explicit ->
+        explicit
+    end
+  end
+
   @spec telemetry_processor_categories() :: [atom()]
   def telemetry_processor_categories, do: fetch!(:telemetry_processor_categories)
 
@@ -1278,5 +1324,19 @@ defmodule Sentry.Config do
 
   def __validate_namespace__(other) do
     {:error, "expected :namespace to be a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_org_id__(nil), do: {:ok, nil}
+
+  def __validate_org_id__(value) when is_binary(value) and value != "" do
+    {:ok, value}
+  end
+
+  def __validate_org_id__("") do
+    {:error, "expected :org_id to be a non-empty string or nil, got empty string"}
+  end
+
+  def __validate_org_id__(other) do
+    {:error, "expected :org_id to be a non-empty string or nil, got: #{inspect(other)}"}
   end
 end

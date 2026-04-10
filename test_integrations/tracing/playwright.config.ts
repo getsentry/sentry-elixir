@@ -1,9 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PHOENIX_URL =
-  process.env.SENTRY_E2E_PHOENIX_APP_URL || "http://localhost:4000";
-const SVELTE_URL =
-  process.env.SENTRY_E2E_SVELTE_APP_URL || "http://localhost:4001";
+// Apply local defaults before any validation. These match the ports used by the
+// webServer block below, so `npx playwright test` works without any setup.
+// In CI or custom environments, set the env vars explicitly to override these.
+process.env.SENTRY_E2E_PHOENIX_APP_URL ??= "http://localhost:4000";
+process.env.SENTRY_E2E_SVELTE_APP_URL ??= "http://localhost:4001";
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Required environment variable ${name} is not set.`);
+  }
+  return value;
+}
+
+const PHOENIX_URL = requireEnv("SENTRY_E2E_PHOENIX_APP_URL");
+const SVELTE_URL = requireEnv("SENTRY_E2E_SVELTE_APP_URL");
 
 // When servers are started externally (e.g., in CI workflow steps), skip webServer config
 const serversRunningExternally = process.env.SENTRY_E2E_SERVERS_RUNNING === "true";
@@ -39,7 +51,7 @@ export default defineConfig({
         webServer: [
           {
             command:
-              'cd ../phoenix_app && rm -f tmp/sentry_debug_events.log && SENTRY_E2E_TEST_MODE=true mix phx.server',
+              'cd ../phoenix_app && rm -f tmp/sentry_debug_events.log && SENTRY_E2E_TEST_MODE=true SENTRY_ORG_ID=123 mix phx.server',
             url: `${PHOENIX_URL}/health`,
             reuseExistingServer: true
           },

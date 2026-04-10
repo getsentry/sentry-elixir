@@ -1,6 +1,8 @@
 defmodule Sentry.ConfigTest do
   use Sentry.Case, async: false
 
+  import Sentry.TestHelpers
+
   alias Sentry.Config
 
   describe "validate!/0" do
@@ -427,6 +429,69 @@ defmodule Sentry.ConfigTest do
     test "defaults to nil" do
       config = Config.validate!([])
       assert config[:before_send_metric] == nil
+    end
+  end
+
+  describe ":org_id" do
+    test "defaults to nil" do
+      assert Config.validate!([])[:org_id] == nil
+    end
+
+    test "accepts a non-empty string" do
+      assert Config.validate!(org_id: "1234567")[:org_id] == "1234567"
+    end
+
+    test "accepts nil explicitly" do
+      assert Config.validate!(org_id: nil)[:org_id] == nil
+    end
+
+    test "rejects an empty string" do
+      assert_raise ArgumentError, ~r/expected :org_id to be a non-empty string or nil/, fn ->
+        Config.validate!(org_id: "")
+      end
+    end
+
+    test "rejects a non-string value" do
+      assert_raise ArgumentError, ~r/invalid value for :org_id option/, fn ->
+        Config.validate!(org_id: 1234)
+      end
+    end
+  end
+
+  describe "effective_org_id/0" do
+    test "returns nil when no org_id is configured and DSN has no org ID" do
+      put_test_config(dsn: "https://public:secret@app.getsentry.com/1", org_id: nil)
+      assert Config.effective_org_id() == nil
+    end
+
+    test "returns explicit org_id when configured" do
+      put_test_config(org_id: "9876543")
+      assert Config.effective_org_id() == "9876543"
+    end
+
+    test "falls back to org ID extracted from DSN host" do
+      put_test_config(dsn: "https://public@o1234567.ingest.sentry.io/123", org_id: nil)
+      assert Config.effective_org_id() == "1234567"
+    end
+
+    test "explicit org_id takes precedence over DSN-derived org ID" do
+      put_test_config(dsn: "https://public@o1234567.ingest.sentry.io/123", org_id: "9999999")
+      assert Config.effective_org_id() == "9999999"
+    end
+  end
+
+  describe ":strict_trace_continuation" do
+    test "defaults to false" do
+      assert Config.validate!([])[:strict_trace_continuation] == false
+    end
+
+    test "accepts true" do
+      assert Config.validate!(strict_trace_continuation: true)[:strict_trace_continuation] == true
+    end
+
+    test "accepts false" do
+      assert Config.validate!(strict_trace_continuation: false)[:strict_trace_continuation] ==
+               false
     end
   end
 end
