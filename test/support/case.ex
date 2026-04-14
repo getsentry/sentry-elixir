@@ -7,6 +7,10 @@ defmodule Sentry.Case do
   use ExUnit.CaseTemplate
 
   setup context do
+    # Override the global receive_timeout (50ms in config.exs) with a value
+    # that won't flake under async load.
+    Sentry.Test.Config.put(finch_request_opts: [receive_timeout: 2000])
+
     # Start a fresh RateLimiter for each test with unique names for isolation.
     setup_rate_limiter()
 
