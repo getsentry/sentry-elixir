@@ -956,4 +956,129 @@ test.describe("Tracing", () => {
       );
     });
   });
+
+  test.describe("GraphQL-to-Oban distributed tracing", () => {
+    // Full distributed trace path:
+    //
+    //   Svelte (http.client span)
+    //     → Phoenix http.server transaction (continues trace via sentry-trace + baggage headers)
+    //       → opentelemetry_absinthe span ("mutation ScheduleJob")
+    //         → OpentelemetryOban.insert() records the span context
+    //   Oban GraphQLJobWorker transaction (new trace, span link → absinthe span)
+    //
+    // Assertions:
+    //   1. Phoenix /api/graphql transaction has a parent_span_id (from the Svelte http.client span)
+    //   2. Phoenix transaction contains an opentelemetry_absinthe span for "mutation ScheduleJob"
+    //      with graphql.operation.name and graphql.operation.type attributes
+    //   3. Oban worker transaction has op "queue.process" for GraphQLJobWorker
+    //   4. Oban transaction carries a span link whose trace_id matches the Phoenix transaction's trace_id
+
+    test("Svelte GraphQL mutation schedules an Oban job with connected span hierarchy", async ({
+      page,
+    }) => {
+      await page.goto("/");
+
+      await expect(page.locator("h1")).toContainText("Svelte Mini App");
+      await expect(page.locator("button#schedule-graphql-job-btn")).toBeVisible();
+
+      clearLoggedEvents();
+
+      await page.click("button#schedule-graphql-job-btn");
+
+      await expect(page.locator(".result")).toContainText("GraphQL job scheduled:", { timeout: 10000 });
+
+      // Wait for both the Phoenix GraphQL transaction and the Oban job transaction
+      const logged = await waitForEvents(
+        (events) => {
+          const transactions = events.events.filter((e) => e.type === "transaction");
+          const hasGraphQL = transactions.some(
+            (t) =>
+              (t.contexts?.trace?.data as any)?.["http.route"] === "/api/graphql" ||
+              t.transaction?.includes("/api/graphql")
+          );
+          const hasOban = transactions.some(
+            (t) =>
+              t.contexts?.trace?.op === "queue.process" &&
+              t.transaction?.includes("GraphQLJobWorker")
+          );
+          return hasGraphQL && hasOban;
+        },
+        { timeout: 15000 }
+      );
+
+      const transactions = logged.events.filter((e) => e.type === "transaction") as TransactionWithSpans[];
+
+      // Step 1: Find the Phoenix http.server transaction for POST /api/graphql
+      const graphqlTransactions = transactions.filter(
+        (t) =>
+          (t.contexts?.trace?.data as any)?.["http.route"] === "/api/graphql" ||
+          t.transaction?.includes("/api/graphql")
+      );
+      expect(graphqlTransactions.length).toBeGreaterThan(0);
+
+      const graphqlTransaction = graphqlTransactions[graphqlTransactions.length - 1];
+      const graphqlTrace = graphqlTransaction.contexts?.trace;
+
+      // The Phoenix transaction must be an http.server span
+      expect(graphqlTrace?.op).toBe("http.server");
+      expect(graphqlTrace?.trace_id).toMatch(/^[a-f0-9]{32}$/);
+      expect(graphqlTrace?.span_id).toMatch(/^[a-f0-9]{16}$/);
+
+      // Step 2: Verify the Phoenix transaction was reached from the Svelte client
+      // (parent_span_id proves the Svelte http.client span propagated its context)
+      expect(graphqlTrace?.parent_span_id).toBeDefined();
+      expect(graphqlTrace?.parent_span_id).toMatch(/^[a-f0-9]{16}$/);
+
+      // Step 3: Validate that all spans in the Phoenix transaction form a valid hierarchy
+      const hierarchyResult = validateSpanHierarchy(graphqlTransaction);
+      expect(hierarchyResult.errors).toEqual([]);
+      expect(hierarchyResult.valid).toBe(true);
+
+      // Step 4: The Phoenix transaction should contain the opentelemetry_absinthe span.
+      // OpentelemetryAbsinthe.setup() instruments Absinthe automatically and produces a span
+      // named "mutation ScheduleJob" with graphql.operation.* attributes.
+      const absintheSpan = graphqlTransaction.spans?.find(
+        (s) => s.description === "mutation ScheduleJob"
+      );
+      expect(absintheSpan).toBeDefined();
+      expect(absintheSpan!.trace_id).toBe(graphqlTrace?.trace_id);
+      expect(absintheSpan!.parent_span_id).toBeDefined();
+
+      const absintheSpanData = absintheSpan!.data as Record<string, any>;
+      expect(absintheSpanData["graphql.operation.name"]).toBe("ScheduleJob");
+      expect(absintheSpanData["graphql.operation.type"]).toBe("mutation");
+
+      // Step 5: Find the Oban job transaction for the GraphQLJobWorker
+      const obanTransactions = transactions.filter(
+        (t) =>
+          t.contexts?.trace?.op === "queue.process" &&
+          t.transaction?.includes("GraphQLJobWorker")
+      );
+      expect(obanTransactions.length).toBeGreaterThan(0);
+
+      const obanTransaction = obanTransactions[0];
+      const obanTrace = obanTransaction.contexts?.trace;
+
+      expect(obanTransaction.transaction).toBe("PhoenixApp.Workers.GraphQLJobWorker");
+      expect(obanTrace?.op).toBe("queue.process");
+      expect(obanTrace?.trace_id).toMatch(/^[a-f0-9]{32}$/);
+      expect(obanTrace?.span_id).toMatch(/^[a-f0-9]{16}$/);
+
+      // The Oban job runs in its own new trace (different trace_id from the GraphQL request)
+      expect(obanTrace?.trace_id).not.toBe(graphqlTrace?.trace_id);
+
+      // Step 6: Verify the span link connects the Oban job back to the GraphQL/Phoenix trace.
+      // OpentelemetryOban.insert() is called from within the opentelemetry_absinthe span,
+      // so the link points back to the same trace as the Phoenix http.server transaction.
+      const obanLinks = obanTrace?.links;
+      expect(obanLinks).toBeDefined();
+      expect(obanLinks!.length).toBeGreaterThan(0);
+
+      const linkToGraphQLTrace = obanLinks!.find(
+        (link) => link.trace_id === graphqlTrace?.trace_id
+      );
+      expect(linkToGraphQLTrace).toBeDefined();
+      expect(linkToGraphQLTrace!.span_id).toMatch(/^[a-f0-9]{16}$/);
+    });
+  });
 });

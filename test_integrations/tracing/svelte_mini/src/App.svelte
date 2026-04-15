@@ -4,7 +4,7 @@
   let loading = $state(false);
   let result = $state("");
 
-  async function makeRequest(method, url) {
+  async function makeRequest(method, url, body = undefined) {
     return await Sentry.startSpan(
       { op: "http.client", name: `${method} ${url}` },
       async (span) => {
@@ -14,12 +14,18 @@
         span.setAttribute("server.address", parsedURL.hostname);
         span.setAttribute("server.port", parsedURL.port || undefined);
 
-        const response = await fetch(url, {
+        const fetchOptions = {
           method,
           headers: {
             "Content-Type": "application/json",
           },
-        });
+        };
+
+        if (body !== undefined) {
+          fetchOptions.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(url, fetchOptions);
 
         span.setAttribute("http.response.status_code", response.status);
         span.setAttribute(
@@ -70,6 +76,40 @@
     }
   }
 
+  async function scheduleGraphQLJob() {
+    loading = true;
+    result = "";
+    try {
+      const mutation = `
+        mutation ScheduleJob($payload: String!) {
+          scheduleJob(payload: $payload) {
+            jobId
+            worker
+            queue
+            payload
+            enqueued
+          }
+        }
+      `;
+
+      const response = await makeRequest("POST", `${SENTRY_E2E_PHOENIX_APP_URL}/api/graphql`, {
+        query: mutation,
+        variables: { payload: "e2e-distributed-trace-test" },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        result = `GraphQL job scheduled: ${JSON.stringify(data, null, 2)}`;
+      } else {
+        result = `Error: ${response.status} ${response.statusText}`;
+      }
+    } catch (error) {
+      result = `Error: ${error.message}`;
+    } finally {
+      loading = false;
+    }
+  }
+
   async function fetchData() {
     loading = true;
     result = "";
@@ -107,6 +147,10 @@
 
     <button id="schedule-job-btn" onclick={scheduleJob} disabled={loading}>
       {loading ? "Loading..." : "Schedule Job"}
+    </button>
+
+    <button id="schedule-graphql-job-btn" onclick={scheduleGraphQLJob} disabled={loading}>
+      {loading ? "Loading..." : "Schedule GraphQL Job"}
     </button>
   </div>
 
