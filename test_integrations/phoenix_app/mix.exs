@@ -33,6 +33,7 @@ defmodule PhoenixApp.MixProject do
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
+      {:nimble_ownership, "~> 1.0"},
       {:postgrex, ">= 0.0.0"},
       {:ecto, "~> 3.12"},
       {:ecto_sql, "~> 3.12"},
