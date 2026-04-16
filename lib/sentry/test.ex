@@ -396,18 +396,22 @@ defmodule Sentry.Test do
     {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
     {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
 
+    # Use the caller-only registry lookup instead of `Sentry.Config.before_send/0`
+    # so the captured "original" callback is only this test's override (or the
+    # global default), never another concurrent test's wrapping callback.
     original_before_send =
-      user_before_send || user_before_send_event || Sentry.Config.before_send()
+      user_before_send || user_before_send_event ||
+        original_config_value(:before_send)
 
-    original_before_send_log = user_before_send_log || Sentry.Config.before_send_log()
+    original_before_send_log =
+      user_before_send_log || original_config_value(:before_send_log)
 
     # Build collecting callbacks that wrap the originals
     new_before_send = build_collecting_callback(original_before_send)
     new_before_send_log = build_collecting_callback(original_before_send_log)
 
-    # Always set a per-test DSN override so that config resolution never falls
-    # through to resolve_from_active_scopes (which could pick up another async
-    # test's DSN). When no DSN is provided, use the default Bypass DSN.
+    # Always set a per-test DSN override. When no DSN is provided, use the
+    # default Bypass DSN.
     extra_config =
       if Keyword.has_key?(extra_config, :dsn) do
         extra_config
@@ -481,6 +485,17 @@ defmodule Sentry.Test do
         [] -> nil
       end
     end)
+  end
+
+  # Reads `key` from this test's per-process scope (or any caller's scope on
+  # `[self() | $callers]`), falling back to the global config value. Skips the
+  # full namespace resolver so the captured "original" callback is never
+  # another concurrent test's wrapping callback.
+  defp original_config_value(key) do
+    case Sentry.Test.Scope.Registry.lookup_caller_override(key) do
+      {:ok, value} -> value
+      :default -> :persistent_term.get({:sentry_config, key}, nil)
+    end
   end
 
   defp build_collecting_callback(nil) do

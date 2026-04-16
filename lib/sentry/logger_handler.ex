@@ -267,9 +267,19 @@ defmodule Sentry.LoggerHandler do
     # The :config key may not be here.
     sentry_config = Map.get(config, :config, %{})
 
+    # Pop :enable_logs from the handler config before validating; it's a
+    # Sentry-level setting not in the handler's NimbleOptions schema.
+    # When present it takes precedence over the global Config.enable_logs?()
+    # which may not resolve correctly in the logger-server process during
+    # async tests.
+    {enable_logs_override, sentry_config} = Map.pop(sentry_config, :enable_logs)
+
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
-    backends = [ErrorBackend] ++ if Config.enable_logs?(), do: [LogsBackend], else: []
+    enable_logs? =
+      if is_boolean(enable_logs_override), do: enable_logs_override, else: Config.enable_logs?()
+
+    backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}
 
     config = Map.put(config, :config, handler_config)

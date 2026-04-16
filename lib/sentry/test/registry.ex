@@ -9,6 +9,7 @@ defmodule Sentry.Test.Registry do
   @compile {:no_warn_undefined, [Bypass, Bypass.Instance, Bypass.Supervisor, Plug.Conn]}
 
   @table :sentry_test_collectors
+  @allows_table :sentry_test_scope_allows
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link([] = _opts) do
@@ -21,11 +22,102 @@ defmodule Sentry.Test.Registry do
     :persistent_term.get(:sentry_test_default_bypass_dsn, nil)
   end
 
+  @doc """
+  Atomic claim of `allowed_pid` for `owner_pid`'s scope. All claims
+  serialize through this GenServer so the conflict check and the ETS
+  write happen as one indivisible step — no two concurrent async tests
+  can both pass a check-and-then-write race for the same allowed_pid.
+
+  `mode`:
+    * `:strict` — return `{:error, {:taken, existing_owner}}` when a
+      live peer scope already owns `allowed_pid` (used by the public
+      `Sentry.Test.Config.allow/2`, surfaced as `Scope.AllowConflictError`).
+    * `:soft`   — return `:skipped` in the same situation (used by the
+      auto-allow of globally-supervised pids in `Config.put/1`).
+
+  Stale entries from owners that have exited without cleanup are
+  silently replaced so the new owner can claim the pid.
+
+  Idempotent: re-claiming a pid you already own returns `:ok`.
+  """
+  @spec claim_allow(pid(), pid(), :strict | :soft) ::
+          :ok | :skipped | {:error, {:taken, pid()}}
+  def claim_allow(owner_pid, allowed_pid, mode)
+      when is_pid(owner_pid) and is_pid(allowed_pid) and mode in [:strict, :soft] do
+    GenServer.call(__MODULE__, {:claim_allow, owner_pid, allowed_pid, mode})
+  end
+
+  @doc """
+  Removes every allow entry whose owner is `owner_pid`. Atomic batch
+  delete via `:ets.match_delete/2` — safe to call from a test's on_exit
+  cleanup without serializing through the GenServer.
+  """
+  @spec drop_allows_for(pid()) :: :ok
+  def drop_allows_for(owner_pid) when is_pid(owner_pid) do
+    if :ets.whereis(@allows_table) != :undefined do
+      :ets.match_delete(@allows_table, {:_, owner_pid})
+    end
+
+    :ok
+  end
+
+  @doc """
+  Direct ETS read of the owner that has allowed `allowed_pid`. Returns
+  the owner pid if it is still alive and still owns the entry, or `nil`
+  for missing/stale claims. Reads bypass the GenServer because ETS
+  lookups are atomic and need to be cheap on the config read path.
+  """
+  @spec lookup_allow_owner(pid()) :: pid() | nil
+  def lookup_allow_owner(allowed_pid) when is_pid(allowed_pid) do
+    case :ets.whereis(@allows_table) do
+      :undefined ->
+        nil
+
+      _ref ->
+        case :ets.lookup(@allows_table, allowed_pid) do
+          [{^allowed_pid, owner}] when is_pid(owner) ->
+            if Process.alive?(owner), do: owner, else: nil
+
+          [] ->
+            nil
+        end
+    end
+  end
+
   @impl true
   def init(nil) do
     _table = :ets.new(@table, [:named_table, :public, :set])
+    _allows_table = :ets.new(@allows_table, [:named_table, :public, :set])
     maybe_start_default_bypass()
     {:ok, :no_state}
+  end
+
+  @impl true
+  def handle_call({:claim_allow, owner_pid, allowed_pid, mode}, _from, state) do
+    reply =
+      case :ets.lookup(@allows_table, allowed_pid) do
+        [] ->
+          true = :ets.insert_new(@allows_table, {allowed_pid, owner_pid})
+          :ok
+
+        [{^allowed_pid, ^owner_pid}] ->
+          :ok
+
+        [{^allowed_pid, existing_owner}] ->
+          cond do
+            not Process.alive?(existing_owner) ->
+              true = :ets.insert(@allows_table, {allowed_pid, owner_pid})
+              :ok
+
+            mode == :strict ->
+              {:error, {:taken, existing_owner}}
+
+            true ->
+              :skipped
+          end
+      end
+
+    {:reply, reply, state}
   end
 
   # Starts a global Bypass instance that acts as a silent HTTP sink for all tests.

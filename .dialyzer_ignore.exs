@@ -4,5 +4,6 @@
   {"test/support/test_helpers.ex"},
   {"lib/sentry/opentelemetry/sampler.ex", :pattern_match, 1},
   {"lib/sentry/application.ex", :unmatched_return},
-  {"lib/sentry/test.ex"}
+  {"lib/sentry/test.ex"},
+  {"lib/sentry/test/registry.ex"}
 ]
