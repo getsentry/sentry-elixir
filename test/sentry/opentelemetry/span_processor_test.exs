@@ -44,7 +44,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     TestEndpoint.child_instrumented_function("one")
 
-    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+    [tx] = collect_sentry_transactions(ref, 1)
 
     assert tx["event_id"]
     assert tx["environment"] == "test"
@@ -64,7 +64,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     TestEndpoint.instrumented_function()
 
-    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+    [tx] = collect_sentry_transactions(ref, 1)
 
     assert_valid_iso8601(tx["timestamp"])
     assert_valid_iso8601(tx["start_timestamp"])
@@ -105,7 +105,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
     TestEndpoint.instrumented_function()
 
-    [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+    [tx] = collect_sentry_transactions(ref, 1)
 
     assert SpanStorage.get_root_span(tx["contexts"]["trace"]["span_id"], table_name: table_name) ==
              nil
@@ -168,7 +168,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       TestEndpoint.instrumented_function()
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
       assert length(tx["spans"]) == 2
 
       [child_span_one, child_span_two] = tx["spans"]
@@ -190,7 +190,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       Enum.each(transactions, fn tx ->
         assert length(tx["spans"]) == 2
@@ -225,7 +225,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       assert length(tx["spans"]) == 4
 
@@ -248,7 +248,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
 
       TestEndpoint.child_instrumented_function("standalone")
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       assert length(tx["spans"]) == 0
       assert tx["transaction"] == "child_instrumented_function_standalone"
@@ -277,7 +277,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       Enum.each(tasks, &Task.await/1)
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       Enum.each(transactions, fn tx ->
         assert length(tx["spans"]) == 1
@@ -315,7 +315,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       Enum.each(transactions, fn tx ->
         trace_id = tx["contexts"]["trace"]["trace_id"]
@@ -380,7 +380,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       # Should capture the HTTP request span as a transaction root despite having an external parent
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       # Verify transaction properties
       assert tx["transaction"] == "POST /api/users"
@@ -449,7 +449,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       # Should capture the HTTP request span as a transaction
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       # Verify the HTTP server span was removed from storage
       # (even though it was stored as a child span due to having a remote parent)
@@ -489,7 +489,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{"trace" => %{"op" => "http.server", "description" => "GET /api/users"}}
       )
     end
@@ -509,7 +509,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{"trace" => %{"op" => "http.server", "description" => "GET"}}
       )
     end
@@ -530,7 +530,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{"trace" => %{"op" => "http.client", "description" => "GET /external/api"}}
       )
     end
@@ -552,7 +552,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{
           "trace" => %{
             "op" => "http.server",
@@ -578,7 +578,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{
           "trace" => %{"op" => "db", "description" => "SELECT * FROM users WHERE id = $1"}
         }
@@ -600,7 +600,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{"trace" => %{"op" => "db", "description" => nil}}
       )
     end
@@ -621,7 +621,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{
           "trace" => %{"op" => "queue.process", "description" => "MyApp.Workers.EmailWorker"}
         },
@@ -639,7 +639,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_envelopes(ref, 1) |> extract_transactions(),
+      assert_sentry_report(collect_sentry_transactions(ref, 1),
         contexts: %{"trace" => %{"op" => "custom_operation", "description" => "custom_operation"}}
       )
     end
@@ -662,7 +662,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       assert length(tx["spans"]) == 1
       [child_span] = tx["spans"]
@@ -689,7 +689,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       assert length(tx["spans"]) == 1
       [child_span] = tx["spans"]
@@ -868,7 +868,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
 
@@ -906,7 +906,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
 
@@ -939,7 +939,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       parent_tx = find_sentry_report!(transactions, transaction: "GET /api/parent")
 
@@ -971,7 +971,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         end
       end
 
-      [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+      [tx] = collect_sentry_transactions(ref, 1)
 
       refute Map.has_key?(tx["contexts"]["trace"], "links")
       assert [child_span] = tx["spans"]
@@ -1008,7 +1008,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end
 
       Process.sleep(200)
-      transactions = collect_envelopes(ref, 100, timeout: 500) |> extract_transactions()
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
 
       linked_tx = find_sentry_report!(transactions, transaction: "GET /api/multi-linked")
 

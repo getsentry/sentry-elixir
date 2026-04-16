@@ -76,10 +76,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     id = CheckInIDMappings.lookup_or_insert_new(123)
-
-    assert headers["type"] == "check_in"
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -127,10 +125,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
         }
       })
 
-      assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
       id = CheckInIDMappings.lookup_or_insert_new(942)
-
-      assert headers["type"] == "check_in"
 
       assert_sentry_report(check_in_body,
         check_in_id: id,
@@ -164,10 +160,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     id = CheckInIDMappings.lookup_or_insert_new(942)
-
-    assert headers["type"] == "check_in"
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -207,7 +201,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
 
     assert_sentry_report(check_in_body,
       monitor_config: %{
@@ -236,7 +230,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     assert_sentry_report(check_in_body, monitor_slug: "sentry-my-worker")
   end
 
@@ -255,7 +249,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     assert_sentry_report(check_in_body, monitor_slug: "sentry-client-worker-my-client")
   end
 
@@ -288,7 +282,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
 
     assert_sentry_report(check_in_body,
       monitor_slug: "this-is-a-custom-slug-123",

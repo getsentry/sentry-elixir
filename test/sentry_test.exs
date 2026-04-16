@@ -286,7 +286,7 @@ defmodule SentryTest do
                )
 
       assert_sentry_report(
-        SentryTest.collect_envelopes(ref, 1) |> SentryTest.extract_transactions(),
+        SentryTest.collect_sentry_transactions(ref, 1),
         transaction: "modified-transaction"
       )
     end

@@ -87,7 +87,7 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_report(:transaction, transaction: "test_span")
 
       # With explicit data from envelope collection:
-      [event] = collect_envelopes(ref, 1) |> extract_events()
+      [event] = collect_sentry_events(ref, 1)
       assert_sentry_report(event, "tags" => %{"oban_queue" => "default"})
 
   """

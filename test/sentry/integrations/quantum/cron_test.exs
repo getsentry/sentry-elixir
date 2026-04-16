@@ -54,10 +54,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       telemetry_span_context: span_ref
     })
 
-    assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
-
-    assert headers["type"] == "check_in"
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -91,10 +89,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       telemetry_span_context: span_ref
     })
 
-    assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
-
-    assert headers["type"] == "check_in"
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -127,10 +123,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       telemetry_span_context: span_ref
     })
 
-    assert [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
-
-    assert headers["type"] == "check_in"
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -167,7 +161,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
         telemetry_span_context: span_ref
       })
 
-      assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
       assert_sentry_report(check_in_body, monitor_slug: unquote(expected_slug))
     end
   end
@@ -183,7 +177,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       telemetry_span_context: span_ref
     })
 
-    assert [[{_headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     assert_sentry_report(check_in_body, monitor_slug: "quantum-generic-job")
   end
 
@@ -204,8 +198,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       telemetry_span_context: span_ref
     })
 
-    assert [[{_start_headers, start_body}], [{_stop_headers, stop_body}]] =
-             SentryTest.collect_envelopes(ref, 2)
+    [start_body, stop_body] = SentryTest.collect_sentry_check_ins(ref, 2)
 
     assert_sentry_report(start_body, check_in_id: id)
     assert_sentry_report(stop_body, check_in_id: id)

@@ -231,7 +231,7 @@ defmodule Sentry.ClientTest do
       assert {:ok, _} = Client.send_event(event, result: :sync)
 
       assert_sentry_report(
-        SentryTest.collect_envelopes(ref, 1) |> SentryTest.extract_events(),
+        SentryTest.collect_sentry_events(ref, 1),
         %{"extra" => %{"key" => "value"}, "user" => %{"id" => 1}}
       )
     end
