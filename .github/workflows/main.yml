@@ -67,7 +67,9 @@ jobs:
       with:
         path: |
           deps
+          test_integrations/umbrella/deps
           test_integrations/phoenix_app/deps
+          test_integrations/legacy_otel/deps
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix.lock') }}
 
