@@ -10,6 +10,13 @@ defmodule Sentry.LoggerBackendTest do
   @moduletag :capture_log
 
   setup do
+    # The legacy Logger backend runs in a child of Logger.Supervisor. Tag that
+    # supervisor with this test's scope so Config lookups inside the backend
+    # resolve against the current test's overrides (via ancestor walk). Safe
+    # because this suite is async: false and is the only one using
+    # Sentry.LoggerBackend.
+    Sentry.Test.Config.allow(self(), Process.whereis(Logger.Supervisor))
+
     assert {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
 
     on_exit(fn ->

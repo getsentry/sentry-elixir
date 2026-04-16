@@ -1,5 +1,5 @@
 defmodule Sentry.TestBackwardCompatTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   alias Sentry.Test, as: SentryTest
 

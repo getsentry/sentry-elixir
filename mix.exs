@@ -97,7 +97,6 @@ defmodule Sentry.Mixfile do
   defp deps do
     [
       {:nimble_options, "~> 1.0"},
-
       # Optional dependencies
       {:hackney, "~> 1.8", optional: true},
       {:finch, "~> 0.21", optional: true},

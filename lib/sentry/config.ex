@@ -804,6 +804,7 @@ defmodule Sentry.Config do
     case NimbleOptions.validate(config_opts, @opts_schema) do
       {:ok, opts} ->
         opts
+        |> validate_test_mode_env()
         |> normalize_included_environments()
         |> normalize_environment()
         |> handle_deprecated_before_send()
@@ -1058,6 +1059,17 @@ defmodule Sentry.Config do
       nil -> config
       value -> Keyword.put_new(config, key, value)
     end
+  end
+
+  defp validate_test_mode_env(opts) do
+    if Keyword.fetch!(opts, :test_mode) and not Code.ensure_loaded?(ExUnit) do
+      raise ArgumentError, """
+      test_mode: true is only allowed in the test environment. \
+      Remove it from your non-test configuration.
+      """
+    end
+
+    opts
   end
 
   # TODO: remove me on v11.0.0, :included_environments has been deprecated

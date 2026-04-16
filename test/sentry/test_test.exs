@@ -1,5 +1,5 @@
 defmodule Sentry.TestTest do
-  use Sentry.Case, async: true
+  use Sentry.Case, async: false
 
   alias Sentry.Test, as: SentryTest
 
@@ -219,7 +219,8 @@ defmodule Sentry.TestTest do
 
       handler_config = %{
         config: %{
-          telemetry_processor: telemetry_processor
+          telemetry_processor: telemetry_processor,
+          enable_logs: true
         }
       }
 

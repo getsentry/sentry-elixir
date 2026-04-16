@@ -109,6 +109,11 @@ defmodule Sentry.LoggerHandler do
       default: Sentry.TelemetryProcessor,
       type_doc: "`t:GenServer.server/0`",
       doc: false
+    ],
+    enable_logs: [
+      type: {:or, [:boolean, nil]},
+      default: nil,
+      doc: false
     ]
   ]
 
@@ -255,6 +260,7 @@ defmodule Sentry.LoggerHandler do
     :sync_threshold,
     :discard_threshold,
     :telemetry_processor,
+    :enable_logs,
     backends: []
   ]
 
@@ -269,7 +275,16 @@ defmodule Sentry.LoggerHandler do
 
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
-    backends = [ErrorBackend] ++ if Config.enable_logs?(), do: [LogsBackend], else: []
+    # When :enable_logs is set on the handler config, it takes precedence over
+    # the global Config.enable_logs?() — which may not resolve correctly in the
+    # logger-server process during async tests.
+    enable_logs? =
+      case handler_config.enable_logs do
+        nil -> Config.enable_logs?()
+        bool -> bool
+      end
+
+    backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}
 
     config = Map.put(config, :config, handler_config)

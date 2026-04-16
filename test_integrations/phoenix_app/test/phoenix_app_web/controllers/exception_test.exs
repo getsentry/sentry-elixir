@@ -1,5 +1,5 @@
 defmodule Sentry.Integrations.Phoenix.ExceptionTest do
-  use PhoenixAppWeb.ConnCase, async: true
+  use PhoenixAppWeb.ConnCase, async: false
 
   import Sentry.TestHelpers
 

@@ -17,17 +17,37 @@ defmodule Sentry.Test.Config do
 
   ## How It Works
 
-  Per-test overrides are stored in `:persistent_term` keyed by `{:sentry_config, test_pid, key}`.
-  The `namespace/1` function walks the current process's caller chain (`$callers`) to find
-  overrides set by the test process, so child processes (e.g., `Task`s) automatically
-  inherit the test's configuration.
+  Each test's overrides live in a `Sentry.Test.Scope` struct stored in
+  `:persistent_term` under `{:sentry_test_scope, test_pid}`. The `namespace/1`
+  function asks `Sentry.Test.Scope.Registry` to resolve a scope for the
+  current process by trying three strategies in order:
 
-  For processes that don't have `$callers` pointing to the test process (such as
-  GenServers started via `start_supervised!/1`), use `allow/2` to explicitly grant
-  them access to the test's configuration.
+    1. Walking `[self() | Process.get(:"$callers", [])]`.
+    2. Walking the `:"$ancestors"` chain transitively against each scope's
+       `allowed_pids` (populated via `allow/2` and by the auto-allow of
+       globally-supervised pids on the first `put/1` call).
+    3. Walking the `:"$ancestors"` chain against each scope's owner pid —
+       covers GenServers started via `start_supervised/1`.
 
-  Overrides are automatically cleaned up when the test exits via `ExUnit.Callbacks.on_exit/1`.
+  Globally-supervised processes (`:logger`, `:logger_sup`,
+  `Sentry.Supervisor`) have no caller/ancestor link back to any test.
+  `put/1` auto-soft-allows them onto the calling scope so strategy 2
+  routes their config queries to the right test transparently, without
+  requiring downstream suites to call `allow/2` themselves.
+
+  Overrides are automatically cleaned up when the test exits via
+  `ExUnit.Callbacks.on_exit/1`.
   """
+
+  alias Sentry.Test.Scope
+  alias Sentry.Test.Scope.Registry
+
+  # Globally-supervised pids that the SDK needs to route per-test config
+  # through (log-handler lifecycle + the SDK supervisor). Auto-allowed onto
+  # every scope created via `put/1` so downstream test suites do not have
+  # to opt in explicitly. Atoms are resolved lazily at auto-allow time via
+  # `Process.whereis/1` — they may not be registered when the app boots.
+  @auto_allow_globals [:logger, :logger_sup, Sentry.Supervisor]
 
   @doc """
   Activates per-test configuration isolation if `test_mode: true` is configured
@@ -40,7 +60,7 @@ defmodule Sentry.Test.Config do
   def maybe_activate do
     if Sentry.Config.test_mode?() and Sentry.Config.namespace() == {Sentry.Config, :namespace} do
       :persistent_term.put({:sentry_config, :namespace}, {__MODULE__, :namespace})
-      :persistent_term.put(:sentry_test_config_scope_counter, :counters.new(1, [:atomics]))
+      Registry.maybe_init()
     end
 
     :ok
@@ -49,35 +69,20 @@ defmodule Sentry.Test.Config do
   @doc """
   Resolves config namespace for the current process.
 
-  The resolution order is:
-
-  1. Walks `[self() | Process.get(:"$callers", [])]` looking for per-test overrides.
-  2. Checks whether the process was explicitly allowed via `allow/2`.
-  3. As a last resort, scans all active test scopes (registered via `put/1`).
-     This fallback only applies when exactly one scope is active, making it
-     safe for `async: false` tests only.
-
   Returns `{:ok, value}` if an override is found, or `:default` to fall back
   to global configuration.
   """
   @spec namespace(atom()) :: {:ok, term()} | :default
   def namespace(key) do
-    scopes = [self() | Process.get(:"$callers", [])]
-
-    case find_override(scopes, key) do
-      {:ok, _value} = found ->
-        found
-
-      :default ->
-        # Check if this process was explicitly allowed by a test process via allow/2.
-        case :persistent_term.get({:sentry_test_config_allowed, self()}, nil) do
-          nil ->
-            # Last resort: scan all active test scopes (safe only for async: false tests).
-            resolve_from_active_scopes(key)
-
-          owner_pid ->
-            find_override([owner_pid], key)
+    case Registry.resolve(self()) do
+      {:ok, scope} ->
+        case Scope.fetch_override(scope, key) do
+          {:ok, value} -> {:ok, value}
+          :error -> :default
         end
+
+      :none ->
+        :default
     end
   end
 
@@ -99,35 +104,23 @@ defmodule Sentry.Test.Config do
   """
   @spec put(keyword()) :: :ok
   def put(config) when is_list(config) do
-    test_pid = self()
+    entries = Enum.map(config, &validate_and_rename/1)
 
-    original_config =
-      for {key, val} <- config do
-        renamed_key =
-          case key do
-            :before_send_event -> :before_send
-            other -> other
-          end
+    _ =
+      Registry.update(self(), fn scope ->
+        Enum.reduce(entries, scope, fn {key, value}, acc ->
+          Scope.put_override(acc, key, value)
+        end)
+      end)
 
-        validated_config = Sentry.Config.validate!([{renamed_key, val}])
-        validated_val = Keyword.fetch!(validated_config, renamed_key)
-
-        :persistent_term.put({:sentry_config, test_pid, renamed_key}, validated_val)
-
-        {renamed_key, validated_val}
-      end
-
-    register_scope(test_pid)
-
-    ExUnit.Callbacks.on_exit(fn ->
-      for {key, _val} <- original_config do
-        :persistent_term.erase({:sentry_config, test_pid, key})
-      end
-
-      unregister_scope(test_pid)
-    end)
+    auto_allow_globals()
 
     :ok
+  end
+
+  defp auto_allow_globals do
+    owner = self()
+    Enum.each(@auto_allow_globals, &Registry.soft_allow(owner, Process.whereis(&1)))
   end
 
   @doc """
@@ -135,7 +128,8 @@ defmodule Sentry.Test.Config do
 
   Use this when a supervised process (such as a `GenServer` started via
   `start_supervised!/1`) does not inherit the test process's `$callers` chain
-  and therefore cannot resolve per-test configuration overrides on its own.
+  and cannot be reached via the `$ancestors` walk (for example, a
+  globally-registered process started at application boot).
 
   The mapping is automatically cleaned up when the test exits.
 
@@ -145,72 +139,23 @@ defmodule Sentry.Test.Config do
       Sentry.Test.Config.allow(self(), scheduler_pid)
 
   """
-  @spec allow(pid(), pid()) :: :ok
-  def allow(owner_pid, allowed_pid) do
-    :persistent_term.put({:sentry_test_config_allowed, allowed_pid}, owner_pid)
+  @spec allow(pid(), pid() | nil) :: :ok
+  def allow(_owner_pid, nil), do: :ok
 
-    ExUnit.Callbacks.on_exit(fn ->
-      :persistent_term.erase({:sentry_test_config_allowed, allowed_pid})
-    end)
-
-    :ok
+  def allow(owner_pid, allowed_pid) when is_pid(owner_pid) and is_pid(allowed_pid) do
+    Registry.strict_allow!(owner_pid, allowed_pid)
   end
 
   ## Private helpers
 
-  defp find_override(scopes, key) do
-    Enum.find_value(scopes, :default, fn pid ->
-      case :persistent_term.get({:sentry_config, pid, key}, :__not_set__) do
-        :__not_set__ -> nil
-        value -> {:ok, value}
+  defp validate_and_rename({key, value}) do
+    renamed =
+      case key do
+        :before_send_event -> :before_send
+        other -> other
       end
-    end)
-  end
 
-  defp resolve_from_active_scopes(key) do
-    # Short-circuit when no test scopes are registered to avoid scanning
-    # all persistent terms via :persistent_term.get() on every config read.
-    if scope_count() == 0 do
-      :default
-    else
-      overrides =
-        for {{:sentry_test_config_scope, pid}, true} <- :persistent_term.get(),
-            Process.alive?(pid),
-            value = :persistent_term.get({:sentry_config, pid, key}, :__not_set__),
-            value != :__not_set__,
-            do: value
-
-      case overrides do
-        [single_value] -> {:ok, single_value}
-        _zero_or_ambiguous -> :default
-      end
-    end
-  end
-
-  defp scope_count do
-    case :persistent_term.get(:sentry_test_config_scope_counter, nil) do
-      nil -> 0
-      ref -> :counters.get(ref, 1)
-    end
-  end
-
-  defp register_scope(pid) do
-    already_registered? = :persistent_term.get({:sentry_test_config_scope, pid}, false)
-    :persistent_term.put({:sentry_test_config_scope, pid}, true)
-
-    unless already_registered? do
-      :counters.add(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
-    end
-  end
-
-  defp unregister_scope(pid) do
-    case :persistent_term.get({:sentry_test_config_scope, pid}, false) do
-      true ->
-        :persistent_term.erase({:sentry_test_config_scope, pid})
-        :counters.sub(:persistent_term.get(:sentry_test_config_scope_counter), 1, 1)
-
-      false ->
-        :ok
-    end
+    validated = Sentry.Config.validate!([{renamed, value}])
+    {renamed, Keyword.fetch!(validated, renamed)}
   end
 end
