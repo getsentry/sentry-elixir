@@ -2,6 +2,7 @@ defmodule Sentry.MetricsIntegrationTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
+  import Sentry.Test.Assertions
 
   alias Sentry.{Metrics, TelemetryProcessor}
   alias Sentry.Telemetry.Buffer
@@ -73,8 +74,8 @@ defmodule Sentry.MetricsIntegrationTest do
       Metrics.count("keep.me", 15)
       Metrics.count("drop.me", 5)
 
-      [batch] = collect_sentry_metric_items(ctx.ref, 1)
-      assert %{"items" => [%{"name" => "keep.me", "value" => 15}]} = batch
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
+      assert_sentry_report(metric, name: "keep.me", value: 15)
 
       # The dropped metric should not produce an envelope
       ref = ctx.ref
@@ -90,9 +91,8 @@ defmodule Sentry.MetricsIntegrationTest do
 
       Metrics.count("test.metric", 5)
 
-      [batch] = collect_sentry_metric_items(ctx.ref, 1)
-      [metric] = batch["items"]
-      assert metric["value"] == 10
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
+      assert_sentry_report(metric, value: 10)
     end
   end
 
@@ -100,20 +100,21 @@ defmodule Sentry.MetricsIntegrationTest do
     test "metrics include all required fields", ctx do
       Metrics.count("test.counter", 42, unit: "request", attributes: %{method: "GET"})
 
-      [[{header, payload}]] = collect_envelopes(ctx.ref, 1)
+      [[{header, %{"items" => [metric]} = payload}]] = collect_envelopes(ctx.ref, 1)
       assert header["content_type"] == "application/vnd.sentry.items.trace-metric+json"
 
-      %{"items" => [metric]} = payload
-      assert metric["type"] == "counter"
-      assert metric["name"] == "test.counter"
-      assert metric["value"] == 42
-      assert metric["unit"] == "request"
-      assert metric["timestamp"]
+      assert_sentry_report(metric,
+        type: "counter",
+        name: "test.counter",
+        value: 42,
+        unit: "request",
+        attributes: %{
+          :"sentry.sdk.name" => %{value: "sentry.elixir"},
+          method: %{value: "GET"}
+        }
+      )
 
-      # Check default attributes
-      attrs = metric["attributes"]
-      assert attrs["sentry.sdk.name"]["value"] == "sentry.elixir"
-      assert attrs["method"]["value"] == "GET"
+      assert payload["items"] |> hd() |> Map.get("timestamp")
     end
 
     test "metrics include environment and release", ctx do
@@ -121,12 +122,14 @@ defmodule Sentry.MetricsIntegrationTest do
 
       Metrics.gauge("memory.usage", 1024)
 
-      [batch] = collect_sentry_metric_items(ctx.ref, 1)
-      [metric] = batch["items"]
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
 
-      attrs = metric["attributes"]
-      assert attrs["sentry.environment"]["value"] == "production"
-      assert attrs["sentry.release"]["value"] == "1.0.0"
+      assert_sentry_report(metric,
+        attributes: %{
+          :"sentry.environment" => %{value: "production"},
+          :"sentry.release" => %{value: "1.0.0"}
+        }
+      )
     end
 
     test "all three metric types are supported", ctx do
@@ -135,11 +138,11 @@ defmodule Sentry.MetricsIntegrationTest do
       Metrics.distribution("distribution.metric", 3.14)
 
       batches = collect_sentry_metric_items(ctx.ref, 3)
+      metrics = Enum.flat_map(batches, fn %{"items" => items} -> items end)
 
-      types = Enum.map(batches, fn %{"items" => [metric]} -> metric["type"] end)
-      assert "counter" in types
-      assert "gauge" in types
-      assert "distribution" in types
+      find_sentry_report!(metrics, type: "counter")
+      find_sentry_report!(metrics, type: "gauge")
+      find_sentry_report!(metrics, type: "distribution")
     end
   end
 end
