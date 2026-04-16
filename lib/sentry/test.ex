@@ -243,6 +243,26 @@ defmodule Sentry.Test do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
+  @doc """
+  Pops all the collected metrics from the current process.
+
+  Returns a list of all `Sentry.Metric` structs that have been collected.
+  After this function returns, the collected metrics are cleared but
+  collection continues.
+
+  > #### Metrics are Asynchronous {: .info}
+  >
+  > Metric events flow through the `TelemetryProcessor` pipeline asynchronously.
+  > You may need to add a small delay before calling this function to ensure
+  > all metrics have been processed by the `before_send_metric` callback.
+
+  """
+  @doc since: "13.0.0"
+  @spec pop_sentry_metrics(pid()) :: [Sentry.Metric.t()]
+  def pop_sentry_metrics(owner_pid \\ self()) when is_pid(owner_pid) do
+    pop_by_struct_type(Sentry.Metric)
+  end
+
   # Bypass envelope helpers
 
   @doc """
@@ -400,6 +420,7 @@ defmodule Sentry.Test do
     {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
     {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
     {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
+    {user_before_send_metric, extra_config} = Keyword.pop(extra_config, :before_send_metric)
 
     # Use the caller-only registry lookup instead of `Sentry.Config.before_send/0`
     # so the captured "original" callback is only this test's override (or the
@@ -411,9 +432,13 @@ defmodule Sentry.Test do
     original_before_send_log =
       user_before_send_log || original_config_value(:before_send_log)
 
+    original_before_send_metric =
+      user_before_send_metric || original_config_value(:before_send_metric)
+
     # Build collecting callbacks that wrap the originals
     new_before_send = build_collecting_callback(original_before_send)
     new_before_send_log = build_collecting_callback(original_before_send_log)
+    new_before_send_metric = build_collecting_callback(original_before_send_metric)
 
     # Always set a per-test DSN override. When no DSN is provided, use the
     # default Bypass DSN.
@@ -432,7 +457,8 @@ defmodule Sentry.Test do
       |> Keyword.merge(extra_config)
       |> Keyword.merge(
         before_send: new_before_send,
-        before_send_log: new_before_send_log
+        before_send_log: new_before_send_log,
+        before_send_metric: new_before_send_metric
       )
 
     put_test_config(config)

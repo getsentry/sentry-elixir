@@ -258,6 +258,50 @@ defmodule Sentry.Test.AssertionsTest do
     end
   end
 
+  describe "assert_sentry_report/2 auto-pop with :metric" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "pops exactly 1 metric and validates criteria" do
+      insert_metric(type: :counter, name: "button.clicks", value: 1)
+
+      assert_sentry_report(:metric, type: :counter, name: "button.clicks", value: 1)
+    end
+
+    test "validates nested map subset matching" do
+      insert_metric(type: :gauge, name: "memory.usage", value: 512, attributes: %{pool: "main"})
+
+      assert_sentry_report(:metric, attributes: %{pool: "main"})
+    end
+
+    test "returns the matched item for further assertions" do
+      insert_metric(type: :distribution, name: "response.time", value: 42.5, unit: "millisecond")
+
+      metric = assert_sentry_report(:metric, name: "response.time")
+      assert metric.type == :distribution
+      assert metric.unit == "millisecond"
+    end
+
+    test "fails when 0 metrics captured" do
+      assert_raise ExUnit.AssertionError, ~r/Expected exactly 1 Sentry metric, got 0/, fn ->
+        assert_sentry_report(:metric, name: "button.clicks")
+      end
+    end
+
+    test "fails on field mismatch with clear error" do
+      insert_metric(type: :counter, name: "button.clicks", value: 1)
+
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          assert_sentry_report(:metric, type: :gauge)
+        end
+
+      assert error.message =~ "Sentry metric assertion failed"
+      assert error.message =~ ":type"
+    end
+  end
+
   describe "integration with real event pipeline" do
     setup do
       SentryTest.setup_sentry()
@@ -342,5 +386,19 @@ defmodule Sentry.Test.AssertionsTest do
     table = Process.get(:sentry_test_collector)
     :ets.insert(table, {System.unique_integer([:monotonic]), log_event})
     log_event
+  end
+
+  defp insert_metric(attrs) do
+    defaults = [
+      type: :counter,
+      name: "test.metric",
+      value: 1,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000
+    ]
+
+    metric = struct!(Sentry.Metric, Keyword.merge(defaults, attrs))
+    table = Process.get(:sentry_test_collector)
+    :ets.insert(table, {System.unique_integer([:monotonic]), metric})
+    metric
   end
 end

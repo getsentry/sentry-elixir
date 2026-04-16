@@ -37,7 +37,8 @@ defmodule Sentry.Test.Assertions do
   @type_to_pop %{
     event: &Sentry.Test.pop_sentry_reports/0,
     transaction: &Sentry.Test.pop_sentry_transactions/0,
-    log: &Sentry.Test.pop_sentry_logs/0
+    log: &Sentry.Test.pop_sentry_logs/0,
+    metric: &Sentry.Test.pop_sentry_metrics/0
   }
 
   @doc """
@@ -93,9 +94,9 @@ defmodule Sentry.Test.Assertions do
   @doc since: "12.1.0"
   def assert_sentry_report(type_or_item, criteria)
 
-  @spec assert_sentry_report(:event | :transaction | :log, keyword()) ::
-          Sentry.Event.t() | Sentry.Transaction.t() | Sentry.LogEvent.t()
-  def assert_sentry_report(type, criteria) when type in [:event, :transaction, :log] do
+  @spec assert_sentry_report(:event | :transaction | :log | :metric, keyword()) ::
+          Sentry.Event.t() | Sentry.Transaction.t() | Sentry.LogEvent.t() | Sentry.Metric.t()
+  def assert_sentry_report(type, criteria) when type in [:event, :transaction, :log, :metric] do
     items = pop_for_type(type)
     label = type_label(type)
 
@@ -170,6 +171,7 @@ defmodule Sentry.Test.Assertions do
   defp type_label(:event), do: "event"
   defp type_label(:transaction), do: "transaction"
   defp type_label(:log), do: "log"
+  defp type_label(:metric), do: "metric"
 
   defp unwrap_single!([single], _label), do: single
   defp unwrap_single!(item, _label) when is_map(item), do: item
