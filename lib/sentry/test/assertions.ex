@@ -173,7 +173,10 @@ defmodule Sentry.Test.Assertions do
         Enum.any?(items, &matches_criteria?(&1, criteria))
       end)
 
-    find_item!(logs, criteria, "log")
+    {match, remaining} = extract_first_match(logs, criteria)
+    put_inbox(:log, remaining)
+
+    match || flunk(format_find_error(logs, criteria, "log"))
   end
 
   @doc """
@@ -200,10 +203,27 @@ defmodule Sentry.Test.Assertions do
     Map.fetch!(@type_to_pop, type).()
   end
 
+  # Per-test inbox of unmatched items left over from prior assert_sentry_log
+  # calls. Destructively read at the start of each await; unmatched items
+  # are written back by callers that use find semantics.
+  @inbox_key {__MODULE__, :inbox}
+
+  defp take_inbox(type) do
+    inbox = Process.get(@inbox_key, %{})
+    Process.put(@inbox_key, Map.put(inbox, type, []))
+    Map.get(inbox, type, [])
+  end
+
+  defp put_inbox(type, items) do
+    inbox = Process.get(@inbox_key, %{})
+    Process.put(@inbox_key, Map.put(inbox, type, items))
+    :ok
+  end
+
   defp await_items(type, timeout, done_fn) do
     maybe_flush(timeout)
     deadline = System.monotonic_time(:millisecond) + timeout
-    await_loop(type, deadline, 1, [], done_fn)
+    await_loop(type, deadline, 1, take_inbox(type), done_fn)
   end
 
   defp await_loop(type, deadline, sleep_ms, acc, done_fn) do
@@ -249,6 +269,19 @@ defmodule Sentry.Test.Assertions do
     Enum.all?(criteria, fn {key, expected} ->
       match_value?(get_field(item, key), expected)
     end)
+  end
+
+  defp extract_first_match(items, criteria) do
+    {match, rest_reversed} =
+      Enum.reduce(items, {nil, []}, fn item, {match, rest} ->
+        cond do
+          match != nil -> {match, [item | rest]}
+          matches_criteria?(item, criteria) -> {item, rest}
+          true -> {nil, [item | rest]}
+        end
+      end)
+
+    {match, Enum.reverse(rest_reversed)}
   end
 
   defp type_label(:event), do: "event"
