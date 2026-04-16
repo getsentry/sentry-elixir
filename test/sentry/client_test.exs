@@ -2,9 +2,11 @@ defmodule Sentry.ClientTest do
   use Sentry.Case
 
   import ExUnit.CaptureLog
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
   alias Sentry.{Client, Event}
+  alias Sentry.Test, as: SentryTest
 
   describe "render_event/1" do
     test "transforms structs into maps" do
@@ -187,25 +189,17 @@ defmodule Sentry.ClientTest do
 
   describe "send_event/2" do
     setup do
-      setup_bypass()
+      SentryTest.setup_sentry()
     end
 
-    test "respects the :sample_rate option", %{bypass: bypass} do
-      # Always sends with sample rate of 1.
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      assert {:ok, "340"} = Client.send_event(Event.create_event([]), sample_rate: 1.0)
+    test "respects the :sample_rate option" do
+      assert {:ok, _} = Client.send_event(Event.create_event([]), sample_rate: 1.0)
+      assert_sentry_report(:event, [])
 
       # Never sends with sample rate of 0.
       assert :unsampled = Client.send_event(Event.create_event([]), sample_rate: 0.0)
 
       # Either sends or doesn't with :sample_rate of 0.5.
-      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
       for _ <- 1..10 do
         event = Event.create_event(message: "Unique: #{System.unique_integer()}")
         result = Client.send_event(event, sample_rate: 0.5)
@@ -214,16 +208,9 @@ defmodule Sentry.ClientTest do
     end
 
     test "calls anonymous :before_send callback", %{bypass: bypass} do
-      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-        assert [{%{"type" => "event"}, event}] = decode_envelope!(body)
-
-        assert event["extra"] == %{"key" => "value"}
-        assert event["user"]["id"] == 1
-
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
+      # Per-test before_send overrides the collecting wrapper installed by
+      # setup_sentry, so use an envelope collector to inspect the wire payload.
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "event")
 
       put_test_config(
         before_send: fn %Event{} = event ->
@@ -242,6 +229,11 @@ defmodule Sentry.ClientTest do
       Logger.metadata(key: "value", user_id: 1)
 
       assert {:ok, _} = Client.send_event(event, result: :sync)
+
+      assert_sentry_report(
+        SentryTest.collect_sentry_events(ref, 1),
+        %{"extra" => %{"key" => "value"}, "user" => %{"id" => 1}}
+      )
     end
 
     test "if :before_send callback returns falsey, the event is not sent" do
@@ -290,12 +282,7 @@ defmodule Sentry.ClientTest do
       assert Sentry.get_last_event_id_and_source() == {event.event_id, event.source}
     end
 
-    test "calls anonymous :after_send_event callback synchronously",
-         %{bypass: bypass} do
-      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
+    test "calls anonymous :after_send_event callback synchronously" do
       test_pid = self()
       ref = make_ref()
 
@@ -306,6 +293,8 @@ defmodule Sentry.ClientTest do
       event = Event.create_event(message: "Something went wrong")
       assert {:ok, _} = Client.send_event(event, result: :sync)
       assert_received {^ref, ^event, {:ok, _id}}
+
+      assert_sentry_report(:event, message: %{formatted: "Something went wrong"})
     end
 
     test "logs API errors at the configured level", %{bypass: bypass} do
@@ -404,7 +393,7 @@ defmodule Sentry.ClientTest do
              }
     end
 
-    test "dedupes events", %{bypass: bypass} do
+    test "dedupes events" do
       put_test_config(dedup_events: true)
 
       {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
@@ -425,11 +414,7 @@ defmodule Sentry.ClientTest do
       ]
 
       for {event, dup_event} <- events do
-        Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-          Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-        end)
-
-        assert {:ok, "340"} = Client.send_event(event, [])
+        assert {:ok, _} = Client.send_event(event, [])
 
         log =
           capture_log(fn ->
@@ -437,6 +422,7 @@ defmodule Sentry.ClientTest do
           end)
 
         assert log =~ "Event dropped due to being a duplicate of a previously-captured event."
+        find_sentry_report!(SentryTest.pop_sentry_reports(), event_id: event.event_id)
       end
     end
   end

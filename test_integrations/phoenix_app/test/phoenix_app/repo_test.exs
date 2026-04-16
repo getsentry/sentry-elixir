@@ -14,7 +14,7 @@ defmodule PhoenixApp.RepoTest do
 
     Repo.all(User) |> Enum.map(& &1.id)
 
-    assert [tx] = collect_envelopes(ref, 1) |> extract_transactions()
+    assert [tx] = collect_sentry_transactions(ref, 1)
 
     assert tx["transaction_info"] == %{"source" => "custom"}
 

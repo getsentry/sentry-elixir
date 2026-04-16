@@ -2,20 +2,15 @@ defmodule Sentry.MetricsIntegrationTest do
   use Sentry.Case, async: false
 
   import Sentry.TestHelpers
+  import Sentry.Test.Assertions
 
   alias Sentry.{Metrics, TelemetryProcessor}
   alias Sentry.Telemetry.Buffer
 
   setup context do
     bypass = Bypass.open()
-    test_pid = self()
-    ref = make_ref()
 
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {ref, body})
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
+    ref = setup_bypass_envelope_collector(bypass)
 
     stop_supervised!(context.telemetry_processor)
 
@@ -38,13 +33,11 @@ defmodule Sentry.MetricsIntegrationTest do
       Metrics.count("metric.1", 1)
       Metrics.gauge("metric.2", 100)
 
-      bodies = collect_envelope_bodies(ctx.ref, 2)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      assert length(items) == 2
+      batches = collect_sentry_metric_items(ctx.ref, 2)
+      assert length(batches) == 2
 
-      for [{header, payload}] <- items do
-        assert header["type"] == "trace_metric"
-        assert %{"items" => [%{"type" => _}]} = payload
+      for batch <- batches do
+        assert %{"items" => [%{"type" => _}]} = batch
       end
     end
 
@@ -67,8 +60,8 @@ defmodule Sentry.MetricsIntegrationTest do
 
       assert Buffer.size(buffer) == 0
 
-      bodies = collect_envelope_bodies(ctx.ref, 3)
-      assert length(bodies) == 3
+      batches = collect_sentry_metric_items(ctx.ref, 3)
+      assert length(batches) == 3
     end
 
     test "applies before_send_metric callback", ctx do
@@ -81,20 +74,12 @@ defmodule Sentry.MetricsIntegrationTest do
       Metrics.count("keep.me", 15)
       Metrics.count("drop.me", 5)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
-
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-
-      assert [
-               {%{"type" => "trace_metric"},
-                %{"items" => [%{"name" => "keep.me", "value" => 15}]}}
-             ] =
-               items
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
+      assert_sentry_report(metric, name: "keep.me", value: 15)
 
       # The dropped metric should not produce an envelope
       ref = ctx.ref
-      refute_receive {^ref, _body}, 200
+      refute_receive {:bypass_envelope, ^ref, _body}, 200
     end
 
     test "callback can modify metrics before sending", ctx do
@@ -106,10 +91,8 @@ defmodule Sentry.MetricsIntegrationTest do
 
       Metrics.count("test.metric", 5)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      [{%{"type" => "trace_metric"}, %{"items" => [metric]}}] = items
-      assert metric["value"] == 10
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
+      assert_sentry_report(metric, value: 10)
     end
   end
 
@@ -117,25 +100,21 @@ defmodule Sentry.MetricsIntegrationTest do
     test "metrics include all required fields", ctx do
       Metrics.count("test.counter", 42, unit: "request", attributes: %{method: "GET"})
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      [{header, payload}] = items
-
-      assert header["type"] == "trace_metric"
-
+      [[{header, %{"items" => [metric]} = payload}]] = collect_envelopes(ctx.ref, 1)
       assert header["content_type"] == "application/vnd.sentry.items.trace-metric+json"
 
-      %{"items" => [metric]} = payload
-      assert metric["type"] == "counter"
-      assert metric["name"] == "test.counter"
-      assert metric["value"] == 42
-      assert metric["unit"] == "request"
-      assert metric["timestamp"]
+      assert_sentry_report(metric,
+        type: "counter",
+        name: "test.counter",
+        value: 42,
+        unit: "request",
+        attributes: %{
+          :"sentry.sdk.name" => %{value: "sentry.elixir"},
+          method: %{value: "GET"}
+        }
+      )
 
-      # Check default attributes
-      attrs = metric["attributes"]
-      assert attrs["sentry.sdk.name"]["value"] == "sentry.elixir"
-      assert attrs["method"]["value"] == "GET"
+      assert payload["items"] |> hd() |> Map.get("timestamp")
     end
 
     test "metrics include environment and release", ctx do
@@ -143,13 +122,14 @@ defmodule Sentry.MetricsIntegrationTest do
 
       Metrics.gauge("memory.usage", 1024)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      [{_header, %{"items" => [metric]}}] = items
+      [%{"items" => [metric]}] = collect_sentry_metric_items(ctx.ref, 1)
 
-      attrs = metric["attributes"]
-      assert attrs["sentry.environment"]["value"] == "production"
-      assert attrs["sentry.release"]["value"] == "1.0.0"
+      assert_sentry_report(metric,
+        attributes: %{
+          :"sentry.environment" => %{value: "production"},
+          :"sentry.release" => %{value: "1.0.0"}
+        }
+      )
     end
 
     test "all three metric types are supported", ctx do
@@ -157,29 +137,12 @@ defmodule Sentry.MetricsIntegrationTest do
       Metrics.gauge("gauge.metric", 100)
       Metrics.distribution("distribution.metric", 3.14)
 
-      bodies = collect_envelope_bodies(ctx.ref, 3)
-      items = Enum.flat_map(bodies, &decode_envelope!/1)
+      batches = collect_sentry_metric_items(ctx.ref, 3)
+      metrics = Enum.flat_map(batches, fn %{"items" => items} -> items end)
 
-      types = Enum.map(items, fn {_header, %{"items" => [metric]}} -> metric["type"] end)
-      assert "counter" in types
-      assert "gauge" in types
-      assert "distribution" in types
-    end
-  end
-
-  # Helper functions
-
-  defp collect_envelope_bodies(ref, expected_count) do
-    collect_envelope_bodies(ref, expected_count, [])
-  end
-
-  defp collect_envelope_bodies(_ref, 0, acc), do: Enum.reverse(acc)
-
-  defp collect_envelope_bodies(ref, remaining, acc) do
-    receive do
-      {^ref, body} -> collect_envelope_bodies(ref, remaining - 1, [body | acc])
-    after
-      2000 -> Enum.reverse(acc)
+      find_sentry_report!(metrics, type: "counter")
+      find_sentry_report!(metrics, type: "gauge")
+      find_sentry_report!(metrics, type: "distribution")
     end
   end
 end

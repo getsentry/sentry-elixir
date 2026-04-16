@@ -2,7 +2,10 @@ defmodule SentryTest do
   use Sentry.Case
 
   import ExUnit.CaptureLog
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
+
+  alias Sentry.Test, as: SentryTest
 
   defmodule TestFilter do
     @behaviour Sentry.EventFilter
@@ -12,16 +15,10 @@ defmodule SentryTest do
   end
 
   setup do
-    setup_bypass(dedup_events: false)
+    SentryTest.setup_sentry(dedup_events: false)
   end
 
-  test "excludes events properly", %{bypass: bypass} do
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert body =~ "RuntimeError"
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "excludes events properly" do
     put_test_config(filter: TestFilter)
 
     assert {:ok, _} =
@@ -40,6 +37,10 @@ defmodule SentryTest do
 
     assert {:ok, _} =
              Sentry.capture_message("RuntimeError: error", event_source: :plug, result: :sync)
+
+    events = SentryTest.pop_sentry_reports()
+    assert length(events) == 2
+    find_sentry_report!(events, original_exception: %RuntimeError{message: "error"})
   end
 
   @tag :capture_log
@@ -59,13 +60,10 @@ defmodule SentryTest do
     Bypass.pass(bypass)
   end
 
-  test "sets last_event_id_and_source when an event is sent", %{bypass: bypass} do
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+  test "sets last_event_id_and_source when an event is sent" do
     Sentry.capture_message("test")
 
+    assert_sentry_report(:event, message: %{formatted: "test"})
     assert {event_id, nil} = Sentry.get_last_event_id_and_source()
     assert is_binary(event_id)
   end
@@ -79,13 +77,9 @@ defmodule SentryTest do
     assert log =~ "Cannot report event without message or exception: %Sentry.Event{"
   end
 
-  test "doesn't incur into infinite logging loops because we prevent that", %{bypass: bypass} do
+  test "doesn't incur into infinite logging loops because we prevent that" do
     put_test_config(dedup_events: true)
     message_to_report = "Hello #{System.unique_integer([:positive])}"
-
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-    end)
 
     :ok =
       :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
@@ -97,7 +91,7 @@ defmodule SentryTest do
     end)
 
     # First one is reported correctly as it has no duplicates
-    assert {:ok, "340"} = Sentry.capture_message(message_to_report)
+    assert {:ok, _} = Sentry.capture_message(message_to_report)
 
     log =
       capture_log(fn ->
@@ -145,33 +139,9 @@ defmodule SentryTest do
   describe "send_check_in/1" do
     test "posts a check-in with all the explicit arguments", %{bypass: bypass} do
       put_test_config(environment_name: "test", release: "1.3.2")
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, check_in_body}] = decode_envelope!(body)
-
-        assert headers["type"] == "check_in"
-        assert Map.has_key?(headers, "length")
-
-        assert check_in_body["status"] == "in_progress"
-        assert check_in_body["monitor_slug"] == "my-slug"
-        assert check_in_body["duration"] == 123.2
-        assert check_in_body["release"] == "1.3.2"
-        assert check_in_body["environment"] == "test"
-
-        assert check_in_body["monitor_config"] == %{
-                 "schedule" => %{"type" => "crontab", "value" => "0 * * * *"},
-                 "checkin_margin" => 5,
-                 "max_runtime" => 30,
-                 "failure_issue_threshold" => 2,
-                 "recovery_threshold" => 2,
-                 "timezone" => "America/Los_Angeles"
-               }
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-      end)
-
-      assert {:ok, "1923"} =
+      assert {:ok, _} =
                Sentry.capture_check_in(
                  status: :in_progress,
                  monitor_slug: "my-slug",
@@ -188,28 +158,47 @@ defmodule SentryTest do
                    timezone: "America/Los_Angeles"
                  ]
                )
+
+      [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
+
+      assert headers["type"] == "check_in"
+      assert Map.has_key?(headers, "length")
+
+      assert_sentry_report(check_in_body,
+        status: "in_progress",
+        monitor_slug: "my-slug",
+        duration: 123.2,
+        release: "1.3.2",
+        environment: "test",
+        monitor_config: %{
+          "schedule" => %{"type" => "crontab", "value" => "0 * * * *"},
+          "checkin_margin" => 5,
+          "max_runtime" => 30,
+          "failure_issue_threshold" => 2,
+          "recovery_threshold" => 2,
+          "timezone" => "America/Los_Angeles"
+        }
+      )
     end
 
     test "posts a check-in with default arguments", %{bypass: bypass} do
       put_test_config(environment_name: "test", release: "1.3.2")
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, check_in_body}] = decode_envelope!(body)
+      assert {:ok, _} = Sentry.capture_check_in(status: :ok, monitor_slug: "default-slug")
 
-        assert headers["type"] == "check_in"
-        assert Map.has_key?(headers, "length")
+      [[{headers, check_in_body}]] = SentryTest.collect_envelopes(ref, 1)
 
-        assert check_in_body["status"] == "ok"
-        assert check_in_body["monitor_slug"] == "default-slug"
-        assert Map.fetch!(check_in_body, "duration") == nil
-        assert Map.fetch!(check_in_body, "release") == "1.3.2"
-        assert Map.fetch!(check_in_body, "environment") == "test"
+      assert headers["type"] == "check_in"
+      assert Map.has_key?(headers, "length")
 
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-      end)
-
-      assert {:ok, "1923"} = Sentry.capture_check_in(status: :ok, monitor_slug: "default-slug")
+      assert_sentry_report(check_in_body,
+        status: "ok",
+        monitor_slug: "default-slug",
+        duration: nil,
+        release: "1.3.2",
+        environment: "test"
+      )
     end
   end
 
@@ -254,22 +243,10 @@ defmodule SentryTest do
       {:ok, transaction: transaction}
     end
 
-    test "sends transaction to Sentry when configured properly", %{
-      bypass: bypass,
-      transaction: transaction
-    } do
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, transaction_body}] = decode_envelope!(body)
+    test "sends transaction to Sentry when configured properly", %{transaction: transaction} do
+      assert {:ok, _} = Sentry.send_transaction(transaction)
 
-        assert headers["type"] == "transaction"
-        assert Map.has_key?(headers, "length")
-        assert transaction_body["transaction"] == "test-transaction"
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      assert {:ok, "340"} = Sentry.send_transaction(transaction)
+      assert_sentry_report(:transaction, transaction: "test-transaction")
     end
 
     test "validates options", %{transaction: transaction} do
@@ -284,15 +261,10 @@ defmodule SentryTest do
       assert :ignored = Sentry.send_transaction(transaction)
     end
 
-    test "respects sample_rate option", %{bypass: bypass, transaction: transaction} do
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, _transaction_body}] = decode_envelope!(body)
-        assert headers["type"] == "transaction"
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
+    test "respects sample_rate option", %{transaction: transaction} do
+      assert {:ok, _} = Sentry.send_transaction(transaction, sample_rate: 1.0)
 
-      assert {:ok, "340"} = Sentry.send_transaction(transaction, sample_rate: 1.0)
+      assert_sentry_report(:transaction, transaction: "test-transaction")
     end
 
     test "supports before_send option", %{bypass: bypass, transaction: transaction} do
@@ -300,34 +272,29 @@ defmodule SentryTest do
       assert :excluded =
                Sentry.send_transaction(transaction, before_send: fn _transaction -> false end)
 
-      # Modify transaction
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
+      # Modify transaction — passing before_send as a per-call option bypasses
+      # the collecting callback installed by setup_sentry, so use the envelope
+      # collector to assert on the wire payload instead.
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "transaction")
 
-        assert [{headers, transaction_body}] = decode_envelope!(body)
-        assert headers["type"] == "transaction"
-        assert transaction_body["transaction"] == "modified-transaction"
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      assert {:ok, "340"} =
+      assert {:ok, _} =
                Sentry.send_transaction(
                  transaction,
                  before_send: fn transaction ->
                    %{transaction | transaction: "modified-transaction"}
                  end
                )
+
+      assert_sentry_report(
+        SentryTest.collect_sentry_transactions(ref, 1),
+        transaction: "modified-transaction"
+      )
     end
 
-    test "supports after_send_event option", %{bypass: bypass, transaction: transaction} do
+    test "supports after_send_event option", %{transaction: transaction} do
       parent = self()
 
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      assert {:ok, "340"} =
+      assert {:ok, id} =
                Sentry.send_transaction(
                  transaction,
                  after_send_event: fn transaction, {:ok, id} ->
@@ -335,10 +302,10 @@ defmodule SentryTest do
                  end
                )
 
-      assert_receive {:after_send, "test-transaction", "340"}
+      assert_receive {:after_send, "test-transaction", ^id}
     end
 
-    test "includes release in transaction payload when configured", %{bypass: bypass} do
+    test "includes release in transaction payload when configured" do
       put_test_config(release: "1.9.123")
 
       transaction =
@@ -352,17 +319,12 @@ defmodule SentryTest do
           }
         })
 
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{_headers, transaction_body}] = decode_envelope!(body)
+      assert {:ok, _} = Sentry.send_transaction(transaction)
 
-        assert transaction_body["transaction"] == "transaction-with-release"
-        assert transaction_body["release"] == "1.9.123"
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "340"}>)
-      end)
-
-      assert {:ok, "340"} = Sentry.send_transaction(transaction)
+      assert_sentry_report(:transaction,
+        transaction: "transaction-with-release",
+        release: "1.9.123"
+      )
     end
   end
 

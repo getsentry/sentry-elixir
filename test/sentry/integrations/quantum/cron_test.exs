@@ -2,7 +2,10 @@ defmodule Sentry.Integrations.Quantum.CronTest do
   use Sentry.Case, async: false
 
   alias Sentry.Integrations.CheckInIDMappings
-  import Sentry.TestHelpers
+
+  import Sentry.Test.Assertions
+
+  alias Sentry.Test, as: SentryTest
 
   defmodule Scheduler do
     use Quantum, otp_app: :sentry
@@ -13,7 +16,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
   end
 
   setup do
-    setup_bypass(dedup_events: false, environment_name: "test")
+    SentryTest.setup_sentry(dedup_events: false, environment_name: "test")
   end
 
   for event_type <- [:start, :stop, :exception] do
@@ -39,34 +42,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
   end
 
   test "captures start events with monitor config", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, check_in_body}] = decode_envelope!(body)
-      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
-
-      assert headers["type"] == "check_in"
-
-      assert check_in_body["check_in_id"] == id
-      assert check_in_body["status"] == "in_progress"
-      assert check_in_body["monitor_slug"] == "quantum-test-job"
-      assert check_in_body["duration"] == nil
-      assert check_in_body["environment"] == "test"
-
-      assert check_in_body["monitor_config"] == %{
-               "schedule" => %{
-                 "type" => "crontab",
-                 "value" => "0 0 * * * *"
-               },
-               "timezone" => "Etc/UTC"
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    span_ref = make_ref()
 
     :telemetry.execute([:quantum, :job, :start], %{}, %{
       job:
@@ -74,41 +51,31 @@ defmodule Sentry.Integrations.Quantum.CronTest do
           name: :test_job,
           schedule: Crontab.CronExpression.Parser.parse!("@daily")
         ),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
+
+    assert_sentry_report(check_in_body,
+      check_in_id: id,
+      status: "in_progress",
+      monitor_slug: "quantum-test-job",
+      duration: nil,
+      environment: "test",
+      monitor_config: %{
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "0 0 * * * *"
+        },
+        "timezone" => "Etc/UTC"
+      }
+    )
   end
 
   test "captures exception events with monitor config", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, check_in_body}] = decode_envelope!(body)
-      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
-
-      assert headers["type"] == "check_in"
-
-      assert check_in_body["check_in_id"] == id
-      assert check_in_body["status"] == "error"
-      assert check_in_body["monitor_slug"] == "quantum-test-job"
-      assert check_in_body["duration"] == 12.099
-      assert check_in_body["environment"] == "test"
-
-      assert check_in_body["monitor_config"] == %{
-               "schedule" => %{
-                 "type" => "crontab",
-                 "value" => "0 0 * * * *"
-               },
-               "timezone" => "Europe/Rome"
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -119,41 +86,31 @@ defmodule Sentry.Integrations.Quantum.CronTest do
           schedule: Crontab.CronExpression.Parser.parse!("@daily"),
           timezone: "Europe/Rome"
         ),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
+
+    assert_sentry_report(check_in_body,
+      check_in_id: id,
+      status: "error",
+      monitor_slug: "quantum-test-job",
+      duration: 12.099,
+      environment: "test",
+      monitor_config: %{
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "0 0 * * * *"
+        },
+        "timezone" => "Europe/Rome"
+      }
+    )
   end
 
   test "captures stop events with monitor config", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, check_in_body}] = decode_envelope!(body)
-      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
-
-      assert headers["type"] == "check_in"
-
-      assert check_in_body["check_in_id"] == id
-      assert check_in_body["status"] == "ok"
-      assert check_in_body["monitor_slug"] == "quantum-test-job"
-      assert check_in_body["duration"] == 12.099
-      assert check_in_body["environment"] == "test"
-
-      assert check_in_body["monitor_config"] == %{
-               "schedule" => %{
-                 "type" => "crontab",
-                 "value" => "0 0 * * * *"
-               },
-               "timezone" => "Etc/UTC"
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -163,10 +120,26 @@ defmodule Sentry.Integrations.Quantum.CronTest do
           name: :test_job,
           schedule: Crontab.CronExpression.Parser.parse!("@daily")
         ),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
+
+    assert_sentry_report(check_in_body,
+      check_in_id: id,
+      status: "ok",
+      monitor_slug: "quantum-test-job",
+      duration: 12.099,
+      environment: "test",
+      monitor_config: %{
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "0 0 * * * *"
+        },
+        "timezone" => "Etc/UTC"
+      }
+    )
   end
 
   for {job_name, expected_slug} <- [
@@ -174,18 +147,8 @@ defmodule Sentry.Integrations.Quantum.CronTest do
         {MyApp.MyJob, "quantum-my-app-my-job"}
       ] do
     test "works for a job named #{inspect(job_name)}", %{bypass: bypass} do
-      test_pid = self()
-      ref = make_ref()
-
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-        assert check_in_body["monitor_slug"] == unquote(expected_slug)
-        send(test_pid, {ref, :done})
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-      end)
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+      span_ref = make_ref()
 
       duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -195,77 +158,49 @@ defmodule Sentry.Integrations.Quantum.CronTest do
             name: unquote(job_name),
             schedule: Crontab.CronExpression.Parser.parse!("@daily")
           ),
-        telemetry_span_context: ref
+        telemetry_span_context: span_ref
       })
 
-      assert_receive {^ref, :done}, 1000
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      assert_sentry_report(check_in_body, monitor_slug: unquote(expected_slug))
     end
   end
 
   test "works for a job without the name", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-      assert check_in_body["monitor_slug"] == "quantum-generic-job"
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
     :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
       job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    assert_sentry_report(check_in_body, monitor_slug: "quantum-generic-job")
   end
 
   test "start event and same ref stop event have same check-in id", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(ref)}")
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-      assert check_in_body["check_in_id"] == id
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    span_ref = make_ref()
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     :telemetry.execute([:quantum, :job, :start], %{}, %{
       job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
-
-    assert_receive {^ref, :done}, 1000
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-      assert check_in_body["check_in_id"] == id
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
     :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
       job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
-      telemetry_span_context: ref
+      telemetry_span_context: span_ref
     })
 
-    assert_receive {^ref, :done}, 1000
+    [start_body, stop_body] = SentryTest.collect_sentry_check_ins(ref, 2)
+
+    assert_sentry_report(start_body, check_in_id: id)
+    assert_sentry_report(stop_body, check_in_id: id)
   end
 end

@@ -43,6 +43,11 @@ defmodule Sentry.Test do
 
       setup :start_collecting_sentry_reports
 
+  ## Assertion Helpers
+
+  See `Sentry.Test.Assertions` for convenient assertion functions that reduce
+  boilerplate when validating captured events, transactions, and logs.
+
   """
 
   @moduledoc since: "10.2.0"
@@ -238,6 +243,26 @@ defmodule Sentry.Test do
     pop_by_struct_type(Sentry.LogEvent)
   end
 
+  @doc """
+  Pops all the collected metrics from the current process.
+
+  Returns a list of all `Sentry.Metric` structs that have been collected.
+  After this function returns, the collected metrics are cleared but
+  collection continues.
+
+  > #### Metrics are Asynchronous {: .info}
+  >
+  > Metric events flow through the `TelemetryProcessor` pipeline asynchronously.
+  > You may need to add a small delay before calling this function to ensure
+  > all metrics have been processed by the `before_send_metric` callback.
+
+  """
+  @doc since: "13.0.0"
+  @spec pop_sentry_metrics(pid()) :: [Sentry.Metric.t()]
+  def pop_sentry_metrics(owner_pid \\ self()) when is_pid(owner_pid) do
+    pop_by_struct_type(Sentry.Metric)
+  end
+
   # Bypass envelope helpers
 
   @doc """
@@ -341,6 +366,151 @@ defmodule Sentry.Test do
   end
 
   @doc """
+  Extracts check-in payloads from decoded envelope item lists.
+  """
+  @doc since: "13.0.0"
+  @spec extract_check_ins([[{map(), map()}]]) :: [map()]
+  def extract_check_ins(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "check_in"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Extracts metric batch payloads from decoded envelope item lists.
+
+  Each returned map has an `"items"` key containing the individual
+  metric maps for that batch. This mirrors the structure of `extract_log_items/1`.
+  """
+  @doc since: "13.0.0"
+  @spec extract_metric_items([[{map(), map()}]]) :: [map()]
+  def extract_metric_items(envelope_items_list) do
+    for items <- envelope_items_list,
+        {%{"type" => "trace_metric"}, payload} <- items,
+        do: payload
+  end
+
+  @doc """
+  Collects events sent through a Bypass envelope collector.
+
+  This is a high-level helper combining `collect_envelopes/3` and `extract_events/1`.
+  Use this instead of `collect_envelopes(ref, count) |> extract_events()`.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  ## Examples
+
+      ref = setup_bypass_envelope_collector(bypass)
+      trigger_event()
+      [event] = collect_sentry_events(ref, 1)
+
+  """
+  @doc since: "13.0.0"
+  @spec collect_sentry_events(reference(), pos_integer(), keyword()) :: [map()]
+  def collect_sentry_events(ref, expected_count, opts \\ []) do
+    collect_envelopes(ref, expected_count, opts) |> extract_events()
+  end
+
+  @doc """
+  Collects transactions sent through a Bypass envelope collector.
+
+  This is a high-level helper combining `collect_envelopes/3` and `extract_transactions/1`.
+  Use this instead of `collect_envelopes(ref, count) |> extract_transactions()`.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  ## Examples
+
+      ref = setup_bypass_envelope_collector(bypass)
+      run_traced_job()
+      [tx] = collect_sentry_transactions(ref, 1)
+
+  """
+  @doc since: "13.0.0"
+  @spec collect_sentry_transactions(reference(), pos_integer(), keyword()) :: [map()]
+  def collect_sentry_transactions(ref, expected_count, opts \\ []) do
+    collect_envelopes(ref, expected_count, opts) |> extract_transactions()
+  end
+
+  @doc """
+  Collects log items sent through a Bypass envelope collector.
+
+  This is a high-level helper combining `collect_envelopes/3` and `extract_log_items/1`.
+  Use this instead of `collect_envelopes(ref, count) |> extract_log_items()`.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  ## Examples
+
+      ref = setup_bypass_envelope_collector(bypass)
+      Logger.info("something happened")
+      [log] = collect_sentry_logs(ref, 1)
+
+  """
+  @doc since: "13.0.0"
+  @spec collect_sentry_logs(reference(), pos_integer(), keyword()) :: [map()]
+  def collect_sentry_logs(ref, expected_count, opts \\ []) do
+    collect_envelopes(ref, expected_count, opts) |> extract_log_items()
+  end
+
+  @doc """
+  Collects check-in payloads sent through a Bypass envelope collector.
+
+  This is a high-level helper combining `collect_envelopes/3` and `extract_check_ins/1`.
+  Use this instead of manually destructuring `[[{header, body}]]` from `collect_envelopes/3`.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  ## Examples
+
+      ref = setup_bypass_envelope_collector(bypass, type: "check_in")
+      Sentry.capture_check_in(status: :ok, monitor_slug: "my-job")
+      [check_in] = collect_sentry_check_ins(ref, 1)
+      assert check_in["status"] == "ok"
+
+  """
+  @doc since: "13.0.0"
+  @spec collect_sentry_check_ins(reference(), pos_integer(), keyword()) :: [map()]
+  def collect_sentry_check_ins(ref, expected_count, opts \\ []) do
+    collect_envelopes(ref, expected_count, opts) |> extract_check_ins()
+  end
+
+  @doc """
+  Collects metric batch payloads sent through a Bypass envelope collector.
+
+  This is a high-level helper combining `collect_envelopes/3` and `extract_metric_items/1`.
+  Use this instead of `collect_envelopes(ref, count) |> extract_metric_items()`.
+
+  Each returned map has an `"items"` key containing the individual metric maps.
+
+  ## Options
+
+    * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
+
+  ## Examples
+
+      ref = setup_bypass_envelope_collector(bypass, type: "trace_metric")
+      Sentry.Metrics.count("button.clicks", 1)
+      [batch] = collect_sentry_metric_items(ref, 1)
+      [metric] = batch["items"]
+      assert metric["name"] == "button.clicks"
+
+  """
+  @doc since: "13.0.0"
+  @spec collect_sentry_metric_items(reference(), pos_integer(), keyword()) :: [map()]
+  def collect_sentry_metric_items(ref, expected_count, opts \\ []) do
+    collect_envelopes(ref, expected_count, opts) |> extract_metric_items()
+  end
+
+  @doc """
   Decodes a raw envelope binary into a list of `{header, item}` tuples.
   """
   @doc since: "12.1.0"
@@ -395,6 +565,7 @@ defmodule Sentry.Test do
     {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
     {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
     {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
+    {user_before_send_metric, extra_config} = Keyword.pop(extra_config, :before_send_metric)
 
     # Use the caller-only registry lookup instead of `Sentry.Config.before_send/0`
     # so the captured "original" callback is only this test's override (or the
@@ -406,9 +577,13 @@ defmodule Sentry.Test do
     original_before_send_log =
       user_before_send_log || original_config_value(:before_send_log)
 
+    original_before_send_metric =
+      user_before_send_metric || original_config_value(:before_send_metric)
+
     # Build collecting callbacks that wrap the originals
     new_before_send = build_collecting_callback(original_before_send)
     new_before_send_log = build_collecting_callback(original_before_send_log)
+    new_before_send_metric = build_collecting_callback(original_before_send_metric)
 
     # Always set a per-test DSN override. When no DSN is provided, use the
     # default Bypass DSN.
@@ -427,7 +602,8 @@ defmodule Sentry.Test do
       |> Keyword.merge(extra_config)
       |> Keyword.merge(
         before_send: new_before_send,
-        before_send_log: new_before_send_log
+        before_send_log: new_before_send_log,
+        before_send_metric: new_before_send_metric
       )
 
     put_test_config(config)

@@ -2,7 +2,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
   alias Sentry.Integrations.CheckInIDMappings
   use Sentry.Case, async: false
 
+  import Sentry.Test.Assertions
   import Sentry.TestHelpers
+
+  alias Sentry.Test, as: SentryTest
 
   setup context do
     opts = context[:attach_opts] || []
@@ -12,7 +15,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   setup do
-    setup_bypass(dedup_events: false, environment_name: "test")
+    SentryTest.setup_sentry(dedup_events: false, environment_name: "test")
   end
 
   for event_type <- [:start, :stop, :exception] do
@@ -63,34 +66,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   test "captures start events with monitor config", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, check_in_body}] = decode_envelope!(body)
-      id = CheckInIDMappings.lookup_or_insert_new(123)
-
-      assert headers["type"] == "check_in"
-
-      assert check_in_body["check_in_id"] == id
-      assert check_in_body["status"] == "in_progress"
-      assert check_in_body["monitor_slug"] == "sentry-my-worker"
-      assert check_in_body["duration"] == nil
-      assert check_in_body["environment"] == "test"
-
-      assert check_in_body["monitor_config"] == %{
-               "schedule" => %{
-                 "type" => "interval",
-                 "value" => 1,
-                 "unit" => "day"
-               }
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
@@ -100,7 +76,23 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    id = CheckInIDMappings.lookup_or_insert_new(123)
+
+    assert_sentry_report(check_in_body,
+      check_in_id: id,
+      status: "in_progress",
+      monitor_slug: "sentry-my-worker",
+      duration: nil,
+      environment: "test",
+      monitor_config: %{
+        "schedule" => %{
+          "type" => "interval",
+          "value" => 1,
+          "unit" => "day"
+        }
+      }
+    )
   end
 
   for {oban_state, expected_status} <- [
@@ -120,34 +112,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       ] do
     test "captures stop events with monitor config and state of #{inspect(oban_state)} and frequency of #{frequency}",
          %{bypass: bypass} do
-      test_pid = self()
-      ref = make_ref()
-
-      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert [{headers, check_in_body}] = decode_envelope!(body)
-        id = CheckInIDMappings.lookup_or_insert_new(942)
-
-        assert headers["type"] == "check_in"
-        assert check_in_body["check_in_id"] == id
-        assert check_in_body["status"] == unquote(expected_status)
-        assert check_in_body["monitor_slug"] == "sentry-my-worker"
-        assert check_in_body["duration"] == 12.099
-        assert check_in_body["environment"] == "test"
-
-        assert check_in_body["monitor_config"] == %{
-                 "schedule" => %{
-                   "type" => "interval",
-                   "value" => 1,
-                   "unit" => unquote(expected_unit)
-                 },
-                 "timezone" => "Europe/Rome"
-               }
-
-        send(test_pid, {ref, :done})
-
-        Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-      end)
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
       duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -160,39 +125,29 @@ defmodule Sentry.Integrations.Oban.CronTest do
         }
       })
 
-      assert_receive {^ref, :done}, 1000
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      id = CheckInIDMappings.lookup_or_insert_new(942)
+
+      assert_sentry_report(check_in_body,
+        check_in_id: id,
+        status: unquote(expected_status),
+        monitor_slug: "sentry-my-worker",
+        duration: 12.099,
+        environment: "test",
+        monitor_config: %{
+          "schedule" => %{
+            "type" => "interval",
+            "value" => 1,
+            "unit" => unquote(expected_unit)
+          },
+          "timezone" => "Europe/Rome"
+        }
+      )
     end
   end
 
   test "captures exception events with monitor config", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{headers, check_in_body}] = decode_envelope!(body)
-      id = CheckInIDMappings.lookup_or_insert_new(942)
-
-      assert headers["type"] == "check_in"
-
-      assert check_in_body["check_in_id"] == id
-      assert check_in_body["status"] == "error"
-      assert check_in_body["monitor_slug"] == "sentry-my-worker"
-      assert check_in_body["duration"] == 12.099
-      assert check_in_body["environment"] == "test"
-
-      assert check_in_body["monitor_config"] == %{
-               "schedule" => %{
-                 "type" => "crontab",
-                 "value" => "* 1 1 1 1"
-               },
-               "timezone" => "Europe/Rome"
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -205,7 +160,23 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    id = CheckInIDMappings.lookup_or_insert_new(942)
+
+    assert_sentry_report(check_in_body,
+      check_in_id: id,
+      status: "error",
+      monitor_slug: "sentry-my-worker",
+      duration: 12.099,
+      environment: "test",
+      monitor_config: %{
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "* 1 1 1 1"
+        },
+        "timezone" => "Europe/Rome"
+      }
+    )
   end
 
   test "uses default monitor configuration in Sentry's config if present", %{bypass: bypass} do
@@ -219,28 +190,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       ]
     )
 
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-      assert check_in_body["monitor_config"] == %{
-               "checkin_margin" => 10,
-               "failure_issue_threshold" => 84,
-               "max_runtime" => 42,
-               "schedule" => %{
-                 "type" => "crontab",
-                 "value" => "* 1 1 1 1"
-               },
-               "timezone" => "Europe/Rome"
-             }
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
       state: :success,
@@ -251,23 +201,26 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+    assert_sentry_report(check_in_body,
+      monitor_config: %{
+        "checkin_margin" => 10,
+        "failure_issue_threshold" => 84,
+        "max_runtime" => 42,
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "* 1 1 1 1"
+        },
+        "timezone" => "Europe/Rome"
+      }
+    )
   end
 
   @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is not affected if the custom monitor_name_generator does not target the worker",
        %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-      assert check_in_body["monitor_slug"] == "sentry-my-worker"
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
@@ -277,24 +230,15 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    assert_sentry_report(check_in_body, monitor_slug: "sentry-my-worker")
   end
 
   @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is set based on the custom monitor_name_generator if it targets the worker",
        %{bypass: bypass} do
     client_name = "my-client"
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-      assert check_in_body["monitor_slug"] == "sentry-client-worker-my-client"
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
@@ -305,25 +249,12 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+    assert_sentry_report(check_in_body, monitor_slug: "sentry-client-worker-my-client")
   end
 
   test "custom options overide job metadata", %{bypass: bypass} do
-    test_pid = self()
-    ref = make_ref()
-
-    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert [{_headers, check_in_body}] = decode_envelope!(body)
-
-      assert check_in_body["monitor_slug"] == "this-is-a-custom-slug-123"
-      assert check_in_body["monitor_config"]["schedule"]["type"] == "interval"
-      assert check_in_body["monitor_config"]["timezone"] == "Europe/Rome"
-
-      send(test_pid, {ref, :done})
-
-      Plug.Conn.send_resp(conn, 200, ~s<{"id": "1923"}>)
-    end)
+    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     defmodule WorkerWithCustomOptions do
       use Oban.Worker
@@ -351,7 +282,15 @@ defmodule Sentry.Integrations.Oban.CronTest do
       }
     })
 
-    assert_receive {^ref, :done}, 1000
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+    assert_sentry_report(check_in_body,
+      monitor_slug: "this-is-a-custom-slug-123",
+      monitor_config: %{
+        "schedule" => %{"type" => "interval"},
+        "timezone" => "Europe/Rome"
+      }
+    )
   end
 
   def custom_name_generator(%Oban.Job{worker: "Sentry.ClientWorker", args: %{"client" => client}}) do
