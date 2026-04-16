@@ -240,8 +240,6 @@ defmodule Sentry.TestTest do
 
       Logger.info("pop_sentry_logs test message")
 
-      Sentry.TelemetryProcessor.flush()
-
       assert_sentry_log(:info, "pop_sentry_logs test message")
     end
   end

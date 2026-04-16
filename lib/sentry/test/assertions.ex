@@ -29,10 +29,29 @@ defmodule Sentry.Test.Assertions do
       events = Sentry.Test.pop_sentry_reports()
       event = find_sentry_report!(events, message: %{formatted: ~r/hello/})
 
+  ## Awaiting Asynchronous Reports
+
+  Log and metric events flow through the `Sentry.TelemetryProcessor` pipeline
+  asynchronously. The type-form of `assert_sentry_report/2` and
+  `assert_sentry_log/3` await internally — they flush the telemetry pipeline
+  and poll the collector with exponential backoff until at least one matching
+  item is captured, up to a timeout (default `#{1000}ms`).
+
+  Tests typically do not need to call `Sentry.TelemetryProcessor.flush/0`
+  or `Process.sleep/1` before these assertions.
+
+  Override the default via the reserved `:timeout` keyword:
+
+      assert_sentry_report(:log, [level: :info, body: "hi"], timeout: 2000)
+      assert_sentry_log(:info, "hi", timeout: 2000)
+
   """
   @moduledoc since: "12.1.0"
 
   import ExUnit.Assertions, only: [flunk: 1]
+
+  @default_timeout 1000
+  @max_poll_interval 50
 
   @type_to_pop %{
     event: &Sentry.Test.pop_sentry_reports/0,
@@ -97,10 +116,11 @@ defmodule Sentry.Test.Assertions do
   @spec assert_sentry_report(:event | :transaction | :log | :metric, keyword()) ::
           Sentry.Event.t() | Sentry.Transaction.t() | Sentry.LogEvent.t() | Sentry.Metric.t()
   def assert_sentry_report(type, criteria) when type in [:event, :transaction, :log, :metric] do
-    items = pop_for_type(type)
+    {timeout, criteria} = Keyword.pop(criteria, :timeout, @default_timeout)
     label = type_label(type)
 
-    item = unwrap_single!(items, label)
+    items = await_items(type, timeout, &(length(&1) >= 1))
+    item = unwrap_single!(items, label, timeout)
     assert_fields!(item, criteria, label)
     item
   end
@@ -117,12 +137,17 @@ defmodule Sentry.Test.Assertions do
   @doc """
   Asserts that a log was captured matching the given level and body pattern.
 
-  Pops all collected logs and finds the first one matching `level` and
-  `body_pattern`. This uses find semantics (not assert-exactly-1) because
-  logs often come in batches.
+  Awaits asynchronously-captured logs: the pipeline is flushed and the
+  collector is polled until a log matching the criteria is found or the
+  timeout elapses (default `#{1000}ms`, overridable via the `:timeout`
+  reserved key in `extra_criteria`).
+
+  Once at least one candidate log is available, finds the first one matching
+  `level` and `body_pattern`. This uses find semantics (not assert-exactly-1)
+  because logs often come in batches.
 
   The optional third argument is a keyword list of extra criteria to match
-  on any `Sentry.LogEvent` field.
+  on any `Sentry.LogEvent` field, plus the reserved `:timeout` option.
 
   Returns the matched log event.
 
@@ -132,6 +157,7 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_log(:error, ~r/connection refused/)
       assert_sentry_log(:info, "User session started", trace_id: "abc123")
       assert_sentry_log(:info, "User session started", attributes: %{id: 312})
+      assert_sentry_log(:info, "slow path", timeout: 2000)
 
   """
   @doc since: "12.1.0"
@@ -139,8 +165,14 @@ defmodule Sentry.Test.Assertions do
           Sentry.LogEvent.t()
   def assert_sentry_log(level, body_pattern, extra_criteria \\ [])
       when is_atom(level) and (is_binary(body_pattern) or is_struct(body_pattern, Regex)) do
+    {timeout, extra_criteria} = Keyword.pop(extra_criteria, :timeout, @default_timeout)
     criteria = [level: level, body: body_pattern] ++ extra_criteria
-    logs = Sentry.Test.pop_sentry_logs()
+
+    logs =
+      await_items(:log, timeout, fn items ->
+        Enum.any?(items, &matches_criteria?(&1, criteria))
+      end)
+
     find_item!(logs, criteria, "log")
   end
 
@@ -168,15 +200,68 @@ defmodule Sentry.Test.Assertions do
     Map.fetch!(@type_to_pop, type).()
   end
 
+  defp await_items(type, timeout, done_fn) do
+    maybe_flush(timeout)
+    deadline = System.monotonic_time(:millisecond) + timeout
+    await_loop(type, deadline, 1, [], done_fn)
+  end
+
+  defp await_loop(type, deadline, sleep_ms, acc, done_fn) do
+    acc = acc ++ pop_for_type(type)
+
+    cond do
+      done_fn.(acc) ->
+        acc
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        acc
+
+      true ->
+        Process.sleep(sleep_ms)
+        await_loop(type, deadline, min(sleep_ms * 2, @max_poll_interval), acc, done_fn)
+    end
+  end
+
+  # Drains the TelemetryProcessor pipeline synchronously. No-op when no
+  # per-test processor is registered (e.g., tests that bypass the pipeline
+  # by inserting directly into the collector ETS table).
+  defp maybe_flush(timeout) do
+    case Process.get(:sentry_telemetry_processor) do
+      nil ->
+        :ok
+
+      processor ->
+        scheduler = Sentry.TelemetryProcessor.scheduler_name(processor)
+
+        if Process.whereis(scheduler) do
+          try do
+            Sentry.TelemetryProcessor.flush(processor, timeout)
+          catch
+            :exit, _ -> :ok
+          end
+        end
+
+        :ok
+    end
+  end
+
+  defp matches_criteria?(item, criteria) do
+    Enum.all?(criteria, fn {key, expected} ->
+      match_value?(get_field(item, key), expected)
+    end)
+  end
+
   defp type_label(:event), do: "event"
   defp type_label(:transaction), do: "transaction"
   defp type_label(:log), do: "log"
   defp type_label(:metric), do: "metric"
 
-  defp unwrap_single!([single], _label), do: single
-  defp unwrap_single!(item, _label) when is_map(item), do: item
+  defp unwrap_single!(items_or_item, label, timeout \\ nil)
 
-  defp unwrap_single!([], label) do
+  defp unwrap_single!([single], _label, _timeout), do: single
+  defp unwrap_single!(item, _label, _timeout) when is_map(item), do: item
+
+  defp unwrap_single!([], label, nil) do
     flunk("""
     Expected exactly 1 Sentry #{label}, got 0.
 
@@ -184,7 +269,17 @@ defmodule Sentry.Test.Assertions do
     """)
   end
 
-  defp unwrap_single!(list, label) when is_list(list) do
+  defp unwrap_single!([], label, timeout) do
+    flunk("""
+    Expected 1 Sentry #{label} within #{timeout}ms, got 0.
+
+    Ensure the TelemetryProcessor is running for this test (via Sentry.Case or
+    Sentry.Test.setup_sentry/1) and that the event was emitted before the
+    assertion. For slow pipelines, pass a larger `:timeout` option.\
+    """)
+  end
+
+  defp unwrap_single!(list, label, _timeout) when is_list(list) do
     flunk("""
     Expected exactly 1 Sentry #{label}, got #{length(list)}.
 
@@ -210,11 +305,8 @@ defmodule Sentry.Test.Assertions do
   end
 
   defp find_item!(items, criteria, label) do
-    Enum.find(items, fn item ->
-      Enum.all?(criteria, fn {key, expected} ->
-        match_value?(get_field(item, key), expected)
-      end)
-    end) || flunk(format_find_error(items, criteria, label))
+    Enum.find(items, &matches_criteria?(&1, criteria)) ||
+      flunk(format_find_error(items, criteria, label))
   end
 
   defp get_field(data, key) when is_atom(key) do

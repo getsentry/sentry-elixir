@@ -50,8 +50,8 @@ defmodule Sentry.Test.AssertionsTest do
     end
 
     test "fails when 0 items captured" do
-      assert_raise ExUnit.AssertionError, ~r/Expected exactly 1 Sentry event, got 0/, fn ->
-        assert_sentry_report(:event, level: :error)
+      assert_raise ExUnit.AssertionError, ~r/Expected 1 Sentry event within 10ms, got 0/, fn ->
+        assert_sentry_report(:event, level: :error, timeout: 10)
       end
     end
 
@@ -179,7 +179,7 @@ defmodule Sentry.Test.AssertionsTest do
       insert_log_event(:info, "other message")
 
       assert_raise ExUnit.AssertionError, ~r/No matching Sentry log found/, fn ->
-        assert_sentry_log(:error, "nonexistent message")
+        assert_sentry_log(:error, "nonexistent message", timeout: 10)
       end
     end
 
@@ -187,7 +187,7 @@ defmodule Sentry.Test.AssertionsTest do
       insert_log_event(:info, "hello")
 
       assert_raise ExUnit.AssertionError, ~r/No matching Sentry log found/, fn ->
-        assert_sentry_log(:error, "hello")
+        assert_sentry_log(:error, "hello", timeout: 10)
       end
     end
   end
@@ -284,8 +284,8 @@ defmodule Sentry.Test.AssertionsTest do
     end
 
     test "fails when 0 metrics captured" do
-      assert_raise ExUnit.AssertionError, ~r/Expected exactly 1 Sentry metric, got 0/, fn ->
-        assert_sentry_report(:metric, name: "button.clicks")
+      assert_raise ExUnit.AssertionError, ~r/Expected 1 Sentry metric within 10ms, got 0/, fn ->
+        assert_sentry_report(:metric, name: "button.clicks", timeout: 10)
       end
     end
 
@@ -299,6 +299,60 @@ defmodule Sentry.Test.AssertionsTest do
 
       assert error.message =~ "Sentry metric assertion failed"
       assert error.message =~ ":type"
+    end
+  end
+
+  describe "await behaviour" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "polling catches an item inserted mid-wait" do
+      table = Process.get(:sentry_test_collector)
+
+      Task.start(fn ->
+        Process.sleep(30)
+        event = build_event(level: :error)
+        :ets.insert(table, {System.unique_integer([:monotonic]), event})
+      end)
+
+      assert_sentry_report(:event, level: :error, timeout: 500)
+    end
+
+    test ":timeout option is respected when item never arrives" do
+      before = System.monotonic_time(:millisecond)
+
+      assert_raise ExUnit.AssertionError, ~r/within 50ms/, fn ->
+        assert_sentry_report(:event, level: :error, timeout: 50)
+      end
+
+      elapsed = System.monotonic_time(:millisecond) - before
+      assert elapsed < 500, "expected fast failure, waited #{elapsed}ms"
+    end
+
+    test "assert_sentry_log awaits for a matching log even when non-matching logs arrive first" do
+      table = Process.get(:sentry_test_collector)
+      now = System.system_time(:microsecond) / 1_000_000
+
+      Task.start(fn ->
+        Process.sleep(10)
+        noise = struct!(Sentry.LogEvent, level: :info, body: "unrelated", timestamp: now)
+        :ets.insert(table, {System.unique_integer([:monotonic]), noise})
+
+        Process.sleep(30)
+        target = struct!(Sentry.LogEvent, level: :info, body: "target log", timestamp: now)
+        :ets.insert(table, {System.unique_integer([:monotonic]), target})
+      end)
+
+      log = assert_sentry_log(:info, "target log", timeout: 500)
+      assert log.body == "target log"
+    end
+
+    test "maybe_flush is a no-op when no processor is registered in pdict" do
+      refute Process.get(:sentry_telemetry_processor)
+
+      insert_event(level: :error)
+      assert_sentry_report(:event, level: :error)
     end
   end
 
