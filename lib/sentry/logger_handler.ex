@@ -109,6 +109,11 @@ defmodule Sentry.LoggerHandler do
       default: Sentry.TelemetryProcessor,
       type_doc: "`t:GenServer.server/0`",
       doc: false
+    ],
+    enable_logs: [
+      type: {:or, [:boolean, nil]},
+      default: nil,
+      doc: false
     ]
   ]
 
@@ -255,6 +260,7 @@ defmodule Sentry.LoggerHandler do
     :sync_threshold,
     :discard_threshold,
     :telemetry_processor,
+    :enable_logs,
     backends: []
   ]
 
@@ -267,17 +273,16 @@ defmodule Sentry.LoggerHandler do
     # The :config key may not be here.
     sentry_config = Map.get(config, :config, %{})
 
-    # Pop :enable_logs from the handler config before validating; it's a
-    # Sentry-level setting not in the handler's NimbleOptions schema.
-    # When present it takes precedence over the global Config.enable_logs?()
-    # which may not resolve correctly in the logger-server process during
-    # async tests.
-    {enable_logs_override, sentry_config} = Map.pop(sentry_config, :enable_logs)
-
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
+    # When :enable_logs is set on the handler config, it takes precedence over
+    # the global Config.enable_logs?() — which may not resolve correctly in the
+    # logger-server process during async tests.
     enable_logs? =
-      if is_boolean(enable_logs_override), do: enable_logs_override, else: Config.enable_logs?()
+      case handler_config.enable_logs do
+        nil -> Config.enable_logs?()
+        bool -> bool
+      end
 
     backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}

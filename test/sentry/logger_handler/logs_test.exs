@@ -258,6 +258,47 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
+    test "handler-level enable_logs: false overrides global enable_logs: true", %{
+      handler_name: handler_name
+    } do
+      :ok = :logger.remove_handler(handler_name)
+
+      override_handler_name =
+        :"sentry_logs_handler_override_#{System.unique_integer([:positive])}"
+
+      # Global config says logs are on; handler-level override forces them off.
+      put_test_config(enable_logs: true)
+
+      assert :ok =
+               :logger.add_handler(override_handler_name, Sentry.LoggerHandler, %{
+                 config: %{enable_logs: false}
+               })
+
+      on_exit(fn -> _ = :logger.remove_handler(override_handler_name) end)
+
+      initial_size = TelemetryProcessor.buffer_size(:log)
+
+      Logger.info("Test message — should be ignored by overridden handler")
+
+      Process.sleep(100)
+
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
+    end
+
+    test "rejects non-boolean :enable_logs in handler config", %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      invalid_handler_name =
+        :"sentry_logs_handler_invalid_#{System.unique_integer([:positive])}"
+
+      assert {:error, {:handler_not_added, {:callback_crashed, {:error, error, _stack}}}} =
+               :logger.add_handler(invalid_handler_name, Sentry.LoggerHandler, %{
+                 config: %{enable_logs: "true"}
+               })
+
+      assert %NimbleOptions.ValidationError{key: :enable_logs} = error
+    end
+
     test "generates trace_id when no trace context is available", %{
       bypass: bypass
     } do
