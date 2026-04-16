@@ -42,6 +42,7 @@ defmodule Sentry.Test.ConfigIsolationTest do
       assert_receive {:resolved, "iso_supervised"}, 1_000
     end
 
+    @tag :otp_25_plus
     test "parent-pid walk resolves override from a spawn_monitor child" do
       put_test_config(environment_name: "iso_spawn")
 
