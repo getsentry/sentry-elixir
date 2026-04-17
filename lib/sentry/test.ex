@@ -83,7 +83,7 @@ defmodule Sentry.Test do
       end
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec setup_sentry(keyword()) :: %{bypass: term()}
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
@@ -281,7 +281,7 @@ defmodule Sentry.Test do
       process. Envelopes not matching the type are silently dropped.
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec setup_bypass_envelope_collector(term(), keyword()) :: reference()
   def setup_bypass_envelope_collector(bypass, opts \\ []) do
     test_pid = self()
@@ -312,7 +312,7 @@ defmodule Sentry.Test do
     * `:timeout` - timeout in ms to wait for each envelope (default: 1000)
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec collect_envelopes(reference(), pos_integer(), keyword()) :: [[{map(), map()}]]
   def collect_envelopes(ref, expected_count, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, 1000)
@@ -335,7 +335,7 @@ defmodule Sentry.Test do
   @doc """
   Extracts event payloads from decoded envelope item lists.
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec extract_events([[{map(), map()}]]) :: [map()]
   def extract_events(envelope_items_list) do
     for items <- envelope_items_list,
@@ -346,7 +346,7 @@ defmodule Sentry.Test do
   @doc """
   Extracts transaction payloads from decoded envelope item lists.
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec extract_transactions([[{map(), map()}]]) :: [map()]
   def extract_transactions(envelope_items_list) do
     for items <- envelope_items_list,
@@ -357,7 +357,7 @@ defmodule Sentry.Test do
   @doc """
   Extracts log item payloads from decoded envelope item lists.
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec extract_log_items([[{map(), map()}]]) :: [map()]
   def extract_log_items(envelope_items_list) do
     for items <- envelope_items_list,
@@ -513,7 +513,7 @@ defmodule Sentry.Test do
   @doc """
   Decodes a raw envelope binary into a list of `{header, item}` tuples.
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec decode_envelope!(binary()) :: [{header :: map(), item :: map()}]
   def decode_envelope!(binary) do
     json_library = Sentry.Config.json_library()
