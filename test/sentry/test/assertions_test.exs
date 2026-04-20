@@ -349,6 +349,7 @@ defmodule Sentry.Test.AssertionsTest do
     end
 
     test "maybe_flush is a no-op when no processor is registered in pdict" do
+      Process.delete(:sentry_telemetry_processor)
       refute Process.get(:sentry_telemetry_processor)
 
       insert_event(level: :error)
