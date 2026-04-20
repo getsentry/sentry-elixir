@@ -46,7 +46,7 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_log(:info, "hi", timeout: 2000)
 
   """
-  @moduledoc since: "12.1.0"
+  @moduledoc since: "13.0.0"
 
   import ExUnit.Assertions, only: [flunk: 1]
 
@@ -110,7 +110,7 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_report(event, "tags" => %{"oban_queue" => "default"})
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   def assert_sentry_report(type_or_item, criteria)
 
   @spec assert_sentry_report(:event | :transaction | :log | :metric, keyword()) ::
@@ -160,7 +160,7 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_log(:info, "slow path", timeout: 2000)
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec assert_sentry_log(Sentry.LogEvent.level(), String.t() | Regex.t(), keyword()) ::
           Sentry.LogEvent.t()
   def assert_sentry_log(level, body_pattern, extra_criteria \\ [])
@@ -191,7 +191,7 @@ defmodule Sentry.Test.Assertions do
       event = find_sentry_report!(events, message: %{formatted: ~r/hello/})
 
   """
-  @doc since: "12.1.0"
+  @doc since: "13.0.0"
   @spec find_sentry_report!([map()], keyword() | [{binary(), term()}]) :: map()
   def find_sentry_report!(items, criteria) when is_list(items) do
     find_item!(items, criteria, "report")
