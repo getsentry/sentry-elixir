@@ -62,10 +62,16 @@ defmodule Sentry.Test do
   Sets up a Bypass instance and configures Sentry for testing.
 
   Opens a Bypass on a random port, configures the DSN to point to it,
-  and wires up `before_send` / `before_send_log` callbacks to capture
-  structs in an isolated ETS table.
+  wires up `before_send` / `before_send_log` callbacks to capture structs
+  in an isolated ETS table, and starts a per-test `Sentry.TelemetryProcessor`
+  (via `setup_telemetry_processor/0`) so that assertions work for events
+  that travel through the TelemetryProcessor pipeline (logs, metrics, or
+  `send_result: :none`).
 
-  Returns a map with `:bypass` for use in test context.
+  Returns a map with `:bypass` and `:telemetry_processor` for use in test
+  context. The `:telemetry_processor` value is the atom name of the
+  per-test processor and can be used to `stop_supervised!/1` and start
+  a custom-configured one when needed.
 
   ## Options
 
@@ -82,9 +88,24 @@ defmodule Sentry.Test do
         Sentry.Test.setup_sentry(dedup_events: false)
       end
 
+  Replacing the auto-started processor with a custom-configured one:
+
+      setup do
+        %{telemetry_processor: name} = ctx = Sentry.Test.setup_sentry()
+        stop_supervised!(name)
+
+        start_supervised!(
+          {Sentry.TelemetryProcessor,
+           name: name, buffer_configs: %{log: %{batch_size: 1}}},
+          id: name
+        )
+
+        ctx
+      end
+
   """
   @doc since: "13.0.0"
-  @spec setup_sentry(keyword()) :: %{bypass: term()}
+  @spec setup_sentry(keyword()) :: %{bypass: term(), telemetry_processor: atom()}
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
 
@@ -95,11 +116,78 @@ defmodule Sentry.Test do
       Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
     end)
 
+    # Start a per-test TelemetryProcessor before setup_collector/1 so that
+    # the collector wires this test's scheduler into its registry.
+    processor_name = setup_telemetry_processor()
+
     # Set up collector with DSN pointing to this test's Bypass
     bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
     setup_collector(bypass_config ++ extra_config)
 
-    %{bypass: bypass}
+    %{bypass: bypass, telemetry_processor: processor_name}
+  end
+
+  @doc """
+  Starts an isolated, per-test `Sentry.TelemetryProcessor` and wires it
+  into the current test's config scope.
+
+  This is called automatically by `setup_sentry/1` and
+  `start_collecting_sentry_reports/0`, so most users do not need to invoke
+  it directly. It is exposed for tests that want to perform the setup
+  without opening a Bypass.
+
+  The helper:
+
+    * starts a fresh `Sentry.TelemetryProcessor` under the ExUnit test
+      supervisor with a unique name,
+    * allows the scheduler PID in `Sentry.Test.Config` so that per-test
+      config overrides reach it,
+    * stores the processor name in the process dictionary under
+      `:sentry_telemetry_processor` so that `Sentry.TelemetryProcessor.add/1`
+      and friends route to it.
+
+  Returns the processor name (an atom).
+
+  Must be called from within an ExUnit test because it uses
+  `ExUnit.Callbacks.start_supervised!/2` for automatic cleanup.
+
+  If a per-test processor is already registered for this test (for example
+  when using `Sentry.Case`), this function is idempotent and returns the
+  existing processor name instead of starting a new one.
+  """
+  @doc since: "13.0.0"
+  @spec setup_telemetry_processor() :: atom()
+  def setup_telemetry_processor do
+    case Process.get(:sentry_telemetry_processor) do
+      name when is_atom(name) and not is_nil(name) ->
+        if processor_alive?(name), do: name, else: do_setup_telemetry_processor()
+
+      _ ->
+        do_setup_telemetry_processor()
+    end
+  end
+
+  defp do_setup_telemetry_processor do
+    uid = System.unique_integer([:positive])
+    processor_name = :"test_telemetry_processor_#{uid}"
+
+    ExUnit.Callbacks.start_supervised!(
+      {Sentry.TelemetryProcessor, name: processor_name},
+      id: processor_name
+    )
+
+    scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
+    Sentry.Test.Config.allow(self(), scheduler_pid)
+
+    Process.put(:sentry_telemetry_processor, processor_name)
+    processor_name
+  end
+
+  defp processor_alive?(name) do
+    case Process.whereis(name) do
+      pid when is_pid(pid) -> Process.alive?(pid)
+      _ -> false
+    end
   end
 
   @doc """
@@ -118,6 +206,7 @@ defmodule Sentry.Test do
   @spec start_collecting_sentry_reports(map()) :: :ok
   def start_collecting_sentry_reports(_context \\ %{}) do
     unless Process.get(:sentry_test_collector) do
+      setup_telemetry_processor()
       setup_collector([])
     end
 

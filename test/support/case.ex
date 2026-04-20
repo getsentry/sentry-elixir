@@ -37,24 +37,13 @@ defmodule Sentry.Case do
     rate_limiter_table = :"test_rate_limiter_#{uid}"
 
     Process.put(:rate_limiter_table_name, rate_limiter_table)
-    start_supervised!({Sentry.Transport.RateLimiter, name: rate_limiter_table}, id: rate_limiter_table)
-  end
 
-  defp setup_telemetry_processor do
-    uid = System.unique_integer([:positive])
-    processor_name = :"test_telemetry_processor_#{uid}"
-
-    start_supervised!(
-      {Sentry.TelemetryProcessor, name: processor_name},
-      id: processor_name
+    start_supervised!({Sentry.Transport.RateLimiter, name: rate_limiter_table},
+      id: rate_limiter_table
     )
-
-    scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
-    Sentry.Test.Config.allow(self(), scheduler_pid)
-
-    Process.put(:sentry_telemetry_processor, processor_name)
-    processor_name
   end
+
+  defp setup_telemetry_processor, do: Sentry.Test.setup_telemetry_processor()
 
   defp setup_sender_pool_counters do
     uid = System.unique_integer([:positive])
