@@ -104,12 +104,6 @@ defmodule Sentry.LoggerHandler do
       set `:sync_threshold` to `nil`.
       """
     ],
-    telemetry_processor: [
-      type: {:or, [:atom, :pid, {:tuple, [:atom, :atom]}]},
-      default: Sentry.TelemetryProcessor,
-      type_doc: "`t:GenServer.server/0`",
-      doc: false
-    ],
     enable_logs: [
       type: {:or, [:boolean, nil]},
       default: nil,
@@ -259,7 +253,6 @@ defmodule Sentry.LoggerHandler do
     :rate_limiting,
     :sync_threshold,
     :discard_threshold,
-    :telemetry_processor,
     :enable_logs,
     backends: []
   ]

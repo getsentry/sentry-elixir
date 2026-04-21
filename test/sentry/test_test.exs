@@ -214,14 +214,13 @@ defmodule Sentry.TestTest do
   describe "pop_sentry_logs/0" do
     @describetag :capture_log
 
-    setup %{telemetry_processor: telemetry_processor} do
+    setup do
       ctx = SentryTest.setup_sentry(enable_logs: true, logs: [level: :info])
 
       handler_name = :"sentry_logs_test_#{System.unique_integer([:positive])}"
 
       handler_config = %{
         config: %{
-          telemetry_processor: telemetry_processor,
           enable_logs: true
         }
       }

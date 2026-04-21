@@ -367,14 +367,10 @@ defmodule Sentry.LoggerHandler.LogsTest do
     %{log_event | attributes: Map.put(log_event.attributes, "mfa_added", "true")}
   end
 
-  defp add_logs_handler(%{telemetry_processor: telemetry_processor}) do
+  defp add_logs_handler(_context) do
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 
-    handler_config = %{
-      config: %{
-        telemetry_processor: telemetry_processor
-      }
-    }
+    handler_config = %{config: %{}}
 
     assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
 
