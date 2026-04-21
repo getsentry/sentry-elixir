@@ -1,103 +1,81 @@
 defmodule Sentry.Integrations.Phoenix.MetricsTest do
   use PhoenixAppWeb.ConnCase, async: false
 
-  import Sentry.TestHelpers
+  import Sentry.Test.Assertions
 
   setup do
-    bypass = Bypass.open()
-    ref = setup_bypass_envelope_collector(bypass)
-
-    put_test_config(
-      dsn: "http://public:secret@localhost:#{bypass.port}/1",
-      enable_metrics: true
-    )
-
-    %{ref: ref, bypass: bypass}
+    Sentry.Test.setup_sentry()
+    :ok
   end
 
   describe "metrics from HTTP requests" do
-    test "GET /metrics emits counter, gauge, and distribution metrics", %{conn: conn, ref: ref} do
+    test "GET /metrics emits counter, gauge, and distribution metrics", %{conn: conn} do
       get(conn, ~p"/metrics")
 
-      envelopes = collect_envelopes(ref, 4)
-      metrics = extract_metrics(envelopes)
+      metrics = pop_metrics()
 
-      types = Enum.map(metrics, & &1["type"]) |> Enum.uniq()
-      assert "counter" in types
-      assert "gauge" in types
-      assert "distribution" in types
+      types = metrics |> Enum.map(& &1.type) |> Enum.uniq()
+      assert :counter in types
+      assert :gauge in types
+      assert :distribution in types
     end
 
-    test "counter metric includes request attributes", %{conn: conn, ref: ref} do
+    test "counter metric includes request attributes", %{conn: conn} do
       get(conn, ~p"/metrics")
 
-      envelopes = collect_envelopes(ref, 4)
-      metrics = extract_metrics(envelopes)
+      metrics = pop_metrics()
 
-      counter = Enum.find(metrics, &(&1["name"] == "http.requests"))
-      assert counter != nil
-      assert counter["type"] == "counter"
-      assert counter["value"] == 1
-      assert counter["attributes"]["method"]["value"] == "GET"
-      assert counter["attributes"]["path"]["value"] == "/metrics"
+      counter = find_sentry_report!(metrics, name: "http.requests", type: :counter)
+      assert counter.value == 1
+      assert counter.attributes[:method] == "GET"
+      assert counter.attributes[:path] == "/metrics"
     end
 
-    test "metrics inside traced spans have trace context", %{conn: conn, ref: ref} do
+    test "metrics inside traced spans have trace context", %{conn: conn} do
       get(conn, ~p"/metrics")
 
-      envelopes = collect_envelopes(ref, 4)
-      metrics = extract_metrics(envelopes)
+      metrics = pop_metrics()
 
-      traced_metrics =
-        Enum.filter(metrics, &(&1["name"] in ["users.count", "db.query_time"]))
+      traced_metrics = Enum.filter(metrics, &(&1.name in ["users.count", "db.query_time"]))
 
       assert length(traced_metrics) == 2
 
       for metric <- traced_metrics do
-        assert is_binary(metric["trace_id"]), "expected trace_id on #{metric["name"]}"
-        assert String.length(metric["trace_id"]) == 32
-        assert is_binary(metric["span_id"]), "expected span_id on #{metric["name"]}"
-        assert String.length(metric["span_id"]) == 16
+        assert is_binary(metric.trace_id), "expected trace_id on #{metric.name}"
+        assert String.length(metric.trace_id) == 32
+        assert is_binary(metric.span_id), "expected span_id on #{metric.name}"
+        assert String.length(metric.span_id) == 16
       end
     end
 
-    test "traced metrics from same request share trace_id", %{conn: conn, ref: ref} do
+    test "traced metrics from same request share trace_id", %{conn: conn} do
       get(conn, ~p"/metrics")
 
-      envelopes = collect_envelopes(ref, 4)
-      metrics = extract_metrics(envelopes)
+      metrics = pop_metrics()
 
-      traced_metrics = Enum.filter(metrics, &(&1["span_id"] != nil))
+      traced_metrics = Enum.filter(metrics, &(&1.span_id != nil))
       assert length(traced_metrics) >= 2
 
-      trace_ids = traced_metrics |> Enum.map(& &1["trace_id"]) |> Enum.uniq()
+      trace_ids = traced_metrics |> Enum.map(& &1.trace_id) |> Enum.uniq()
       assert length(trace_ids) == 1
     end
 
-    test "separate requests produce different trace_ids", %{conn: conn, ref: ref} do
+    test "separate requests produce different trace_ids", %{conn: conn} do
       get(conn, ~p"/metrics")
-      envelopes1 = collect_envelopes(ref, 4)
+      metrics1 = pop_metrics()
 
       get(conn, ~p"/metrics")
-      envelopes2 = collect_envelopes(ref, 4)
+      metrics2 = pop_metrics()
 
-      metrics1 = extract_metrics(envelopes1)
-      metrics2 = extract_metrics(envelopes2)
+      traced1 = find_sentry_report!(metrics1, name: "users.count")
+      traced2 = find_sentry_report!(metrics2, name: "users.count")
 
-      traced1 = Enum.find(metrics1, &(&1["name"] == "users.count"))
-      traced2 = Enum.find(metrics2, &(&1["name"] == "users.count"))
-
-      assert traced1 != nil
-      assert traced2 != nil
-      assert traced1["trace_id"] != traced2["trace_id"]
+      assert traced1.trace_id != traced2.trace_id
     end
   end
 
-  # Extract metric items from collected envelopes (already decoded by collect_envelopes/2)
-  defp extract_metrics(envelopes) do
-    envelopes
-    |> List.flatten()
-    |> Enum.filter(fn {header, _payload} -> header["type"] == "trace_metric" end)
-    |> Enum.flat_map(fn {_header, %{"items" => items}} -> items end)
+  defp pop_metrics do
+    Sentry.TelemetryProcessor.flush()
+    Sentry.Test.pop_sentry_metrics()
   end
 end
