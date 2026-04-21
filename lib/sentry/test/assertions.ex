@@ -24,6 +24,11 @@ defmodule Sentry.Test.Assertions do
       assert_sentry_log(:info, "User session started")
       assert_sentry_log(:info, ~r/session started/, trace_id: "abc123")
 
+  Use the metric shorthand (find semantics — works with multiple co-emitted metrics):
+
+      assert_sentry_metric(:counter, name: "button.clicks")
+      assert_sentry_metric(:distribution, name: "response.time")
+
   Find a specific event among many:
 
       events = Sentry.Test.pop_sentry_reports()
@@ -44,6 +49,7 @@ defmodule Sentry.Test.Assertions do
 
       assert_sentry_report(:log, [level: :info, body: "hi"], timeout: 2000)
       assert_sentry_log(:info, "hi", timeout: 2000)
+      assert_sentry_metric(:counter, name: "clicks", timeout: 2000)
 
   """
   @moduledoc since: "13.0.0"
@@ -177,6 +183,49 @@ defmodule Sentry.Test.Assertions do
     put_inbox(:log, remaining)
 
     match || flunk(format_find_error(logs, criteria, "log"))
+  end
+
+  @doc """
+  Asserts that a metric was captured matching the given type and criteria.
+
+  Awaits asynchronously-captured metrics: the pipeline is flushed and the
+  collector is polled until a metric matching the criteria is found or the
+  timeout elapses (default `#{1000}ms`, overridable via the `:timeout`
+  reserved key in `criteria`).
+
+  Uses find semantics (not assert-exactly-1), so this succeeds even when
+  multiple metrics were emitted together — as is common when a single
+  request records several measurements.
+
+  Unmatched metrics are returned to an inbox so that multiple successive
+  `assert_sentry_metric/2` calls in the same test each see a clean slate.
+
+  Returns the matched metric.
+
+  ## Examples
+
+      assert_sentry_metric(:counter, name: "button.clicks")
+      assert_sentry_metric(:distribution, name: "response.time", value: 42.5)
+      assert_sentry_metric(:gauge, name: "memory.usage", attributes: %{pool: "main"})
+      assert_sentry_metric(:counter, name: "requests", timeout: 2000)
+
+  """
+  @doc since: "13.0.0"
+  @spec assert_sentry_metric(:counter | :distribution | :gauge, keyword()) :: Sentry.Metric.t()
+  def assert_sentry_metric(type, criteria \\ [])
+      when type in [:counter, :distribution, :gauge] do
+    {timeout, criteria} = Keyword.pop(criteria, :timeout, @default_timeout)
+    criteria = [type: type] ++ criteria
+
+    metrics =
+      await_items(:metric, timeout, fn items ->
+        Enum.any?(items, &matches_criteria?(&1, criteria))
+      end)
+
+    {match, remaining} = extract_first_match(metrics, criteria)
+    put_inbox(:metric, remaining)
+
+    match || flunk(format_find_error(metrics, criteria, "metric"))
   end
 
   @doc """

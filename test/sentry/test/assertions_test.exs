@@ -456,4 +456,110 @@ defmodule Sentry.Test.AssertionsTest do
     :ets.insert(table, {System.unique_integer([:monotonic]), metric})
     metric
   end
+
+  describe "assert_sentry_metric/2" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "finds metric by type when multiple metrics exist" do
+      insert_metric(type: :counter, name: "clicks", value: 5)
+      insert_metric(type: :distribution, name: "response.time", value: 42.5)
+
+      metric = assert_sentry_metric(:counter, name: "clicks")
+      assert %Sentry.Metric{} = metric
+      assert metric.type == :counter
+      assert metric.name == "clicks"
+      assert metric.value == 5
+    end
+
+    test "uses find semantics - succeeds when target is among many" do
+      insert_metric(type: :counter, name: "sync.read.entities", value: 1)
+      insert_metric(type: :distribution, name: "sync.read.entities.count", value: 10)
+
+      metric = assert_sentry_metric(:distribution, name: "sync.read.entities.count")
+      assert metric.value == 10
+    end
+
+    test "returns unmatched metrics to inbox for subsequent assertions" do
+      insert_metric(type: :counter, name: "first.metric", value: 1)
+      insert_metric(type: :distribution, name: "second.metric", value: 99.9)
+
+      assert_sentry_metric(:counter, name: "first.metric")
+      # Second assertion must still find the distribution metric
+      assert_sentry_metric(:distribution, name: "second.metric")
+    end
+
+    test "matches additional criteria beyond type" do
+      insert_metric(
+        type: :counter,
+        name: "button.clicks",
+        value: 1,
+        attributes: %{button_id: "submit"}
+      )
+
+      insert_metric(
+        type: :counter,
+        name: "button.clicks",
+        value: 1,
+        attributes: %{button_id: "cancel"}
+      )
+
+      metric =
+        assert_sentry_metric(:counter,
+          name: "button.clicks",
+          attributes: %{button_id: "submit"}
+        )
+
+      assert metric.attributes[:button_id] == "submit"
+    end
+
+    test "fails when no matching metric found" do
+      insert_metric(type: :counter, name: "other.metric")
+
+      assert_raise ExUnit.AssertionError, ~r/No matching Sentry metric found/, fn ->
+        assert_sentry_metric(:gauge, name: "nonexistent", timeout: 10)
+      end
+    end
+
+    test "fails when type doesn't match" do
+      insert_metric(type: :counter, name: "my.metric")
+
+      assert_raise ExUnit.AssertionError, ~r/No matching Sentry metric found/, fn ->
+        assert_sentry_metric(:gauge, name: "my.metric", timeout: 10)
+      end
+    end
+
+    test "respects :timeout option" do
+      before = System.monotonic_time(:millisecond)
+
+      assert_raise ExUnit.AssertionError, ~r/No matching Sentry metric found/, fn ->
+        assert_sentry_metric(:counter, name: "missing", timeout: 50)
+      end
+
+      elapsed = System.monotonic_time(:millisecond) - before
+      assert elapsed < 500, "expected fast failure, waited #{elapsed}ms"
+    end
+
+    test "awaits async metrics" do
+      table = Process.get(:sentry_test_collector)
+
+      Task.start(fn ->
+        Process.sleep(30)
+
+        metric =
+          struct!(Sentry.Metric,
+            type: :counter,
+            name: "async.metric",
+            value: 1,
+            timestamp: System.system_time(:nanosecond) / 1_000_000_000
+          )
+
+        :ets.insert(table, {System.unique_integer([:monotonic]), metric})
+      end)
+
+      metric = assert_sentry_metric(:counter, name: "async.metric", timeout: 500)
+      assert metric.name == "async.metric"
+    end
+  end
 end
