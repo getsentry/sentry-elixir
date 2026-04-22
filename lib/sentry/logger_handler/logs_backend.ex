@@ -14,7 +14,7 @@ defmodule Sentry.LoggerHandler.LogsBackend do
   alias Sentry.{Config, LogEvent, LoggerUtils, TelemetryProcessor}
 
   @impl true
-  def handle_event(%{level: log_level, meta: log_meta} = log_event, config, _handler_id) do
+  def handle_event(%{level: log_level, meta: log_meta} = log_event, _config, _handler_id) do
     cond do
       Logger.compare_levels(log_level, Config.logs_level()) == :lt ->
         :ok
@@ -23,11 +23,11 @@ defmodule Sentry.LoggerHandler.LogsBackend do
         :ok
 
       true ->
-        send_log_event(log_event, config)
+        send_log_event(log_event)
     end
   end
 
-  defp send_log_event(%{meta: log_meta} = log_event, config) do
+  defp send_log_event(%{meta: log_meta} = log_event) do
     attributes = extract_metadata(log_meta, Config.logs_metadata())
 
     # Extract parameters for message template interpolation (if provided via metadata)
@@ -36,8 +36,7 @@ defmodule Sentry.LoggerHandler.LogsBackend do
     # Create log event
     log_event_struct = LogEvent.from_logger_event(log_event, attributes, parameters)
 
-    # Add to TelemetryProcessor buffer (use configured processor for test isolation)
-    case TelemetryProcessor.add(config.telemetry_processor, log_event_struct) do
+    case TelemetryProcessor.add(log_event_struct) do
       {:ok, {:rate_limited, data_category}} ->
         Sentry.ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
 

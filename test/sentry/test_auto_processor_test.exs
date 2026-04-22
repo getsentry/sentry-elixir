@@ -56,7 +56,6 @@ defmodule Sentry.TestAutoProcessorTest do
 
       handler_config = %{
         config: %{
-          telemetry_processor: ctx.telemetry_processor,
           enable_logs: true
         }
       }

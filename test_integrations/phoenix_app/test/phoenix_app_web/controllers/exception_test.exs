@@ -1,15 +1,10 @@
 defmodule Sentry.Integrations.Phoenix.ExceptionTest do
   use PhoenixAppWeb.ConnCase, async: false
 
-  import Sentry.TestHelpers
+  import Sentry.Test.Assertions
 
   setup do
-    %{bypass: bypass} = setup_bypass(traces_sample_rate: 1.0)
-
-    Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
+    Sentry.Test.setup_sentry(traces_sample_rate: 1.0)
     :ok
   end
 
@@ -18,7 +13,12 @@ defmodule Sentry.Integrations.Phoenix.ExceptionTest do
       get(conn, ~p"/exception")
     end
 
-    assert {event_id, _source} = Sentry.get_last_event_id_and_source()
-    assert is_binary(event_id)
+    event =
+      assert_sentry_report(:event,
+        level: :error,
+        original_exception: %RuntimeError{message: "Test exception"}
+      )
+
+    assert is_binary(event.event_id)
   end
 end
