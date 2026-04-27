@@ -1,3 +1,50 @@
+## 13.0.0
+
+### New Features ✨
+
+#### Tests
+
+- Auto-start TelemetryProcessor in setup_sentry by @solnic in [#1039](https://github.com/getsentry/sentry-elixir/pull/1039)
+- Automatic await in test helpers by @solnic in [#1037](https://github.com/getsentry/sentry-elixir/pull/1037)
+- Add test helpers by @solnic in [#1034](https://github.com/getsentry/sentry-elixir/pull/1034)
+
+#### Tracing
+
+- First class support for Oban by @solnic in [#1020](https://github.com/getsentry/sentry-elixir/pull/1020)
+- Add support for OTel span links by @solnic in [#1019](https://github.com/getsentry/sentry-elixir/pull/1019)
+
+#### Other
+
+- (metrics) Support for Metrics by @solnic in [#1018](https://github.com/getsentry/sentry-elixir/pull/1018)
+- (test) Add assert_sentry_metric/2 assertion helper by @solnic in [#1042](https://github.com/getsentry/sentry-elixir/pull/1042)
+- Add strict trace continuation support by @giortzisg in [#1016](https://github.com/getsentry/sentry-elixir/pull/1016)
+
+### Bug Fixes 🐛
+
+- (ci) Update validate-pr action to remove draft enforcement by @stephanie-anderson in [#1027](https://github.com/getsentry/sentry-elixir/pull/1027)
+- (tests) Proper TP setup for phx process in tests by @solnic in [#1041](https://github.com/getsentry/sentry-elixir/pull/1041)
+
+### Internal Changes 🔧
+
+#### Deps Dev
+
+- Bump vite from 6.4.1 to 6.4.2 in /test_integrations/tracing/svelte_mini by @dependabot in [#1032](https://github.com/getsentry/sentry-elixir/pull/1032)
+- Bump picomatch from 4.0.3 to 4.0.4 in /test_integrations/tracing/svelte_mini by @dependabot in [#1021](https://github.com/getsentry/sentry-elixir/pull/1021)
+
+#### Tests
+
+- More test stability fixes and improvements by @solnic in [#1035](https://github.com/getsentry/sentry-elixir/pull/1035)
+- Proper config isolation by @solnic in [#1031](https://github.com/getsentry/sentry-elixir/pull/1031)
+
+#### Other
+
+- (deps) Bump devalue from 5.6.3 to 5.6.4 in /test_integrations/tracing/svelte_mini by @dependabot in [#1017](https://github.com/getsentry/sentry-elixir/pull/1017)
+- (test) Rework Sentry.Test to use Bypass-based HTTP testing by @solnic in [#1030](https://github.com/getsentry/sentry-elixir/pull/1030)
+- Update @doc since version to 13.0.0 in test modules by @solnic in [#1038](https://github.com/getsentry/sentry-elixir/pull/1038)
+- Update GitHub Actions setup to use latest action versions by @solnic in [#1033](https://github.com/getsentry/sentry-elixir/pull/1033)
+- Update validate-pr workflow by @stephanie-anderson in [#1028](https://github.com/getsentry/sentry-elixir/pull/1028)
+- Add PR validation workflow by @stephanie-anderson in [#1023](https://github.com/getsentry/sentry-elixir/pull/1023)
+
 ## 12.0.3
 
 ### New Features ✨
