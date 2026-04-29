@@ -84,9 +84,9 @@ defmodule Sentry.Client do
 
     result =
       with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
+           :ok <- ensure_dsn_configured(),
            :ok <- sample_event(sample_rate),
-           :ok <- maybe_dedupe(event),
-           :ok <- ensure_dsn_configured() do
+           :ok <- maybe_dedupe(event) do
         send_result = encode_and_send(event, result_type, client, request_retries)
         _ignored = maybe_call_after_send(event, send_result, after_send_event)
         send_result

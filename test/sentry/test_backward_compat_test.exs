@@ -116,5 +116,16 @@ defmodule Sentry.TestBackwardCompatTest do
       assert :ignored =
                Sentry.capture_check_in(status: :ok, monitor_slug: "nil-dsn-job")
     end
+
+    test "capturing the same event twice does not pollute the dedupe table" do
+      Sentry.Test.Config.put(dedup_events: true)
+
+      exception = %RuntimeError{
+        message: "dedupe-regression-#{System.unique_integer([:positive])}"
+      }
+
+      assert :ignored = Sentry.capture_exception(exception, result: :sync)
+      assert :ignored = Sentry.capture_exception(exception, result: :sync)
+    end
   end
 end
