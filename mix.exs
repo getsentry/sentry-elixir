@@ -151,6 +151,8 @@ defmodule Sentry.Mixfile do
   end
 
   defp run_integration_tests_if_supported(args) do
+    run_integration_tests("prod_mode", args, env: [{"MIX_ENV", "prod"}])
+
     if Version.match?(System.version(), ">= 1.16.0") do
       run_integration_tests("umbrella", args)
       run_integration_tests("phoenix_app", args)
@@ -160,7 +162,7 @@ defmodule Sentry.Mixfile do
     end
   end
 
-  defp run_integration_tests(integration, args) do
+  defp run_integration_tests(integration, args, opts \\ []) do
     IO.puts(
       IO.ANSI.format([
         "\n",
@@ -168,11 +170,11 @@ defmodule Sentry.Mixfile do
       ])
     )
 
-    case setup_integration(integration) do
+    case setup_integration(integration, opts) do
       {_, 0} ->
         color_arg = if IO.ANSI.enabled?(), do: "--color", else: "--no-color"
 
-        {_, status} = run_in_integration(integration, ["test", color_arg | args])
+        {_, status} = run_in_integration(integration, ["test", color_arg | args], opts)
 
         if status > 0 do
           IO.puts(
@@ -194,14 +196,22 @@ defmodule Sentry.Mixfile do
     end
   end
 
-  defp setup_integration(integration) do
-    run_in_integration(integration, ["deps.get"])
+  defp setup_integration(integration, opts) do
+    run_in_integration(integration, ["deps.get"], opts)
   end
 
-  defp run_in_integration(integration, args) do
-    System.cmd("mix", args,
+  defp run_in_integration(integration, args, opts) do
+    cmd_opts = [
       into: IO.binstream(:stdio, :line),
       cd: Path.join("test_integrations", integration)
-    )
+    ]
+
+    cmd_opts =
+      case Keyword.get(opts, :env) do
+        nil -> cmd_opts
+        env -> Keyword.put(cmd_opts, :env, env)
+      end
+
+    System.cmd("mix", args, cmd_opts)
   end
 end
