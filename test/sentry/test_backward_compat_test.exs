@@ -74,4 +74,47 @@ defmodule Sentry.TestBackwardCompatTest do
       assert [] == SentryTest.pop_sentry_reports()
     end
   end
+
+  describe "with dsn: nil" do
+    setup do
+      assert :ok = SentryTest.start_collecting_sentry_reports()
+      Sentry.Test.Config.put(dsn: nil)
+      :ok
+    end
+
+    test "capture_exception/2 returns :ignored and routes the event to the collector" do
+      assert :ignored = Sentry.capture_exception(%RuntimeError{message: "boom"}, result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.original_exception == %RuntimeError{message: "boom"}
+    end
+
+    test "capture_message/2 returns :ignored and routes the event to the collector" do
+      assert :ignored = Sentry.capture_message("hello world", result: :sync)
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.message.formatted == "hello world"
+    end
+
+    test "send_transaction/2 returns :ignored and routes the transaction to the collector" do
+      transaction =
+        Sentry.Transaction.new(%{
+          span_id: "nil-dsn-span",
+          start_timestamp: "2025-01-01T00:00:00Z",
+          timestamp: "2025-01-02T00:00:00Z",
+          contexts: %{trace: %{trace_id: "nil-dsn-trace", span_id: "nil-dsn-span"}},
+          spans: []
+        })
+
+      assert :ignored = Sentry.send_transaction(transaction, result: :sync)
+
+      assert [%Sentry.Transaction{} = collected] = SentryTest.pop_sentry_transactions()
+      assert collected.span_id == "nil-dsn-span"
+    end
+
+    test "capture_check_in/1 returns :ignored without raising" do
+      assert :ignored =
+               Sentry.capture_check_in(status: :ok, monitor_slug: "nil-dsn-job")
+    end
+  end
 end

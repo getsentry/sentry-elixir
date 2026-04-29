@@ -380,12 +380,6 @@ defmodule Sentry do
         ClientReport.Sender.record_discarded_events(:event_processor, [event])
         :ignored
 
-      !Config.dsn() ->
-        # We still validate options even if we're not sending the event. This aims at catching
-        # configuration issues during development instead of only when deploying to production.
-        _options = NimbleOptions.validate!(options, Options.send_event_schema())
-        :ignored
-
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
         Client.send_event(event, options)
 
@@ -399,12 +393,6 @@ defmodule Sentry do
     included_envs = Config.included_environments()
 
     cond do
-      !Config.dsn() ->
-        # We still validate options even if we're not sending the event. This aims at catching
-        # configuration issues during development instead of only when deploying to production.
-        _options = NimbleOptions.validate!(options, Options.send_event_schema())
-        :ignored
-
       included_envs == :all or to_string(Config.environment_name()) in included_envs ->
         Client.send_transaction(transaction, options)
 
@@ -458,13 +446,9 @@ defmodule Sentry do
   @spec capture_check_in(keyword()) ::
           {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
   def capture_check_in(options) when is_list(options) do
-    if Config.dsn() do
-      options
-      |> CheckIn.new()
-      |> Client.send_check_in(options)
-    else
-      :ignored
-    end
+    options
+    |> CheckIn.new()
+    |> Client.send_check_in(options)
   end
 
   @doc ~S"""
