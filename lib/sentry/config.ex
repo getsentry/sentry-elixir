@@ -929,7 +929,7 @@ defmodule Sentry.Config do
   def hackney_opts, do: fetch!(:hackney_opts)
 
   @spec before_send() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
-  def before_send, do: get(:before_send)
+  def before_send, do: compose_send_callback(:before_send)
 
   @spec after_send_event() ::
           (Sentry.Event.t(), term() -> Sentry.Event.t()) | {module(), atom()} | nil
@@ -1028,11 +1028,49 @@ defmodule Sentry.Config do
 
   @spec before_send_log() ::
           (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil
-  def before_send_log, do: get(:before_send_log)
+  def before_send_log, do: compose_send_callback(:before_send_log)
 
   @spec before_send_metric() ::
           (Sentry.Metric.t() -> Sentry.Metric.t() | nil | false) | {module(), atom()} | nil
-  def before_send_metric, do: get(:before_send_metric)
+  def before_send_metric, do: compose_send_callback(:before_send_metric)
+
+  # Composes the user-provided callback (under `key`) with an internal callback
+  # (under `internal_<key>`). In production/development the user-provided
+  # callback is dropped when there is no DSN, so callbacks never run for events
+  # that won't be sent. In test mode the user-provided callback is always
+  # honored — tests routinely use `dsn: nil` to assert callback behavior in
+  # isolation, and dropping there would break those contracts.
+  defp compose_send_callback(key) do
+    user_callback = if user_callbacks_enabled?(), do: get(key), else: nil
+    internal_callback = get(internal_callback_key(key))
+
+    case {user_callback, internal_callback} do
+      {nil, nil} -> nil
+      {user, nil} -> user
+      {nil, internal} -> internal
+      {user, internal} -> chain_send_callbacks(user, internal)
+    end
+  end
+
+  defp user_callbacks_enabled? do
+    not is_nil(dsn()) or test_mode?()
+  end
+
+  defp internal_callback_key(:before_send), do: :_internal_before_send
+  defp internal_callback_key(:before_send_log), do: :_internal_before_send_log
+  defp internal_callback_key(:before_send_metric), do: :_internal_before_send_metric
+
+  defp chain_send_callbacks(first, second) do
+    fn struct ->
+      case apply_send_callback(first, struct) do
+        result when result == nil or result == false -> result
+        result -> apply_send_callback(second, result)
+      end
+    end
+  end
+
+  defp apply_send_callback(fun, struct) when is_function(fun, 1), do: fun.(struct)
+  defp apply_send_callback({mod, fun}, struct), do: apply(mod, fun, [struct])
 
   @spec put_config(atom(), term()) :: :ok
   def put_config(key, value) when is_atom(key) do

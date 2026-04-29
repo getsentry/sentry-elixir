@@ -146,6 +146,19 @@ defmodule Sentry.Test.Config do
     Registry.strict_allow!(owner_pid, allowed_pid)
   end
 
+  @doc false
+  @spec put_override(atom(), term()) :: :ok
+  def put_override(key, value) when is_atom(key) do
+    _ =
+      Registry.update(self(), fn scope ->
+        Scope.put_override(scope, key, value)
+      end)
+
+    auto_allow_globals()
+
+    :ok
+  end
+
   ## Private helpers
 
   defp validate_and_rename({key, value}) do
