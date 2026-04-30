@@ -263,6 +263,18 @@ defmodule Sentry.LoggerHandler do
   @doc false
   @spec adding_handler(:logger.handler_config()) :: {:ok, :logger.handler_config()}
   def adding_handler(config) do
+    # If a user explicitly registers their own Sentry.LoggerHandler (i.e., not the
+    # auto-registered :sentry_log_handler), remove the auto-registered one to prevent
+    # duplicate log capture. We spawn a separate process to do the removal because
+    # adding_handler/1 is called from within the logger gen_server process, and calling
+    # :logger.remove_handler/1 directly would deadlock.
+    if config.id != :sentry_log_handler do
+      _ = spawn(fn -> :logger.remove_handler(:sentry_log_handler) end)
+      :ok
+    else
+      :ok
+    end
+
     # The :config key may not be here.
     sentry_config = Map.get(config, :config, %{})
 
