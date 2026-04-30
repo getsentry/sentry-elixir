@@ -650,30 +650,6 @@ defmodule Sentry.Test do
     # Store in process dict for pop_* lookups
     Process.put(:sentry_test_collector, collector_table)
 
-    # Extract user-provided callbacks from extra_config (if any), falling back to current config
-    {user_before_send, extra_config} = Keyword.pop(extra_config, :before_send)
-    {user_before_send_event, extra_config} = Keyword.pop(extra_config, :before_send_event)
-    {user_before_send_log, extra_config} = Keyword.pop(extra_config, :before_send_log)
-    {user_before_send_metric, extra_config} = Keyword.pop(extra_config, :before_send_metric)
-
-    # Use the caller-only registry lookup instead of `Sentry.Config.before_send/0`
-    # so the captured "original" callback is only this test's override (or the
-    # global default), never another concurrent test's wrapping callback.
-    original_before_send =
-      user_before_send || user_before_send_event ||
-        original_config_value(:before_send)
-
-    original_before_send_log =
-      user_before_send_log || original_config_value(:before_send_log)
-
-    original_before_send_metric =
-      user_before_send_metric || original_config_value(:before_send_metric)
-
-    # Build collecting callbacks that wrap the originals
-    new_before_send = build_collecting_callback(original_before_send)
-    new_before_send_log = build_collecting_callback(original_before_send_log)
-    new_before_send_metric = build_collecting_callback(original_before_send_metric)
-
     # Always set a per-test DSN override. When no DSN is provided, use the
     # default Bypass DSN.
     extra_config =
@@ -686,16 +662,19 @@ defmodule Sentry.Test do
         end
       end
 
-    config =
-      [finch_request_opts: [receive_timeout: 2000]]
-      |> Keyword.merge(extra_config)
-      |> Keyword.merge(
-        before_send: new_before_send,
-        before_send_log: new_before_send_log,
-        before_send_metric: new_before_send_metric
-      )
+    config = Keyword.merge([finch_request_opts: [receive_timeout: 2000]], extra_config)
 
     put_test_config(config)
+
+    # Install standalone collecting callbacks under internal slots. They're
+    # composed with the user-provided :before_send / :before_send_log /
+    # :before_send_metric in `Sentry.Config` based on DSN value: when DSN is
+    # `nil`, only these collecting callbacks run; when DSN is set, the user's
+    # callback runs first and its result is collected.
+    collector = build_collecting_callback()
+    Sentry.Test.Config.put_override(:_internal_before_send, collector)
+    Sentry.Test.Config.put_override(:_internal_before_send_log, collector)
+    Sentry.Test.Config.put_override(:_internal_before_send_metric, collector)
 
     scheduler_pid = get_scheduler_pid()
 
@@ -752,18 +731,11 @@ defmodule Sentry.Test do
     end)
   end
 
-  # Reads `key` from this test's per-process scope (or any caller's scope on
-  # `[self() | $callers]`), falling back to the global config value. Skips the
-  # full namespace resolver so the captured "original" callback is never
-  # another concurrent test's wrapping callback.
-  defp original_config_value(key) do
-    case Sentry.Test.Scope.Registry.lookup_caller_override(key) do
-      {:ok, value} -> value
-      :default -> :persistent_term.get({:sentry_config, key}, nil)
-    end
-  end
-
-  defp build_collecting_callback(nil) do
+  # Standalone collecting callback. Records the struct in this test's
+  # collector ETS table when one is registered for the calling process (or any
+  # of its callers), then returns the struct unchanged so it flows through any
+  # remaining pipeline stages.
+  defp build_collecting_callback do
     fn struct ->
       case find_collector() do
         nil -> :ok
@@ -771,28 +743,6 @@ defmodule Sentry.Test do
       end
 
       struct
-    end
-  end
-
-  defp build_collecting_callback({mod, fun}) do
-    build_collecting_callback(Function.capture(mod, fun, 1))
-  end
-
-  defp build_collecting_callback(original) when is_function(original, 1) do
-    fn struct ->
-      # Guard on find_collector/0 so that a test-specific callback stored in
-      # :persistent_term is never invoked from an unrelated async test's process.
-      # When a collector IS found, call the original first so user-defined
-      # filtering/modification is applied before we collect the result.
-      case find_collector() do
-        nil ->
-          struct
-
-        table ->
-          result = original.(struct)
-          unless is_nil(result), do: collect_struct(table, result)
-          result
-      end
     end
   end
 

@@ -27,30 +27,35 @@ defmodule Sentry.Client do
   @max_message_length 8_192
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
-          {:ok, check_in_id :: String.t()} | {:error, ClientError.t()}
+          {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
-    if Config.telemetry_processor_category?(:check_in) do
-      case TelemetryProcessor.add(check_in) do
-        {:ok, {:rate_limited, data_category}} ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+    cond do
+      is_nil(Config.dsn()) ->
+        :ignored
 
-        :ok ->
-          :ok
-      end
+      Config.telemetry_processor_category?(:check_in) ->
+        case TelemetryProcessor.add(check_in) do
+          {:ok, {:rate_limited, data_category}} ->
+            ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
 
-      {:ok, check_in.check_in_id}
-    else
-      client = Keyword.get_lazy(opts, :client, &Config.client/0)
+          :ok ->
+            :ok
+        end
 
-      # This is a "private" option, only really used in testing.
-      request_retries =
-        Keyword.get_lazy(opts, :request_retries, fn ->
-          Application.get_env(:sentry, :request_retries, Transport.default_retries())
-        end)
+        {:ok, check_in.check_in_id}
 
-      check_in
-      |> Envelope.from_check_in()
-      |> Transport.encode_and_post_envelope(client, request_retries)
+      true ->
+        client = Keyword.get_lazy(opts, :client, &Config.client/0)
+
+        # This is a "private" option, only really used in testing.
+        request_retries =
+          Keyword.get_lazy(opts, :request_retries, fn ->
+            Application.get_env(:sentry, :request_retries, Transport.default_retries())
+          end)
+
+        check_in
+        |> Envelope.from_check_in()
+        |> Transport.encode_and_post_envelope(client, request_retries)
     end
   end
 
@@ -59,6 +64,7 @@ defmodule Sentry.Client do
   @spec send_event(Event.t(), keyword()) ::
           {:ok, event_id :: String.t()}
           | {:error, ClientError.t()}
+          | :ignored
           | :unsampled
           | :excluded
   def send_event(%Event{} = event, opts) when is_list(opts) do
@@ -78,6 +84,7 @@ defmodule Sentry.Client do
 
     result =
       with {:ok, %Event{} = event} <- maybe_call_before_send(event, before_send),
+           :ok <- ensure_dsn_configured(),
            :ok <- sample_event(sample_rate),
            :ok <- maybe_dedupe(event) do
         send_result = encode_and_send(event, result_type, client, request_retries)
@@ -98,6 +105,9 @@ defmodule Sentry.Client do
 
       :excluded ->
         :excluded
+
+      :ignored ->
+        :ignored
 
       {:error, %ClientError{} = error} ->
         {:error, error}
@@ -120,6 +130,7 @@ defmodule Sentry.Client do
   @spec send_transaction(Transaction.t(), keyword()) ::
           {:ok, transaction_id :: String.t()}
           | {:error, ClientError.t()}
+          | :ignored
           | :excluded
   def send_transaction(%Transaction{} = transaction, opts \\ []) do
     opts = NimbleOptions.validate!(opts, Options.send_transaction_schema())
@@ -134,14 +145,22 @@ defmodule Sentry.Client do
         Application.get_env(:sentry, :request_retries, Transport.default_retries())
       end)
 
-    with {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send) do
+    with {:ok, %Transaction{} = transaction} <- maybe_call_before_send(transaction, before_send),
+         :ok <- ensure_dsn_configured() do
       send_result = encode_and_send(transaction, result_type, client, request_retries)
       _ignored = maybe_call_after_send(transaction, send_result, after_send_event)
       send_result
     else
       :excluded ->
         :excluded
+
+      :ignored ->
+        :ignored
     end
+  end
+
+  defp ensure_dsn_configured do
+    if Config.dsn(), do: :ok, else: :ignored
   end
 
   defp sample_event(sample_rate) do
