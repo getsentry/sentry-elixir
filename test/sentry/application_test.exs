@@ -90,6 +90,46 @@ defmodule Sentry.ApplicationTest do
       assert {:ok, _} = :logger.get_handler_config(existing_handler)
     end
 
+    test "removes auto-handler when a user adds their own Sentry.LoggerHandler after startup" do
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
+      assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
+
+      user_handler = :"user_sentry_handler_#{System.unique_integer([:positive])}"
+
+      on_exit(fn ->
+        _ = :logger.remove_handler(user_handler)
+      end)
+
+      :ok = :logger.add_handler(user_handler, Sentry.LoggerHandler, %{config: %{}})
+
+      assert {:ok, _} = :logger.get_handler_config(user_handler)
+
+      wait_until(fn ->
+        match?(
+          {:error, {:not_found, :sentry_log_handler}},
+          :logger.get_handler_config(:sentry_log_handler)
+        )
+      end)
+
+      assert {:error, {:not_found, :sentry_log_handler}} =
+               :logger.get_handler_config(:sentry_log_handler)
+    end
+
+    test "keeps auto-handler when a user adds a Sentry.LoggerHandler with invalid config" do
+      restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
+      assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
+
+      user_handler = :"user_sentry_handler_#{System.unique_integer([:positive])}"
+
+      assert {:error, _reason} =
+               :logger.add_handler(user_handler, Sentry.LoggerHandler, %{
+                 config: %{sync_threshold: 10, discard_threshold: 20}
+               })
+
+      assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:error, {:not_found, ^user_handler}} = :logger.get_handler_config(user_handler)
+    end
+
     test "auto-handler captures logs to the buffer" do
       restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
 

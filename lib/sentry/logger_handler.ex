@@ -282,12 +282,26 @@ defmodule Sentry.LoggerHandler do
 
     config = Map.put(config, :config, handler_config)
 
-    if rate_limiting_config = config.config.rate_limiting do
-      _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
-      {:ok, config}
-    else
-      {:ok, config}
+    result =
+      if rate_limiting_config = config.config.rate_limiting do
+        _ = RateLimiter.start_under_sentry_supervisor(config.id, rate_limiting_config)
+        {:ok, config}
+      else
+        {:ok, config}
+      end
+
+    # If a user explicitly registers their own Sentry.LoggerHandler (i.e., not the
+    # auto-registered :sentry_log_handler), remove the auto-registered one to prevent
+    # duplicate log capture. We do this after all validation so that if config is
+    # invalid (and adding_handler raises), the auto-handler stays active. We spawn a
+    # separate process because adding_handler/1 is called from within the logger
+    # gen_server process, and calling :logger.remove_handler/1 directly would deadlock.
+    if config.id != :sentry_log_handler do
+      _ = spawn(fn -> :logger.remove_handler(:sentry_log_handler) end)
+      :ok
     end
+
+    result
   end
 
   # Callback for :logger handlers
