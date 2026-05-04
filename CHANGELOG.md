@@ -1,3 +1,10 @@
+## 13.0.1
+
+### Bug Fixes 🐛
+
+- (logs) Remove auto-registered handler when user adds custom handler by @solnic in [#1046](https://github.com/getsentry/sentry-elixir/pull/1046)
+- (tests) Accept `nil` as the DSN value again by @solnic in [#1044](https://github.com/getsentry/sentry-elixir/pull/1044)
+
 ## 13.0.0
 
 ### New Features ✨
