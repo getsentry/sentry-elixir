@@ -176,7 +176,7 @@ defmodule Sentry.PlugContext do
       url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
       method: conn.method,
       data: apply_fun_with_conn(conn, body_scrubber, %{}),
-      query_string: conn.query_string,
+      query_string: default_query_string_scrubber(conn),
       cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
       headers: apply_fun_with_conn(conn, header_scrubber, %{}),
       env: %{
@@ -249,6 +249,25 @@ defmodule Sentry.PlugContext do
   @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
   def default_url_scrubber(conn) do
     Plug.Conn.request_url(conn)
+  end
+
+  @doc """
+  Scrubs the query string of a request.
+
+  Parses the query string, redacts values whose key matches the
+  `Sentry.Scrubber` denylist, and re-encodes it. The original key order
+  is not preserved (it is not preserved by `Plug.Conn.fetch_query_params/1`
+  either).
+  """
+  @spec default_query_string_scrubber(Plug.Conn.t()) :: String.t()
+  def default_query_string_scrubber(%{query_string: ""}), do: ""
+
+  def default_query_string_scrubber(conn) do
+    conn
+    |> Plug.Conn.fetch_query_params()
+    |> Map.fetch!(:query_params)
+    |> Sentry.Scrubber.scrub_map()
+    |> URI.encode_query()
   end
 
   @doc """

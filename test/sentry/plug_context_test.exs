@@ -117,6 +117,25 @@ defmodule Sentry.PlugContextTest do
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
+  test "default query string scrubbing redacts sensitive params" do
+    conn = conn(:get, "/test?password=hunter2&keep=this&api_token=abc")
+    call(conn, [])
+
+    qs = Sentry.Context.get_all().request.query_string
+    decoded = URI.decode_query(qs)
+
+    assert decoded["password"] == "[Filtered]"
+    assert decoded["api_token"] == "[Filtered]"
+    assert decoded["keep"] == "this"
+  end
+
+  test "default query string scrubbing leaves an empty query string alone" do
+    conn = conn(:get, "/test")
+    call(conn, [])
+
+    assert Sentry.Context.get_all().request.query_string == ""
+  end
+
   test "allows configuring request id header", %{conn: conn} do
     conn
     |> put_resp_header("my-request-id", "abc123")
