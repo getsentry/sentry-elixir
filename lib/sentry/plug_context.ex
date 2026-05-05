@@ -227,11 +227,20 @@ defmodule Sentry.PlugContext do
   defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
-  Scrubs **all** cookies off of the request.
+  Scrubs cookie values while preserving cookie names.
+
+  Every cookie value is replaced with `"[Filtered]"`. Cookie names are
+  preserved. This conforms to the Sentry data collection spec, which
+  requires key/header names to be kept and only values to be redacted.
+  Because cookies frequently carry session identifiers and other
+  credentials, the safe default is to scrub all values.
   """
   @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
-  def default_cookie_scrubber(_conn) do
-    %{}
+  def default_cookie_scrubber(conn) do
+    conn
+    |> Plug.Conn.fetch_cookies()
+    |> Map.fetch!(:req_cookies)
+    |> Map.new(fn {name, _value} -> {name, Sentry.Scrubber.scrubbed_value()} end)
   end
 
   @doc """

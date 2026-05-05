@@ -154,7 +154,11 @@ defmodule Sentry.PlugContextTest do
              "content-type" => "application/json",
              "cookie" => "[Filtered]"
            }
-    assert request_context.cookies == %{}
+
+    assert request_context.cookies == %{
+             "regular" => "[Filtered]",
+             "secret" => "[Filtered]"
+           }
 
     assert request_context.data == %{
              "another_cc" => "[Filtered]",
