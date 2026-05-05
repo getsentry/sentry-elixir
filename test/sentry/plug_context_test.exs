@@ -148,7 +148,12 @@ defmodule Sentry.PlugContextTest do
 
     request_context = Sentry.Context.get_all().request
 
-    assert request_context.headers == %{"content-type" => "application/json"}
+    assert request_context.headers == %{
+             "authentication" => "[Filtered]",
+             "authorization" => "[Filtered]",
+             "content-type" => "application/json",
+             "cookie" => "[Filtered]"
+           }
     assert request_context.cookies == %{}
 
     assert request_context.data == %{

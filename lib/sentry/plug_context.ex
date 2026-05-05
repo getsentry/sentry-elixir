@@ -153,7 +153,6 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
   @default_plug_request_id_header "x-request-id"
 
   @doc false
@@ -244,17 +243,18 @@ defmodule Sentry.PlugContext do
   end
 
   @doc """
-  Scrubs the headers of a request.
+  Scrubs the values of sensitive request headers.
 
-  The default scrubbed headers are:
-
-  #{Enum.map_join(@default_scrubbed_header_keys, "\n", &"*  `#{&1}`")}
+  Header **names** are always preserved; values for headers whose name matches
+  the `Sentry.Scrubber` denylist (substring, case-insensitive) are replaced
+  with `"[Filtered]"`. The `cookie` header is also always scrubbed since its
+  raw value typically carries session identifiers.
   """
   @spec default_header_scrubber(Plug.Conn.t()) :: map()
   def default_header_scrubber(conn) do
     conn.req_headers
     |> Map.new()
-    |> Map.drop(@default_scrubbed_header_keys)
+    |> Sentry.Scrubber.scrub_map(["cookie"])
   end
 
   @doc """
