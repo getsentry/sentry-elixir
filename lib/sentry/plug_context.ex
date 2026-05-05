@@ -153,9 +153,7 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  @default_scrubbed_param_keys ["password", "passwd", "secret"]
   @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
-  @scrubbed_value "*********"
   @default_plug_request_id_header "x-request-id"
 
   @doc false
@@ -264,39 +262,10 @@ defmodule Sentry.PlugContext do
 
   The default scrubbed keys are:
 
-  #{Enum.map_join(@default_scrubbed_param_keys, "\n", &"*  `#{&1}`")}
+  #{Enum.map_join(Sentry.Scrubber.default_scrubbed_param_keys(), "\n", &"*  `#{&1}`")}
   """
   @spec default_body_scrubber(Plug.Conn.t()) :: map()
   def default_body_scrubber(conn) do
-    scrub_map(conn.params, @default_scrubbed_param_keys)
+    Sentry.Scrubber.scrub_map(conn.params)
   end
-
-  defp scrub_map(map, scrubbed_keys) do
-    Map.new(map, fn {key, value} ->
-      value =
-        cond do
-          key in scrubbed_keys -> @scrubbed_value
-          is_binary(value) and value =~ credit_card_regex() -> @scrubbed_value
-          is_struct(value) -> value |> Map.from_struct() |> scrub_map(scrubbed_keys)
-          is_map(value) -> scrub_map(value, scrubbed_keys)
-          is_list(value) -> scrub_list(value, scrubbed_keys)
-          true -> value
-        end
-
-      {key, value}
-    end)
-  end
-
-  defp scrub_list(list, scrubbed_keys) do
-    Enum.map(list, fn value ->
-      cond do
-        is_struct(value) -> value |> Map.from_struct() |> scrub_map(scrubbed_keys)
-        is_map(value) -> scrub_map(value, scrubbed_keys)
-        is_list(value) -> scrub_list(value, scrubbed_keys)
-        true -> value
-      end
-    end)
-  end
-
-  defp credit_card_regex, do: ~r/^(?:\d[ -]*?){13,16}$/
 end

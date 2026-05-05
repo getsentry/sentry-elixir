@@ -152,16 +152,16 @@ defmodule Sentry.PlugContextTest do
     assert request_context.cookies == %{}
 
     assert request_context.data == %{
-             "another_cc" => "*********",
-             "cc" => "*********",
+             "another_cc" => "[Filtered]",
+             "cc" => "[Filtered]",
              "count" => 334,
-             "credit_card" => "*********",
-             "passwd" => "*********",
-             "password" => "*********",
-             "secret" => "*********",
-             "user" => %{"password" => "*********"},
+             "credit_card" => "[Filtered]",
+             "passwd" => "[Filtered]",
+             "password" => "[Filtered]",
+             "secret" => "[Filtered]",
+             "user" => %{"password" => "[Filtered]"},
              "payments" => [
-               %{"yet_another_cc" => "*********"}
+               %{"yet_another_cc" => "[Filtered]"}
              ]
            }
   end
@@ -173,7 +173,7 @@ defmodule Sentry.PlugContextTest do
     call(conn, [])
 
     assert Sentry.Context.get_all().request.data == %{
-             "password" => "*********",
+             "password" => "[Filtered]",
              "image" => %{
                content_type: nil,
                filename: "my_image.png",

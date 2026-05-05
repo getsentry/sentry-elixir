@@ -181,7 +181,7 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
-      assert exception.value =~ ~s(params: %{"password" => "*********"})
+      assert exception.value =~ ~s(params: %{"password" => "[Filtered]"})
     end
 
     test "can render feedback form in Phoenix ErrorView" do
