@@ -244,11 +244,24 @@ defmodule Sentry.PlugContext do
   end
 
   @doc """
-  Returns the request URL without modifying it.
+  Returns the request URL with sensitive query parameters redacted.
+
+  The path, scheme, host, and port are preserved. Query parameter values whose
+  key matches the `Sentry.Scrubber` denylist are replaced with `"[Filtered]"`.
   """
   @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
-  def default_url_scrubber(conn) do
+  def default_url_scrubber(%{query_string: ""} = conn) do
     Plug.Conn.request_url(conn)
+  end
+
+  def default_url_scrubber(conn) do
+    scrubbed_qs = default_query_string_scrubber(conn)
+
+    conn
+    |> Plug.Conn.request_url()
+    |> URI.parse()
+    |> Map.put(:query, scrubbed_qs)
+    |> URI.to_string()
   end
 
   @doc """

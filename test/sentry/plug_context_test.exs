@@ -117,6 +117,25 @@ defmodule Sentry.PlugContextTest do
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
+  test "default URL scrubber redacts sensitive query params from URL" do
+    conn = conn(:get, "/test?password=hunter2&keep=this")
+    call(conn, [])
+
+    url = Sentry.Context.get_all().request.url
+    refute url =~ "hunter2"
+
+    decoded = url |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+    assert decoded["password"] == "[Filtered]"
+    assert decoded["keep"] == "this"
+  end
+
+  test "default URL scrubber leaves URLs without query strings unchanged" do
+    conn = conn(:get, "/test")
+    call(conn, [])
+
+    assert Sentry.Context.get_all().request.url == "http://www.example.com/test"
+  end
+
   test "default query string scrubbing redacts sensitive params" do
     conn = conn(:get, "/test?password=hunter2&keep=this&api_token=abc")
     call(conn, [])
