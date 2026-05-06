@@ -136,6 +136,24 @@ defmodule Sentry.PlugContextTest do
     assert Sentry.Context.get_all().request.query_string == ""
   end
 
+  test "default query string scrubbing handles array-style params" do
+    conn = conn(:get, "/test?tags[]=elixir&tags[]=sentry&keep=this")
+    call(conn, [])
+
+    qs = Sentry.Context.get_all().request.query_string
+    assert is_binary(qs)
+    decoded = URI.decode_query(qs)
+    assert decoded["keep"] == "this"
+  end
+
+  test "default query string scrubbing handles nested params" do
+    conn = conn(:get, "/test?user[name]=alice&user[password]=secret&keep=this")
+    call(conn, [])
+
+    qs = Sentry.Context.get_all().request.query_string
+    assert is_binary(qs)
+  end
+
   test "allows configuring request id header", %{conn: conn} do
     conn
     |> put_resp_header("my-request-id", "abc123")

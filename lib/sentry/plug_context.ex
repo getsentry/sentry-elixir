@@ -267,7 +267,7 @@ defmodule Sentry.PlugContext do
     |> Plug.Conn.fetch_query_params()
     |> Map.fetch!(:query_params)
     |> Sentry.Scrubber.scrub_map()
-    |> URI.encode_query()
+    |> Plug.Conn.Query.encode()
   end
 
   @doc """
