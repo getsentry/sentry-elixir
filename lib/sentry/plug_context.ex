@@ -237,9 +237,7 @@ defmodule Sentry.PlugContext do
   """
   @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
   def default_cookie_scrubber(conn) do
-    conn
-    |> Plug.Conn.fetch_cookies()
-    |> Map.fetch!(:req_cookies)
+    conn.req_cookies
     |> Map.new(fn {name, _value} -> {name, Sentry.Scrubber.scrubbed_value()} end)
   end
 
@@ -276,9 +274,7 @@ defmodule Sentry.PlugContext do
   def default_query_string_scrubber(%{query_string: ""}), do: ""
 
   def default_query_string_scrubber(conn) do
-    conn
-    |> Plug.Conn.fetch_query_params()
-    |> Map.fetch!(:query_params)
+    conn.query_params
     |> Sentry.Scrubber.scrub_map()
     |> Plug.Conn.Query.encode()
   end
