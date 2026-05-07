@@ -124,13 +124,26 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       {mod, fun, args} =
         Process.get(@scrubber_pdict_key, {__MODULE__, :default_scrubber, []})
 
-      case apply(mod, fun, [data | args]) do
-        result when is_map(result) ->
-          result
+      try do
+        case apply(mod, fun, [data | args]) do
+          result when is_map(result) ->
+            result
 
-        other ->
+          other ->
+            Logger.error(
+              "Sentry.LiveViewHook scrubber returned non-map value: #{inspect(other)}; " <>
+                "falling back to redacted data",
+              event_source: :logger
+            )
+
+            %{}
+        end
+      catch
+        # We must NEVER raise an error in a hook, as it will crash the LiveView process
+        # and we don't want Sentry to be responsible for that.
+        kind, reason ->
           Logger.error(
-            "Sentry.LiveViewHook scrubber returned non-map value: #{inspect(other)}; " <>
+            "Sentry.LiveViewHook scrubber raised an error: #{Exception.format(kind, reason)}; " <>
               "falling back to redacted data",
             event_source: :logger
           )

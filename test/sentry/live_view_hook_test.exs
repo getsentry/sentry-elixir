@@ -55,6 +55,22 @@ defmodule SentryTest.NonMapScrubberLive do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 end
 
+defmodule SentryTest.RaisingScrubber do
+  def scrub(_data), do: raise("scrubber crashed!")
+end
+
+defmodule SentryTest.RaisingScrubberLive do
+  use Phoenix.LiveView
+
+  on_mount {Sentry.LiveViewHook, scrubber: {SentryTest.RaisingScrubber, :scrub, []}}
+
+  def render(assigns), do: ~H"<h1>raising</h1>"
+
+  def mount(_params, _session, socket), do: {:ok, socket}
+
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+end
+
 defmodule SentryTest.LiveComponent do
   use Phoenix.LiveComponent
 
@@ -100,6 +116,7 @@ defmodule SentryTest.Router do
     live "/hook_test", SentryTest.Live
     live "/custom_scrubber", SentryTest.CustomScrubberLive
     live "/non_map_scrubber", SentryTest.NonMapScrubberLive
+    live "/raising_scrubber", SentryTest.RaisingScrubberLive
   end
 end
 
@@ -248,6 +265,21 @@ defmodule Sentry.LiveViewHookTest do
                  fn ->
                    Sentry.LiveViewHook.on_mount([scrubber: :not_a_tuple], %{}, %{}, %{})
                  end
+  end
+
+  test "logs error and uses empty data when scrubber raises", %{conn: conn} do
+    {view, log} =
+      ExUnit.CaptureLog.with_log(fn ->
+        {:ok, view, _html} = live(conn, "/raising_scrubber")
+        render_hook(view, :submit, %{"foo" => "bar"})
+        view
+      end)
+
+    assert log =~ "Sentry.LiveViewHook scrubber raised an error"
+
+    [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
+    assert event_breadcrumb.category == "web.live_view.event"
+    assert event_breadcrumb.data == %{}
   end
 
   test "logs error and uses empty data when scrubber returns a non-map", %{conn: conn} do
