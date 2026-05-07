@@ -149,7 +149,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       })
 
       if uri = get_connect_info_if_root(socket, :uri) do
-        Context.set_request_context(%{url: URI.to_string(uri)})
+        Context.set_request_context(%{url: uri |> URI.to_string() |> scrub_uri()})
       end
 
       if user_agent = get_connect_info_if_root(socket, :user_agent) do

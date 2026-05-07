@@ -205,12 +205,15 @@ defmodule Sentry.LiveViewHookTest do
   test "scrubs sensitive query params from URI in handle_params breadcrumb", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/hook_test?password=supersecret&visible=ok")
 
-    breadcrumbs = get_sentry_context(view).breadcrumbs
-    params_breadcrumb = Enum.find(breadcrumbs, &(&1.category == "web.live_view.params"))
+    context = get_sentry_context(view)
+    params_breadcrumb = Enum.find(context.breadcrumbs, &(&1.category == "web.live_view.params"))
 
     refute params_breadcrumb.data.uri =~ "supersecret"
     assert params_breadcrumb.data.uri =~ "password=%2A%2A%2A%2A%2A%2A%2A%2A%2A"
     assert params_breadcrumb.data.uri =~ "visible=ok"
+
+    refute context.request.url =~ "supersecret"
+    assert context.request.url =~ "password=%2A%2A%2A%2A%2A%2A%2A%2A%2A"
   end
 
   test "uses a user-supplied scrubber when configured", %{conn: conn} do
