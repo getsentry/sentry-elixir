@@ -202,6 +202,15 @@ defmodule Sentry.LiveViewHookTest do
            }
   end
 
+  test "scrubs sensitive params from mount breadcrumb", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/hook_test?password=supersecret&visible=ok")
+
+    breadcrumbs = get_sentry_context(view).breadcrumbs
+    mount_breadcrumb = Enum.find(breadcrumbs, &(&1.category == "web.live_view.mount"))
+
+    assert mount_breadcrumb.data == %{"password" => "*********", "visible" => "ok"}
+  end
+
   test "scrubs sensitive query params from URI in handle_params breadcrumb", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/hook_test?password=supersecret&visible=ok")
 
