@@ -61,6 +61,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         {Sentry.LiveViewHook, :default_scrubber, []}
 
+    The scrubber is resolved once at `on_mount` time and applies to every
+    breadcrumb recorded for the lifetime of the LiveView process.
+
     """
 
     @moduledoc since: "10.5.0"
