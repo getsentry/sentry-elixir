@@ -39,6 +39,22 @@ defmodule SentryTest.CustomScrubberLive do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 end
 
+defmodule SentryTest.NonMapScrubber do
+  def scrub(_data), do: :not_a_map
+end
+
+defmodule SentryTest.NonMapScrubberLive do
+  use Phoenix.LiveView
+
+  on_mount {Sentry.LiveViewHook, scrubber: {SentryTest.NonMapScrubber, :scrub, []}}
+
+  def render(assigns), do: ~H"<h1>nonmap</h1>"
+
+  def mount(_params, _session, socket), do: {:ok, socket}
+
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+end
+
 defmodule SentryTest.LiveComponent do
   use Phoenix.LiveComponent
 
@@ -83,6 +99,7 @@ defmodule SentryTest.Router do
     get "/dead_test", SentryTest.PageController, :page
     live "/hook_test", SentryTest.Live
     live "/custom_scrubber", SentryTest.CustomScrubberLive
+    live "/non_map_scrubber", SentryTest.NonMapScrubberLive
   end
 end
 
@@ -223,6 +240,29 @@ defmodule Sentry.LiveViewHookTest do
 
     refute context.request.url =~ "supersecret"
     assert context.request.url =~ "password=%2A%2A%2A%2A%2A%2A%2A%2A%2A"
+  end
+
+  test "raises ArgumentError when :scrubber is not an MFA tuple" do
+    assert_raise ArgumentError,
+                 ~r/expected :scrubber to be a \{module, function, args\} tuple/,
+                 fn ->
+                   Sentry.LiveViewHook.on_mount([scrubber: :not_a_tuple], %{}, %{}, %{})
+                 end
+  end
+
+  test "logs error and uses empty data when scrubber returns a non-map", %{conn: conn} do
+    {view, log} =
+      ExUnit.CaptureLog.with_log(fn ->
+        {:ok, view, _html} = live(conn, "/non_map_scrubber")
+        render_hook(view, :submit, %{"foo" => "bar"})
+        view
+      end)
+
+    assert log =~ "Sentry.LiveViewHook scrubber returned non-map value"
+
+    [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
+    assert event_breadcrumb.category == "web.live_view.event"
+    assert event_breadcrumb.data == %{}
   end
 
   test "uses a user-supplied scrubber when configured", %{conn: conn} do
