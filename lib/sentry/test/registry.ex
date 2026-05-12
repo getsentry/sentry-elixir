@@ -8,7 +8,6 @@ defmodule Sentry.Test.Registry do
   # Bypass and Plug.Conn may not be available at compile time (optional deps).
   @compile {:no_warn_undefined, [Bypass, Bypass.Instance, Bypass.Supervisor, Plug.Conn]}
 
-  @table :sentry_test_collectors
   @allows_table :sentry_test_scope_allows
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -86,7 +85,6 @@ defmodule Sentry.Test.Registry do
 
   @impl true
   def init(nil) do
-    _table = :ets.new(@table, [:named_table, :public, :set])
     _allows_table = :ets.new(@allows_table, [:named_table, :public, :set])
     maybe_start_default_bypass()
     {:ok, :no_state}

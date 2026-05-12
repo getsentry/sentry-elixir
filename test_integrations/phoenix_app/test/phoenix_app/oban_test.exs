@@ -4,7 +4,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
   import ExUnit.CaptureLog
   import Sentry.TestHelpers
-  
+
   require OpenTelemetry.Tracer
 
   alias Sentry.Integrations.Oban.ErrorReporter
@@ -437,5 +437,106 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       assert [event] = events
       assert event["tags"]["oban_worker"] == "NonExistent.Worker.Module"
     end
+  end
+
+  describe "allow_sentry_reports/2 with a real Oban worker process" do
+    setup do
+      Sentry.Test.setup_sentry()
+      Sentry.Integrations.Oban.ErrorReporter.attach()
+      on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.ErrorReporter) end)
+    end
+
+    test "events from the worker process are dropped without an explicit allow" do
+      run_failing_worker_in_detached_process(before_perform: fn -> :ok end)
+
+      assert [] == Sentry.Test.pop_sentry_reports()
+    end
+
+    test "events from the worker process are captured when allowed via a telemetry hook" do
+      test_pid = self()
+      handler_id = {:sentry_allow_test, System.unique_integer([:positive])}
+
+      try do
+        :telemetry.attach(
+          handler_id,
+          [:oban, :job, :start],
+          fn _event, _measurements, _metadata, _config ->
+            Sentry.Test.allow_sentry_reports(test_pid, self())
+          end,
+          nil
+        )
+
+        run_failing_worker_in_detached_process(before_perform: fn -> :ok end)
+      after
+        :telemetry.detach(handler_id)
+      end
+
+      assert [%Sentry.Event{} = event] = Sentry.Test.pop_sentry_reports()
+
+      assert [exception] = event.exception
+      assert exception.type == "RuntimeError"
+      assert exception.value == "intentional failure for testing"
+
+      assert event.tags[:oban_worker] ==
+               "Sentry.Integrations.Phoenix.ObanTest.FailingWorker"
+    end
+  end
+
+  defp run_failing_worker_in_detached_process(opts) do
+    parent = self()
+    ref = make_ref()
+
+    spawn(fn ->
+      Keyword.fetch!(opts, :before_perform).()
+
+      job = %Oban.Job{
+        id: System.unique_integer([:positive]),
+        args: %{"should_fail" => true},
+        worker: "Sentry.Integrations.Phoenix.ObanTest.FailingWorker",
+        queue: "background",
+        attempt: 1,
+        max_attempts: 1,
+        meta: %{},
+        inserted_at: DateTime.utc_now(),
+        scheduled_at: DateTime.utc_now(),
+        attempted_at: DateTime.utc_now()
+      }
+
+      start_metadata = %{job: job, conf: %{name: Oban}}
+      :telemetry.execute([:oban, :job, :start], %{system_time: System.system_time()}, start_metadata)
+
+      {kind, reason, stacktrace} =
+        try do
+          FailingWorker.perform(job)
+          {:ok, nil, []}
+        catch
+          kind, reason -> {kind, reason, __STACKTRACE__}
+        end
+
+      exception_metadata =
+        Map.merge(start_metadata, %{
+          kind: kind,
+          reason: reason,
+          error: reason,
+          stacktrace: stacktrace,
+          state: :failure
+        })
+
+      :telemetry.execute(
+        [:oban, :job, :exception],
+        %{duration: 0},
+        exception_metadata
+      )
+
+      send(parent, {ref, :done})
+    end)
+
+    receive do
+      {^ref, :done} -> :ok
+    after
+      5_000 -> flunk("worker process did not finish in time")
+    end
+
+    Process.sleep(50)
   end
 end

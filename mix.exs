@@ -111,6 +111,7 @@ defmodule Sentry.Mixfile do
       {:plug_cowboy, "~> 2.7", only: [:test]},
       {:bandit, "~> 1.0", only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
+      {:nimble_ownership, "~> 1.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29", only: :dev},
       {:excoveralls, "~> 0.17.1", only: [:test]},
