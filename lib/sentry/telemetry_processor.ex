@@ -54,6 +54,9 @@ defmodule Sentry.TelemetryProcessor do
           | {:scheduler_weights, %{Category.priority() => pos_integer()}}
           | {:on_envelope, (Sentry.Envelope.t() -> any())}
           | {:transport_capacity, pos_integer()}
+          | {:processor_resolver, (pid() -> atom() | nil) | nil}
+
+  @resolver_key {__MODULE__, :resolver}
 
   ## Public API
 
@@ -74,6 +77,11 @@ defmodule Sentry.TelemetryProcessor do
     * `:scheduler_weights` - Map of priority to weight override (optional)
     * `:on_envelope` - Callback function invoked when envelopes are ready to send (optional)
     * `:transport_capacity` - Maximum number of items the transport queue can hold (default: 1000). For log envelopes, each log event counts as one item.
+    * `:processor_resolver` - Optional `(pid() -> atom() | nil)` function used by `add/1` to discover
+      the per-pid processor name when no value is set in the process dictionary. The resolver is
+      stored in `:persistent_term` and shared across all processor instances; passing the same
+      function from every `start_link/1` call is safe and idempotent. Defaults to `nil`, in which
+      case `add/1` falls back to the default processor name.
 
   ## Examples
 
@@ -294,6 +302,11 @@ defmodule Sentry.TelemetryProcessor do
     on_envelope = Keyword.get(opts, :on_envelope)
     transport_capacity = Keyword.get(opts, :transport_capacity, 1000)
 
+    case Keyword.get(opts, :processor_resolver) do
+      nil -> :ok
+      resolver when is_function(resolver, 1) -> :persistent_term.put(@resolver_key, resolver)
+    end
+
     buffer_names =
       for category <- Category.all(), into: %{} do
         {category, buffer_name(processor_name, category)}
@@ -374,7 +387,20 @@ defmodule Sentry.TelemetryProcessor do
   end
 
   defp processor_name do
-    Process.get(:sentry_telemetry_processor, @default_name)
+    case Process.get(:sentry_telemetry_processor) do
+      name when is_atom(name) and not is_nil(name) ->
+        name
+
+      _ ->
+        resolve_processor_name() || @default_name
+    end
+  end
+
+  defp resolve_processor_name do
+    case :persistent_term.get(@resolver_key, nil) do
+      nil -> nil
+      resolver when is_function(resolver, 1) -> resolver.(self())
+    end
   end
 
   defp maybe_add_opt(opts, _key, nil), do: opts

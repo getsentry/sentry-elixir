@@ -36,8 +36,8 @@ defmodule Sentry.Application do
       if Config.test_mode?() do
         if Code.ensure_loaded?(NimbleOwnership) do
           [
-            Sentry.Test.Registry,
-            {NimbleOwnership, name: Sentry.Test.OwnershipServer}
+            {NimbleOwnership, name: Sentry.Test.OwnershipServer},
+            Sentry.Test.Registry
           ]
         else
           [Sentry.Test.Registry]
@@ -53,15 +53,15 @@ defmodule Sentry.Application do
         []
       end
 
-    telemetry_processor =
+    telemetry_processor_opts =
       [
-        {Sentry.TelemetryProcessor,
-         [
-           buffer_capacities: Config.telemetry_buffer_capacities(),
-           scheduler_weights: Config.telemetry_scheduler_weights(),
-           transport_capacity: Config.transport_capacity()
-         ]}
+        buffer_capacities: Config.telemetry_buffer_capacities(),
+        scheduler_weights: Config.telemetry_scheduler_weights(),
+        transport_capacity: Config.transport_capacity()
       ]
+      |> maybe_put_test_processor_resolver()
+
+    telemetry_processor = [{Sentry.TelemetryProcessor, telemetry_processor_opts}]
 
     children =
       maybe_test_registry ++
@@ -161,5 +161,13 @@ defmodule Sentry.Application do
     defp maybe_rate_limiter, do: []
   else
     defp maybe_rate_limiter, do: [Sentry.Transport.RateLimiter]
+  end
+
+  defp maybe_put_test_processor_resolver(opts) do
+    if Config.test_mode?() do
+      Keyword.put(opts, :processor_resolver, &Sentry.Test.Registry.lookup_processor_for/1)
+    else
+      opts
+    end
   end
 end
