@@ -20,6 +20,10 @@ defmodule Sentry.Test.Registry do
   # `tag_processor_for/2` sets it.
   @routing_table :sentry_test_pid_routing
 
+  # Separate ETS table tagging Oban job ids to the test pid that
+  # scheduled them, used by the Oban auto-allowance integration.
+  @oban_jobs_table :sentry_test_oban_job_tags
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link([] = _opts) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
@@ -236,9 +240,77 @@ defmodule Sentry.Test.Registry do
     :ok
   end
 
+  @doc """
+  Tags an inserted Oban job with the pid of the process that scheduled
+  it. Used by the `allowance: [Oban]` telemetry handlers in
+  `Sentry.Test` to route a worker's captured events back to the
+  inserting test under `async: true`.
+
+  Direct ETS write — atomic, no GenServer round-trip.
+  """
+  @spec tag_oban_job(integer(), pid()) :: :ok
+  def tag_oban_job(job_id, owner_pid)
+      when is_integer(job_id) and is_pid(owner_pid) do
+    if :ets.whereis(@oban_jobs_table) != :undefined do
+      :ets.insert(@oban_jobs_table, {job_id, owner_pid})
+    end
+
+    :ok
+  end
+
+  @doc """
+  Returns the pid that tagged `job_id`, or `nil` if the tag is missing
+  or the tagging pid is no longer alive.
+  """
+  @spec lookup_oban_job(integer()) :: pid() | nil
+  def lookup_oban_job(job_id) when is_integer(job_id) do
+    case :ets.whereis(@oban_jobs_table) do
+      :undefined ->
+        nil
+
+      _ ->
+        case :ets.lookup(@oban_jobs_table, job_id) do
+          [{^job_id, pid}] when is_pid(pid) ->
+            if Process.alive?(pid), do: pid, else: nil
+
+          [] ->
+            nil
+        end
+    end
+  end
+
+  @doc """
+  Removes the tag for `job_id`. Called from the `:oban, :job, :stop`
+  and `:oban, :job, :exception` handlers.
+  """
+  @spec untag_oban_job(integer()) :: :ok
+  def untag_oban_job(job_id) when is_integer(job_id) do
+    if :ets.whereis(@oban_jobs_table) != :undefined do
+      :ets.delete(@oban_jobs_table, job_id)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Removes every tag whose owner is `owner_pid`. Used by
+  `setup_collector/1`'s `on_exit/1` cleanup so jobs that crashed
+  before emitting a `:stop`/`:exception` event don't leave stale tags
+  behind.
+  """
+  @spec drop_oban_tags_for(pid()) :: :ok
+  def drop_oban_tags_for(owner_pid) when is_pid(owner_pid) do
+    if :ets.whereis(@oban_jobs_table) != :undefined do
+      :ets.match_delete(@oban_jobs_table, {:_, owner_pid})
+    end
+
+    :ok
+  end
+
   @impl true
   def init(nil) do
     _routing_table = :ets.new(@routing_table, [:named_table, :public, :set])
+    _oban_jobs_table = :ets.new(@oban_jobs_table, [:named_table, :public, :set])
     maybe_start_default_bypass()
     {:ok, %{owner_monitors: %{}}}
   end

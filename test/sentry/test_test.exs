@@ -416,6 +416,143 @@ defmodule Sentry.TestTest do
     end
   end
 
+  describe "setup_sentry/1 with allowance: [Oban] (synthetic events)" do
+    setup do
+      SentryTest.setup_sentry(allowance: [Oban])
+    end
+
+    test "tags the job at insert time and routes the worker on start" do
+      test_pid = self()
+      job = %{id: System.unique_integer([:positive])}
+
+      :telemetry.execute([:oban, :engine, :insert_job, :stop], %{}, %{job: job})
+      assert Sentry.Test.Registry.lookup_oban_job(job.id) == test_pid
+
+      worker_done = make_ref()
+
+      # Raw spawn/1 — does NOT propagate $callers, so the worker has no
+      # caller-chain link back to the test. The tag store is the only
+      # path that can route this worker's events to the test's collector.
+      worker =
+        spawn(fn ->
+          :telemetry.execute([:oban, :job, :start], %{}, %{job: job})
+
+          captured =
+            case Sentry.capture_message("oban hello", result: :sync) do
+              {:ok, _} -> :captured
+              other -> {:unexpected, other}
+            end
+
+          send(test_pid, {worker_done, captured})
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive {^worker_done, :captured}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [%Sentry.Event{message: %{formatted: "oban hello"}}] =
+               SentryTest.pop_sentry_reports()
+    end
+
+    test "ignores jobs that were not tagged at insert time" do
+      test_pid = self()
+      job = %{id: System.unique_integer([:positive])}
+      worker_done = make_ref()
+
+      worker =
+        spawn(fn ->
+          :telemetry.execute([:oban, :job, :start], %{}, %{job: job})
+
+          captured =
+            case Sentry.capture_message("untagged", result: :sync) do
+              {:ok, _} -> :captured
+              other -> {:unexpected, other}
+            end
+
+          send(test_pid, {worker_done, captured})
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive {^worker_done, :captured}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "untags the job on :stop" do
+      job = %{id: System.unique_integer([:positive])}
+      :telemetry.execute([:oban, :engine, :insert_job, :stop], %{}, %{job: job})
+      assert Sentry.Test.Registry.lookup_oban_job(job.id) == self()
+
+      :telemetry.execute([:oban, :job, :stop], %{}, %{job: job})
+      refute Sentry.Test.Registry.lookup_oban_job(job.id)
+    end
+
+    test "untags the job on :exception" do
+      job = %{id: System.unique_integer([:positive])}
+      :telemetry.execute([:oban, :engine, :insert_job, :stop], %{}, %{job: job})
+      assert Sentry.Test.Registry.lookup_oban_job(job.id) == self()
+
+      :telemetry.execute([:oban, :job, :exception], %{}, %{job: job})
+      refute Sentry.Test.Registry.lookup_oban_job(job.id)
+    end
+
+    test "insert_all_jobs tags every job in the batch" do
+      jobs = [
+        %{id: System.unique_integer([:positive])},
+        %{id: System.unique_integer([:positive])}
+      ]
+
+      :telemetry.execute([:oban, :engine, :insert_all_jobs, :stop], %{}, %{jobs: jobs})
+
+      for job <- jobs do
+        assert Sentry.Test.Registry.lookup_oban_job(job.id) == self()
+      end
+    end
+
+    test "silently ignores synthetic jobs without an integer id" do
+      # :inline mode jobs / ad-hoc telemetry simulations may carry no id.
+      :telemetry.execute([:oban, :engine, :insert_job, :stop], %{}, %{job: %{id: nil}})
+      :telemetry.execute([:oban, :job, :start], %{}, %{job: %{id: nil}})
+      :ok
+    end
+
+    test "two concurrent test scopes are routed independently" do
+      test_pid = self()
+      job_for_me = %{id: System.unique_integer([:positive])}
+      job_for_peer = %{id: System.unique_integer([:positive])}
+
+      # Spawn a peer that acts as a separate live owner via NimbleOwnership,
+      # tags its own Oban job, and reports back when ready.
+      peer =
+        spawn(fn ->
+          {:ok, _} =
+            NimbleOwnership.get_and_update(
+              Sentry.Test.OwnershipServer,
+              self(),
+              :sentry_test_collector,
+              fn _ -> {:ok, :peer_table} end
+            )
+
+          Sentry.Test.Registry.tag_oban_job(job_for_peer.id, self())
+          send(test_pid, :claimed)
+
+          receive do
+            :exit -> :ok
+          end
+        end)
+
+      on_exit(fn -> Process.exit(peer, :kill) end)
+      assert_receive :claimed, 5_000
+
+      # Tag my own job.
+      :telemetry.execute([:oban, :engine, :insert_job, :stop], %{}, %{job: job_for_me})
+
+      assert Sentry.Test.Registry.lookup_oban_job(job_for_me.id) == test_pid
+      assert Sentry.Test.Registry.lookup_oban_job(job_for_peer.id) == peer
+    end
+  end
+
   describe "before_send wrapping" do
     test "wraps existing before_send callback" do
       test_pid = self()
