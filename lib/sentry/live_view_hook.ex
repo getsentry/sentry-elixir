@@ -39,6 +39,31 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     You can also set this in your `MyAppWeb` module, so that all LiveViews that
     `use MyAppWeb, :live_view` will have this hook.
+
+    ## Scrubbing Sensitive Data
+
+    *Available since v13.1.0.*
+
+    LiveView events and `handle_params` calls frequently carry user-submitted
+    form data, which may include passwords or other sensitive values. Before
+    storing this data in breadcrumbs, this hook scrubs it using
+    `Sentry.Scrubber.scrub_map/2`. URI query strings stored in breadcrumbs are
+    scrubbed via `Sentry.Scrubber.scrub_url/2`.
+
+    To customize the scrubbing logic, pass a `:scrubber` option when attaching
+    the hook. The scrubber must be a `{module, function, args}` tuple; the
+    breadcrumb `data` map is prepended to `args` before invoking the function,
+    which must return a map.
+
+        on_mount {Sentry.LiveViewHook, scrubber: {MyApp.Scrubber, :scrub, []}}
+
+    The default scrubber is equivalent to:
+
+        {Sentry.LiveViewHook, :default_scrubber, []}
+
+    The scrubber is resolved once at `on_mount` time and applies to every
+    breadcrumb recorded for the lifetime of the LiveView process.
+
     """
 
     @moduledoc since: "10.5.0"
@@ -49,15 +74,85 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     require Logger
 
+    @scrubber_pdict_key {__MODULE__, :scrubber}
+
     # See also:
     # https://develop.sentry.dev/sdk/event-payloads/request/
 
     @doc false
-    @spec on_mount(:default, map() | :not_mounted_at_router, map(), struct()) :: {:cont, struct()}
-    def on_mount(:default, %{} = params, _session, socket), do: on_mount(params, socket)
-    def on_mount(:default, :not_mounted_at_router, _session, socket), do: {:cont, socket}
+    @spec on_mount(:default | keyword(), map() | :not_mounted_at_router, map(), struct()) ::
+            {:cont, struct()}
+    def on_mount(:default, params, session, socket),
+      do: on_mount([], params, session, socket)
+
+    def on_mount(opts, %{} = params, _session, socket) when is_list(opts) do
+      store_scrubber(opts)
+      on_mount(params, socket)
+    end
+
+    def on_mount(opts, :not_mounted_at_router, _session, socket) when is_list(opts) do
+      store_scrubber(opts)
+      {:cont, socket}
+    end
+
+    @doc """
+    The default scrubber applied to LiveView breadcrumb data.
+
+    Delegates to `Sentry.Scrubber.scrub_map/2` with the default sensitive
+    parameter keys.
+    """
+    @doc since: "13.1.0"
+    @spec default_scrubber(map()) :: map()
+    def default_scrubber(data) when is_map(data) do
+      Sentry.Scrubber.scrub_map(data)
+    end
 
     ## Helpers
+
+    defp store_scrubber(opts) do
+      case Keyword.get(opts, :scrubber, {__MODULE__, :default_scrubber, []}) do
+        {mod, fun, args} = scrubber when is_atom(mod) and is_atom(fun) and is_list(args) ->
+          Process.put(@scrubber_pdict_key, scrubber)
+
+        other ->
+          raise ArgumentError,
+                "expected :scrubber to be a {module, function, args} tuple, got: #{inspect(other)}"
+      end
+    end
+
+    defp scrub(data) when is_map(data) do
+      {mod, fun, args} =
+        Process.get(@scrubber_pdict_key, {__MODULE__, :default_scrubber, []})
+
+      try do
+        case apply(mod, fun, [data | args]) do
+          result when is_map(result) ->
+            result
+
+          other ->
+            Logger.error(
+              "Sentry.LiveViewHook scrubber returned non-map value: #{inspect(other)}; " <>
+                "falling back to redacted data",
+              event_source: :logger
+            )
+
+            %{}
+        end
+      catch
+        # We must NEVER raise an error in a hook, as it will crash the LiveView process
+        # and we don't want Sentry to be responsible for that.
+        kind, reason ->
+          Logger.error(
+            "Sentry.LiveViewHook scrubber raised an error: #{Exception.format(kind, reason)}; " <>
+              "falling back to redacted data",
+            event_source: :logger
+          )
+
+          %{}
+      end
+    end
+
+    defp scrub_uri(uri) when is_binary(uri), do: Sentry.Scrubber.scrub_url(uri)
 
     defp on_mount(params, %Phoenix.LiveView.Socket{} = socket) do
       Context.set_extra_context(%{socket_id: socket.id})
@@ -66,11 +161,11 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       Context.add_breadcrumb(%{
         category: "web.live_view.mount",
         message: "Mounted live view",
-        data: params
+        data: scrub(params)
       })
 
       if uri = get_connect_info_if_root(socket, :uri) do
-        Context.set_request_context(%{url: URI.to_string(uri)})
+        Context.set_request_context(%{url: uri |> URI.to_string() |> scrub_uri()})
       end
 
       if user_agent = get_connect_info_if_root(socket, :user_agent) do
@@ -105,7 +200,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       Context.add_breadcrumb(%{
         category: "web.live_view.event",
         message: inspect(event),
-        data: %{event: event, params: params}
+        data: scrub(%{event: event, params: params})
       })
 
       {:cont, socket}
@@ -121,13 +216,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     end
 
     defp handle_params_hook(params, uri, socket) do
+      scrubbed_uri = scrub_uri(uri)
       Context.set_extra_context(%{socket_id: socket.id})
-      Context.set_request_context(%{url: uri})
+      Context.set_request_context(%{url: scrubbed_uri})
 
       Context.add_breadcrumb(%{
         category: "web.live_view.params",
-        message: "#{uri}",
-        data: %{params: params, uri: uri}
+        message: "#{scrubbed_uri}",
+        data: scrub(%{params: params, uri: scrubbed_uri})
       })
 
       {:cont, socket}
