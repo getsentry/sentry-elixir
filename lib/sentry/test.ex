@@ -76,10 +76,9 @@ defmodule Sentry.Test do
 
   ## Options
 
-    * `:allowance` - a list of integration module atoms to enable automatic
-      `Sentry.Test.allow_sentry_reports/2` wiring for. The integrations land
-      in follow-up commits; see the integration-specific sections below for
-      supported entries.
+    * `:allowance` - a list of integration module atoms (currently `Oban`)
+      to enable automatic `Sentry.Test.allow_sentry_reports/2` wiring for.
+      See the "Oban tests" section below.
 
   Any other key is forwarded to the per-test Sentry config (e.g.,
   `dedup_events: false`, `traces_sample_rate: 1.0`).
@@ -100,6 +99,32 @@ defmodule Sentry.Test do
 
   This collapses the common `bypass = setup_sentry(...); ref =
   setup_bypass_envelope_collector(bypass)` two-step into one call.
+  ## Oban tests
+
+  When you run Oban in `:inline` or `:manual` mode (per the
+  [Oban testing guide](https://hexdocs.pm/oban/testing.html)), jobs
+  execute synchronously in the calling process and `Sentry.Test`
+  captures their events automatically — no `:allowance` option needed.
+
+  Use `allowance: [Oban]` when your test exercises a real Oban
+  supervisor with worker processes (the production-like setup that
+  issue #1052 was filed for). The option installs telemetry handlers
+  that tag jobs at insert time and route the worker's captured events
+  back to the inserting test:
+
+      setup do
+        Sentry.Test.setup_sentry(allowance: [Oban])
+      end
+
+      test "captures events from a real Oban worker" do
+        {:ok, _} = Oban.insert(MyWorker.new(%{}))
+        # ... wait for the worker to run ...
+        assert [%Sentry.Event{}] = Sentry.Test.pop_sentry_reports()
+      end
+
+  Jobs inserted by other processes (cron plugins, jobs scheduling
+  jobs) are not auto-tagged and require manual
+  `Sentry.Test.allow_sentry_reports/2`.
 
   ## Examples
 
@@ -929,9 +954,81 @@ defmodule Sentry.Test do
 
   # Returns the list of `{event_path, {module, function}}` handler pairs for
   # a given integration atom, or `:unknown` for unsupported entries (the
-  # caller turns that into an `ArgumentError`). Commits 2 and 3 prepend
-  # clauses for `Oban` and `Broadway` respectively.
+  # caller turns that into an `ArgumentError`).
+  defp allowance_handlers(Oban) do
+    [
+      {[:oban, :engine, :insert_job, :stop], {__MODULE__, :__handle_oban_insert_job__}},
+      {[:oban, :engine, :insert_all_jobs, :stop], {__MODULE__, :__handle_oban_insert_all_jobs__}},
+      {[:oban, :job, :start], {__MODULE__, :__handle_oban_job_start__}},
+      {[:oban, :job, :stop], {__MODULE__, :__handle_oban_job_finish__}},
+      {[:oban, :job, :exception], {__MODULE__, :__handle_oban_job_finish__}}
+    ]
+  end
+
   defp allowance_handlers(_other), do: :unknown
+
+  # ── Oban allowance handlers ──
+  #
+  # Guards on `is_integer(id)` so synthetic jobs from `:inline` mode or
+  # ad-hoc telemetry simulations (no persisted id) are silently skipped —
+  # keeps the handlers safe to install in any test config.
+
+  @doc false
+  def __handle_oban_insert_job__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    Sentry.Test.Registry.tag_oban_job(id, self())
+  end
+
+  def __handle_oban_insert_job__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_insert_all_jobs__(_event, _measurements, %{jobs: jobs}, _config)
+      when is_list(jobs) do
+    pid = self()
+
+    Enum.each(jobs, fn
+      %{id: id} when is_integer(id) -> Sentry.Test.Registry.tag_oban_job(id, pid)
+      _ -> :ok
+    end)
+  end
+
+  def __handle_oban_insert_all_jobs__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_job_start__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    case Sentry.Test.Registry.lookup_oban_job(id) do
+      nil -> :ok
+      test_pid -> safe_allow(test_pid, self())
+    end
+  end
+
+  def __handle_oban_job_start__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_job_finish__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    Sentry.Test.Registry.untag_oban_job(id)
+  end
+
+  def __handle_oban_job_finish__(_event, _measurements, _metadata, _config), do: :ok
+
+  # Best-effort allow used by the Oban / Broadway dispatch handlers.
+  # Swallows the `ArgumentError` that `allow_sentry_reports/2` raises
+  # when:
+  #
+  #   * the would-be worker pid is already allowed by another live test
+  #     (concurrent tests racing on a shared worker — first wins);
+  #   * the worker pid is the test pid itself (e.g. Oban :manual mode
+  #     with `drain_queue/2` — `$callers` already routes the events);
+  #   * the owner pid is no longer collecting (test exited between
+  #     insert and start).
+  defp safe_allow(owner_pid, allowed_pid)
+       when is_pid(owner_pid) and is_pid(allowed_pid) do
+    allow_sentry_reports(owner_pid, allowed_pid)
+  rescue
+    ArgumentError -> :ok
+  end
 
   # Sets up collection infrastructure (ETS table, before_send wrapping, config)
   # without opening a new Bypass. When no :dsn is provided in extra_config,
@@ -999,7 +1096,11 @@ defmodule Sentry.Test do
     # cleans up the key and allowances automatically when this test exits.
     # Drop any worker→processor routing rows that point at this test's
     # processor so a test that exits before its allowed pids do not
-    # leave stale rows pointing at a stopped per-test processor.
+    # leave stale rows pointing at a stopped per-test processor. Also
+    # defensively drop any Oban job tags owned by this test in case a
+    # job crashed before emitting a `:stop` / `:exception` event — leaves a
+    # stale row pointing at a dead pid otherwise.
+    test_pid = self()
     processor_name = Process.get(:sentry_telemetry_processor)
 
     ExUnit.Callbacks.on_exit(fn ->
@@ -1010,6 +1111,8 @@ defmodule Sentry.Test do
       if is_atom(processor_name) and not is_nil(processor_name) do
         Sentry.Test.Registry.drop_processor_routing_for(processor_name)
       end
+
+      Sentry.Test.Registry.drop_oban_tags_for(test_pid)
     end)
 
     :ok
