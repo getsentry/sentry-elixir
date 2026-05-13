@@ -154,16 +154,150 @@ defmodule Sentry.TestTest do
       SentryTest.setup_sentry()
     end
 
-    test "allow_sentry_reports/2 is a no-op" do
-      assert :ok = SentryTest.allow_sentry_reports(self(), self())
-    end
-
     test "start_collecting/1 is a no-op when already collecting" do
       assert :ok = SentryTest.start_collecting()
     end
 
     test "cleanup/1 is a no-op" do
       assert :ok = SentryTest.cleanup(self())
+    end
+  end
+
+  describe "allow_sentry_reports/2 (issue #1052)" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    test "events from a process without $callers are not collected" do
+      test_pid = self()
+
+      pid =
+        spawn(fn ->
+          assert [] == Process.get(:"$callers", [])
+          assert {:ok, _} = Sentry.capture_message("from unrelated process", result: :sync)
+          send(test_pid, :done)
+        end)
+
+      ref = Process.monitor(pid)
+      assert_receive :done, 5000
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 5000
+
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "allow_sentry_reports/2 should let an unrelated process report into the test" do
+      test_pid = self()
+
+      pid =
+        spawn(fn ->
+          receive do
+            :go ->
+              assert {:ok, _} = Sentry.capture_message("from allowed process", result: :sync)
+              send(test_pid, :done)
+          end
+        end)
+
+      ref = Process.monitor(pid)
+
+      assert :ok = SentryTest.allow_sentry_reports(self(), pid)
+
+      send(pid, :go)
+      assert_receive :done, 5000
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 5000
+
+      assert [%Sentry.Event{} = event] = SentryTest.pop_sentry_reports()
+      assert event.message.formatted == "from allowed process"
+    end
+
+    test "allow_sentry_reports/2 is idempotent under the same owner" do
+      pid = spawn(fn -> Process.sleep(:infinity) end)
+      on_exit(fn -> Process.exit(pid, :kill) end)
+
+      assert :ok = SentryTest.allow_sentry_reports(self(), pid)
+      assert :ok = SentryTest.allow_sentry_reports(self(), pid)
+    end
+
+    test "allow_sentry_reports/2 accepts a zero-arity function returning a pid" do
+      pid = spawn(fn -> Process.sleep(:infinity) end)
+      on_exit(fn -> Process.exit(pid, :kill) end)
+
+      assert :ok = SentryTest.allow_sentry_reports(self(), fn -> pid end)
+    end
+
+    test "allow_sentry_reports/2 raises when the function does not return a pid" do
+      assert_raise ArgumentError, ~r/expected the function .* to return a pid/, fn ->
+        SentryTest.allow_sentry_reports(self(), fn -> :not_a_pid end)
+      end
+    end
+  end
+
+  describe "allow_sentry_reports/2 without setup" do
+    test "raises a descriptive ArgumentError when owner has not called setup_sentry/1" do
+      pid = spawn(fn -> Process.sleep(:infinity) end)
+      on_exit(fn -> Process.exit(pid, :kill) end)
+
+      assert_raise ArgumentError, ~r/is not collecting Sentry reports/, fn ->
+        SentryTest.allow_sentry_reports(self(), pid)
+      end
+    end
+  end
+
+  describe "allow_sentry_reports/2 cross-test isolation" do
+    setup do
+      SentryTest.setup_sentry()
+    end
+
+    defp spawn_peer_owner(target, parent) do
+      spawn(fn ->
+        {:ok, _} =
+          NimbleOwnership.get_and_update(
+            Sentry.Test.OwnershipServer,
+            self(),
+            :sentry_test_collector,
+            fn _ -> {:ok, :peer_table} end
+          )
+
+        :ok =
+          NimbleOwnership.allow(
+            Sentry.Test.OwnershipServer,
+            self(),
+            target,
+            :sentry_test_collector
+          )
+
+        send(parent, {:claimed, self()})
+
+        receive do
+          :exit -> :ok
+        end
+      end)
+    end
+
+    test "another live owner cannot steal an allowed pid" do
+      target = spawn(fn -> Process.sleep(:infinity) end)
+      on_exit(fn -> Process.exit(target, :kill) end)
+
+      peer = spawn_peer_owner(target, self())
+      on_exit(fn -> Process.exit(peer, :kill) end)
+      assert_receive {:claimed, ^peer}, 5000
+
+      assert_raise ArgumentError, ~r/already allowed by another live test scope/, fn ->
+        SentryTest.allow_sentry_reports(self(), target)
+      end
+    end
+
+    test "after the prior owner exits, the same pid can be re-claimed" do
+      target = spawn(fn -> Process.sleep(:infinity) end)
+      on_exit(fn -> Process.exit(target, :kill) end)
+
+      peer = spawn_peer_owner(target, self())
+      ref = Process.monitor(peer)
+      assert_receive {:claimed, ^peer}, 5000
+
+      send(peer, :exit)
+      assert_receive {:DOWN, ^ref, :process, ^peer, _}, 5000
+
+      assert :ok = SentryTest.allow_sentry_reports(self(), target)
     end
   end
 

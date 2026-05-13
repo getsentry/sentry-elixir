@@ -7,6 +7,8 @@ defmodule Sentry.Application do
 
   alias Sentry.Config
 
+  @compile {:no_warn_undefined, [NimbleOwnership]}
+
   @impl true
   def start(_type, _opts) do
     config = Config.validate!()
@@ -32,7 +34,14 @@ defmodule Sentry.Application do
 
     maybe_test_registry =
       if Config.test_mode?() do
-        [Sentry.Test.Registry]
+        if Code.ensure_loaded?(NimbleOwnership) do
+          [
+            Sentry.Test.Registry,
+            {NimbleOwnership, name: Sentry.Test.OwnershipServer}
+          ]
+        else
+          [Sentry.Test.Registry]
+        end
       else
         []
       end
