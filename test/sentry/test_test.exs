@@ -374,6 +374,47 @@ defmodule Sentry.TestTest do
     end
   end
 
+  describe "setup_sentry/1 with :allowance (foundation)" do
+    test "empty allowance list is a no-op" do
+      assert %{bypass: _, telemetry_processor: _} =
+               SentryTest.setup_sentry(allowance: [])
+    end
+
+    test "raises a clear error for unknown allowance entries" do
+      assert_raise ArgumentError, ~r/unknown :allowance entry/, fn ->
+        SentryTest.setup_sentry(allowance: [SomeUnknownThing])
+      end
+    end
+
+    test "__attach_allowance__/3 routes worker events back to the owner" do
+      SentryTest.setup_sentry()
+      test_pid = self()
+
+      SentryTest.__attach_allowance__(
+        [:sentry_test_allowance, :synthetic, :start],
+        {SentryTest, :__handle_allowance_event__},
+        %{owner_pid: test_pid}
+      )
+
+      worker_done = make_ref()
+
+      {:ok, _worker} =
+        Task.start(fn ->
+          :telemetry.execute([:sentry_test_allowance, :synthetic, :start], %{}, %{})
+
+          assert {:ok, _} =
+                   Sentry.capture_message("hello from synthetic worker", result: :sync)
+
+          send(test_pid, worker_done)
+        end)
+
+      assert_receive ^worker_done, 5_000
+
+      assert [%Sentry.Event{message: %{formatted: "hello from synthetic worker"}}] =
+               SentryTest.pop_sentry_reports()
+    end
+  end
+
   describe "before_send wrapping" do
     test "wraps existing before_send callback" do
       test_pid = self()

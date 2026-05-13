@@ -53,7 +53,7 @@ defmodule Sentry.Test do
 
   @moduledoc since: "10.2.0"
 
-  @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership]}
+  @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership, :telemetry]}
 
   @ownership_server Sentry.Test.OwnershipServer
 
@@ -76,8 +76,13 @@ defmodule Sentry.Test do
 
   ## Options
 
-  Any extra Sentry config options (e.g., `dedup_events: false`, `traces_sample_rate: 1.0`)
-  will be forwarded to the test config.
+    * `:allowance` - a list of integration module atoms to enable automatic
+      `Sentry.Test.allow_sentry_reports/2` wiring for. The integrations land
+      in follow-up commits; see the integration-specific sections below for
+      supported entries.
+
+  Any other key is forwarded to the per-test Sentry config (e.g.,
+  `dedup_events: false`, `traces_sample_rate: 1.0`).
 
   The reserved `:telemetry_processor` option is *not* forwarded to the test
   config. Instead, its value (a keyword list) is passed to the per-test
@@ -137,6 +142,7 @@ defmodule Sentry.Test do
 
     {tp_opts, extra_config} = Keyword.pop(extra_config, :telemetry_processor, [])
     {collect_envelopes, extra_config} = Keyword.pop(extra_config, :collect_envelopes, false)
+    {allowance, extra_config} = Keyword.pop(extra_config, :allowance, [])
 
     # Open a per-test Bypass and stub the envelope endpoint
     bypass = Bypass.open()
@@ -152,6 +158,8 @@ defmodule Sentry.Test do
     # Set up collector with DSN pointing to this test's Bypass
     bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
     setup_collector(bypass_config ++ extra_config)
+
+    attach_allowance_handlers(allowance, self())
 
     case collect_envelopes do
       false ->
@@ -849,6 +857,81 @@ defmodule Sentry.Test do
       """
     end
   end
+
+  defp ensure_telemetry_loaded! do
+    unless Code.ensure_loaded?(:telemetry) do
+      raise """
+      `:telemetry` is required for the `:allowance` option of Sentry.Test
+      but is not available. Add it to your test dependencies:
+
+          {:telemetry, "~> 1.0", only: [:test]}
+      """
+    end
+  end
+
+  # ── :allowance plumbing ──
+  #
+  # Each integration atom (e.g. Oban, Broadway) is mapped by
+  # allowance_handlers!/1 to one or more {telemetry_event, {module, fun}}
+  # pairs. Commit 1 ships only the catch-all clause; commits 2 and 3 add
+  # the integration-specific clauses.
+
+  defp attach_allowance_handlers([], _owner_pid), do: :ok
+
+  defp attach_allowance_handlers(modules, owner_pid) when is_list(modules) do
+    ensure_telemetry_loaded!()
+    Enum.each(modules, &attach_allowance_handler(&1, owner_pid))
+  end
+
+  defp attach_allowance_handler(module, owner_pid) do
+    case allowance_handlers(module) do
+      :unknown ->
+        raise ArgumentError,
+              "unknown :allowance entry #{inspect(module)}. Supported integrations: " <>
+                "(none built-in yet — Oban and Broadway land in follow-up commits)"
+
+      pairs when is_list(pairs) ->
+        Enum.each(pairs, fn {event, handler_fun} ->
+          __attach_allowance__(event, handler_fun, %{owner_pid: owner_pid})
+        end)
+    end
+  end
+
+  @doc false
+  @spec __attach_allowance__([atom()], {module(), atom()}, map()) :: :ok
+  def __attach_allowance__(event, {module, function}, config)
+      when is_list(event) and is_atom(module) and is_atom(function) and is_map(config) do
+    ref = System.unique_integer([:positive])
+    handler_id = {:sentry_test_allowance, ref}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        event,
+        Function.capture(module, function, 4),
+        config
+      )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
+  # Generic "allow whatever fired this event for owner_pid" handler. Used
+  # by the foundation unit tests and available for ad-hoc telemetry
+  # routing; the Oban / Broadway dispatches use their own handlers that
+  # consult metadata rather than blindly allowing the emitting pid.
+  @doc false
+  def __handle_allowance_event__(_event, _measurements, _metadata, %{owner_pid: owner_pid}) do
+    allow_sentry_reports(owner_pid, self())
+  rescue
+    ArgumentError -> :ok
+  end
+
+  # Returns the list of `{event_path, {module, function}}` handler pairs for
+  # a given integration atom, or `:unknown` for unsupported entries (the
+  # caller turns that into an `ArgumentError`). Commits 2 and 3 prepend
+  # clauses for `Oban` and `Broadway` respectively.
+  defp allowance_handlers(_other), do: :unknown
 
   # Sets up collection infrastructure (ETS table, before_send wrapping, config)
   # without opening a new Bypass. When no :dsn is provided in extra_config,
