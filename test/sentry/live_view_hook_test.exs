@@ -130,7 +130,7 @@ defmodule SentryTest.Endpoint do
 end
 
 defmodule Sentry.LiveViewHookTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
