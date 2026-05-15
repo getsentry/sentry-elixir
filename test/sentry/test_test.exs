@@ -55,6 +55,42 @@ defmodule Sentry.TestTest do
       assert is_pid(scheduler_pid)
       assert Sentry.Test.Registry.lookup_processor_for(scheduler_pid) == name
     end
+
+    test "does not return a :ref by default" do
+      refute Map.has_key?(SentryTest.setup_sentry(), :ref)
+    end
+
+    test "collect_envelopes: true returns a ref that captures sent envelopes" do
+      %{ref: ref} = SentryTest.setup_sentry(collect_envelopes: true)
+
+      assert {:ok, _} = Sentry.capture_message("collected", result: :sync)
+
+      assert [[{%{"type" => "event"}, event}]] = SentryTest.collect_envelopes(ref, 1)
+      assert event["message"]["formatted"] == "collected"
+    end
+
+    test "collect_envelopes accepts collector options forwarded to the collector" do
+      %{ref: ref} = SentryTest.setup_sentry(collect_envelopes: [type: "event"])
+
+      assert is_reference(ref)
+      assert {:ok, _} = Sentry.capture_message("typed", result: :sync)
+      assert [[{%{"type" => "event"}, _}]] = SentryTest.collect_envelopes(ref, 1)
+    end
+
+    test "collect_envelopes coexists with :telemetry_processor and config options" do
+      %{ref: ref, telemetry_processor: name} =
+        SentryTest.setup_sentry(
+          dedup_events: false,
+          collect_envelopes: true,
+          telemetry_processor: [buffer_configs: %{log: %{batch_size: 1}}]
+        )
+
+      assert is_reference(ref)
+      assert Sentry.Config.dedup_events?() == false
+
+      log_buffer = Sentry.TelemetryProcessor.get_buffer(name, :log)
+      assert :sys.get_state(log_buffer).batch_size == 1
+    end
   end
 
   describe "start_collecting_sentry_reports/0" do

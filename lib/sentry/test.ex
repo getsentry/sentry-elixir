@@ -85,6 +85,17 @@ defmodule Sentry.Test do
   `scheduler_weights`, `transport_capacity`). This replaces the need to
   manually `stop_supervised!/1` and re-`start_supervised!/2` the processor.
 
+  The reserved `:collect_envelopes` option is *not* forwarded to the test
+  config either. When set, a Bypass envelope collector is wired up
+  automatically and its reference is returned under the `:ref` key:
+
+    * `true` — set up the collector with no options;
+    * a keyword list — forwarded to `setup_bypass_envelope_collector/2`
+      (e.g. `[type: "check_in"]` to only collect a given item type).
+
+  This collapses the common `bypass = setup_sentry(...); ref =
+  setup_bypass_envelope_collector(bypass)` two-step into one call.
+
   ## Examples
 
       setup do
@@ -103,14 +114,29 @@ defmodule Sentry.Test do
         )
       end
 
+  Collecting envelopes directly as the ExUnit setup return:
+
+      setup do
+        Sentry.Test.setup_sentry(collect_envelopes: true, traces_sample_rate: 1.0)
+      end
+
+      test "...", %{ref: ref} do
+        # ...
+      end
+
   """
   @doc since: "13.0.0"
-  @spec setup_sentry(keyword()) :: %{bypass: term(), telemetry_processor: atom()}
+  @spec setup_sentry(keyword()) :: %{
+          :bypass => term(),
+          :telemetry_processor => atom(),
+          optional(:ref) => reference()
+        }
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
     ensure_nimble_ownership_loaded!()
 
     {tp_opts, extra_config} = Keyword.pop(extra_config, :telemetry_processor, [])
+    {collect_envelopes, extra_config} = Keyword.pop(extra_config, :collect_envelopes, false)
 
     # Open a per-test Bypass and stub the envelope endpoint
     bypass = Bypass.open()
@@ -127,7 +153,19 @@ defmodule Sentry.Test do
     bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
     setup_collector(bypass_config ++ extra_config)
 
-    %{bypass: bypass, telemetry_processor: processor_name}
+    case collect_envelopes do
+      false ->
+        %{bypass: bypass, telemetry_processor: processor_name}
+
+      collect ->
+        collector_opts = if is_list(collect), do: collect, else: []
+
+        %{
+          bypass: bypass,
+          telemetry_processor: processor_name,
+          ref: setup_bypass_envelope_collector(bypass, collector_opts)
+        }
+    end
   end
 
   @doc """
