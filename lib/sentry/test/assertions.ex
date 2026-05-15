@@ -57,6 +57,7 @@ defmodule Sentry.Test.Assertions do
   import ExUnit.Assertions, only: [flunk: 1]
 
   @default_timeout 1000
+  @refute_timeout 100
   @max_poll_interval 50
 
   @type_to_pop %{
@@ -244,6 +245,41 @@ defmodule Sentry.Test.Assertions do
   @spec find_sentry_report!([map()], keyword() | [{binary(), term()}]) :: map()
   def find_sentry_report!(items, criteria) when is_list(items) do
     find_item!(items, criteria, "report")
+  end
+
+  @doc """
+  Asserts that **no** Sentry check-in envelope reaches the Bypass envelope
+  collector identified by `ref` within `timeout` ms (default
+  `#{@refute_timeout}`).
+
+  The `Sentry.TelemetryProcessor` pipeline is flushed first, so a check-in
+  that was buffered (rather than sent synchronously) is still detected
+  rather than silently slipping past the timeout window.
+
+  Use with a collector created via
+  `Sentry.Test.setup_sentry(collect_envelopes: [type: "check_in"])` (or
+  `Sentry.Test.setup_bypass_envelope_collector/2` with `type: "check_in"`),
+  so that only check-in envelopes are forwarded to the test process.
+
+  ## Examples
+
+      test "ignores non-cron jobs", %{ref: ref} do
+        :telemetry.execute([:oban, :job, :start], %{}, %{job: %Oban.Job{}})
+        refute_sentry_check_in(ref)
+      end
+
+  """
+  @doc since: "13.0.2"
+  @spec refute_sentry_check_in(reference(), timeout()) :: :ok
+  def refute_sentry_check_in(ref, timeout \\ @refute_timeout) when is_reference(ref) do
+    maybe_flush(timeout)
+
+    receive do
+      {:bypass_envelope, ^ref, body} ->
+        flunk("expected no check-in to be sent, but received envelope: #{body}")
+    after
+      timeout -> :ok
+    end
   end
 
   # --- Private helpers ---
