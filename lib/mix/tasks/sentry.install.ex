@@ -43,7 +43,7 @@ if Code.ensure_loaded?(Igniter) do
     def info(_argv, _composing_task) do
       %Igniter.Mix.Task.Info{
         group: :sentry,
-        adds_deps: [{:jason, "~> 1.2"}, {:hackney, "~> 1.8"}],
+        adds_deps: [{:jason, "~> 1.2"}, {:hackney, ">= 1.8.0 and < 5.0.0"}],
         example: __MODULE__.Docs.example(),
         schema: [dsn: :string],
         defaults: [dsn: "<your_dsn>"]
