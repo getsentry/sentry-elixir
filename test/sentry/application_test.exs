@@ -1,6 +1,8 @@
 defmodule Sentry.ApplicationTest do
   use ExUnit.Case, async: false
 
+  import Sentry.TestHelpers, only: [wait_until: 1]
+
   require Logger
 
   describe "auto logger handler when enable_logs is true" do
@@ -172,24 +174,5 @@ defmodule Sentry.ApplicationTest do
     end)
 
     {:ok, _} = Application.ensure_all_started(:sentry)
-  end
-
-  defp wait_until(condition_fn, timeout \\ 1000) do
-    end_time = System.monotonic_time(:millisecond) + timeout
-    wait_loop(condition_fn, end_time, 1)
-  end
-
-  defp wait_loop(condition_fn, end_time, sleep_time) do
-    cond do
-      condition_fn.() ->
-        :ok
-
-      System.monotonic_time(:millisecond) >= end_time ->
-        :timeout
-
-      true ->
-        Process.sleep(sleep_time)
-        wait_loop(condition_fn, end_time, min(sleep_time * 2, 50))
-    end
   end
 end

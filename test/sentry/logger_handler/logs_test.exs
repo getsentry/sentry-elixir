@@ -389,24 +389,4 @@ defmodule Sentry.LoggerHandler.LogsTest do
   defp wait_for_buffer_stable(_buffer, expected_size, timeout \\ 1000) do
     wait_until(fn -> TelemetryProcessor.buffer_size(:log) == expected_size end, timeout)
   end
-
-  defp wait_until(condition_fn, timeout) do
-    end_time = System.monotonic_time(:millisecond) + timeout
-    wait_until_loop(condition_fn, end_time, 1)
-  end
-
-  defp wait_until_loop(condition_fn, end_time, sleep_time) do
-    cond do
-      condition_fn.() ->
-        :ok
-
-      System.monotonic_time(:millisecond) >= end_time ->
-        :timeout
-
-      true ->
-        Process.sleep(sleep_time)
-        next_sleep = min(sleep_time * 2, 50)
-        wait_until_loop(condition_fn, end_time, next_sleep)
-    end
-  end
 end
