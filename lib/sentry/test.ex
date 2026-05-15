@@ -65,7 +65,7 @@ defmodule Sentry.Test do
   Opens a Bypass on a random port, configures the DSN to point to it,
   wires up `before_send` / `before_send_log` callbacks to capture structs
   in an isolated ETS table, and starts a per-test `Sentry.TelemetryProcessor`
-  (via `setup_telemetry_processor/0`) so that assertions work for events
+  (via `setup_telemetry_processor/1`) so that assertions work for events
   that travel through the TelemetryProcessor pipeline (logs, metrics, or
   `send_result: :none`).
 
@@ -79,6 +79,12 @@ defmodule Sentry.Test do
   Any extra Sentry config options (e.g., `dedup_events: false`, `traces_sample_rate: 1.0`)
   will be forwarded to the test config.
 
+  The reserved `:telemetry_processor` option is *not* forwarded to the test
+  config. Instead, its value (a keyword list) is passed to the per-test
+  `Sentry.TelemetryProcessor` (e.g. `buffer_configs`, `buffer_capacities`,
+  `scheduler_weights`, `transport_capacity`). This replaces the need to
+  manually `stop_supervised!/1` and re-`start_supervised!/2` the processor.
+
   ## Examples
 
       setup do
@@ -89,19 +95,12 @@ defmodule Sentry.Test do
         Sentry.Test.setup_sentry(dedup_events: false)
       end
 
-  Replacing the auto-started processor with a custom-configured one:
+  Configuring the per-test processor (e.g. a smaller log batch size):
 
       setup do
-        %{telemetry_processor: name} = ctx = Sentry.Test.setup_sentry()
-        stop_supervised!(name)
-
-        start_supervised!(
-          {Sentry.TelemetryProcessor,
-           name: name, buffer_configs: %{log: %{batch_size: 1}}},
-          id: name
+        Sentry.Test.setup_sentry(
+          telemetry_processor: [buffer_configs: %{log: %{batch_size: 1}}]
         )
-
-        ctx
       end
 
   """
@@ -110,6 +109,8 @@ defmodule Sentry.Test do
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
     ensure_nimble_ownership_loaded!()
+
+    {tp_opts, extra_config} = Keyword.pop(extra_config, :telemetry_processor, [])
 
     # Open a per-test Bypass and stub the envelope endpoint
     bypass = Bypass.open()
@@ -120,7 +121,7 @@ defmodule Sentry.Test do
 
     # Start a per-test TelemetryProcessor before setup_collector/1 so that
     # the collector wires this test's scheduler into its registry.
-    processor_name = setup_telemetry_processor()
+    processor_name = setup_telemetry_processor(tp_opts)
 
     # Set up collector with DSN pointing to this test's Bypass
     bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
@@ -153,34 +154,69 @@ defmodule Sentry.Test do
   Must be called from within an ExUnit test because it uses
   `ExUnit.Callbacks.start_supervised!/2` for automatic cleanup.
 
-  If a per-test processor is already registered for this test (for example
-  when using `Sentry.Case`), this function is idempotent and returns the
-  existing processor name instead of starting a new one.
+  ## Options
+
+  `tp_opts` is a keyword list forwarded to the per-test
+  `Sentry.TelemetryProcessor` child spec (e.g. `buffer_configs`,
+  `buffer_capacities`, `scheduler_weights`, `transport_capacity`).
+
+  Idempotency depends on `tp_opts`:
+
+    * with no `tp_opts`, an already-registered live processor (for example
+      one started by `Sentry.Case`) is reused and its name returned;
+    * with `tp_opts`, an already-registered live processor is stopped and
+      restarted under the same name with the given options, so callers no
+      longer need to `stop_supervised!/1` + `start_supervised!/2` manually.
   """
   @doc since: "13.0.0"
-  @spec setup_telemetry_processor() :: atom()
-  def setup_telemetry_processor do
+  @spec setup_telemetry_processor(keyword()) :: atom()
+  def setup_telemetry_processor(tp_opts \\ []) do
     case Process.get(:sentry_telemetry_processor) do
       name when is_atom(name) and not is_nil(name) ->
-        if processor_alive?(name), do: name, else: start_telemetry_processor()
+        cond do
+          not processor_alive?(name) -> start_telemetry_processor(tp_opts)
+          tp_opts == [] -> name
+          true -> restart_telemetry_processor(name, tp_opts)
+        end
 
       _ ->
-        start_telemetry_processor()
+        start_telemetry_processor(tp_opts)
     end
   end
 
-  defp start_telemetry_processor do
+  defp start_telemetry_processor(tp_opts) do
     uid = System.unique_integer([:positive])
     processor_name = :"test_telemetry_processor_#{uid}"
 
-    ExUnit.Callbacks.start_supervised!(
-      {Sentry.TelemetryProcessor,
-       name: processor_name, processor_resolver: &Sentry.Test.Registry.lookup_processor_for/1},
-      id: processor_name
-    )
+    start_processor_child(processor_name, tp_opts)
 
+    # Must be set before tag_scheduler/1, which reads
+    # `:sentry_telemetry_processor` from this process's dictionary via
+    # `fetch_owner_processor/1`. Tagging would otherwise be a silent no-op.
     Process.put(:sentry_telemetry_processor, processor_name)
 
+    tag_scheduler(processor_name)
+    processor_name
+  end
+
+  defp restart_telemetry_processor(name, tp_opts) do
+    ExUnit.Callbacks.stop_supervised!(name)
+    start_processor_child(name, tp_opts)
+    # The process dictionary already holds `name`; the new scheduler pid
+    # must be re-tagged since the old one died with the old supervisor.
+    tag_scheduler(name)
+    name
+  end
+
+  defp start_processor_child(name, tp_opts) do
+    opts =
+      [name: name, processor_resolver: &Sentry.Test.Registry.lookup_processor_for/1]
+      |> Keyword.merge(tp_opts)
+
+    ExUnit.Callbacks.start_supervised!({Sentry.TelemetryProcessor, opts}, id: name)
+  end
+
+  defp tag_scheduler(processor_name) do
     scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
 
     if scheduler_pid do
@@ -191,7 +227,7 @@ defmodule Sentry.Test do
       tag_processor_for_allowed_pid(self(), scheduler_pid)
     end
 
-    processor_name
+    :ok
   end
 
   defp processor_alive?(name) do
@@ -366,9 +402,9 @@ defmodule Sentry.Test do
   # callback drops the event.
   #
   # The owner's processor name is looked up from its process
-  # dictionary; tests set it in `setup_telemetry_processor/0`. If the
+  # dictionary; tests set it in `setup_telemetry_processor/1`. If the
   # owner has no per-test processor (e.g. legacy
-  # `start_collecting/1` without `setup_telemetry_processor/0`), the
+  # `start_collecting/1` without `setup_telemetry_processor/1`), the
   # tag is skipped and the buffered event still falls back to the
   # global processor — the same behaviour as before this change.
   defp tag_processor_for_allowed_pid(owner_pid, allowed_pid) do
