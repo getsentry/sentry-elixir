@@ -52,6 +52,14 @@ defmodule Sentry.ClientTest do
              }
     end
 
+    test "safely inspects non-JSON-encodable values in :request" do
+      event =
+        Event.create_event(request: %{url: %URI{scheme: "http", host: "example.com", port: 80}})
+
+      rendered = Client.render_event(event)
+      assert rendered.request.url == inspect(%URI{scheme: "http", host: "example.com", port: 80})
+    end
+
     test "safely inspects terms that cannot be converted to JSON" do
       event =
         Event.create_event(
