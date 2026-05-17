@@ -156,7 +156,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     defp on_mount(params, %Phoenix.LiveView.Socket{} = socket) do
       Context.set_extra_context(%{socket_id: socket.id})
-      Context.set_request_context(%{url: socket.host_uri})
+
+      if uri = socket.host_uri do
+        Context.set_request_context(%{url: URI.to_string(uri)})
+      end
 
       Context.add_breadcrumb(%{
         category: "web.live_view.mount",
@@ -231,8 +234,15 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     defp get_connect_info_if_root(socket, key) do
       case socket.parent_pid do
-        nil -> get_connect_info(socket, key)
-        pid when is_pid(pid) -> nil
+        nil ->
+          try do
+            get_connect_info(socket, key)
+          rescue
+            _ -> nil
+          end
+
+        pid when is_pid(pid) ->
+          nil
       end
     end
 
