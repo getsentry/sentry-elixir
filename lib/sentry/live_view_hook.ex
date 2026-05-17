@@ -12,12 +12,21 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       * The user agent and user's IP address
       * Breadcrumbs for events that happen within LiveView
 
-    To make this module work best, you'll need to fetch information from the LiveView's
-    WebSocket. You can do that when calling the `socket/3` macro in your Phoenix endpoint.
-    For example:
+    To get the most complete request context, you'll need to fetch information from
+    the LiveView's WebSocket. You can do that when calling the `socket/3` macro in your
+    Phoenix endpoint. For example:
 
         socket "/live", Phoenix.LiveView.Socket,
           websocket: [connect_info: [:peer_data, :uri, :user_agent]]
+
+    Each key in `connect_info` enriches the Sentry context as follows:
+
+      * `:uri` — overrides the request URL with the WebSocket connect URI
+      * `:user_agent` — adds the user agent to extra context
+      * `:peer_data` — adds the client's IP address to user context
+
+    The hook still works when these keys are omitted, but the corresponding context
+    fields will not be populated.
 
     ## Examples
 
@@ -157,8 +166,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     defp on_mount(params, %Phoenix.LiveView.Socket{} = socket) do
       Context.set_extra_context(%{socket_id: socket.id})
 
-      if uri = socket.host_uri do
-        Context.set_request_context(%{url: URI.to_string(uri)})
+      case socket.host_uri do
+        %URI{} = uri ->
+          Context.set_request_context(%{url: URI.to_string(uri)})
+
+        _ ->
+          :ok
       end
 
       Context.add_breadcrumb(%{
@@ -235,6 +248,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     defp get_connect_info_if_root(socket, key) do
       case socket.parent_pid do
         nil ->
+          # Bandit raises when the transport is already closed (e.g. client disconnect
+          # during mount). Because Bandit is an optional dependency, we rescue broadly
+          # rather than matching on Bandit.TransportError directly.
           try do
             get_connect_info(socket, key)
           rescue
