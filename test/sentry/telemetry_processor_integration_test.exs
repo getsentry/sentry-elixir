@@ -7,30 +7,14 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   alias Sentry.Telemetry.Buffer
   alias Sentry.{LogEvent, Metric, Transaction}
 
-  setup context do
-    %{bypass: bypass} = setup_bypass()
-    test_pid = self()
-    ref = make_ref()
+  setup _context do
+    %{bypass: bypass, telemetry_processor: name, ref: ref} =
+      Sentry.Test.setup_sentry(
+        collect_envelopes: true,
+        telemetry_processor: [buffer_configs: %{log: %{batch_size: 1}}]
+      )
 
-    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {ref, body})
-      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
-    end)
-
-    stop_supervised!(context.telemetry_processor)
-
-    uid = System.unique_integer([:positive])
-    processor_name = :"test_integration_#{uid}"
-
-    start_supervised!(
-      {TelemetryProcessor, name: processor_name, buffer_configs: %{log: %{batch_size: 1}}},
-      id: processor_name
-    )
-
-    Process.put(:sentry_telemetry_processor, processor_name)
-
-    %{processor: processor_name, ref: ref, bypass: bypass}
+    %{processor: name, ref: ref, bypass: bypass}
   end
 
   describe "error events with telemetry_processor_categories" do
@@ -50,11 +34,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       :sys.resume(scheduler)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
+      envelopes = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert length(envelopes) == 1
 
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      assert [{%{"type" => "event"}, event}] = items
+      [[{%{"type" => "event"}, event}]] = envelopes
       assert event["message"]["formatted"] == "integration test error"
     end
 
@@ -77,9 +60,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       :sys.resume(scheduler)
 
-      bodies = collect_envelope_bodies(ctx.ref, 5)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      categories = Enum.map(items, &decoded_envelope_category/1)
+      envelopes = collect_envelopes(ctx.ref, 5, timeout: 2000)
+      categories = Enum.map(envelopes, &decoded_envelope_category/1)
 
       error_count = Enum.count(categories, &(&1 == :error))
       assert error_count == 3
@@ -104,10 +86,9 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(error_buffer) == 0
 
-      bodies = collect_envelope_bodies(ctx.ref, 5)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      assert length(items) == 5
-      assert Enum.all?(items, fn [{%{"type" => type}, _}] -> type == "event" end)
+      envelopes = collect_envelopes(ctx.ref, 5, timeout: 2000)
+      assert length(envelopes) == 5
+      assert Enum.all?(envelopes, fn [{%{"type" => type}, _}] -> type == "event" end)
     end
   end
 
@@ -128,11 +109,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       :sys.resume(scheduler)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
+      envelopes = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert length(envelopes) == 1
 
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      assert [{%{"type" => "check_in"}, check_in}] = items
+      [[{%{"type" => "check_in"}, check_in}]] = envelopes
       assert check_in["monitor_slug"] == "test-job"
       assert check_in["status"] == "ok"
     end
@@ -153,10 +133,9 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(check_in_buffer) == 0
 
-      bodies = collect_envelope_bodies(ctx.ref, 3)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      assert length(items) == 3
-      assert Enum.all?(items, fn [{%{"type" => type}, _}] -> type == "check_in" end)
+      envelopes = collect_envelopes(ctx.ref, 3, timeout: 2000)
+      assert length(envelopes) == 3
+      assert Enum.all?(envelopes, fn [{%{"type" => type}, _}] -> type == "check_in" end)
     end
   end
 
@@ -178,11 +157,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       :sys.resume(scheduler)
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
+      envelopes = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert length(envelopes) == 1
 
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      assert [{%{"type" => "transaction"}, transaction_data}] = items
+      [[{%{"type" => "transaction"}, transaction_data}]] = envelopes
       assert is_binary(transaction_data["event_id"])
       assert is_number(transaction_data["start_timestamp"])
       assert is_number(transaction_data["timestamp"])
@@ -204,10 +182,9 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(transaction_buffer) == 0
 
-      bodies = collect_envelope_bodies(ctx.ref, 3)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      assert length(items) == 3
-      assert Enum.all?(items, fn [{%{"type" => type}, _}] -> type == "transaction" end)
+      envelopes = collect_envelopes(ctx.ref, 3, timeout: 2000)
+      assert length(envelopes) == 3
+      assert Enum.all?(envelopes, fn [{%{"type" => type}, _}] -> type == "transaction" end)
     end
   end
 
@@ -216,11 +193,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
       TelemetryProcessor.add(ctx.processor, make_log_event("log-2"))
 
-      bodies = collect_envelope_bodies(ctx.ref, 2)
-      items = Enum.map(bodies, &decode_envelope!/1)
-      assert length(items) == 2
+      envelopes = collect_envelopes(ctx.ref, 2, timeout: 2000)
+      assert length(envelopes) == 2
 
-      for [{header, payload}] <- items do
+      for [{header, payload}] <- envelopes do
         assert header["type"] == "log"
         assert %{"items" => [%{"body" => _}]} = payload
       end
@@ -242,8 +218,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(buffer) == 0
 
-      bodies = collect_envelope_bodies(ctx.ref, 3)
-      assert length(bodies) == 3
+      envelopes = collect_envelopes(ctx.ref, 3, timeout: 2000)
+      assert length(envelopes) == 3
     end
 
     test "applies before_send_log callback", ctx do
@@ -256,37 +232,25 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       TelemetryProcessor.add(ctx.processor, make_log_event("keep me"))
       TelemetryProcessor.add(ctx.processor, make_log_event("drop me"))
 
-      bodies = collect_envelope_bodies(ctx.ref, 1)
-      assert length(bodies) == 1
+      envelopes = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert length(envelopes) == 1
 
-      [items] = Enum.map(bodies, &decode_envelope!/1)
-      assert [{%{"type" => "log"}, %{"items" => [%{"body" => "keep me"}]}}] = items
+      [[{%{"type" => "log"}, %{"items" => [%{"body" => "keep me"}]}}]] = envelopes
 
       # The dropped event should not produce an envelope
       ref = ctx.ref
-      refute_receive {^ref, _body}, 200
+      refute_receive {:bypass_envelope, ^ref, _body}, 200
     end
   end
 
   describe "buffer overflow client reports" do
     setup ctx do
-      stop_supervised!(ctx.processor)
-
-      uid = System.unique_integer([:positive])
-      processor_name = :"test_overflow_#{uid}"
-
-      start_supervised!(
-        {TelemetryProcessor,
-         name: processor_name, buffer_configs: %{log: %{capacity: 2, batch_size: 1}}},
-        id: processor_name
-      )
-
-      Process.put(:sentry_telemetry_processor, processor_name)
+      Sentry.Test.setup_telemetry_processor(buffer_configs: %{log: %{capacity: 2, batch_size: 1}})
 
       Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
-      %{processor: processor_name}
+      :ok
     end
 
     test "sends cache_overflow client report when log buffer overflows", ctx do
@@ -303,7 +267,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
-      assert_receive {^ref, body}, 2000
+      assert_receive {:bypass_envelope, ^ref, body}, 2000
 
       items = decode_envelope!(body)
       assert [{%{"type" => "client_report"}, client_report}] = items
@@ -449,7 +413,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
-      assert_receive {^ref, body}, 2000
+      assert_receive {:bypass_envelope, ^ref, body}, 2000
 
       items = decode_envelope!(body)
       assert [{%{"type" => "client_report"}, client_report}] = items
@@ -476,7 +440,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
 
       ref = ctx.ref
-      assert_receive {^ref, body}, 2000
+      assert_receive {:bypass_envelope, ^ref, body}, 2000
 
       items = decode_envelope!(body)
       assert [{%{"type" => "client_report"}, client_report}] = items
@@ -548,7 +512,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   defp flush_ref_messages(ref) do
     receive do
-      {^ref, _body} -> flush_ref_messages(ref)
+      {:bypass_envelope, ^ref, _body} -> flush_ref_messages(ref)
     after
       100 -> :ok
     end
@@ -560,20 +524,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       level: :info,
       body: body
     }
-  end
-
-  defp collect_envelope_bodies(ref, expected_count) do
-    collect_envelope_bodies(ref, expected_count, [])
-  end
-
-  defp collect_envelope_bodies(_ref, 0, acc), do: Enum.reverse(acc)
-
-  defp collect_envelope_bodies(ref, remaining, acc) do
-    receive do
-      {^ref, body} -> collect_envelope_bodies(ref, remaining - 1, [body | acc])
-    after
-      2000 -> Enum.reverse(acc)
-    end
   end
 
   defp decoded_envelope_category([{%{"type" => "event"}, _} | _]), do: :error

@@ -16,21 +16,23 @@ defmodule Sentry.Integrations.Quantum.CronTest do
   end
 
   setup do
-    SentryTest.setup_sentry(dedup_events: false, environment_name: "test")
+    SentryTest.setup_sentry(
+      dedup_events: false,
+      environment_name: "test",
+      collect_envelopes: [type: "check_in"]
+    )
   end
 
   for event_type <- [:start, :stop, :exception] do
-    test "ignores #{event_type} events without a cron meta", %{bypass: bypass} do
-      Bypass.down(bypass)
-
+    test "ignores #{event_type} events without a cron meta", %{ref: ref} do
       :telemetry.execute([:quantum, :job, unquote(event_type)], %{}, %{
         job: Scheduler.new_job(name: :test_job)
       })
+
+      refute_sentry_check_in(ref)
     end
 
-    test "ignores #{event_type} events with a cron expr of @reboot", %{bypass: bypass} do
-      Bypass.down(bypass)
-
+    test "ignores #{event_type} events with a cron expr of @reboot", %{ref: ref} do
       :telemetry.execute([:quantum, :job, unquote(event_type)], %{}, %{
         job:
           Scheduler.new_job(
@@ -38,11 +40,12 @@ defmodule Sentry.Integrations.Quantum.CronTest do
             schedule: Crontab.CronExpression.Parser.parse!("@reboot")
           )
       })
+
+      refute_sentry_check_in(ref)
     end
   end
 
-  test "captures start events with monitor config", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+  test "captures start events with monitor config", %{ref: ref} do
     span_ref = make_ref()
 
     :telemetry.execute([:quantum, :job, :start], %{}, %{
@@ -73,8 +76,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     )
   end
 
-  test "captures exception events with monitor config", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+  test "captures exception events with monitor config", %{ref: ref} do
     span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
@@ -108,8 +110,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     )
   end
 
-  test "captures stop events with monitor config", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+  test "captures stop events with monitor config", %{ref: ref} do
     span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
@@ -146,8 +147,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
         {:some_job, "quantum-some-job"},
         {MyApp.MyJob, "quantum-my-app-my-job"}
       ] do
-    test "works for a job named #{inspect(job_name)}", %{bypass: bypass} do
-      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+    test "works for a job named #{inspect(job_name)}", %{ref: ref} do
       span_ref = make_ref()
 
       duration = System.convert_time_unit(12_099, :millisecond, :native)
@@ -166,8 +166,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     end
   end
 
-  test "works for a job without the name", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+  test "works for a job without the name", %{ref: ref} do
     span_ref = make_ref()
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
@@ -181,8 +180,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     assert_sentry_report(check_in_body, monitor_slug: "quantum-generic-job")
   end
 
-  test "start event and same ref stop event have same check-in id", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
+  test "start event and same ref stop event have same check-in id", %{ref: ref} do
     span_ref = make_ref()
     id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
