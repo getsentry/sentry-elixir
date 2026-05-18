@@ -1,5 +1,5 @@
 defmodule Sentry.EnvelopeTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   import Sentry.TestHelpers
 
