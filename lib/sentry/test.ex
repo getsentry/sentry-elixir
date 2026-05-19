@@ -53,7 +53,7 @@ defmodule Sentry.Test do
 
   @moduledoc since: "10.2.0"
 
-  @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership]}
+  @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership, :telemetry, Broadway]}
 
   @ownership_server Sentry.Test.OwnershipServer
 
@@ -65,7 +65,7 @@ defmodule Sentry.Test do
   Opens a Bypass on a random port, configures the DSN to point to it,
   wires up `before_send` / `before_send_log` callbacks to capture structs
   in an isolated ETS table, and starts a per-test `Sentry.TelemetryProcessor`
-  (via `setup_telemetry_processor/0`) so that assertions work for events
+  (via `setup_telemetry_processor/1`) so that assertions work for events
   that travel through the TelemetryProcessor pipeline (logs, metrics, or
   `send_result: :none`).
 
@@ -76,8 +76,90 @@ defmodule Sentry.Test do
 
   ## Options
 
-  Any extra Sentry config options (e.g., `dedup_events: false`, `traces_sample_rate: 1.0`)
-  will be forwarded to the test config.
+    * `:allowance` - a list of integration module atoms (currently `Oban`
+      and `Broadway`) to enable automatic `Sentry.Test.allow_sentry_reports/2`
+      wiring for. See the "Oban tests" and "Broadway tests" sections below.
+
+  Any other key is forwarded to the per-test Sentry config (e.g.,
+  `dedup_events: false`, `traces_sample_rate: 1.0`).
+
+  The reserved `:telemetry_processor` option is *not* forwarded to the test
+  config. Instead, its value (a keyword list) is passed to the per-test
+  `Sentry.TelemetryProcessor` (e.g. `buffer_configs`, `buffer_capacities`,
+  `scheduler_weights`, `transport_capacity`). This replaces the need to
+  manually `stop_supervised!/1` and re-`start_supervised!/2` the processor.
+
+  The reserved `:collect_envelopes` option is *not* forwarded to the test
+  config either. When set, a Bypass envelope collector is wired up
+  automatically and its reference is returned under the `:ref` key:
+
+    * `true` — set up the collector with no options;
+    * a keyword list — forwarded to `setup_bypass_envelope_collector/2`
+      (e.g. `[type: "check_in"]` to only collect a given item type).
+
+  This collapses the common `bypass = setup_sentry(...); ref =
+  setup_bypass_envelope_collector(bypass)` two-step into one call.
+  ## Oban tests
+
+  When you run Oban in `:inline` or `:manual` mode (per the
+  [Oban testing guide](https://hexdocs.pm/oban/testing.html)), jobs
+  execute synchronously in the calling process and `Sentry.Test`
+  captures their events automatically — no `:allowance` option needed.
+
+  Use `allowance: [Oban]` when your test exercises a real Oban
+  supervisor with worker processes (the production-like setup that
+  issue #1052 was filed for). The option installs telemetry handlers
+  that tag jobs at insert time and route the worker's captured events
+  back to the inserting test:
+
+      setup do
+        Sentry.Test.setup_sentry(allowance: [Oban])
+      end
+
+      test "captures events from a real Oban worker" do
+        {:ok, _} = Oban.insert(MyWorker.new(%{}))
+        # ... wait for the worker to run ...
+        assert [%Sentry.Event{}] = Sentry.Test.pop_sentry_reports()
+      end
+
+  Jobs inserted by other processes (cron plugins, jobs scheduling
+  jobs) are not auto-tagged and require manual
+  `Sentry.Test.allow_sentry_reports/2`.
+
+  ## Broadway tests
+
+  To route events from a Broadway processor or batch-processor back
+  to your test, pass `:sentry_test_owner` in the message metadata
+  when injecting messages via `Broadway.test_message/3` or
+  `Broadway.test_batch/3`:
+
+      setup do
+        Sentry.Test.setup_sentry(allowance: [Broadway])
+        start_supervised!(MyPipeline)
+        :ok
+      end
+
+      test "captures events from the processor" do
+        ref =
+          Broadway.test_message(MyPipeline, payload,
+            metadata: %{sentry_test_owner: self()}
+          )
+
+        assert_receive {:ack, ^ref, [_succeeded], []}
+
+        assert [%Sentry.Event{}] = Sentry.Test.pop_sentry_reports()
+      end
+
+  This mirrors the [Ecto sandbox pattern documented in
+  Broadway](https://hexdocs.pm/broadway/Broadway.html#module-testing-with-ecto):
+  the test owner travels with the message itself, so two `async: true`
+  tests racing through the same pipeline are routed independently.
+
+  Messages submitted without the `:sentry_test_owner` metadata are not
+  auto-allowed — the handler silently skips them. For production
+  producers (Kafka, SQS, etc.) that need the same routing, attach the
+  same key to the messages they emit; the handler reads it regardless
+  of source.
 
   ## Examples
 
@@ -89,27 +171,38 @@ defmodule Sentry.Test do
         Sentry.Test.setup_sentry(dedup_events: false)
       end
 
-  Replacing the auto-started processor with a custom-configured one:
+  Configuring the per-test processor (e.g. a smaller log batch size):
 
       setup do
-        %{telemetry_processor: name} = ctx = Sentry.Test.setup_sentry()
-        stop_supervised!(name)
-
-        start_supervised!(
-          {Sentry.TelemetryProcessor,
-           name: name, buffer_configs: %{log: %{batch_size: 1}}},
-          id: name
+        Sentry.Test.setup_sentry(
+          telemetry_processor: [buffer_configs: %{log: %{batch_size: 1}}]
         )
+      end
 
-        ctx
+  Collecting envelopes directly as the ExUnit setup return:
+
+      setup do
+        Sentry.Test.setup_sentry(collect_envelopes: true, traces_sample_rate: 1.0)
+      end
+
+      test "...", %{ref: ref} do
+        # ...
       end
 
   """
   @doc since: "13.0.0"
-  @spec setup_sentry(keyword()) :: %{bypass: term(), telemetry_processor: atom()}
+  @spec setup_sentry(keyword()) :: %{
+          :bypass => term(),
+          :telemetry_processor => atom(),
+          optional(:ref) => reference()
+        }
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
     ensure_nimble_ownership_loaded!()
+
+    {tp_opts, extra_config} = Keyword.pop(extra_config, :telemetry_processor, [])
+    {collect_envelopes, extra_config} = Keyword.pop(extra_config, :collect_envelopes, false)
+    {allowance, extra_config} = Keyword.pop(extra_config, :allowance, [])
 
     # Open a per-test Bypass and stub the envelope endpoint
     bypass = Bypass.open()
@@ -120,13 +213,27 @@ defmodule Sentry.Test do
 
     # Start a per-test TelemetryProcessor before setup_collector/1 so that
     # the collector wires this test's scheduler into its registry.
-    processor_name = setup_telemetry_processor()
+    processor_name = setup_telemetry_processor(tp_opts)
 
     # Set up collector with DSN pointing to this test's Bypass
     bypass_config = [dsn: "http://public:secret@localhost:#{bypass.port}/1"]
     setup_collector(bypass_config ++ extra_config)
 
-    %{bypass: bypass, telemetry_processor: processor_name}
+    attach_allowance_handlers(allowance, self())
+
+    case collect_envelopes do
+      false ->
+        %{bypass: bypass, telemetry_processor: processor_name}
+
+      collect ->
+        collector_opts = if is_list(collect), do: collect, else: []
+
+        %{
+          bypass: bypass,
+          telemetry_processor: processor_name,
+          ref: setup_bypass_envelope_collector(bypass, collector_opts)
+        }
+    end
   end
 
   @doc """
@@ -153,34 +260,69 @@ defmodule Sentry.Test do
   Must be called from within an ExUnit test because it uses
   `ExUnit.Callbacks.start_supervised!/2` for automatic cleanup.
 
-  If a per-test processor is already registered for this test (for example
-  when using `Sentry.Case`), this function is idempotent and returns the
-  existing processor name instead of starting a new one.
+  ## Options
+
+  `tp_opts` is a keyword list forwarded to the per-test
+  `Sentry.TelemetryProcessor` child spec (e.g. `buffer_configs`,
+  `buffer_capacities`, `scheduler_weights`, `transport_capacity`).
+
+  Idempotency depends on `tp_opts`:
+
+    * with no `tp_opts`, an already-registered live processor (for example
+      one started by `Sentry.Case`) is reused and its name returned;
+    * with `tp_opts`, an already-registered live processor is stopped and
+      restarted under the same name with the given options, so callers no
+      longer need to `stop_supervised!/1` + `start_supervised!/2` manually.
   """
   @doc since: "13.0.0"
-  @spec setup_telemetry_processor() :: atom()
-  def setup_telemetry_processor do
+  @spec setup_telemetry_processor(keyword()) :: atom()
+  def setup_telemetry_processor(tp_opts \\ []) do
     case Process.get(:sentry_telemetry_processor) do
       name when is_atom(name) and not is_nil(name) ->
-        if processor_alive?(name), do: name, else: start_telemetry_processor()
+        cond do
+          not processor_alive?(name) -> start_telemetry_processor(tp_opts)
+          tp_opts == [] -> name
+          true -> restart_telemetry_processor(name, tp_opts)
+        end
 
       _ ->
-        start_telemetry_processor()
+        start_telemetry_processor(tp_opts)
     end
   end
 
-  defp start_telemetry_processor do
+  defp start_telemetry_processor(tp_opts) do
     uid = System.unique_integer([:positive])
     processor_name = :"test_telemetry_processor_#{uid}"
 
-    ExUnit.Callbacks.start_supervised!(
-      {Sentry.TelemetryProcessor,
-       name: processor_name, processor_resolver: &Sentry.Test.Registry.lookup_processor_for/1},
-      id: processor_name
-    )
+    start_processor_child(processor_name, tp_opts)
 
+    # Must be set before tag_scheduler/1, which reads
+    # `:sentry_telemetry_processor` from this process's dictionary via
+    # `fetch_owner_processor/1`. Tagging would otherwise be a silent no-op.
     Process.put(:sentry_telemetry_processor, processor_name)
 
+    tag_scheduler(processor_name)
+    processor_name
+  end
+
+  defp restart_telemetry_processor(name, tp_opts) do
+    ExUnit.Callbacks.stop_supervised!(name)
+    start_processor_child(name, tp_opts)
+    # The process dictionary already holds `name`; the new scheduler pid
+    # must be re-tagged since the old one died with the old supervisor.
+    tag_scheduler(name)
+    name
+  end
+
+  defp start_processor_child(name, tp_opts) do
+    opts =
+      [name: name, processor_resolver: &Sentry.Test.Registry.lookup_processor_for/1]
+      |> Keyword.merge(tp_opts)
+
+    ExUnit.Callbacks.start_supervised!({Sentry.TelemetryProcessor, opts}, id: name)
+  end
+
+  defp tag_scheduler(processor_name) do
     scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
 
     if scheduler_pid do
@@ -191,7 +333,7 @@ defmodule Sentry.Test do
       tag_processor_for_allowed_pid(self(), scheduler_pid)
     end
 
-    processor_name
+    :ok
   end
 
   defp processor_alive?(name) do
@@ -366,9 +508,9 @@ defmodule Sentry.Test do
   # callback drops the event.
   #
   # The owner's processor name is looked up from its process
-  # dictionary; tests set it in `setup_telemetry_processor/0`. If the
+  # dictionary; tests set it in `setup_telemetry_processor/1`. If the
   # owner has no per-test processor (e.g. legacy
-  # `start_collecting/1` without `setup_telemetry_processor/0`), the
+  # `start_collecting/1` without `setup_telemetry_processor/1`), the
   # tag is skipped and the buffered event still falls back to the
   # global processor — the same behaviour as before this change.
   defp tag_processor_for_allowed_pid(owner_pid, allowed_pid) do
@@ -776,6 +918,191 @@ defmodule Sentry.Test do
     end
   end
 
+  defp ensure_telemetry_loaded! do
+    unless Code.ensure_loaded?(:telemetry) do
+      raise """
+      `:telemetry` is required for the `:allowance` option of Sentry.Test
+      but is not available. Add it to your test dependencies:
+
+          {:telemetry, "~> 1.0", only: [:test]}
+      """
+    end
+  end
+
+  # ── :allowance plumbing ──
+  #
+  # Each integration atom (e.g. Oban, Broadway) is mapped by
+  # allowance_handlers!/1 to one or more {telemetry_event, {module, fun}}
+  # pairs. Commit 1 ships only the catch-all clause; commits 2 and 3 add
+  # the integration-specific clauses.
+
+  defp attach_allowance_handlers([], _owner_pid), do: :ok
+
+  defp attach_allowance_handlers(modules, owner_pid) when is_list(modules) do
+    ensure_telemetry_loaded!()
+    Enum.each(modules, &attach_allowance_handler(&1, owner_pid))
+  end
+
+  defp attach_allowance_handler(module, owner_pid) do
+    case allowance_handlers(module) do
+      :unknown ->
+        raise ArgumentError,
+              "unknown :allowance entry #{inspect(module)}. Supported integrations: " <>
+                "(none built-in yet — Oban and Broadway land in follow-up commits)"
+
+      pairs when is_list(pairs) ->
+        Enum.each(pairs, fn {event, handler_fun} ->
+          __attach_allowance__(event, handler_fun, %{owner_pid: owner_pid})
+        end)
+    end
+  end
+
+  @doc false
+  @spec __attach_allowance__([atom()], {module(), atom()}, map()) :: :ok
+  def __attach_allowance__(event, {module, function}, config)
+      when is_list(event) and is_atom(module) and is_atom(function) and is_map(config) do
+    ref = System.unique_integer([:positive])
+    handler_id = {:sentry_test_allowance, ref}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        event,
+        Function.capture(module, function, 4),
+        config
+      )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
+  # Generic "allow whatever fired this event for owner_pid" handler. Used
+  # by the foundation unit tests and available for ad-hoc telemetry
+  # routing; the Oban / Broadway dispatches use their own handlers that
+  # consult metadata rather than blindly allowing the emitting pid.
+  @doc false
+  def __handle_allowance_event__(_event, _measurements, _metadata, %{owner_pid: owner_pid}) do
+    allow_sentry_reports(owner_pid, self())
+  rescue
+    ArgumentError -> :ok
+  end
+
+  # Returns the list of `{event_path, {module, function}}` handler pairs for
+  # a given integration atom, or `:unknown` for unsupported entries (the
+  # caller turns that into an `ArgumentError`).
+  defp allowance_handlers(Oban) do
+    [
+      {[:oban, :engine, :insert_job, :stop], {__MODULE__, :__handle_oban_insert_job__}},
+      {[:oban, :engine, :insert_all_jobs, :stop], {__MODULE__, :__handle_oban_insert_all_jobs__}},
+      {[:oban, :job, :start], {__MODULE__, :__handle_oban_job_start__}},
+      {[:oban, :job, :stop], {__MODULE__, :__handle_oban_job_finish__}},
+      {[:oban, :job, :exception], {__MODULE__, :__handle_oban_job_finish__}}
+    ]
+  end
+
+  defp allowance_handlers(Broadway) do
+    # Both events fire once per worker invocation (per batch) in the
+    # processor / batch-processor pid, with metadata.messages giving
+    # the full batch. Reading the owner from message metadata is the
+    # documented Broadway pattern (same shape as `ecto_sandbox`).
+    [
+      {[:broadway, :processor, :start], {__MODULE__, :__handle_broadway_batch_start__}},
+      {[:broadway, :batch_processor, :start], {__MODULE__, :__handle_broadway_batch_start__}}
+    ]
+  end
+
+  defp allowance_handlers(_other), do: :unknown
+
+  # ── Oban allowance handlers ──
+  #
+  # Guards on `is_integer(id)` so synthetic jobs from `:inline` mode or
+  # ad-hoc telemetry simulations (no persisted id) are silently skipped —
+  # keeps the handlers safe to install in any test config.
+
+  @doc false
+  def __handle_oban_insert_job__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    Sentry.Test.Registry.tag_oban_job(id, self())
+  end
+
+  def __handle_oban_insert_job__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_insert_all_jobs__(_event, _measurements, %{jobs: jobs}, _config)
+      when is_list(jobs) do
+    pid = self()
+
+    Enum.each(jobs, fn
+      %{id: id} when is_integer(id) -> Sentry.Test.Registry.tag_oban_job(id, pid)
+      _ -> :ok
+    end)
+  end
+
+  def __handle_oban_insert_all_jobs__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_job_start__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    case Sentry.Test.Registry.lookup_oban_job(id) do
+      nil -> :ok
+      test_pid -> safe_allow(test_pid, self())
+    end
+  end
+
+  def __handle_oban_job_start__(_event, _measurements, _metadata, _config), do: :ok
+
+  @doc false
+  def __handle_oban_job_finish__(_event, _measurements, %{job: %{id: id}}, _config)
+      when is_integer(id) do
+    Sentry.Test.Registry.untag_oban_job(id)
+  end
+
+  def __handle_oban_job_finish__(_event, _measurements, _metadata, _config), do: :ok
+
+  # ── Broadway allowance handler ──
+  #
+  # The handler walks the batch's messages looking for a
+  # `:sentry_test_owner` metadata entry — the documented Broadway test
+  # pattern, identical in shape to the `:ecto_sandbox` example in the
+  # Broadway testing guide. Tests submit messages via
+  # `Broadway.test_message/3` with
+  # `metadata: %{sentry_test_owner: self()}` (or any custom producer
+  # that propagates `:metadata` onto `%Broadway.Message{}`).
+  @doc false
+  def __handle_broadway_batch_start__(_event, _measurements, %{messages: messages}, _config)
+      when is_list(messages) do
+    case find_broadway_owner(messages) do
+      nil -> :ok
+      owner_pid -> safe_allow(owner_pid, self())
+    end
+  end
+
+  def __handle_broadway_batch_start__(_event, _measurements, _metadata, _config), do: :ok
+
+  defp find_broadway_owner(messages) do
+    Enum.find_value(messages, fn
+      %{metadata: %{sentry_test_owner: pid}} when is_pid(pid) -> pid
+      _ -> nil
+    end)
+  end
+
+  # Best-effort allow used by the Oban / Broadway dispatch handlers.
+  # Swallows the `ArgumentError` that `allow_sentry_reports/2` raises
+  # when:
+  #
+  #   * the would-be worker pid is already allowed by another live test
+  #     (concurrent tests racing on a shared worker — first wins);
+  #   * the worker pid is the test pid itself (e.g. Oban :manual mode
+  #     with `drain_queue/2` — `$callers` already routes the events);
+  #   * the owner pid is no longer collecting (test exited between
+  #     insert and start).
+  defp safe_allow(owner_pid, allowed_pid)
+       when is_pid(owner_pid) and is_pid(allowed_pid) do
+    allow_sentry_reports(owner_pid, allowed_pid)
+  rescue
+    ArgumentError -> :ok
+  end
+
   # Sets up collection infrastructure (ETS table, before_send wrapping, config)
   # without opening a new Bypass. When no :dsn is provided in extra_config,
   # falls back to the default Bypass DSN from Registry.
@@ -842,7 +1169,11 @@ defmodule Sentry.Test do
     # cleans up the key and allowances automatically when this test exits.
     # Drop any worker→processor routing rows that point at this test's
     # processor so a test that exits before its allowed pids do not
-    # leave stale rows pointing at a stopped per-test processor.
+    # leave stale rows pointing at a stopped per-test processor. Also
+    # defensively drop any Oban job tags owned by this test in case a
+    # job crashed before emitting a `:stop` / `:exception` event — leaves a
+    # stale row pointing at a dead pid otherwise.
+    test_pid = self()
     processor_name = Process.get(:sentry_telemetry_processor)
 
     ExUnit.Callbacks.on_exit(fn ->
@@ -853,6 +1184,8 @@ defmodule Sentry.Test do
       if is_atom(processor_name) and not is_nil(processor_name) do
         Sentry.Test.Registry.drop_processor_routing_for(processor_name)
       end
+
+      Sentry.Test.Registry.drop_oban_tags_for(test_pid)
     end)
 
     :ok

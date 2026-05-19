@@ -388,6 +388,45 @@ defmodule Sentry.Test.AssertionsTest do
     end
   end
 
+  describe "refute_sentry_check_in/2 (message-level)" do
+    test "returns :ok when no envelope is received for the ref" do
+      assert :ok = refute_sentry_check_in(make_ref(), 10)
+    end
+
+    test "ignores envelopes addressed to a different ref" do
+      send(self(), {:bypass_envelope, make_ref(), "unrelated"})
+
+      assert :ok = refute_sentry_check_in(make_ref(), 10)
+    end
+
+    test "flunks when an envelope is received for the ref" do
+      ref = make_ref()
+      send(self(), {:bypass_envelope, ref, ~s({"type":"check_in"})})
+
+      assert_raise ExUnit.AssertionError, ~r/expected no check-in/, fn ->
+        refute_sentry_check_in(ref, 10)
+      end
+    end
+  end
+
+  describe "refute_sentry_check_in/2 with real pipeline" do
+    setup do
+      SentryTest.setup_sentry(collect_envelopes: [type: "check_in"])
+    end
+
+    test "returns :ok when no check-in was captured", %{ref: ref} do
+      assert :ok = refute_sentry_check_in(ref, 50)
+    end
+
+    test "flunks (after flushing the pipeline) when a check-in was captured", %{ref: ref} do
+      {:ok, _id} = Sentry.capture_check_in(status: :ok, monitor_slug: "refute-test")
+
+      assert_raise ExUnit.AssertionError, ~r/expected no check-in/, fn ->
+        refute_sentry_check_in(ref)
+      end
+    end
+  end
+
   # Test helpers — direct ETS insertion for isolation
 
   defp msg(text) do

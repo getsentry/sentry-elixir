@@ -75,7 +75,8 @@ defmodule PhoenixApp.MixProject do
       {:opentelemetry_ecto, "~> 1.2"},
       {:opentelemetry_logger_metadata, "~> 0.2.0"},
       {:hackney, "~> 1.18"},
-      {:oban, "~> 2.10"}
+      {:oban, "~> 2.10"},
+      {:broadway, "~> 1.0", only: [:test]}
     ]
   end
 

@@ -15,59 +15,61 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   setup do
-    SentryTest.setup_sentry(dedup_events: false, environment_name: "test")
+    SentryTest.setup_sentry(
+      dedup_events: false,
+      environment_name: "test",
+      collect_envelopes: [type: "check_in"]
+    )
   end
 
   for event_type <- [:start, :stop, :exception] do
-    test "ignores #{event_type} events without a cron meta", %{bypass: bypass} do
-      Bypass.down(bypass)
+    test "ignores #{event_type} events without a cron meta", %{ref: ref} do
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{job: %Oban.Job{}})
+      refute_sentry_check_in(ref)
     end
 
-    test "ignores #{event_type} events without a cron_expr meta", %{bypass: bypass} do
-      Bypass.down(bypass)
-
+    test "ignores #{event_type} events without a cron_expr meta", %{ref: ref} do
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
         job: %Oban.Job{meta: %{"cron" => true}}
       })
+
+      refute_sentry_check_in(ref)
     end
 
-    test "ignores #{event_type} events with a cron expr of @reboot", %{bypass: bypass} do
-      Bypass.down(bypass)
-
+    test "ignores #{event_type} events with a cron expr of @reboot", %{ref: ref} do
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
         job: %Oban.Job{
           worker: "Sentry.MyWorker",
           meta: %{"cron" => true, "cron_expr" => "@reboot"}
         }
       })
+
+      refute_sentry_check_in(ref)
     end
 
     test "ignores #{event_type} events with a cron expr of @reboot even with timezone", %{
-      bypass: bypass
+      ref: ref
     } do
-      Bypass.down(bypass)
-
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
         job: %Oban.Job{
           worker: "Sentry.MyWorker",
           meta: %{"cron" => true, "cron_expr" => "@reboot", "cron_tz" => "Etc/UTC"}
         }
       })
+
+      refute_sentry_check_in(ref)
     end
 
-    test "ignores #{event_type} events with a cron expr that is not a string", %{bypass: bypass} do
-      Bypass.down(bypass)
-
+    test "ignores #{event_type} events with a cron expr that is not a string", %{ref: ref} do
       :telemetry.execute([:oban, :job, unquote(event_type)], %{}, %{
         job: %Oban.Job{worker: "Sentry.MyWorker", meta: %{"cron" => true, "cron_expr" => 123}}
       })
+
+      refute_sentry_check_in(ref)
     end
   end
 
-  test "captures start events with monitor config", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
-
+  test "captures start events with monitor config", %{ref: ref} do
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
@@ -111,9 +113,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
         {"@annually", "year"}
       ] do
     test "captures stop events with monitor config and state of #{inspect(oban_state)} and frequency of #{frequency}",
-         %{bypass: bypass} do
-      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
-
+         %{ref: ref} do
       duration = System.convert_time_unit(12_099, :millisecond, :native)
 
       :telemetry.execute([:oban, :job, :stop], %{duration: duration}, %{
@@ -146,9 +146,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     end
   end
 
-  test "captures exception events with monitor config", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
-
+  test "captures exception events with monitor config", %{ref: ref} do
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
     :telemetry.execute([:oban, :job, :exception], %{duration: duration}, %{
@@ -179,7 +177,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     )
   end
 
-  test "uses default monitor configuration in Sentry's config if present", %{bypass: bypass} do
+  test "uses default monitor configuration in Sentry's config if present", %{ref: ref} do
     put_test_config(
       integrations: [
         monitor_config_defaults: [
@@ -189,8 +187,6 @@ defmodule Sentry.Integrations.Oban.CronTest do
         ]
       ]
     )
-
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
       state: :success,
@@ -219,9 +215,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
   @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is not affected if the custom monitor_name_generator does not target the worker",
-       %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
-
+       %{ref: ref} do
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
         worker: "Sentry.MyWorker",
@@ -236,9 +230,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
 
   @tag attach_opts: [monitor_slug_generator: {__MODULE__, :custom_name_generator}]
   test "monitor_slug is set based on the custom monitor_name_generator if it targets the worker",
-       %{bypass: bypass} do
+       %{ref: ref} do
     client_name = "my-client"
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
 
     :telemetry.execute([:oban, :job, :start], %{}, %{
       job: %Oban.Job{
@@ -253,9 +246,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     assert_sentry_report(check_in_body, monitor_slug: "sentry-client-worker-my-client")
   end
 
-  test "custom options overide job metadata", %{bypass: bypass} do
-    ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "check_in")
-
+  test "custom options overide job metadata", %{ref: ref} do
     defmodule WorkerWithCustomOptions do
       use Oban.Worker
 
