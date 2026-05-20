@@ -31,6 +31,8 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
         config
       ) do
+    stacktrace = if is_list(stacktrace), do: stacktrace, else: []
+
     if report?(reason) and should_report?(job, config) do
       report(job, kind, reason, stacktrace, config)
     else

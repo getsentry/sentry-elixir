@@ -148,6 +148,11 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       end
     end
 
+    # See https://github.com/getsentry/sentry-elixir/issues/1063
+    test "does not crash when stacktrace metadata is not a list" do
+      emit_telemetry_for_failed_job(:exit, :user_stopped, :user_stopped)
+    end
+
     test "includes custom tags when oban_tags_to_sentry_tags function config option is set and returns non empty map" do
       emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
         oban_tags_to_sentry_tags: fn _job -> %{custom_tag: "custom_value"} end
