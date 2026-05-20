@@ -489,7 +489,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{"trace" => %{"op" => "http.server", "description" => "GET /api/users"}}
       )
     end
@@ -509,7 +509,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{"trace" => %{"op" => "http.server", "description" => "GET"}}
       )
     end
@@ -530,7 +530,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{"trace" => %{"op" => "http.client", "description" => "GET /external/api"}}
       )
     end
@@ -552,7 +552,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{
           "trace" => %{
             "op" => "http.server",
@@ -578,7 +578,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{
           "trace" => %{"op" => "db", "description" => "SELECT * FROM users WHERE id = $1"}
         }
@@ -600,7 +600,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{"trace" => %{"op" => "db", "description" => nil}}
       )
     end
@@ -621,7 +621,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{
           "trace" => %{"op" => "queue.process", "description" => "MyApp.Workers.EmailWorker"}
         },
@@ -639,7 +639,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
         Process.sleep(1)
       end
 
-      assert_sentry_report(collect_sentry_transactions(ref, 1),
+      assert_sentry_transaction(ref,
         contexts: %{"trace" => %{"op" => "custom_operation", "description" => "custom_operation"}}
       )
     end
