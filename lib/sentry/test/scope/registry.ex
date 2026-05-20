@@ -7,12 +7,19 @@ defmodule Sentry.Test.Scope.Registry do
   #
   #   * `{:sentry_test_scope, owner_pid} -> %Scope{}` in `:persistent_term` —
   #     one entry per active test scope, owns its overrides.
-  #   * `:sentry_test_scope_allows` ETS table (named, public, set) —
-  #     reverse index `{allowed_pid, owner_pid}` mapping each
-  #     explicitly-routed pid back to the scope that claimed it.
-  #     Owned by `Sentry.Test.Registry`. Direct ETS reads on the config
+  #   * `:sentry_test_pid_routing` ETS table (named, public, set) —
+  #     single merged routing table owned by `Sentry.Test.Registry`.
+  #     Rows are 3-tuples
+  #     `{allowed_pid, owner_pid_or_nil, processor_name_or_nil}`: the
+  #     owner field is the reverse index mapping each explicitly-routed
+  #     pid back to the scope that claimed it (read here via
+  #     `lookup_allow_owner/1`); the processor field routes buffered
+  #     events (logs, metrics) from that pid to a per-test
+  #     `Sentry.TelemetryProcessor`. Direct ETS reads on the config
   #     read path; conflict-checked writes serialize through that
-  #     GenServer for atomic check-and-insert.
+  #     GenServer for atomic check-and-insert. Owner exit is handled by
+  #     that GenServer's `:DOWN` monitor (routing-row prune +
+  #     `handle_owner_down/1`), not `ExUnit.Callbacks.on_exit/1`.
   #   * `@counter_key -> :counters.t()` — atomic counter for cheap
   #     "any active scopes?" short-circuits, so config reads in
   #     production cost essentially nothing.
@@ -29,8 +36,11 @@ defmodule Sentry.Test.Scope.Registry do
   #                     GenServers started via `start_supervised/1`).
   #   3. by_allow     — walk `[pid | ancestors]`; reverse-allow lookup
   #                     for each candidate (the pid was explicitly
-  #                     routed onto a scope via `allow/2` or
-  #                     auto-allowed in `Config.put/1`).
+  #                     routed onto a scope via
+  #                     `Sentry.Test.allow_sentry_reports/2` /
+  #                     `Sentry.Test.Config.allow/2`, or auto-allowed in
+  #                     `Sentry.Test.Config.put/1` — all of which claim
+  #                     through `Sentry.Test.Registry.claim_allow/3`).
   #
   # Globally-supervised processes (`:logger`, `:logger_sup`,
   # `Sentry.Supervisor`) have no caller/ancestor link to any test and
@@ -81,8 +91,9 @@ defmodule Sentry.Test.Scope.Registry do
 
   @doc """
   Atomically updates the scope owned by `owner_pid`, creating a new
-  scope on first call and registering cleanup via
-  `ExUnit.Callbacks.on_exit/1`.
+  scope on first call and asking `Sentry.Test.Registry` to monitor
+  the owner pid so cleanup runs from the registry's `:DOWN` handler
+  when the owner exits.
 
   Not concurrency-safe across processes — each test only mutates its
   own scope from its own process, so in practice there is no
@@ -98,7 +109,7 @@ defmodule Sentry.Test.Scope.Registry do
         :error ->
           new_scope = Scope.new(owner_pid)
           bump_counter()
-          register_cleanup(owner_pid)
+          TestRegistry.monitor_owner(owner_pid)
           new_scope
       end
 
@@ -156,14 +167,22 @@ defmodule Sentry.Test.Scope.Registry do
     end
   end
 
-  @spec unregister(pid()) :: :ok
-  def unregister(owner_pid) when is_pid(owner_pid) do
+  @doc """
+  Scope-state half of owner cleanup. Erases the persistent_term scope
+  entry and decrements the active-scope counter. Called from
+  `Sentry.Test.Registry`'s `:DOWN` handler — the routing-table half
+  is pruned there, atomically with monitor-map removal.
+
+  Idempotent: only decrements the counter when the entry was actually
+  present, so duplicate DOWNs cannot drive it negative.
+  """
+  @spec handle_owner_down(pid()) :: :ok
+  def handle_owner_down(owner_pid) when is_pid(owner_pid) do
     case :persistent_term.get({@scope_key, owner_pid}, :__not_set__) do
       :__not_set__ ->
         :ok
 
       %Scope{} ->
-        TestRegistry.drop_allows_for(owner_pid)
         :persistent_term.erase({@scope_key, owner_pid})
         decrement_counter()
         :ok
@@ -308,15 +327,6 @@ defmodule Sentry.Test.Scope.Registry do
       nil -> :ok
       ref -> :counters.sub(ref, 1, 1)
     end
-  end
-
-  defp register_cleanup(owner_pid) do
-    ExUnit.Callbacks.on_exit(fn -> unregister(owner_pid) end)
-  rescue
-    # `on_exit/1` raises outside an ExUnit test process; in that case the
-    # caller is responsible for cleanup (or the scope simply lives until the
-    # owner process dies and `list_active/0` filters it out via `Process.alive?`).
-    _ -> :ok
   end
 
   defp collect_ancestors(_pid, 0, _seen), do: []

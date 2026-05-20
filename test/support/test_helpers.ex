@@ -79,7 +79,10 @@ defmodule Sentry.TestHelpers do
     end)
 
     config =
-      [dsn: "http://public:secret@localhost:#{bypass.port}/1", finch_request_opts: [receive_timeout: 2000]]
+      [
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        finch_request_opts: [receive_timeout: 2000]
+      ]
       |> Keyword.merge(extra_config)
 
     put_test_config(config)
@@ -110,4 +113,33 @@ defmodule Sentry.TestHelpers do
 
   def collect_envelopes(ref, expected_count, opts \\ []),
     do: Sentry.Test.collect_envelopes(ref, expected_count, opts)
+
+  @doc """
+  Polls `condition_fn` until it returns a truthy value or `timeout`
+  (default 1000ms) elapses, using exponential backoff (1ms, doubling,
+  capped at 50ms).
+
+  Returns `true` when the condition became truthy, `false` on timeout.
+  Use this to wait on asynchronous state (e.g. a GenServer processing a
+  `:DOWN`, a buffer draining) instead of a fixed `Process.sleep/1`.
+  """
+  @spec wait_until((-> as_boolean(term())), timeout()) :: boolean()
+  def wait_until(condition_fn, timeout \\ 1000) when is_function(condition_fn, 0) do
+    end_time = System.monotonic_time(:millisecond) + timeout
+    wait_until_loop(condition_fn, end_time, 1)
+  end
+
+  defp wait_until_loop(condition_fn, end_time, sleep_time) do
+    cond do
+      condition_fn.() ->
+        true
+
+      System.monotonic_time(:millisecond) >= end_time ->
+        false
+
+      true ->
+        Process.sleep(sleep_time)
+        wait_until_loop(condition_fn, end_time, min(sleep_time * 2, 50))
+    end
+  end
 end

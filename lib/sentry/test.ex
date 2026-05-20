@@ -56,7 +56,6 @@ defmodule Sentry.Test do
   @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership]}
 
   @ownership_server Sentry.Test.OwnershipServer
-  @collector_key :sentry_test_collector
 
   # Public API
 
@@ -163,26 +162,35 @@ defmodule Sentry.Test do
   def setup_telemetry_processor do
     case Process.get(:sentry_telemetry_processor) do
       name when is_atom(name) and not is_nil(name) ->
-        if processor_alive?(name), do: name, else: do_setup_telemetry_processor()
+        if processor_alive?(name), do: name, else: start_telemetry_processor()
 
       _ ->
-        do_setup_telemetry_processor()
+        start_telemetry_processor()
     end
   end
 
-  defp do_setup_telemetry_processor do
+  defp start_telemetry_processor do
     uid = System.unique_integer([:positive])
     processor_name = :"test_telemetry_processor_#{uid}"
 
     ExUnit.Callbacks.start_supervised!(
-      {Sentry.TelemetryProcessor, name: processor_name},
+      {Sentry.TelemetryProcessor,
+       name: processor_name, processor_resolver: &Sentry.Test.Registry.lookup_processor_for/1},
       id: processor_name
     )
 
-    scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
-    Sentry.Test.Config.allow(self(), scheduler_pid)
-
     Process.put(:sentry_telemetry_processor, processor_name)
+
+    scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
+
+    if scheduler_pid do
+      # Goes through the unified `:sentry_test_scope` key, which also
+      # populates the merged routing ETS row so `Config.namespace/1`
+      # resolves the scheduler pid back to this test's scope.
+      Sentry.Test.Registry.claim_allow(self(), scheduler_pid, :soft)
+      tag_processor_for_allowed_pid(self(), scheduler_pid)
+    end
+
     processor_name
   end
 
@@ -221,8 +229,7 @@ defmodule Sentry.Test do
 
   > #### Deprecated {: .warning}
   >
-  > This function is deprecated and will be removed in v13.0.0.
-  > Use `setup_sentry/1` or `start_collecting_sentry_reports/0` instead.
+  > This function is deprecated and will be removed in v14.0.0. Use `setup_sentry/1` instead.
 
   The `:owner`, `:cleanup`, and `:key` options are no longer supported and are ignored.
   """
@@ -243,11 +250,11 @@ defmodule Sentry.Test do
 
   > #### Deprecated {: .warning}
   >
-  > This function is deprecated and will be removed in v13.0.0.
-  > Cleanup is now handled automatically via `on_exit` callbacks.
+  > This function is deprecated and will be removed in v14.0.0.
+  > Cleanup is now handled automatically when the owning test process exits.
   """
   @doc since: "10.2.0"
-  @doc deprecated: "Cleanup is now automatic via on_exit callbacks"
+  @doc deprecated: "Cleanup is now automatic when the owning test process exits"
   @spec cleanup(pid()) :: :ok
   def cleanup(owner_pid) when is_pid(owner_pid) do
     :ok
@@ -297,38 +304,44 @@ defmodule Sentry.Test do
     ensure_nimble_ownership_loaded!()
     allowed_pid = resolve_allowed_pid(pid_or_fun)
 
-    case NimbleOwnership.allow(@ownership_server, owner_pid, allowed_pid, @collector_key) do
+    unless owner_collecting?(owner_pid) do
+      raise ArgumentError,
+            "owner #{inspect(owner_pid)} is not collecting Sentry reports; " <>
+              "call Sentry.Test.setup_sentry/1 or " <>
+              "Sentry.Test.start_collecting_sentry_reports/0 first"
+    end
+
+    # Single orchestrator call: claims `allowed_pid` for `owner_pid` via
+    # NimbleOwnership against the unified `:sentry_test_scope` key (which
+    # also gates the collector callback) and writes the merged routing
+    # row. After it succeeds, tag the per-test processor for buffered
+    # event routing — the row is already present so this is a cheap
+    # `:ets.update_element/3`.
+    case Sentry.Test.Registry.claim_allow(owner_pid, allowed_pid, :strict) do
       :ok ->
-        # Also route per-test config overrides (DSN, before_send hooks,
-        # the internal collector callback, etc.) through the owner's
-        # scope so that Sentry callbacks invoked from `allowed_pid`
-        # resolve to the same configuration the test set up.
-        Sentry.Test.Config.allow(owner_pid, allowed_pid)
+        tag_processor_for_allowed_pid(owner_pid, allowed_pid)
         :ok
 
-      {:error, %{reason: {:already_allowed, ^owner_pid}}} ->
-        # Idempotent re-allow under the same owner.
-        Sentry.Test.Config.allow(owner_pid, allowed_pid)
-        :ok
-
-      {:error, %{reason: {:already_allowed, existing_owner}}} ->
-        raise ArgumentError,
-              "cannot allow #{inspect(allowed_pid)} for #{inspect(owner_pid)}: " <>
-                "already allowed by another live test scope " <>
-                "(owner: #{inspect(existing_owner)})"
-
-      {:error, %{reason: :not_allowed}} ->
-        raise ArgumentError,
-              "owner #{inspect(owner_pid)} is not collecting Sentry reports; " <>
-                "call Sentry.Test.setup_sentry/1 or " <>
-                "Sentry.Test.start_collecting_sentry_reports/0 first"
-
-      {:error, %{reason: :already_an_owner}} ->
+      {:error, {:taken, ^allowed_pid}} ->
         raise ArgumentError,
               "cannot allow #{inspect(allowed_pid)} for #{inspect(owner_pid)}: " <>
                 "#{inspect(allowed_pid)} is already collecting Sentry reports " <>
                 "itself (called setup_sentry/1 or start_collecting_sentry_reports/0)"
+
+      {:error, {:taken, existing_owner}} ->
+        raise ArgumentError,
+              "cannot allow #{inspect(allowed_pid)} for #{inspect(owner_pid)}: " <>
+                "already allowed by another live test scope " <>
+                "(owner: #{inspect(existing_owner)})"
     end
+  end
+
+  defp owner_collecting?(owner_pid) do
+    # A scope is "collecting" only when it has a collector table, i.e.
+    # `setup_collector/1` ran for it. A lazy scope (config-only test,
+    # registered by `Sentry.Test.Registry`) has `collector_table: nil`,
+    # so callers get a useful error pointing them at `setup_sentry/1`.
+    not is_nil(Sentry.Test.Registry.collector_table_for(owner_pid))
   end
 
   defp resolve_allowed_pid(pid) when is_pid(pid), do: pid
@@ -342,6 +355,42 @@ defmodule Sentry.Test do
         raise ArgumentError,
               "expected the function passed to allow_sentry_reports/2 to return a pid, " <>
                 "got: #{inspect(other)}"
+    end
+  end
+
+  # Routes buffered events (logs, metrics) emitted from an allowed
+  # pid to the owning test's per-test TelemetryProcessor rather than
+  # the global one. Without this, the buffered pipeline invokes the
+  # test's collecting callback in the global scheduler pid — which
+  # is not in the test's NimbleOwnership allow chain — and the
+  # callback drops the event.
+  #
+  # The owner's processor name is looked up from its process
+  # dictionary; tests set it in `setup_telemetry_processor/0`. If the
+  # owner has no per-test processor (e.g. legacy
+  # `start_collecting/1` without `setup_telemetry_processor/0`), the
+  # tag is skipped and the buffered event still falls back to the
+  # global processor — the same behaviour as before this change.
+  defp tag_processor_for_allowed_pid(owner_pid, allowed_pid) do
+    case fetch_owner_processor(owner_pid) do
+      nil ->
+        :ok
+
+      processor_name ->
+        Sentry.Test.Registry.tag_processor_for(allowed_pid, processor_name)
+    end
+  end
+
+  defp fetch_owner_processor(owner_pid) do
+    case Process.info(owner_pid, :dictionary) do
+      {:dictionary, dict} ->
+        case Keyword.get(dict, :sentry_telemetry_processor) do
+          name when is_atom(name) and not is_nil(name) -> name
+          _ -> nil
+        end
+
+      nil ->
+        nil
     end
   end
 
@@ -737,16 +786,16 @@ defmodule Sentry.Test do
     collector_table = :"sentry_test_collector_#{uid}"
     :ets.new(collector_table, [:ordered_set, :public, :named_table])
 
-    # Register this test as the NimbleOwnership owner of the collector key,
-    # with the collector ETS table as its metadata. NimbleOwnership monitors
-    # the owner pid and auto-cleans the key + every transitive allowance
-    # when the test process exits.
+    # Register this test as the NimbleOwnership owner of the scope key,
+    # with the canonical collecting metadata (`%{collector_table: table}`)
+    # as its value. NimbleOwnership monitors the owner pid and auto-cleans
+    # the key + every transitive allowance when the test process exits.
     {:ok, _} =
       NimbleOwnership.get_and_update(
         @ownership_server,
         self(),
-        @collector_key,
-        fn _prev -> {:ok, collector_table} end
+        Sentry.Test.Registry.scope_key(),
+        fn _prev -> {:ok, Sentry.Test.Registry.collector_metadata(collector_table)} end
       )
 
     # Store in process dict for pop_* lookups
@@ -773,26 +822,36 @@ defmodule Sentry.Test do
     # :before_send_metric in `Sentry.Config` based on DSN value: when DSN is
     # `nil`, only these collecting callbacks run; when DSN is set, the user's
     # callback runs first and its result is collected.
-    collector = build_collecting_callback()
+    collector = build_collecting_callback(self())
     Sentry.Test.Config.put_override(:_internal_before_send, collector)
     Sentry.Test.Config.put_override(:_internal_before_send_log, collector)
     Sentry.Test.Config.put_override(:_internal_before_send_metric, collector)
 
     # The TelemetryProcessor's scheduler is not in `$callers` of this test —
     # allow it explicitly so log/metric events routed through the buffered
-    # pipeline can find this test's collector.
+    # pipeline can find this test's collector. Routes through the orchestrator
+    # so the merged routing row is updated alongside the NimbleOwnership claim.
     scheduler_pid = get_scheduler_pid()
 
     if scheduler_pid do
-      :ok =
-        NimbleOwnership.allow(@ownership_server, self(), scheduler_pid, @collector_key)
+      Sentry.Test.Registry.claim_allow(self(), scheduler_pid, :soft)
+      tag_processor_for_allowed_pid(self(), scheduler_pid)
     end
 
     # Register cleanup for the collector ETS table only. NimbleOwnership
     # cleans up the key and allowances automatically when this test exits.
+    # Drop any worker→processor routing rows that point at this test's
+    # processor so a test that exits before its allowed pids do not
+    # leave stale rows pointing at a stopped per-test processor.
+    processor_name = Process.get(:sentry_telemetry_processor)
+
     ExUnit.Callbacks.on_exit(fn ->
       if :ets.whereis(collector_table) != :undefined do
         :ets.delete(collector_table)
+      end
+
+      if is_atom(processor_name) and not is_nil(processor_name) do
+        Sentry.Test.Registry.drop_processor_routing_for(processor_name)
       end
     end)
 
@@ -811,32 +870,40 @@ defmodule Sentry.Test do
     :exit, _ -> nil
   end
 
-  defp find_collector do
-    pids = [self() | Process.get(:"$callers", [])]
-
-    case NimbleOwnership.fetch_owner(@ownership_server, pids, @collector_key) do
-      {:ok, owner_pid} ->
-        @ownership_server
-        |> NimbleOwnership.get_owned(owner_pid, %{})
-        |> Map.get(@collector_key)
-
-      :error ->
-        nil
-    end
-  end
-
-  # Standalone collecting callback. Records the struct in this test's
-  # collector ETS table when one is registered for the calling process (or any
-  # of its callers), then returns the struct unchanged so it flows through any
-  # remaining pipeline stages.
-  defp build_collecting_callback do
+  # Standalone collecting callback. Records the struct in the owning
+  # test's collector ETS table, then returns the struct unchanged so it
+  # flows through any remaining pipeline stages.
+  #
+  # The owner pid is captured in the closure at install time so the
+  # callback always routes to the test that installed it, regardless of
+  # which process invokes it (the test pid, an allowed worker pid, the
+  # per-test scheduler pid, or the global TelemetryProcessor scheduler
+  # pid).
+  #
+  # Membership is still enforced via NimbleOwnership: the calling pid
+  # (or any of its `$callers`) must be in `owner_pid`'s allow chain for
+  # the collector key. This preserves the pre-existing safety check
+  # that processes outside the test's allow set never have their
+  # events collected.
+  defp build_collecting_callback(owner_pid) do
     fn struct ->
-      case find_collector() do
-        nil -> :ok
-        table -> collect_struct(table, struct)
+      with true <- Process.alive?(owner_pid),
+           true <- caller_allowed_for?(owner_pid),
+           table when not is_nil(table) <-
+             Sentry.Test.Registry.collector_table_for(owner_pid) do
+        collect_struct(table, struct)
       end
 
       struct
+    end
+  end
+
+  defp caller_allowed_for?(owner_pid) do
+    pids = [self() | Process.get(:"$callers", [])]
+
+    case NimbleOwnership.fetch_owner(@ownership_server, pids, Sentry.Test.Registry.scope_key()) do
+      {:ok, ^owner_pid} -> true
+      _ -> false
     end
   end
 
