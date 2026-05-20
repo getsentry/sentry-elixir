@@ -129,6 +129,14 @@ defmodule SentryTest.Endpoint do
   plug SentryTest.Router
 end
 
+defmodule SentryTest.EndpointNoUri do
+  use Phoenix.Endpoint, otp_app: :sentry
+
+  socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [:peer_data, :user_agent]]
+
+  plug SentryTest.Router
+end
+
 defmodule Sentry.LiveViewHookTest do
   use Sentry.Case, async: false
 
@@ -314,6 +322,66 @@ defmodule Sentry.LiveViewHookTest do
                "other" => "not-redacted"
              }
            }
+  end
+
+  defp get_sentry_context(view) do
+    {:dictionary, pdict} = Process.info(view.pid, :dictionary)
+
+    assert {:ok, sentry_context} =
+             pdict
+             |> Keyword.fetch!(:"$logger_metadata$")
+             |> Map.fetch(Sentry.Context.__logger_metadata_key__())
+
+    sentry_context
+  end
+end
+
+defmodule Sentry.LiveViewHookNoUriTest do
+  use Sentry.Case, async: false
+
+  import ExUnit.CaptureLog
+  import Phoenix.ConnTest
+  import Phoenix.LiveViewTest
+
+  @endpoint SentryTest.EndpointNoUri
+
+  setup_all do
+    Application.put_env(:sentry, SentryTest.EndpointNoUri,
+      secret_key_base: "TMnue44VMTf1VmyD6SYKR30cqKpHluHOFZGXcVkC33hKVVKTVZ1HBQLLLLLLLLLL",
+      live_view: [signing_salt: "F8ftIAbYdeTzhwgl"]
+    )
+
+    pid = start_supervised!(SentryTest.EndpointNoUri)
+    Process.link(pid)
+    :ok
+  end
+
+  setup do
+    %{conn: build_conn()}
+  end
+
+  test "stores string URL when :uri is not in connect_info", %{conn: conn} do
+    conn = Plug.Conn.put_req_header(conn, "user-agent", "sentry-testing 1.0")
+
+    {:ok, view, html} = live(conn, "/hook_test")
+    assert html =~ "<h1>Testing Sentry hooks</h1>"
+
+    context = get_sentry_context(view)
+
+    assert is_binary(context.request.url)
+    assert context.request.url == "http://www.example.com/hook_test"
+    assert context.extra.user_agent == "sentry-testing 1.0"
+  end
+
+  test "does not log a Sentry error when connect_info is unavailable", %{conn: conn} do
+    conn = Plug.Conn.put_req_header(conn, "user-agent", "sentry-testing 1.0")
+
+    logs =
+      capture_log(fn ->
+        {:ok, _view, _html} = live(conn, "/hook_test")
+      end)
+
+    refute logs =~ "Sentry.LiveView.on_mount hook errored out"
   end
 
   defp get_sentry_context(view) do
