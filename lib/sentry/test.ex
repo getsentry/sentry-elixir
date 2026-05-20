@@ -964,6 +964,17 @@ defmodule Sentry.Test do
     end
   end
 
+  # The collector runs in `before_send`, which executes before
+  # `Sentry.Client` calls `maybe_dedupe/1`.
+  #
+  # This will go away in 14.0.0 along with the full switch to
+  # Telemetry Processor and simplified testing infra.
+  defp collect_struct(table, %Sentry.Event{} = event) do
+    unless Sentry.Config.dedup_events?() and Sentry.Dedupe.member?(event) do
+      :ets.insert(table, {System.unique_integer([:monotonic]), event})
+    end
+  end
+
   defp collect_struct(table, struct) do
     :ets.insert(table, {System.unique_integer([:monotonic]), struct})
   end
