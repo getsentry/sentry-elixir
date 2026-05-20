@@ -248,6 +248,77 @@ defmodule Sentry.Test.Assertions do
   end
 
   @doc """
+  Asserts that exactly one transaction envelope is collected via `ref` and
+  matches the given `criteria`.
+
+  This is shorthand for:
+
+      assert_sentry_report(collect_sentry_transactions(ref, 1), criteria)
+
+  Reserved option in `criteria`:
+
+    * `:timeout` — ms to wait for the envelope (default: `#{1000}`)
+
+  Use with a collector created via
+  `Sentry.Test.setup_sentry(collect_envelopes: true)`.
+
+  Returns the matched transaction map.
+
+  ## Examples
+
+      test "GET /transaction", %{conn: conn, ref: ref} do
+        get(conn, ~p"/transaction")
+
+        assert_sentry_transaction(ref,
+          transaction: "test_span",
+          contexts: %{trace: %{op: "test_span"}}
+        )
+      end
+
+  """
+  @doc since: "13.0.2"
+  @spec assert_sentry_transaction(reference(), keyword()) :: map()
+  def assert_sentry_transaction(ref, criteria \\ []) when is_reference(ref) do
+    {timeout, criteria} = Keyword.pop(criteria, :timeout, @default_timeout)
+    transactions = Sentry.Test.collect_sentry_transactions(ref, 1, timeout: timeout)
+    tx = unwrap_single!(transactions, "transaction", timeout)
+    assert_fields!(tx, criteria, "transaction")
+    tx
+  end
+
+  @doc """
+  Collects up to `:count` transaction envelopes via `ref` and returns the
+  first one matching `criteria`. Raises if no transaction matches.
+
+  This is shorthand for:
+
+      find_sentry_report!(collect_sentry_transactions(ref, count, timeout: timeout), criteria)
+
+  Reserved options in `criteria`:
+
+    * `:count`   — max number of envelopes to collect (default: `1`)
+    * `:timeout` — ms to wait for each envelope (default: `#{1000}`)
+
+  ## Examples
+
+      find_sentry_transaction!(ref,
+        count: 10,
+        timeout: 2000,
+        transaction: "PhoenixAppWeb.UserLive.Index.handle_event#save",
+        contexts: %{trace: %{origin: "opentelemetry_phoenix"}}
+      )
+
+  """
+  @doc since: "13.0.2"
+  @spec find_sentry_transaction!(reference(), keyword()) :: map()
+  def find_sentry_transaction!(ref, criteria) when is_reference(ref) do
+    {count, criteria} = Keyword.pop(criteria, :count, 1)
+    {timeout, criteria} = Keyword.pop(criteria, :timeout, @default_timeout)
+    transactions = Sentry.Test.collect_sentry_transactions(ref, count, timeout: timeout)
+    find_item!(transactions, criteria, "transaction")
+  end
+
+  @doc """
   Asserts that **no** Sentry check-in envelope reaches the Bypass envelope
   collector identified by `ref` within `timeout` ms (default
   `#{@refute_timeout}`).
