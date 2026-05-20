@@ -2,6 +2,7 @@ defmodule PhoenixAppWeb.UserLiveTest do
   use PhoenixAppWeb.ConnCase, async: false
 
   import Sentry.TestHelpers
+  import Sentry.Test.Assertions
   import Phoenix.LiveViewTest
   import PhoenixApp.AccountsFixtures
 
@@ -10,7 +11,7 @@ defmodule PhoenixAppWeb.UserLiveTest do
   @invalid_attrs %{name: nil, age: nil}
 
   setup do
-    setup_bypass(traces_sample_rate: 1.0)
+    Sentry.Test.setup_sentry(collect_envelopes: true, traces_sample_rate: 1.0)
   end
 
   defp create_user(_) do
@@ -28,9 +29,7 @@ defmodule PhoenixAppWeb.UserLiveTest do
       assert html =~ user.name
     end
 
-    test "saves new user", %{conn: conn, bypass: bypass} do
-      ref = setup_bypass_envelope_collector(bypass)
-
+    test "saves new user", %{conn: conn, ref: ref} do
       {:ok, index_live, _html} = live(conn, ~p"/users")
 
       assert index_live |> element("a", "New User") |> render_click() =~
@@ -52,21 +51,19 @@ defmodule PhoenixAppWeb.UserLiveTest do
       assert html =~ "User created successfully"
       assert html =~ "some name"
 
-      transactions = collect_envelopes(ref, 10, timeout: 2000) |> extract_transactions()
-
       transaction_save =
-        Enum.find(transactions, fn tx ->
-          tx["transaction"] == "PhoenixAppWeb.UserLive.Index.handle_event#save"
-        end)
-
-      assert transaction_save != nil
-      assert transaction_save["transaction"] == "PhoenixAppWeb.UserLive.Index.handle_event#save"
-      assert transaction_save["transaction_info"]["source"] == "custom"
-
-      assert transaction_save["contexts"]["trace"]["op"] ==
-               "PhoenixAppWeb.UserLive.Index.handle_event#save"
-
-      assert transaction_save["contexts"]["trace"]["origin"] == "opentelemetry_phoenix"
+        find_sentry_transaction!(ref,
+          count: 10,
+          timeout: 2000,
+          transaction: "PhoenixAppWeb.UserLive.Index.handle_event#save",
+          transaction_info: %{"source" => "custom"},
+          contexts: %{
+            trace: %{
+              op: "PhoenixAppWeb.UserLive.Index.handle_event#save",
+              origin: "opentelemetry_phoenix"
+            }
+          }
+        )
 
       assert length(transaction_save["spans"]) == 1
       assert [span] = transaction_save["spans"]
