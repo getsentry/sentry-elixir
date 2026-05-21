@@ -276,7 +276,7 @@ defmodule Sentry.Test.Assertions do
       end
 
   """
-  @doc since: "13.0.2"
+  @doc since: "13.1.0"
   @spec assert_sentry_transaction(reference(), keyword()) :: map()
   def assert_sentry_transaction(ref, criteria \\ []) when is_reference(ref) do
     {timeout, criteria} = Keyword.pop(criteria, :timeout, @default_timeout)
@@ -309,7 +309,7 @@ defmodule Sentry.Test.Assertions do
       )
 
   """
-  @doc since: "13.0.2"
+  @doc since: "13.1.0"
   @spec find_sentry_transaction!(reference(), keyword()) :: map()
   def find_sentry_transaction!(ref, criteria) when is_reference(ref) do
     {count, criteria} = Keyword.pop(criteria, :count, 1)
@@ -340,7 +340,7 @@ defmodule Sentry.Test.Assertions do
       end
 
   """
-  @doc since: "13.0.2"
+  @doc since: "13.1.0"
   @spec refute_sentry_check_in(reference(), timeout()) :: :ok
   def refute_sentry_check_in(ref, timeout \\ @refute_timeout) when is_reference(ref) do
     maybe_flush(timeout)

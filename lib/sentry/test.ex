@@ -370,7 +370,7 @@ defmodule Sentry.Test do
       end
 
   """
-  @doc since: "13.0.2"
+  @doc since: "13.1.0"
   @spec allow_sentry_reports(pid(), pid() | (-> pid())) :: :ok
   def allow_sentry_reports(owner_pid, pid_or_fun) when is_pid(owner_pid) do
     allowed_pid = resolve_allowed_pid(pid_or_fun)
