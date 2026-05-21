@@ -53,18 +53,21 @@ defmodule Sentry.Scrubber do
   @doc """
   The placeholder string used to replace scrubbed values.
   """
+  @doc since: "13.1.0"
   @spec scrubbed_value() :: String.t()
   def scrubbed_value, do: @scrubbed_value
 
   @doc """
   Returns the default list of sensitive parameter keys.
   """
+  @doc since: "13.1.0"
   @spec default_param_keys() :: [String.t()]
   def default_param_keys, do: @default_scrubbed_param_keys
 
   @doc """
   Returns the default list of sensitive header keys.
   """
+  @doc since: "13.1.0"
   @spec default_header_keys() :: [String.t()]
   def default_header_keys, do: @default_scrubbed_header_keys
 
@@ -80,6 +83,7 @@ defmodule Sentry.Scrubber do
     * `:keys` - the list of sensitive keys to redact. Defaults to
       `default_param_keys/0`.
   """
+  @doc since: "13.1.0"
   @spec scrub_map(map(), [option()]) :: map()
   def scrub_map(map, opts \\ []) when is_map(map) do
     keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
@@ -94,6 +98,7 @@ defmodule Sentry.Scrubber do
 
   See `scrub_map/2`.
   """
+  @doc since: "13.1.0"
   @spec scrub_list(list(), [option()]) :: list()
   def scrub_list(list, opts \\ []) when is_list(list) do
     keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
@@ -111,6 +116,7 @@ defmodule Sentry.Scrubber do
     * `:keys` - the list of sensitive keys to drop. Defaults to
       `default_header_keys/0`.
   """
+  @doc since: "13.1.0"
   @spec drop_keys(map(), [option()]) :: map()
   def drop_keys(map, opts \\ []) when is_map(map) do
     keys = Keyword.get(opts, :keys, @default_scrubbed_header_keys)
@@ -126,6 +132,7 @@ defmodule Sentry.Scrubber do
 
   See `scrub_map/2`.
   """
+  @doc since: "13.1.0"
   @spec scrub_url(String.t(), [option()]) :: String.t()
   def scrub_url(url, opts \\ []) when is_binary(url) do
     case URI.parse(url) do
@@ -148,6 +155,7 @@ defmodule Sentry.Scrubber do
 
   See `scrub_map/2`.
   """
+  @doc since: "13.1.0"
   @spec scrub_query_string(String.t(), [option()]) :: String.t()
   def scrub_query_string(query, opts \\ []) when is_binary(query) do
     keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
