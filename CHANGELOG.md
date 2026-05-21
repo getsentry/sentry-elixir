@@ -1,3 +1,35 @@
+## 13.1.0
+
+### New Features ✨
+
+#### Tests
+
+- More test helpers and features by @solnic in [#1060](https://github.com/getsentry/sentry-elixir/pull/1060)
+- Support async tests with Telemetry Processor by @solnic in [#1055](https://github.com/getsentry/sentry-elixir/pull/1055)
+- Restore manual pid allowance for capturing events by @solnic in [#1053](https://github.com/getsentry/sentry-elixir/pull/1053)
+
+### Bug Fixes 🐛
+
+- (live_view) Scrub sensitive data from LiveView breadcrumbs by @solnic in [#1051](https://github.com/getsentry/sentry-elixir/pull/1051)
+- (live_view_hook) Handle Bandit.TransportError and URI struct in connect_info by @dl-alexandre in [#1062](https://github.com/getsentry/sentry-elixir/pull/1062)
+- (test) Handle deduped events when collecting by @solnic in [#1066](https://github.com/getsentry/sentry-elixir/pull/1066)
+
+### Internal Changes 🔧
+
+#### Deps Dev
+
+- Bump postcss from 8.5.6 to 8.5.14 in /test_integrations/tracing/svelte_mini by @dependabot in [#1061](https://github.com/getsentry/sentry-elixir/pull/1061)
+- Bump svelte from 5.53.6 to 5.55.7 in /test_integrations/tracing/svelte_mini by @dependabot in [#1059](https://github.com/getsentry/sentry-elixir/pull/1059)
+
+#### Other
+
+- (deps) Bump devalue from 5.6.4 to 5.8.1 in /test_integrations/tracing/svelte_mini by @dependabot in [#1058](https://github.com/getsentry/sentry-elixir/pull/1058)
+- (docs) Prep for 13.1.0 by @solnic in [#1067](https://github.com/getsentry/sentry-elixir/pull/1067)
+
+### Other
+
+- refa: extract scrubber by @solnic in [#1050](https://github.com/getsentry/sentry-elixir/pull/1050)
+
 ## 13.0.1
 
 ### Bug Fixes 🐛
