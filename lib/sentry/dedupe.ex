@@ -26,6 +26,12 @@ defmodule Sentry.Dedupe do
     end
   end
 
+  @spec member?(Event.t()) :: boolean()
+  def member?(%Event{} = event) do
+    :ets.whereis(@ets) != :undefined and
+      :ets.lookup(@ets, Event.hash(event)) != []
+  end
+
   ## Callbacks
 
   @impl true

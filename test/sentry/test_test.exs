@@ -3,6 +3,7 @@ defmodule Sentry.TestTest do
 
   require Logger
 
+  import ExUnit.CaptureLog
   import Sentry.Test.Assertions
 
   alias Sentry.Test, as: SentryTest
@@ -534,6 +535,53 @@ defmodule Sentry.TestTest do
       Sentry.TelemetryProcessor.flush(Sentry.TelemetryProcessor)
 
       assert_sentry_log(:warn, "hello from allowed pid")
+    end
+  end
+
+  describe "dedupe logic" do
+    test "duplicate events are not captured by Sentry.Test" do
+      Sentry.Test.setup_sentry(dedup_events: true)
+
+      log =
+        capture_log(fn ->
+          for _ <- 1..10 do
+            Sentry.capture_message("This message should be deduplicated")
+          end
+        end)
+
+      reports = SentryTest.pop_sentry_reports()
+      assert length(reports) == 1
+
+      dropped_count =
+        ~r/Event dropped due to being a duplicate of a previously-captured event\./
+        |> Regex.scan(log)
+        |> length()
+
+      assert dropped_count == 9
+    end
+
+    test "duplicate events are not captured when routed through TelemetryProcessor" do
+      Sentry.Test.setup_sentry(
+        dedup_events: true,
+        telemetry_processor_categories: [:error]
+      )
+
+      log =
+        capture_log(fn ->
+          for _ <- 1..10 do
+            Sentry.capture_message("Same message via TelemetryProcessor", result: :none)
+          end
+        end)
+
+      reports = SentryTest.pop_sentry_reports()
+      assert length(reports) == 1
+
+      dropped_count =
+        ~r/Event dropped due to being a duplicate of a previously-captured event\./
+        |> Regex.scan(log)
+        |> length()
+
+      assert dropped_count == 9
     end
   end
 end

@@ -11,10 +11,9 @@ defmodule Sentry.Test do
 
   > #### Bypass and NimbleOwnership Required {: .info}
   >
-  > This module requires `bypass` and `nimble_ownership` as test dependencies:
+  > This module requires `bypass` as a test dependency:
   >
   >     {:bypass, "~> 2.0", only: [:test]}
-  >     {:nimble_ownership, "~> 1.0", only: [:test]}
 
   ## Examples
 
@@ -53,7 +52,7 @@ defmodule Sentry.Test do
 
   @moduledoc since: "10.2.0"
 
-  @compile {:no_warn_undefined, [Bypass, Plug.Conn, NimbleOwnership]}
+  @compile {:no_warn_undefined, [Bypass, Plug.Conn]}
 
   @ownership_server Sentry.Test.OwnershipServer
 
@@ -133,7 +132,6 @@ defmodule Sentry.Test do
         }
   def setup_sentry(extra_config \\ []) do
     ensure_bypass_loaded!()
-    ensure_nimble_ownership_loaded!()
 
     {tp_opts, extra_config} = Keyword.pop(extra_config, :telemetry_processor, [])
     {collect_envelopes, extra_config} = Keyword.pop(extra_config, :collect_envelopes, false)
@@ -375,7 +373,6 @@ defmodule Sentry.Test do
   @doc since: "13.0.2"
   @spec allow_sentry_reports(pid(), pid() | (-> pid())) :: :ok
   def allow_sentry_reports(owner_pid, pid_or_fun) when is_pid(owner_pid) do
-    ensure_nimble_ownership_loaded!()
     allowed_pid = resolve_allowed_pid(pid_or_fun)
 
     unless owner_collecting?(owner_pid) do
@@ -838,24 +835,10 @@ defmodule Sentry.Test do
     end
   end
 
-  defp ensure_nimble_ownership_loaded! do
-    unless Code.ensure_loaded?(NimbleOwnership) do
-      raise """
-      NimbleOwnership is required for Sentry.Test but is not available.
-
-      Add it to your test dependencies in mix.exs:
-
-          {:nimble_ownership, "~> 1.0", only: [:test]}
-      """
-    end
-  end
-
   # Sets up collection infrastructure (ETS table, before_send wrapping, config)
   # without opening a new Bypass. When no :dsn is provided in extra_config,
   # falls back to the default Bypass DSN from Registry.
   defp setup_collector(extra_config) do
-    ensure_nimble_ownership_loaded!()
-
     uid = System.unique_integer([:positive])
     collector_table = :"sentry_test_collector_#{uid}"
     :ets.new(collector_table, [:ordered_set, :public, :named_table])
@@ -978,6 +961,17 @@ defmodule Sentry.Test do
     case NimbleOwnership.fetch_owner(@ownership_server, pids, Sentry.Test.Registry.scope_key()) do
       {:ok, ^owner_pid} -> true
       _ -> false
+    end
+  end
+
+  # The collector runs in `before_send`, which executes before
+  # `Sentry.Client` calls `maybe_dedupe/1`.
+  #
+  # This will go away in 14.0.0 along with the full switch to
+  # Telemetry Processor and simplified testing infra.
+  defp collect_struct(table, %Sentry.Event{} = event) do
+    unless Sentry.Config.dedup_events?() and Sentry.Dedupe.member?(event) do
+      :ets.insert(table, {System.unique_integer([:monotonic]), event})
     end
   end
 

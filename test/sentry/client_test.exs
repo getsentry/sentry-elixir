@@ -400,10 +400,14 @@ defmodule Sentry.ClientTest do
                "params" => nil
              }
     end
+  end
 
-    test "dedupes events" do
-      put_test_config(dedup_events: true)
+  describe "send_event/2 with dedup_events: true" do
+    setup do
+      Sentry.Test.setup_sentry(dedup_events: true, collect_envelopes: [type: "event"])
+    end
 
+    test "dedupes events", %{ref: ref} do
       {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
 
       events = [
@@ -430,7 +434,10 @@ defmodule Sentry.ClientTest do
           end)
 
         assert log =~ "Event dropped due to being a duplicate of a previously-captured event."
-        find_sentry_report!(SentryTest.pop_sentry_reports(), event_id: event.event_id)
+
+        [sent_event] = collect_sentry_events(ref, 1)
+
+        assert_sentry_report(sent_event, event_id: event.event_id)
       end
     end
   end
