@@ -56,6 +56,22 @@ defmodule Sentry.PlugCaptureTest do
     plug PhoenixRouter
   end
 
+  defmodule CustomBodyScrubber do
+    def scrub(_conn), do: %{"scrubbed_by" => "custom_body_scrubber"}
+  end
+
+  defmodule PhoenixEndpointWithCustomPlugContext do
+    use Sentry.PlugCapture
+    use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
+
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
+    plug Sentry.PlugContext, body_scrubber: {CustomBodyScrubber, :scrub}
+    plug PhoenixRouter
+  end
+
   setup do
     SentryTest.setup_sentry()
   end
@@ -182,6 +198,36 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
       assert exception.value =~ ~s(params: %{"password" => "*********"})
+    end
+
+    test "scrubs Phoenix.ActionClauseError using PlugContext-configured body_scrubber" do
+      Application.put_env(:sentry, PhoenixEndpointWithCustomPlugContext,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithCustomPlugContext)
+      Process.link(pid)
+
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?password=secret")
+        |> Plug.run([{PhoenixEndpointWithCustomPlugContext, []}])
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+      assert exception.type == "Phoenix.ActionClauseError"
+
+      assert exception.value =~ ~s("scrubbed_by" => "custom_body_scrubber"),
+             """
+             expected the embedded conn's params to be scrubbed by the user-configured \
+             body_scrubber from Sentry.PlugContext, but got:
+
+             #{exception.value}
+             """
     end
 
     test "can render feedback form in Phoenix ErrorView" do

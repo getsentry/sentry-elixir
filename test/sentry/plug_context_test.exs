@@ -182,6 +182,35 @@ defmodule Sentry.PlugContextTest do
            }
   end
 
+  describe "scrubber registration" do
+    test "registers a conn scrubber accessible via Sentry.Scrubber.scrub_conn/1", %{conn: conn} do
+      call(conn, [])
+
+      scrubbed =
+        Sentry.Scrubber.scrub_conn(%Plug.Conn{
+          cookies: %{"session" => "secret"},
+          req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+          params: %{"password" => "hunter2", "ok" => "fine"}
+        })
+
+      assert scrubbed.cookies == %{}
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+      assert scrubbed.params == %{"password" => "*********", "ok" => "fine"}
+    end
+
+    test "honors a custom body_scrubber when scrub_conn/1 is called downstream",
+         %{conn: conn} do
+      call(conn, body_scrubber: {__MODULE__, :body_scrubber})
+
+      scrubbed =
+        Sentry.Scrubber.scrub_conn(%Plug.Conn{
+          params: %{"foo" => "kept", "bar" => "dropped"}
+        })
+
+      assert scrubbed.params == %{"foo" => "kept"}
+    end
+  end
+
   defp call(conn, opts) do
     Plug.run(conn, [{Sentry.PlugContext, opts}])
   end

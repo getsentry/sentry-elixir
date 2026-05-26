@@ -80,4 +80,91 @@ defmodule Sentry.ScrubberTest do
       assert scrubbed =~ "visible=ok"
     end
   end
+
+  describe "scrub_conn/1 with no registered scrubber" do
+    setup do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret-session"},
+        req_headers: [
+          {"Authorization", "Bearer secret-token"},
+          {"cookie", "session=secret-session"},
+          {"x-request-id", "abc-123"}
+        ],
+        params: %{"password" => "hunter2", "name" => "Alice"}
+      }
+
+      %{conn: conn, scrubbed: Scrubber.scrub_conn(conn)}
+    end
+
+    test "clears cookies", %{scrubbed: scrubbed} do
+      assert scrubbed.cookies == %{}
+    end
+
+    test "drops sensitive req_headers case-insensitively and keeps list shape",
+         %{scrubbed: scrubbed} do
+      assert scrubbed.req_headers == [{"x-request-id", "abc-123"}]
+      assert is_list(scrubbed.req_headers)
+    end
+
+    test "scrubs params", %{scrubbed: scrubbed} do
+      assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
+    end
+
+    test "returns a %Plug.Conn{} struct", %{scrubbed: scrubbed} do
+      assert is_struct(scrubbed, Plug.Conn)
+    end
+  end
+
+  describe "put_conn_scrubber/1 + scrub_conn/1" do
+    defmodule MarkerScrubber do
+      def stamp(conn, marker) do
+        %{conn | params: %{"marker" => marker}}
+      end
+    end
+
+    test "registered MFA scrubber wins over the default" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+
+      :ok = Scrubber.put_conn_scrubber({MarkerScrubber, :stamp, ["registered"]})
+
+      scrubbed = Scrubber.scrub_conn(conn)
+      assert scrubbed.params == %{"marker" => "registered"}
+    end
+
+    test "registration is process-local" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+
+      task =
+        Task.async(fn ->
+          :ok = Scrubber.put_conn_scrubber({MarkerScrubber, :stamp, ["task-only"]})
+          Scrubber.scrub_conn(conn)
+        end)
+
+      task_result = Task.await(task)
+      assert task_result.params == %{"marker" => "task-only"}
+
+      # The current process never registered a scrubber, so it falls back to the default.
+      scrubbed = Scrubber.scrub_conn(conn)
+      assert scrubbed.params == %{"password" => "*********"}
+    end
+
+    test "raises when the registered scrubber returns a non-Plug.Conn" do
+      defmodule BrokenScrubber do
+        def scrub(_conn), do: :not_a_conn
+      end
+
+      conn = %Plug.Conn{}
+      :ok = Scrubber.put_conn_scrubber({BrokenScrubber, :scrub, []})
+
+      assert_raise RuntimeError, ~r/expected.*to return a Plug.Conn/, fn ->
+        Scrubber.scrub_conn(conn)
+      end
+    end
+
+    test "validates the MFA shape on put" do
+      assert_raise FunctionClauseError, fn ->
+        Scrubber.put_conn_scrubber({"not", "an", "mfa"})
+      end
+    end
+  end
 end
