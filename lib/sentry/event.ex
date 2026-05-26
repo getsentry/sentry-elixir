@@ -469,7 +469,7 @@ defmodule Sentry.Event do
     inspect_opts = [printable_limit: max_length, limit: max(div(max_length, 3), 1)]
 
     for {arg, index} <- Enum.with_index(args), into: %{} do
-      {"arg#{index}", String.slice(inspect(arg, inspect_opts), 0, max_length)}
+      {"arg#{index}", String.slice(inspect(Sentry.Scrubber.scrub(arg), inspect_opts), 0, max_length)}
     end
   end
 

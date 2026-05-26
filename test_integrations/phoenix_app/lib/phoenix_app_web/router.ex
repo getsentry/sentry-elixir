@@ -54,6 +54,7 @@ defmodule PhoenixAppWeb.Router do
 
     get "/error", PageController, :api_error
     get "/health", PageController, :health
+    post "/function-clause-error", PageController, :function_clause_error
     get "/api/data", PageController, :api_data
     post "/api/oban-job", PageController, :api_oban_job
     put "/sentry-test-config", TestConfigController, :update

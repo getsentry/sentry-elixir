@@ -14,6 +14,10 @@ defmodule PhoenixAppWeb.PageController do
     raise "Test exception"
   end
 
+  def function_clause_error(_conn, %{"required" => _value}) do
+    :ok
+  end
+
   def transaction(conn, _params) do
     Tracer.with_span "test_span" do
       :timer.sleep(100)
