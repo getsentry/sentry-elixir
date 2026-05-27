@@ -116,6 +116,34 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       )
     end
 
+    test "reports exits with a non-list stacktrace without crashing" do
+      # When a job dies from a gen-call exit (e.g. a GenServer.call or a
+      # NimblePool/Finch checkout timeout), Oban surfaces the {module, function,
+      # args} from the exit reason in the :stacktrace metadata, which is not a
+      # list. The reporter must not pass that straight to Sentry's :stacktrace
+      # option, since it would crash and get the telemetry handler detached.
+      emit_telemetry_for_failed_job(
+        :exit,
+        {:shutdown, :idle_timeout},
+        {NimblePool, :checkout, [self()]}
+      )
+
+      assert_sentry_report(:event,
+        message: %{
+          message: "Oban job #{@worker_as_string} exited: %s",
+          params: ["{:shutdown, :idle_timeout}"],
+          formatted: "Oban job #{@worker_as_string} exited: {:shutdown, :idle_timeout}"
+        },
+        exception: [],
+        tags: %{
+          "oban_queue" => "default",
+          "oban_state" => "available",
+          "oban_worker" => @worker_as_string
+        },
+        fingerprint: [@worker_as_string, "{{ default }}"]
+      )
+    end
+
     test "reports throws to Sentry" do
       emit_telemetry_for_failed_job(:throw, :this_was_not_caught, [])
 

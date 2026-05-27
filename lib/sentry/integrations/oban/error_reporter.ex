@@ -78,6 +78,13 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   end
 
   defp report(job, kind, reason, stacktrace, config) do
+    # Oban can hand us a non-list "stacktrace" when a job dies from a gen-call
+    # exit (such as a GenServer.call or NimblePool checkout timeout): the value
+    # is the `{module, function, args}` from the exit reason rather than a
+    # stacktrace. Sentry's :stacktrace option only accepts a list, so anything
+    # else would crash this handler (and get it detached). Coerce it away.
+    stacktrace = if is_list(stacktrace), do: stacktrace, else: []
+
     stacktrace =
       case {apply(Oban.Worker, :from_string, [job.worker]), stacktrace} do
         {{:ok, atom_worker}, []} -> [{atom_worker, :process, 1, []}]
