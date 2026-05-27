@@ -147,9 +147,9 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
+      Sentry.Scrubber.put_conn_scrubber({__MODULE__, :scrub_conn, [opts]})
       request = build_request_interface_data(conn, opts)
       Sentry.Context.set_request_context(request)
-      Sentry.Scrubber.put_conn_scrubber({__MODULE__, :scrub_conn, [opts]})
       conn
     end
   end
@@ -158,20 +158,7 @@ defmodule Sentry.PlugContext do
   @default_scrubbed_header_keys Sentry.Scrubber.default_header_keys()
   @default_plug_request_id_header "x-request-id"
 
-  @doc """
-  Scrubs a `%Plug.Conn{}` using this plug's per-field scrubbers.
-
-  Composes the resolved `:body_scrubber`, `:header_scrubber`, and
-  `:cookie_scrubber` from `opts` (falling back to this module's defaults) and
-  applies them to the corresponding fields of `conn`, returning a scrubbed
-  `%Plug.Conn{}`.
-
-  Registered as the active `Sentry.Scrubber` conn scrubber during `call/2` so
-  that downstream conn scrubbing (e.g. `Sentry.PlugCapture` redacting a conn
-  embedded in `Phoenix.ActionClauseError.args`) honors the same configuration
-  the user passed to `plug Sentry.PlugContext`.
-  """
-  @doc since: "13.1.1"
+  @doc false
   @spec scrub_conn(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
   def scrub_conn(conn, opts) when is_struct(conn, Plug.Conn) do
     body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
@@ -192,9 +179,6 @@ defmodule Sentry.PlugContext do
   @doc false
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
   def build_request_interface_data(conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
     url_scrubber = Keyword.get(opts, :url_scrubber, {__MODULE__, :default_url_scrubber})
 
     remote_address_reader =
@@ -206,13 +190,15 @@ defmodule Sentry.PlugContext do
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
 
+    scrubbed = Sentry.Scrubber.scrub_conn(conn)
+
     %{
       url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
       method: conn.method,
-      data: apply_fun_with_conn(conn, body_scrubber, %{}),
+      data: scrubbed.params,
       query_string: conn.query_string,
-      cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
-      headers: apply_fun_with_conn(conn, header_scrubber, %{}),
+      cookies: scrubbed.cookies,
+      headers: Map.new(scrubbed.req_headers),
       env: %{
         "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader, %{}),
         "REMOTE_PORT" => remote_port(conn),
