@@ -24,18 +24,35 @@ defmodule Sentry.Integrations.Phoenix.StacktraceVarsScrubbingTest do
 
     [[{%{"type" => "event"}, event_payload}]] = collect_envelopes(ref, 1, timeout: 2000)
 
-    frame_vars =
-      event_payload
-      |> Map.fetch!("exception")
-      |> hd()
-      |> get_in(["stacktrace", "frames"])
-      |> Enum.flat_map(fn frame -> Map.values(frame["vars"] || %{}) end)
-      |> Enum.join("\n")
+    frame_vars = frame_vars(event_payload)
 
     refute frame_vars =~ @auth_token,
            "auth token leaked into stacktrace frame vars: #{frame_vars}"
 
     refute frame_vars =~ @cookie_value,
            "session cookie leaked into stacktrace frame vars: #{frame_vars}"
+  end
+
+  test "user-provided body_scrubber on PlugContext is applied to conn in stacktrace args",
+       %{conn: conn, ref: ref} do
+    assert_raise Phoenix.ActionClauseError, fn ->
+      post(conn, ~p"/function-clause-error", %{"password" => "secret-input"})
+    end
+
+    [[{%{"type" => "event"}, event_payload}]] = collect_envelopes(ref, 1, timeout: 2000)
+
+    frame_vars = frame_vars(event_payload)
+
+    assert frame_vars =~ "custom-scrub-applied",
+           "user-provided body_scrubber marker missing from frame vars: #{frame_vars}"
+  end
+
+  defp frame_vars(event_payload) do
+    event_payload
+    |> Map.fetch!("exception")
+    |> hd()
+    |> get_in(["stacktrace", "frames"])
+    |> Enum.flat_map(fn frame -> Map.values(frame["vars"] || %{}) end)
+    |> Enum.join("\n")
   end
 end

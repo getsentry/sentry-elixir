@@ -6,6 +6,9 @@ defmodule PhoenixAppWeb.PageController do
 
   alias PhoenixApp.{Repo, Accounts.User}
 
+  plug Sentry.PlugContext,
+       [body_scrubber: {__MODULE__, :marker_body_scrubber}] when action == :function_clause_error
+
   def home(conn, _params) do
     render(conn, :home, layout: false)
   end
@@ -17,6 +20,9 @@ defmodule PhoenixAppWeb.PageController do
   def function_clause_error(_conn, %{"required" => _value}) do
     :ok
   end
+
+  @doc false
+  def marker_body_scrubber(_conn), do: %{"marker" => "custom-scrub-applied"}
 
   def transaction(conn, _params) do
     Tracer.with_span "test_span" do
