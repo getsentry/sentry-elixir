@@ -148,7 +148,7 @@ defmodule Sentry.PlugContext do
     @impl Plug
     def call(conn, opts) do
       Sentry.Scrubber.put_conn_scrubber(
-        Keyword.take(opts, [:body_scrubber, :header_scrubber, :cookie_scrubber])
+        Keyword.take(opts, [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber])
       )
 
       request = build_request_interface_data(conn, opts)
@@ -164,8 +164,6 @@ defmodule Sentry.PlugContext do
   @doc false
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
   def build_request_interface_data(conn, opts) do
-    url_scrubber = Keyword.get(opts, :url_scrubber, {__MODULE__, :default_url_scrubber})
-
     remote_address_reader =
       Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
 
@@ -178,7 +176,7 @@ defmodule Sentry.PlugContext do
     scrubbed = Sentry.Scrubber.scrub_conn(conn)
 
     %{
-      url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
+      url: Sentry.Scrubber.scrub_request_url(conn),
       method: conn.method,
       data: scrubbed.params,
       query_string: conn.query_string,

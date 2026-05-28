@@ -70,7 +70,8 @@ defmodule Sentry.Scrubber do
   @type conn_scrubber_opts :: [
           body_scrubber: field_scrubber(),
           header_scrubber: field_scrubber(),
-          cookie_scrubber: field_scrubber()
+          cookie_scrubber: field_scrubber(),
+          url_scrubber: field_scrubber()
         ]
 
   @doc """
@@ -198,10 +199,10 @@ defmodule Sentry.Scrubber do
   @doc """
   Registers the current process's per-field scrubbers for `%Plug.Conn{}`.
 
-  Accepts the same `:body_scrubber`, `:header_scrubber`, and `:cookie_scrubber`
-  keys that `Sentry.PlugContext` takes as plug options, resolves each missing
-  key to its corresponding `default_*_scrubber/1`, and stores the resolved
-  scrubbers in the process dictionary.
+  Accepts the same `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`,
+  and `:url_scrubber` keys that `Sentry.PlugContext` takes as plug options,
+  resolves each missing key to its corresponding `default_*_scrubber/1`, and
+  stores the resolved scrubbers in the process dictionary.
 
   The registration lives for the lifetime of the calling process — typically
   the request process when registered from `Sentry.PlugContext.call/2`. Used
@@ -222,7 +223,8 @@ defmodule Sentry.Scrubber do
     %{
       body_scrubber: Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber}),
       header_scrubber: Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber}),
-      cookie_scrubber: Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
+      cookie_scrubber: Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber}),
+      url_scrubber: Keyword.get(opts, :url_scrubber, {__MODULE__, :default_url_scrubber})
     }
   end
 
@@ -311,6 +313,42 @@ defmodule Sentry.Scrubber do
   def default_cookie_scrubber(_conn) do
     %{}
   end
+
+  @doc """
+  Default `:url_scrubber` used by `put_conn_scrubber/1` when no override is
+  provided.
+
+  Returns `Plug.Conn.request_url/1` of the given conn, unchanged.
+  """
+  @doc since: "13.1.1"
+  @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
+  def default_url_scrubber(conn) when is_struct(conn, Plug.Conn) do
+    Plug.Conn.request_url(conn)
+  end
+
+  @doc """
+  Returns the request URL for `conn`, scrubbed by the current process's
+  registered `:url_scrubber`.
+
+  When `put_conn_scrubber/1` has been called for this process, applies the
+  resolved url scrubber. Otherwise falls back to `default_url_scrubber/1`,
+  which returns the URL unchanged.
+  """
+  @doc since: "13.1.1"
+  @spec scrub_request_url(Plug.Conn.t()) :: String.t()
+  def scrub_request_url(conn) when is_struct(conn, Plug.Conn) do
+    url_scrubber =
+      case Process.get(@conn_scrubber_pdict_key) do
+        %{url_scrubber: scrubber} -> scrubber
+        nil -> {__MODULE__, :default_url_scrubber}
+      end
+
+    apply_url_scrubber(conn, url_scrubber)
+  end
+
+  defp apply_url_scrubber(conn, nil), do: Plug.Conn.request_url(conn)
+  defp apply_url_scrubber(conn, {mod, fun}), do: apply(mod, fun, [conn])
+  defp apply_url_scrubber(conn, fun) when is_function(fun, 1), do: fun.(conn)
 
   defp apply_field_scrubber(_conn, nil), do: %{}
   defp apply_field_scrubber(conn, {mod, fun}), do: apply(mod, fun, [conn])
