@@ -52,10 +52,26 @@ defmodule Sentry.Scrubber do
   @type option :: {:keys, [String.t()]}
 
   @typedoc """
-  An MFA tuple identifying a function that takes a `%Plug.Conn{}` (as its first
-  argument) and returns a scrubbed `%Plug.Conn{}`.
+  A per-field scrubber identifying how to redact a particular `%Plug.Conn{}`
+  field.
+
+    * a 1-arity function — invoked as `fun.(conn)`
+    * `{module, function}` — invoked as `apply(module, function, [conn])`
+    * `nil` — disables the scrubber; the field is replaced with `%{}`
   """
-  @type conn_scrubber :: {module(), atom(), [term()]}
+  @type field_scrubber ::
+          (Plug.Conn.t() -> term()) | {module(), atom()} | nil
+
+  @typedoc """
+  Options accepted by `put_conn_scrubber/1`.
+
+  Each key, when omitted, falls back to the corresponding `default_*_scrubber/1`.
+  """
+  @type conn_scrubber_opts :: [
+          body_scrubber: field_scrubber(),
+          header_scrubber: field_scrubber(),
+          cookie_scrubber: field_scrubber()
+        ]
 
   @doc """
   The placeholder string used to replace scrubbed values.
@@ -180,47 +196,57 @@ defmodule Sentry.Scrubber do
   end
 
   @doc """
-  Registers the current process's scrubber for `%Plug.Conn{}` structs.
+  Registers the current process's per-field scrubbers for `%Plug.Conn{}`.
 
-  The scrubber is a `{module, function, args}` tuple; it is invoked as
-  `apply(module, function, [conn | args])` and must return a `%Plug.Conn{}`.
-  The registration is stored in the process dictionary, so it lives only for
-  the lifetime of the calling process — typically the request process when
-  registered from `Sentry.PlugContext.call/2`.
+  Accepts the same `:body_scrubber`, `:header_scrubber`, and `:cookie_scrubber`
+  keys that `Sentry.PlugContext` takes as plug options, resolves each missing
+  key to its corresponding `default_*_scrubber/1`, and stores the resolved
+  scrubbers in the process dictionary.
 
-  `Sentry.PlugContext` uses this to expose its user-configured `body_scrubber`,
-  `header_scrubber`, and `cookie_scrubber` to other parts of the SDK (notably
-  `Sentry.PlugCapture`) so all conn scrubbing honors the same configuration.
+  The registration lives for the lifetime of the calling process — typically
+  the request process when registered from `Sentry.PlugContext.call/2`. Used
+  by other parts of the SDK (notably `Sentry.PlugCapture`) so all conn
+  scrubbing honors the same configuration the user passed to
+  `plug Sentry.PlugContext`.
 
   Returns `:ok`.
   """
   @doc since: "13.1.1"
-  @spec put_conn_scrubber(conn_scrubber()) :: :ok
-  def put_conn_scrubber({mod, fun, args})
-      when is_atom(mod) and is_atom(fun) and is_list(args) do
-    Process.put(@conn_scrubber_pdict_key, {mod, fun, args})
+  @spec put_conn_scrubber(conn_scrubber_opts()) :: :ok
+  def put_conn_scrubber(opts) when is_list(opts) do
+    Process.put(@conn_scrubber_pdict_key, resolve_conn_scrubber_opts(opts))
     :ok
   end
 
-  @doc """
-  Scrubs a `%Plug.Conn{}` using the current process's registered scrubber.
+  defp resolve_conn_scrubber_opts(opts) do
+    %{
+      body_scrubber: Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber}),
+      header_scrubber: Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber}),
+      cookie_scrubber: Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
+    }
+  end
 
-  If no scrubber has been registered via `put_conn_scrubber/1`, falls back to a
-  built-in default that clears cookies, drops sensitive request headers, and
-  scrubs `params` via `scrub_map/2`.
+  @doc """
+  Scrubs a `%Plug.Conn{}` using the current process's registered scrubbers.
+
+  When `put_conn_scrubber/1` has been called for this process, applies the
+  resolved body, header, and cookie scrubbers to the corresponding conn
+  fields. Otherwise falls back to `default_conn_scrubber/1`.
   """
   @doc since: "13.1.1"
   @spec scrub_conn(Plug.Conn.t()) :: Plug.Conn.t()
   def scrub_conn(conn) when is_struct(conn, Plug.Conn) do
-    {mod, fun, args} =
-      Process.get(@conn_scrubber_pdict_key, {__MODULE__, :default_conn_scrubber, []})
+    case Process.get(@conn_scrubber_pdict_key) do
+      nil ->
+        default_conn_scrubber(conn)
 
-    case apply(mod, fun, [conn | args]) do
-      %_{} = scrubbed when is_struct(scrubbed, Plug.Conn) ->
-        scrubbed
-
-      other ->
-        raise "expected #{inspect(mod)}.#{fun}/#{length(args) + 1} to return a Plug.Conn, got: #{inspect(other)}"
+      %{body_scrubber: body, header_scrubber: header, cookie_scrubber: cookie} ->
+        %{
+          conn
+          | cookies: apply_field_scrubber(conn, cookie),
+            req_headers: headers_to_list(apply_field_scrubber(conn, header)),
+            params: apply_field_scrubber(conn, body)
+        }
     end
   end
 
@@ -228,8 +254,9 @@ defmodule Sentry.Scrubber do
   Default scrubber for `%Plug.Conn{}` used by `scrub_conn/1` when no
   per-process scrubber is registered.
 
-  Clears `cookies`, drops sensitive `req_headers` (preserving the list shape
-  required by `Plug.Conn`), and scrubs `params` via `scrub_map/2`.
+  Clears `cookies`, drops sensitive `req_headers` case-insensitively
+  (preserving the list shape required by `Plug.Conn`), and scrubs `params`
+  via `scrub_map/2`.
   """
   @doc since: "13.1.1"
   @spec default_conn_scrubber(Plug.Conn.t()) :: Plug.Conn.t()
@@ -242,7 +269,55 @@ defmodule Sentry.Scrubber do
     }
   end
 
-  ## Internal recursion
+  @doc """
+  Default `:body_scrubber` used by `put_conn_scrubber/1` when no override is
+  provided.
+
+  Scrubs `conn.params` via `scrub_map/2`. The default scrubbed keys are:
+
+  #{Enum.map_join(@default_scrubbed_param_keys, "\n", &"  * `\"#{&1}\"`")}
+  """
+  @doc since: "13.1.1"
+  @spec default_body_scrubber(Plug.Conn.t()) :: map()
+  def default_body_scrubber(conn) when is_struct(conn, Plug.Conn) do
+    scrub_map(conn.params)
+  end
+
+  @doc """
+  Default `:header_scrubber` used by `put_conn_scrubber/1` when no override is
+  provided.
+
+  Drops sensitive entries from `conn.req_headers` via `drop_keys/2` after
+  converting to a map. The default scrubbed keys are:
+
+  #{Enum.map_join(@default_scrubbed_header_keys, "\n", &"  * `\"#{&1}\"`")}
+  """
+  @doc since: "13.1.1"
+  @spec default_header_scrubber(Plug.Conn.t()) :: map()
+  def default_header_scrubber(conn) when is_struct(conn, Plug.Conn) do
+    conn.req_headers
+    |> Map.new()
+    |> drop_keys()
+  end
+
+  @doc """
+  Default `:cookie_scrubber` used by `put_conn_scrubber/1` when no override is
+  provided.
+
+  Drops *all* cookies — returns an empty map regardless of input.
+  """
+  @doc since: "13.1.1"
+  @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
+  def default_cookie_scrubber(_conn) do
+    %{}
+  end
+
+  defp apply_field_scrubber(_conn, nil), do: %{}
+  defp apply_field_scrubber(conn, {mod, fun}), do: apply(mod, fun, [conn])
+  defp apply_field_scrubber(conn, fun) when is_function(fun, 1), do: fun.(conn)
+
+  defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
+  defp headers_to_list(headers) when is_list(headers), do: headers
 
   defp drop_sensitive_req_headers(headers) when is_list(headers) do
     Enum.reject(headers, fn
@@ -260,6 +335,8 @@ defmodule Sentry.Scrubber do
     do: do_scrub_map(params, @default_scrubbed_param_keys)
 
   defp scrub_params(other), do: other
+
+  ## Internal recursion
 
   defp do_scrub_map(map, keys) do
     Map.new(map, fn {key, value} -> {key, scrub_value(key, value, keys)} end)

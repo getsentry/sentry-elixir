@@ -147,7 +147,10 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
-      Sentry.Scrubber.put_conn_scrubber({__MODULE__, :scrub_conn, [opts]})
+      Sentry.Scrubber.put_conn_scrubber(
+        Keyword.take(opts, [:body_scrubber, :header_scrubber, :cookie_scrubber])
+      )
+
       request = build_request_interface_data(conn, opts)
       Sentry.Context.set_request_context(request)
       conn
@@ -157,24 +160,6 @@ defmodule Sentry.PlugContext do
   @default_scrubbed_param_keys Sentry.Scrubber.default_param_keys()
   @default_scrubbed_header_keys Sentry.Scrubber.default_header_keys()
   @default_plug_request_id_header "x-request-id"
-
-  @doc false
-  @spec scrub_conn(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
-  def scrub_conn(conn, opts) when is_struct(conn, Plug.Conn) do
-    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
-
-    %{
-      conn
-      | cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
-        req_headers: headers_to_list(apply_fun_with_conn(conn, header_scrubber, %{})),
-        params: apply_fun_with_conn(conn, body_scrubber, %{})
-    }
-  end
-
-  defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
-  defp headers_to_list(headers) when is_list(headers), do: headers
 
   @doc false
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
@@ -269,12 +254,6 @@ defmodule Sentry.PlugContext do
 
   #{Enum.map_join(@default_scrubbed_header_keys, "\n", &"*  `#{&1}`")}
   """
-  # FIXME: returns a map, but `Plug.Conn.req_headers` is typed as a list of
-  # `{name, value}` tuples. Callers that assign the result back into a conn
-  # (rather than into the request-context map) produce a shape-invalid struct.
-  # Consider returning a list of tuples instead. See `scrub_conn/2` and
-  # `Sentry.Scrubber.scrub_conn/1` for the list-shape-preserving paths used in
-  # the meantime.
   @spec default_header_scrubber(Plug.Conn.t()) :: map()
   def default_header_scrubber(conn) do
     conn.req_headers

@@ -116,19 +116,56 @@ defmodule Sentry.ScrubberTest do
   end
 
   describe "put_conn_scrubber/1 + scrub_conn/1" do
-    defmodule MarkerScrubber do
-      def stamp(conn, marker) do
-        %{conn | params: %{"marker" => marker}}
-      end
-    end
-
-    test "registered MFA scrubber wins over the default" do
+    test "registered :body_scrubber wins over the default" do
       conn = %Plug.Conn{params: %{"password" => "hunter2"}}
 
-      :ok = Scrubber.put_conn_scrubber({MarkerScrubber, :stamp, ["registered"]})
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "registered"} end)
 
       scrubbed = Scrubber.scrub_conn(conn)
       assert scrubbed.params == %{"marker" => "registered"}
+    end
+
+    test "registered {module, function} tuple is invoked with the conn" do
+      defmodule TupleScrubber do
+        def stamp(_conn), do: %{"marker" => "from-mf"}
+      end
+
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: {TupleScrubber, :stamp})
+
+      assert Scrubber.scrub_conn(conn).params == %{"marker" => "from-mf"}
+    end
+
+    test "a nil scrubber for a field clears that field to %{}" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}],
+        params: %{"password" => "hunter2"}
+      }
+
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: nil, cookie_scrubber: nil)
+
+      scrubbed = Scrubber.scrub_conn(conn)
+      assert scrubbed.params == %{}
+      assert scrubbed.cookies == %{}
+    end
+
+    test "missing keys fall back to Sentry.PlugContext defaults" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+        params: %{"password" => "hunter2", "name" => "Alice"}
+      }
+
+      :ok = Scrubber.put_conn_scrubber([])
+
+      scrubbed = Scrubber.scrub_conn(conn)
+      assert scrubbed.cookies == %{}
+      assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
+      # default_header_scrubber returns a map; headers_to_list preserves the conn shape
+      assert is_list(scrubbed.req_headers)
+      assert {"x-keep", "yes"} in scrubbed.req_headers
+      refute Enum.any?(scrubbed.req_headers, fn {k, _v} -> k == "authorization" end)
     end
 
     test "registration is process-local" do
@@ -136,32 +173,19 @@ defmodule Sentry.ScrubberTest do
 
       task =
         Task.async(fn ->
-          :ok = Scrubber.put_conn_scrubber({MarkerScrubber, :stamp, ["task-only"]})
+          :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "task-only"} end)
           Scrubber.scrub_conn(conn)
         end)
 
       task_result = Task.await(task)
       assert task_result.params == %{"marker" => "task-only"}
 
-      # The current process never registered a scrubber, so it falls back to the default.
+      # The current process never registered a scrubber, so it falls back to default_conn_scrubber.
       scrubbed = Scrubber.scrub_conn(conn)
       assert scrubbed.params == %{"password" => "*********"}
     end
 
-    test "raises when the registered scrubber returns a non-Plug.Conn" do
-      defmodule BrokenScrubber do
-        def scrub(_conn), do: :not_a_conn
-      end
-
-      conn = %Plug.Conn{}
-      :ok = Scrubber.put_conn_scrubber({BrokenScrubber, :scrub, []})
-
-      assert_raise RuntimeError, ~r/expected.*to return a Plug.Conn/, fn ->
-        Scrubber.scrub_conn(conn)
-      end
-    end
-
-    test "validates the MFA shape on put" do
+    test "validates the opts shape on put" do
       assert_raise FunctionClauseError, fn ->
         Scrubber.put_conn_scrubber({"not", "an", "mfa"})
       end
