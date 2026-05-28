@@ -81,7 +81,7 @@ defmodule Sentry.ScrubberTest do
     end
   end
 
-  describe "scrub_conn/1 with no registered scrubber" do
+  describe "scrub/1 with no registered scrubber" do
     setup do
       conn = %Plug.Conn{
         cookies: %{"session" => "secret-session"},
@@ -93,7 +93,7 @@ defmodule Sentry.ScrubberTest do
         params: %{"password" => "hunter2", "name" => "Alice"}
       }
 
-      %{conn: conn, scrubbed: Scrubber.scrub_conn(conn)}
+      %{conn: conn, scrubbed: Scrubber.scrub(conn)}
     end
 
     test "clears cookies", %{scrubbed: scrubbed} do
@@ -115,13 +115,13 @@ defmodule Sentry.ScrubberTest do
     end
   end
 
-  describe "put_conn_scrubber/1 + scrub_conn/1" do
+  describe "put_conn_scrubber/1 + scrub/1" do
     test "registered :body_scrubber wins over the default" do
       conn = %Plug.Conn{params: %{"password" => "hunter2"}}
 
       :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "registered"} end)
 
-      scrubbed = Scrubber.scrub_conn(conn)
+      scrubbed = Scrubber.scrub(conn)
       assert scrubbed.params == %{"marker" => "registered"}
     end
 
@@ -133,7 +133,7 @@ defmodule Sentry.ScrubberTest do
       conn = %Plug.Conn{params: %{"password" => "hunter2"}}
       :ok = Scrubber.put_conn_scrubber(body_scrubber: {TupleScrubber, :stamp})
 
-      assert Scrubber.scrub_conn(conn).params == %{"marker" => "from-mf"}
+      assert Scrubber.scrub(conn).params == %{"marker" => "from-mf"}
     end
 
     test "a nil scrubber for a field clears that field to %{}" do
@@ -145,7 +145,7 @@ defmodule Sentry.ScrubberTest do
 
       :ok = Scrubber.put_conn_scrubber(body_scrubber: nil, cookie_scrubber: nil)
 
-      scrubbed = Scrubber.scrub_conn(conn)
+      scrubbed = Scrubber.scrub(conn)
       assert scrubbed.params == %{}
       assert scrubbed.cookies == %{}
     end
@@ -159,10 +159,9 @@ defmodule Sentry.ScrubberTest do
 
       :ok = Scrubber.put_conn_scrubber([])
 
-      scrubbed = Scrubber.scrub_conn(conn)
+      scrubbed = Scrubber.scrub(conn)
       assert scrubbed.cookies == %{}
       assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
-      # default_header_scrubber returns a map; headers_to_list preserves the conn shape
       assert is_list(scrubbed.req_headers)
       assert {"x-keep", "yes"} in scrubbed.req_headers
       refute Enum.any?(scrubbed.req_headers, fn {k, _v} -> k == "authorization" end)
@@ -174,14 +173,15 @@ defmodule Sentry.ScrubberTest do
       task =
         Task.async(fn ->
           :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "task-only"} end)
-          Scrubber.scrub_conn(conn)
+          Scrubber.scrub(conn)
         end)
 
       task_result = Task.await(task)
       assert task_result.params == %{"marker" => "task-only"}
 
-      # The current process never registered a scrubber, so it falls back to default_conn_scrubber.
-      scrubbed = Scrubber.scrub_conn(conn)
+      # The current process never registered a scrubber, so scrub/1 lazily
+      # initializes defaults instead of inheriting the task's marker scrubber.
+      scrubbed = Scrubber.scrub(conn)
       assert scrubbed.params == %{"password" => "*********"}
     end
 

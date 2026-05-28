@@ -28,7 +28,7 @@ defmodule Sentry.PlugContext do
 
       defmodule MySentryScrubber do
         def scrub_params(conn) do
-          # Makes use of the default body_scrubber to avoid sending password
+          # Makes use of the default body scrubbing to avoid sending password
           # and credit card information in plain text. To also prevent sending
           # our sensitive "my_secret_field" and "other_sensitive_data" fields,
           # we simply drop those keys.
@@ -147,9 +147,7 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
-      Sentry.Scrubber.put_conn_scrubber(
-        Keyword.take(opts, [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber])
-      )
+      Sentry.Scrubber.put_conn_scrubber(Keyword.take(opts, Sentry.Scrubber.scrubber_names()))
 
       request = build_request_interface_data(conn, opts)
       Sentry.Context.set_request_context(request)
@@ -173,7 +171,7 @@ defmodule Sentry.PlugContext do
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
 
-    scrubbed = Sentry.Scrubber.scrub_conn(conn)
+    scrubbed = Sentry.Scrubber.scrub(conn)
 
     %{
       url: Sentry.Scrubber.scrub_request_url(conn),

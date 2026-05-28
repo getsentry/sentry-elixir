@@ -68,10 +68,11 @@ defmodule Sentry.PlugCapture do
       `Plug.Conn` struct is prepended to `args` before invoking the function,
       so that the final function will be called as `apply(module, function, [conn | args])`.
       The function must return a `Plug.Conn` struct. By default, the built-in
-      scrubber delegates to `Sentry.Scrubber.scrub_conn/1`, which honors any
-      `:body_scrubber`, `:header_scrubber`, and `:cookie_scrubber` configured
-      on `Sentry.PlugContext` for the current request. When no `Sentry.PlugContext`
-      has run, falls back to `Sentry.Scrubber.default_conn_scrubber/1`:
+      scrubber delegates to `Sentry.Scrubber.scrub/1`, which honors any
+      `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`, or
+      `:url_scrubber` opts configured on `Sentry.PlugContext` for the current
+      request. When no `Sentry.PlugContext` has run, falls back to the
+      defaults defined by `Sentry.Scrubber.scrub/2`:
 
       * scrubs *all* cookies
       * drops sensitive request headers (`authorization`, `authentication`, `cookie`)
@@ -156,7 +157,7 @@ defmodule Sentry.PlugCapture do
   end
 
   @doc false
-  def default_scrubber(conn), do: Sentry.Scrubber.scrub_conn(conn)
+  def default_scrubber(conn), do: Sentry.Scrubber.scrub(conn)
 
   defp apply_scrubber(conn, {mod, fun, args} = _scrubber) do
     case apply(mod, fun, [conn | args]) do
