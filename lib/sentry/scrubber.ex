@@ -57,6 +57,15 @@ defmodule Sentry.Scrubber do
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
+  # `%Plug.Conn{}` fields scrubbed by `scrub/1`, each mapped to the struct key
+  # of the scrubber that redacts it. Add an entry to make a new field scrubbed
+  # by default.
+  @scrubbable_conn_fields [
+    cookies: :cookie_scrubber,
+    req_headers: :header_scrubber,
+    params: :body_scrubber
+  ]
+
   @typedoc """
   A resolved set of per-field scrubbers for a `%Plug.Conn{}`.
 
@@ -308,12 +317,9 @@ defmodule Sentry.Scrubber do
   @spec scrub(map()) :: map()
 
   def scrub(conn) when is_struct(conn, Plug.Conn) do
-    %{
-      conn
-      | cookies: scrubber().cookie_scrubber.(conn),
-        req_headers: to_header_list(scrubber().header_scrubber.(conn)),
-        params: scrubber().body_scrubber.(conn)
-    }
+    Enum.reduce(@scrubbable_conn_fields, conn, fn {field, scrubber_key}, acc ->
+      Map.replace!(acc, field, normalize(field, get(scrubber_key).(conn)))
+    end)
   end
 
   def scrub(map) when is_map(map) and not is_struct(map), do: scrub(map, [])
@@ -409,10 +415,14 @@ defmodule Sentry.Scrubber do
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
     do: scrub_url(Plug.Conn.request_url(conn))
 
-  # A header scrubber may return a map (the documented convention — see
-  # `Sentry.PlugContext`'s `default_header_scrubber/1`), but
-  # `%Plug.Conn{}.req_headers` must be a list of `{name, value}` tuples. Coerce
-  # so `scrub/1` always returns a structurally valid conn.
+  # Coerces a per-field scrubber result into the shape its `%Plug.Conn{}` field
+  # requires. A header scrubber may return a map (the documented convention —
+  # see `Sentry.PlugContext`'s `default_header_scrubber/1`), but `req_headers`
+  # must be a list of `{name, value}` tuples, so `scrub/1` stays structurally
+  # valid. Other fields pass through unchanged.
+  defp normalize(:req_headers, headers), do: to_header_list(headers)
+  defp normalize(_field, value), do: value
+
   defp to_header_list(headers) when is_list(headers), do: headers
   defp to_header_list(headers) when is_map(headers), do: Map.to_list(headers)
 

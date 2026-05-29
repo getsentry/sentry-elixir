@@ -140,6 +140,17 @@ defmodule Sentry.ScrubberTest do
     test "returns a %Plug.Conn{} struct", %{scrubbed: scrubbed} do
       assert is_struct(scrubbed, Plug.Conn)
     end
+
+    test "rewrites only cookies, req_headers, and params", %{conn: conn, scrubbed: scrubbed} do
+      changed =
+        conn
+        |> Map.from_struct()
+        |> Enum.filter(fn {key, value} -> Map.fetch!(scrubbed, key) != value end)
+        |> Enum.map(fn {key, _value} -> key end)
+        |> Enum.sort()
+
+      assert changed == [:cookies, :params, :req_headers]
+    end
   end
 
   describe "put_conn_scrubber/1 + scrub/1" do
