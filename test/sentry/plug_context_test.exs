@@ -110,11 +110,27 @@ defmodule Sentry.PlugContextTest do
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
   end
 
+  test "does not scrub the URL by default" do
+    conn = conn(:get, "/test?password=hunter2")
+    call(conn, [])
+
+    assert "http://www.example.com/test?password=hunter2" ==
+             Sentry.Context.get_all().request.url
+  end
+
   test "allows configuring URL scrubber" do
     conn = conn(:get, "/secret-token/secret")
     call(conn, url_scrubber: {__MODULE__, :url_scrubber})
 
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
+  end
+
+  test "url_scrubber: nil falls back to the request URL unchanged" do
+    conn = conn(:get, "/test?password=hunter2")
+    call(conn, url_scrubber: nil)
+
+    assert "http://www.example.com/test?password=hunter2" ==
+             Sentry.Context.get_all().request.url
   end
 
   test "allows configuring request id header", %{conn: conn} do

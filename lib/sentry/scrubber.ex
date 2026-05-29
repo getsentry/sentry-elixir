@@ -98,7 +98,8 @@ defmodule Sentry.Scrubber do
 
     * a 1-arity function — invoked as `fun.(conn)`
     * `{module, function}` — invoked as `apply(module, function, [conn])`
-    * `nil` — disables the scrubber; the field is replaced with `%{}`
+    * `nil` — disables the scrubber; map-shaped fields are replaced with `%{}`,
+      and `:url` falls back to the request URL unchanged
   """
   @type field_scrubber ::
           (Plug.Conn.t() -> term()) | {module(), atom()} | nil
@@ -253,14 +254,15 @@ defmodule Sentry.Scrubber do
   # Resolves a per-field scrubber option into a `(conn -> term)` function. A
   # missing option falls back to the field's default scrubber, expressed as an
   # `{module, function, args}` MFA that captures the matching `scrub(conn, field)`
-  # clause. `nil` disables scrubbing for the field (it becomes `%{}`).
+  # clause. `nil` disables scrubbing for the field: the map-shaped fields become
+  # `%{}`, while `:url` (a string field) falls back to the request URL unchanged.
   defp resolve_scrubber(opts, opt_name, field) do
     case Keyword.fetch(opts, opt_name) do
       :error ->
         mfa_to_fun({__MODULE__, :scrub, [field]})
 
       {:ok, nil} ->
-        fn _conn -> %{} end
+        nil_scrubber(field)
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
         mfa_to_fun({m, f, args})
@@ -272,6 +274,9 @@ defmodule Sentry.Scrubber do
         fun
     end
   end
+
+  defp nil_scrubber(:url), do: mfa_to_fun({__MODULE__, :scrub, [:url]})
+  defp nil_scrubber(_field), do: fn _conn -> %{} end
 
   defp mfa_to_fun({m, f, args}), do: fn conn -> apply(m, f, [conn | args]) end
 
@@ -355,8 +360,9 @@ defmodule Sentry.Scrubber do
     * `:headers` — drops sensitive `conn.req_headers` case-insensitively,
       preserving the list-of-tuples shape.
     * `:cookies` — drops *all* cookies, returning `%{}`.
-    * `:url` — scrubs sensitive query parameters from the request URL via
-      `scrub_url/1`.
+    * `:url` — returns the request URL unchanged. Scrub sensitive data out of
+      URLs by configuring a custom `:url_scrubber` (see `Sentry.PlugContext`),
+      for example one built on `scrub_url/1`.
 
   Because these clauses are the defaults (not the registered scrubbers), a
   custom `:body_scrubber` can safely compose on the default behavior without
@@ -419,7 +425,7 @@ defmodule Sentry.Scrubber do
   def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
 
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
-    do: scrub_url(Plug.Conn.request_url(conn))
+    do: Plug.Conn.request_url(conn)
 
   # Coerces a per-field scrubber result into the shape its `%Plug.Conn{}` field
   # requires. A header scrubber may return a map (the documented convention —
