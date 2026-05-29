@@ -3,6 +3,33 @@ defmodule Sentry.ScrubberTest do
 
   alias Sentry.Scrubber
 
+  describe "new/1" do
+    test "new/0 builds an all-defaults scrubber" do
+      scrubber = Scrubber.new()
+
+      assert %Scrubber{} = scrubber
+
+      for field <- Scrubber.scrubber_names() do
+        assert is_function(Map.fetch!(scrubber, field), 1)
+      end
+    end
+
+    test "uses the given per-field scrubber and defaults the rest" do
+      marker = fn _conn -> %{"marker" => "custom"} end
+      scrubber = Scrubber.new(body_scrubber: marker)
+
+      assert scrubber.body_scrubber == marker
+      assert is_function(scrubber.header_scrubber, 1)
+    end
+
+    test "does not register the scrubber for the process" do
+      _ = Scrubber.new(body_scrubber: fn _conn -> %{"marker" => "unregistered"} end)
+
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+      assert Scrubber.scrub(conn).params == %{"password" => "*********"}
+    end
+  end
+
   describe "scrub/2" do
     test "redacts sensitive top-level keys" do
       assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==

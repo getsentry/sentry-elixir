@@ -215,11 +215,24 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.1"
   @spec put_conn_scrubber(conn_scrubber_opts()) :: :ok
   def put_conn_scrubber(opts) when is_list(opts) do
-    Process.put(@scrubber_pdict_key, resolve_scrubbers(opts))
+    Process.put(@scrubber_pdict_key, new(opts))
     :ok
   end
 
-  defp resolve_scrubbers(opts) do
+  @doc """
+  Builds a resolved `t:t/0` set of per-field scrubbers from the given options.
+
+  Accepts the same `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`,
+  and `:url_scrubber` keys as `put_conn_scrubber/1`. Each missing key falls
+  back to the field's default scrubber (the matching `scrub(conn, field)`
+  clause). Called with no arguments, `new/0` returns the all-defaults scrubber.
+
+  Unlike `put_conn_scrubber/1`, this only constructs the struct — it does not
+  register it for the current process.
+  """
+  @doc since: "13.1.1"
+  @spec new(conn_scrubber_opts()) :: t()
+  def new(opts \\ []) when is_list(opts) do
     %__MODULE__{
       body_scrubber: resolve_scrubber(opts, :body_scrubber, :body),
       header_scrubber: resolve_scrubber(opts, :header_scrubber, :headers),
@@ -257,7 +270,7 @@ defmodule Sentry.Scrubber do
   defp scrubber do
     case Process.get(@scrubber_pdict_key) do
       nil ->
-        defaults = resolve_scrubbers([])
+        defaults = new()
         Process.put(@scrubber_pdict_key, defaults)
         defaults
 
