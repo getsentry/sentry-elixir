@@ -266,6 +266,6 @@ defmodule Sentry.PlugContext do
   """
   @spec default_body_scrubber(Plug.Conn.t()) :: map()
   def default_body_scrubber(conn) do
-    Sentry.Scrubber.scrub_map(conn.params)
+    Sentry.Scrubber.scrub(conn.params)
   end
 end

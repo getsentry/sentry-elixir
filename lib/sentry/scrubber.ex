@@ -28,15 +28,25 @@ defmodule Sentry.Scrubber do
 
   ## Custom scrubbing
 
-  All public functions accept an optional `:keys` option that overrides the
-  default list of sensitive keys. This makes it possible to compose custom
-  scrubbers on top of the defaults:
+  The map/query/header functions accept an optional `:keys` option that
+  overrides the default list of sensitive keys. This makes it possible to
+  compose custom scrubbers on top of the defaults:
 
       def scrub(map) do
         map
-        |> Sentry.Scrubber.scrub_map(keys: ["password", "api_key"])
+        |> Sentry.Scrubber.scrub(keys: ["password", "api_key"])
         |> Map.drop(["internal_notes"])
       end
+
+  ## Scrubbing a `%Plug.Conn{}`
+
+  Conn scrubbing is configured per process rather than per call. Register the
+  per-field scrubbers once with `put_conn_scrubber/1` (typically from
+  `Sentry.PlugContext.call/2`), then `scrub/1` redacts a conn's params,
+  headers, and cookies using that registration, and `scrub_request_url/1`
+  returns the conn's request URL through the registered `:url_scrubber`. Any
+  field left unregistered falls back to the default behavior described on
+  `scrub/2`'s `scrub(field, value)` clause.
   """
 
   @moduledoc since: "13.1.0"
@@ -118,40 +128,6 @@ defmodule Sentry.Scrubber do
   def default_header_keys, do: @default_scrubbed_header_keys
 
   @doc """
-  Recursively scrubs a map.
-
-  Any value whose key is in the configured sensitive key list is replaced with
-  the placeholder. Values matching the credit-card pattern are also replaced.
-  Nested maps, structs, and lists are scrubbed recursively.
-
-  ## Options
-
-    * `:keys` - the list of sensitive keys to redact. Defaults to
-      `default_param_keys/0`.
-  """
-  @doc since: "13.1.0"
-  @spec scrub_map(map(), [option()]) :: map()
-  def scrub_map(map, opts \\ []) when is_map(map) do
-    keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
-    do_scrub_map(map, keys)
-  end
-
-  @doc """
-  Recursively scrubs a list, applying the same rules as `scrub_map/2` to any
-  maps it contains.
-
-  ## Options
-
-  See `scrub_map/2`.
-  """
-  @doc since: "13.1.0"
-  @spec scrub_list(list(), [option()]) :: list()
-  def scrub_list(list, opts \\ []) when is_list(list) do
-    keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
-    do_scrub_list(list, keys)
-  end
-
-  @doc """
   Drops sensitive keys from a flat map.
 
   This is the strategy used for HTTP headers, where the sensitive value should
@@ -176,7 +152,7 @@ defmodule Sentry.Scrubber do
 
   ## Options
 
-  See `scrub_map/2`.
+  See `scrub/2`.
   """
   @doc since: "13.1.0"
   @spec scrub_url(String.t(), [option()]) :: String.t()
@@ -199,7 +175,7 @@ defmodule Sentry.Scrubber do
 
   ## Options
 
-  See `scrub_map/2`.
+  See `scrub/2`.
   """
   @doc since: "13.1.0"
   @spec scrub_query_string(String.t(), [option()]) :: String.t()
@@ -287,9 +263,50 @@ defmodule Sentry.Scrubber do
   end
 
   @doc """
-  Default scrubbing for a single `%Plug.Conn{}` field.
+  Scrubs a `%Plug.Conn{}` or a plain map.
 
-    * `:body` — scrubs a `params`-shaped map via `scrub_map/2`; non-maps pass
+  Given a `%Plug.Conn{}`, scrubs it using the current process's registered
+  scrubbers. When `put_conn_scrubber/1` has been called for this process,
+  applies the resolved body, header, and cookie scrubbers to the corresponding
+  conn fields. Otherwise falls back to `scrub/2` for each field.
+
+  Given a plain map, recursively scrubs it with the default sensitive keys —
+  equivalent to `scrub(map, [])`. See `scrub/2`.
+  """
+  @doc since: "13.1.1"
+  @spec scrub(Plug.Conn.t()) :: Plug.Conn.t()
+  @spec scrub(map()) :: map()
+
+  def scrub(conn) when is_struct(conn, Plug.Conn) do
+    %{
+      conn
+      | cookies: scrubber().cookie_scrubber.(conn),
+        req_headers: headers_to_list(scrubber().header_scrubber.(conn)),
+        params: scrubber().body_scrubber.(conn)
+    }
+  end
+
+  def scrub(map) when is_map(map) and not is_struct(map), do: scrub(map, [])
+
+  @doc """
+  Scrubs a value, dispatching on the first argument.
+
+  ## Scrubbing a map or list — `scrub(map, opts)` / `scrub(list, opts)`
+
+  Recursively scrubs a map. Any value whose key is in the configured sensitive
+  key list is replaced with the placeholder. Values matching the credit-card
+  pattern are also replaced. Nested maps, structs, and lists are scrubbed
+  recursively. A list given as the top-level value is scrubbed element-wise
+  using the same rules.
+
+  Accepts the same `:keys` option as the other scrubbing functions:
+
+    * `:keys` - the list of sensitive keys to redact. Defaults to
+      `default_param_keys/0`.
+
+  ## Default scrubbing for a `%Plug.Conn{}` field — `scrub(field, value)`
+
+    * `:body` — scrubs a `params`-shaped map via `scrub/2`; non-maps pass
       through unchanged (so `%Plug.Conn.Unfetched{}` is preserved).
     * `:headers` — drops sensitive `req_headers` case-insensitively. Accepts
       both the list-of-tuples shape (preserved on output) and a map (drops
@@ -308,47 +325,36 @@ defmodule Sentry.Scrubber do
         end
       end
   """
-  @doc since: "13.1.1"
+  @doc since: "13.1.0"
+  @spec scrub(map(), [option()]) :: map()
+  @spec scrub(list(), [option()]) :: list()
   @spec scrub(:body | :headers | :cookies | :url, term()) :: term()
-  def scrub(:body, params) when is_map(params) and not is_struct(params),
-    do: do_scrub_map(params, @default_scrubbed_param_keys)
+  def scrub(value, opts \\ [])
 
+  def scrub(map, opts) when is_map(map) and not is_struct(map) and is_list(opts) do
+    keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
+    Map.new(map, fn {key, value} -> {key, scrub_value(key, value, keys)} end)
+  end
+
+  def scrub(list, opts) when is_list(list) do
+    Enum.map(list, fn value ->
+      cond do
+        is_struct(value) -> value |> Map.from_struct() |> scrub(opts)
+        is_map(value) or is_list(value) -> scrub(value, opts)
+        true -> value
+      end
+    end)
+  end
+
+  def scrub(:body, params) when is_map(params) and not is_struct(params), do: scrub(params)
   def scrub(:body, other), do: other
-
   def scrub(:headers, headers) when is_list(headers), do: drop_sensitive_req_headers(headers)
   def scrub(:headers, headers) when is_map(headers), do: drop_keys(headers)
-
   def scrub(:cookies, _cookies), do: %{}
-
   def scrub(:url, url) when is_binary(url), do: url
 
-  @doc """
-  Scrubs a `%Plug.Conn{}` using the current process's registered scrubbers.
-
-  When `put_conn_scrubber/1` has been called for this process, applies the
-  resolved body, header, and cookie scrubbers to the corresponding conn
-  fields. Otherwise falls back to `scrub/2` for each field.
-  """
-  @doc since: "13.1.1"
-  @spec scrub(Plug.Conn.t()) :: Plug.Conn.t()
-  def scrub(conn) when is_struct(conn, Plug.Conn) do
-    %{
-      conn
-      | cookies: scrubber().cookie_scrubber.(conn),
-        req_headers: headers_to_list(scrubber().header_scrubber.(conn)),
-        params: scrubber().body_scrubber.(conn)
-    }
-  end
-
-  @doc """
-  Returns the request URL for `conn`, scrubbed by the current process's
-  registered `:url_scrubber`. Falls back to `scrub(:url, url)`.
-  """
-  @doc since: "13.1.1"
   @spec scrub_request_url(Plug.Conn.t()) :: String.t()
-  def scrub_request_url(conn) when is_struct(conn, Plug.Conn) do
-    scrubber().url_scrubber.(conn)
-  end
+  def scrub_request_url(conn) when is_struct(conn, Plug.Conn), do: scrubber().url_scrubber.(conn)
 
   defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
   defp headers_to_list(headers) when is_list(headers), do: headers
@@ -363,30 +369,12 @@ defmodule Sentry.Scrubber do
     end)
   end
 
-  ## Internal recursion
-
-  defp do_scrub_map(map, keys) do
-    Map.new(map, fn {key, value} -> {key, scrub_value(key, value, keys)} end)
-  end
-
-  defp do_scrub_list(list, keys) do
-    Enum.map(list, fn value ->
-      cond do
-        is_struct(value) -> value |> Map.from_struct() |> do_scrub_map(keys)
-        is_map(value) -> do_scrub_map(value, keys)
-        is_list(value) -> do_scrub_list(value, keys)
-        true -> value
-      end
-    end)
-  end
-
   defp scrub_value(key, value, keys) do
     cond do
       key in keys -> @scrubbed_value
       is_binary(value) and value =~ credit_card_regex() -> @scrubbed_value
-      is_struct(value) -> value |> Map.from_struct() |> do_scrub_map(keys)
-      is_map(value) -> do_scrub_map(value, keys)
-      is_list(value) -> do_scrub_list(value, keys)
+      is_struct(value) -> value |> Map.from_struct() |> scrub(keys: keys)
+      is_map(value) or is_list(value) -> scrub(value, keys: keys)
       true -> value
     end
   end

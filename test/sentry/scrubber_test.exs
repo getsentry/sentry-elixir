@@ -3,42 +3,42 @@ defmodule Sentry.ScrubberTest do
 
   alias Sentry.Scrubber
 
-  describe "scrub_map/2" do
+  describe "scrub/2" do
     test "redacts sensitive top-level keys" do
-      assert Scrubber.scrub_map(%{"password" => "x", "ok" => 1}) ==
+      assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
                %{"password" => "*********", "ok" => 1}
     end
 
     test "recurses into nested maps" do
-      assert Scrubber.scrub_map(%{"outer" => %{"secret" => "shh"}}) ==
+      assert Scrubber.scrub(%{"outer" => %{"secret" => "shh"}}) ==
                %{"outer" => %{"secret" => "*********"}}
     end
 
     test "recurses into lists of maps" do
-      assert Scrubber.scrub_map(%{"items" => [%{"passwd" => "1"}, %{"ok" => 2}]}) ==
+      assert Scrubber.scrub(%{"items" => [%{"passwd" => "1"}, %{"ok" => 2}]}) ==
                %{"items" => [%{"passwd" => "*********"}, %{"ok" => 2}]}
     end
 
     test "redacts credit-card-shaped values" do
-      assert Scrubber.scrub_map(%{"cc" => "4111111111111111"}) ==
+      assert Scrubber.scrub(%{"cc" => "4111111111111111"}) ==
                %{"cc" => "*********"}
     end
 
     test "scrubs structs by converting them to maps" do
       uri = URI.parse("http://example.com")
-      assert %{"u" => scrubbed} = Scrubber.scrub_map(%{"u" => uri})
+      assert %{"u" => scrubbed} = Scrubber.scrub(%{"u" => uri})
       assert is_map(scrubbed)
       refute Map.has_key?(scrubbed, :__struct__)
     end
 
     test "respects custom :keys option" do
-      assert Scrubber.scrub_map(%{"api_key" => "x", "password" => "y"}, keys: ["api_key"]) ==
+      assert Scrubber.scrub(%{"api_key" => "x", "password" => "y"}, keys: ["api_key"]) ==
                %{"api_key" => "*********", "password" => "y"}
     end
 
     test "leaves non-sensitive values untouched" do
       data = %{"name" => "alice", "age" => 30}
-      assert Scrubber.scrub_map(data) == data
+      assert Scrubber.scrub(data) == data
     end
   end
 
