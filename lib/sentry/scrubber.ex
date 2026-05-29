@@ -273,8 +273,8 @@ defmodule Sentry.Scrubber do
     end
   end
 
-  @spec scrubbers() :: t()
-  defp scrubbers do
+  @spec scrubber() :: t()
+  defp scrubber do
     case Process.get(@scrubber_pdict_key) do
       nil ->
         defaults = resolve_scrubbers([])
@@ -334,9 +334,9 @@ defmodule Sentry.Scrubber do
   def scrub(conn) when is_struct(conn, Plug.Conn) do
     %{
       conn
-      | cookies: scrubbers().cookie_scrubber.(conn),
-        req_headers: headers_to_list(scrubbers().header_scrubber.(conn)),
-        params: scrubbers().body_scrubber.(conn)
+      | cookies: scrubber().cookie_scrubber.(conn),
+        req_headers: headers_to_list(scrubber().header_scrubber.(conn)),
+        params: scrubber().body_scrubber.(conn)
     }
   end
 
@@ -347,7 +347,7 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.1"
   @spec scrub_request_url(Plug.Conn.t()) :: String.t()
   def scrub_request_url(conn) when is_struct(conn, Plug.Conn) do
-    scrubbers().url_scrubber.(conn)
+    scrubber().url_scrubber.(conn)
   end
 
   defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
