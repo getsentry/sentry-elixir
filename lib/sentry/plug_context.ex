@@ -60,9 +60,10 @@ defmodule Sentry.PlugContext do
       defmodule MySentryScrubber do
         def scrub_headers(conn) do
           # In this example, we do not want to include Content-Type or User-Agent
-          # in reported headers, so we drop them.
-          conn.req_headers
-          |> Map.new()
+          # in reported headers, so we drop them. `default_header_scrubber/1`
+          # takes the conn and returns a map of the retained headers, which we
+          # then trim further.
+          conn
           |> Sentry.PlugContext.default_header_scrubber()
           |> Map.drop(["content-type", "user-agent"])
         end
@@ -252,7 +253,9 @@ defmodule Sentry.PlugContext do
   """
   @spec default_header_scrubber(Plug.Conn.t()) :: map()
   def default_header_scrubber(conn) do
-    Sentry.Scrubber.scrub(conn, :headers)
+    conn
+    |> Sentry.Scrubber.scrub(:headers)
+    |> Map.new()
   end
 
   @doc """
