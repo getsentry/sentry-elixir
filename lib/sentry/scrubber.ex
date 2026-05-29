@@ -407,7 +407,7 @@ defmodule Sentry.Scrubber do
     cond do
       key in keys -> @scrubbed_value
       is_binary(value) and value =~ credit_card_regex() -> @scrubbed_value
-      is_struct(value) -> value |> Map.from_struct() |> scrub(keys: keys)
+      is_struct(value) -> scrub(Map.from_struct(value), keys: keys)
       is_map(value) or is_list(value) -> scrub(value, keys: keys)
       true -> value
     end
