@@ -44,7 +44,7 @@ defmodule Sentry.Scrubber do
   @default_scrubbed_param_keys ["password", "passwd", "secret"]
   @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
   @scrubbed_value "*********"
-  @conn_scrubber_pdict_key {__MODULE__, :conn_scrubber}
+  @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
   @doc false
@@ -220,7 +220,7 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.1"
   @spec put_conn_scrubber(conn_scrubber_opts()) :: :ok
   def put_conn_scrubber(opts) when is_list(opts) do
-    Process.put(@conn_scrubber_pdict_key, resolve_scrubbers(opts))
+    Process.put(@scrubber_pdict_key, resolve_scrubbers(opts))
     :ok
   end
 
@@ -257,10 +257,10 @@ defmodule Sentry.Scrubber do
   end
 
   defp scrubbers do
-    case Process.get(@conn_scrubber_pdict_key) do
+    case Process.get(@scrubber_pdict_key) do
       nil ->
         defaults = resolve_scrubbers([])
-        Process.put(@conn_scrubber_pdict_key, defaults)
+        Process.put(@scrubber_pdict_key, defaults)
         defaults
 
       map ->
