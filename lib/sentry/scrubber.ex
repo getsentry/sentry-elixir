@@ -43,10 +43,10 @@ defmodule Sentry.Scrubber do
   Conn scrubbing is configured per process rather than per call. Register the
   per-field scrubbers once with `put_conn_scrubber/1` (typically from
   `Sentry.PlugContext.call/2`), then `scrub/1` redacts a conn's params,
-  headers, and cookies using that registration, and `scrub_request_url/1`
-  returns the conn's request URL through the registered `:url_scrubber`. Any
-  field left unregistered falls back to the default behavior described on
-  `scrub/2`'s `scrub(field, value)` clause.
+  headers, and cookies using that registration. The request URL is not a conn
+  field, so callers fetch the registered `:url_scrubber` with `get/1` and
+  apply it to the conn. Any field left unregistered falls back to the default
+  behavior implemented by `scrub/2`'s `scrub(conn, field)` clauses.
   """
 
   @moduledoc since: "13.1.0"
@@ -97,7 +97,8 @@ defmodule Sentry.Scrubber do
   @typedoc """
   Options accepted by `put_conn_scrubber/1`.
 
-  Each key, when omitted, falls back to the corresponding `default_*_scrubber/1`.
+  Each key, when omitted, falls back to the field's default scrubber — the
+  matching `scrub(conn, field)` clause of `scrub/2`.
   """
   @type conn_scrubber_opts :: [
           body_scrubber: field_scrubber(),
@@ -199,8 +200,9 @@ defmodule Sentry.Scrubber do
 
   Accepts the same `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`,
   and `:url_scrubber` keys that `Sentry.PlugContext` takes as plug options,
-  resolves each missing key to its corresponding `default_*_scrubber/1`, and
-  stores the resolved scrubbers in the process dictionary.
+  resolves each missing key to the field's default scrubber (the
+  `{__MODULE__, :scrub, [field]}` MFA, i.e. the matching `scrub(conn, field)`
+  clause), and stores the resolved scrubbers in the process dictionary.
 
   The registration lives for the lifetime of the calling process — typically
   the request process when registered from `Sentry.PlugContext.call/2`. Used
@@ -226,27 +228,30 @@ defmodule Sentry.Scrubber do
     }
   end
 
+  # Resolves a per-field scrubber option into a `(conn -> term)` function. A
+  # missing option falls back to the field's default scrubber, expressed as an
+  # `{module, function, args}` MFA that captures the matching `scrub(conn, field)`
+  # clause. `nil` disables scrubbing for the field (it becomes `%{}`).
   defp resolve_scrubber(opts, opt_name, field) do
     case Keyword.fetch(opts, opt_name) do
       :error ->
-        fn conn -> scrub(field, conn) end
-
-      {:ok, nil} when field == :url ->
-        fn conn -> scrub(:url, conn) end
+        mfa_to_fun({__MODULE__, :scrub, [field]})
 
       {:ok, nil} ->
         fn _conn -> %{} end
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
-        fn conn -> apply(m, f, [conn | args]) end
+        mfa_to_fun({m, f, args})
 
       {:ok, {m, f}} when is_atom(m) and is_atom(f) ->
-        fn conn -> apply(m, f, [conn]) end
+        mfa_to_fun({m, f, []})
 
       {:ok, fun} when is_function(fun, 1) ->
         fun
     end
   end
+
+  defp mfa_to_fun({m, f, args}), do: fn conn -> apply(m, f, [conn | args]) end
 
   @spec scrubber() :: t()
   defp scrubber do
@@ -262,12 +267,25 @@ defmodule Sentry.Scrubber do
   end
 
   @doc """
+  Returns the current process's resolved scrubber function for the given field.
+
+  `key` is one of `#{inspect(@scrubber_names)}`. Returns the scrubber registered
+  via `put_conn_scrubber/1`, or the field's default if none was registered. The
+  returned function takes a `%Plug.Conn{}` and returns the scrubbed value, so
+  callers apply it as `Sentry.Scrubber.get(:url_scrubber).(conn)`.
+  """
+  @doc since: "13.1.1"
+  @spec get(atom()) :: (Plug.Conn.t() -> term())
+  def get(key) when key in @scrubber_names, do: Map.get(scrubber(), key)
+
+  @doc """
   Scrubs a `%Plug.Conn{}` or a plain map.
 
-  Given a `%Plug.Conn{}`, scrubs it using the current process's registered
-  scrubbers. When `put_conn_scrubber/1` has been called for this process,
-  applies the resolved body, header, and cookie scrubbers to the corresponding
-  conn fields. Otherwise falls back to `scrub/2` for each field.
+  Given a `%Plug.Conn{}`, scrubs its cookies, headers, and params using the
+  current process's registered scrubbers (see `put_conn_scrubber/1`), falling
+  back to the SDK defaults for any field without a registered scrubber. The
+  request URL is not a conn field; callers scrub it separately by applying the
+  `:url_scrubber` from `get/1` (whose default is `scrub(conn, :url)`).
 
   Given a plain map, recursively scrubs it with the default sensitive keys —
   equivalent to `scrub(map, [])`. See `scrub/2`.
@@ -303,25 +321,29 @@ defmodule Sentry.Scrubber do
     * `:keys` - the list of sensitive keys to redact. Defaults to
       `default_param_keys/0`.
 
-  ## Default scrubbing for a `%Plug.Conn{}` field — `scrub(field, conn)`
+  ## Scrubbing a single `%Plug.Conn{}` field — `scrub(conn, field)`
 
-  Extracts the relevant field from the `conn` itself and applies the SDK's
-  default redaction for it:
+  Extracts the given field from the `conn` and applies the SDK's *default*
+  redaction for it. Each clause is what the field's default scrubber captures
+  as a `{__MODULE__, :scrub, [field]}` MFA, and what `scrub/1` (conn fields)
+  and `get/1` (URL) fall back to when no custom scrubber is registered:
 
     * `:body` — scrubs `conn.params` via `scrub/2`; non-map params (such as
       `%Plug.Conn.Unfetched{}`) pass through unchanged.
     * `:headers` — drops sensitive `conn.req_headers` case-insensitively,
       preserving the list-of-tuples shape.
     * `:cookies` — drops *all* cookies, returning `%{}`.
-    * `:url` — returns the conn's request URL unchanged.
+    * `:url` — scrubs sensitive query parameters from the request URL via
+      `scrub_url/1`.
 
-  Used by `scrub/1` and `scrub_request_url/1` for fields the user has not
-  overridden via `put_conn_scrubber/1`, and available for custom scrubbers
-  that want to compose the default behavior:
+  Because these clauses are the defaults (not the registered scrubbers), a
+  custom `:body_scrubber` can safely compose on the default behavior without
+  recursing:
 
       defmodule MyScrubber do
         def scrub_params(conn) do
-          Sentry.Scrubber.scrub(:body, conn)
+          conn
+          |> Sentry.Scrubber.scrub(:body)
           |> Map.drop(["my_secret_field"])
         end
       end
@@ -329,7 +351,7 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.0"
   @spec scrub(map(), [option()]) :: map()
   @spec scrub(list(), [option()]) :: list()
-  @spec scrub(:body | :headers | :cookies | :url, Plug.Conn.t()) :: term()
+  @spec scrub(Plug.Conn.t(), :body | :headers | :cookies | :url) :: term()
   def scrub(value, opts \\ [])
 
   def scrub(map, opts) when is_map(map) and not is_struct(map) and is_list(opts) do
@@ -347,7 +369,11 @@ defmodule Sentry.Scrubber do
     end)
   end
 
-  def scrub(:body, conn) when is_struct(conn, Plug.Conn) do
+  # These are the SDK's default per-field scrubbers, captured as
+  # `{__MODULE__, :scrub, [field]}` MFAs in `resolve_scrubber/3`. `scrub/1`
+  # (conn fields) and `get/1` (URL) apply the *registered* scrubbers; these
+  # clauses are the defaults those registrations fall back to.
+  def scrub(conn, :body) when is_struct(conn, Plug.Conn) do
     if is_map(conn.params) and not is_struct(conn.params) do
       scrub(conn.params)
     else
@@ -355,14 +381,13 @@ defmodule Sentry.Scrubber do
     end
   end
 
-  def scrub(:headers, conn) when is_struct(conn, Plug.Conn),
+  def scrub(conn, :headers) when is_struct(conn, Plug.Conn),
     do: drop_sensitive_req_headers(conn.req_headers)
 
-  def scrub(:cookies, conn) when is_struct(conn, Plug.Conn), do: %{}
-  def scrub(:url, conn) when is_struct(conn, Plug.Conn), do: Plug.Conn.request_url(conn)
+  def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
 
-  @spec scrub_request_url(Plug.Conn.t()) :: String.t()
-  def scrub_request_url(conn) when is_struct(conn, Plug.Conn), do: scrubber().url_scrubber.(conn)
+  def scrub(conn, :url) when is_struct(conn, Plug.Conn),
+    do: scrub_url(Plug.Conn.request_url(conn))
 
   defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
   defp headers_to_list(headers) when is_list(headers), do: headers
