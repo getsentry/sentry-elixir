@@ -47,6 +47,23 @@ defmodule Sentry.Scrubber do
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
+  @typedoc """
+  A resolved set of per-field scrubbers for a `%Plug.Conn{}`.
+
+  Each field holds a 1-arity function that takes the conn and returns the
+  scrubbed value for the corresponding field. Built by `put_conn_scrubber/1`
+  from `t:conn_scrubber_opts/0` and stored in the process dictionary.
+  """
+  @type t :: %__MODULE__{
+          body_scrubber: (Plug.Conn.t() -> term()),
+          header_scrubber: (Plug.Conn.t() -> term()),
+          cookie_scrubber: (Plug.Conn.t() -> term()),
+          url_scrubber: (Plug.Conn.t() -> String.t())
+        }
+
+  @enforce_keys @scrubber_names
+  defstruct @scrubber_names
+
   @doc false
   @spec scrubber_names() :: [atom()]
   def scrubber_names, do: @scrubber_names
@@ -225,7 +242,7 @@ defmodule Sentry.Scrubber do
   end
 
   defp resolve_scrubbers(opts) do
-    %{
+    %__MODULE__{
       body_scrubber: resolve_scrubber(opts, :body_scrubber, :body, & &1.params),
       header_scrubber: resolve_scrubber(opts, :header_scrubber, :headers, & &1.req_headers),
       cookie_scrubber: resolve_scrubber(opts, :cookie_scrubber, :cookies, & &1.cookies),
@@ -256,6 +273,7 @@ defmodule Sentry.Scrubber do
     end
   end
 
+  @spec scrubbers() :: t()
   defp scrubbers do
     case Process.get(@scrubber_pdict_key) do
       nil ->
@@ -263,8 +281,8 @@ defmodule Sentry.Scrubber do
         Process.put(@scrubber_pdict_key, defaults)
         defaults
 
-      map ->
-        map
+      %__MODULE__{} = scrubbers ->
+        scrubbers
     end
   end
 
