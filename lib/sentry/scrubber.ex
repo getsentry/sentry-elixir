@@ -298,7 +298,7 @@ defmodule Sentry.Scrubber do
     %{
       conn
       | cookies: scrubber().cookie_scrubber.(conn),
-        req_headers: headers_to_list(scrubber().header_scrubber.(conn)),
+        req_headers: to_header_list(scrubber().header_scrubber.(conn)),
         params: scrubber().body_scrubber.(conn)
     }
   end
@@ -381,19 +381,8 @@ defmodule Sentry.Scrubber do
     end
   end
 
-  def scrub(conn, :headers) when is_struct(conn, Plug.Conn),
-    do: drop_sensitive_req_headers(conn.req_headers)
-
-  def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
-
-  def scrub(conn, :url) when is_struct(conn, Plug.Conn),
-    do: scrub_url(Plug.Conn.request_url(conn))
-
-  defp headers_to_list(headers) when is_map(headers), do: Map.to_list(headers)
-  defp headers_to_list(headers) when is_list(headers), do: headers
-
-  defp drop_sensitive_req_headers(headers) do
-    Enum.reject(headers, fn
+  def scrub(conn, :headers) when is_struct(conn, Plug.Conn) do
+    Enum.reject(conn.req_headers, fn
       {name, _value} when is_binary(name) ->
         String.downcase(name) in @default_scrubbed_header_keys
 
@@ -401,6 +390,18 @@ defmodule Sentry.Scrubber do
         false
     end)
   end
+
+  def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
+
+  def scrub(conn, :url) when is_struct(conn, Plug.Conn),
+    do: scrub_url(Plug.Conn.request_url(conn))
+
+  # A header scrubber may return a map (the documented convention — see
+  # `Sentry.PlugContext`'s `default_header_scrubber/1`), but
+  # `%Plug.Conn{}.req_headers` must be a list of `{name, value}` tuples. Coerce
+  # so `scrub/1` always returns a structurally valid conn.
+  defp to_header_list(headers) when is_list(headers), do: headers
+  defp to_header_list(headers) when is_map(headers), do: Map.to_list(headers)
 
   defp scrub_value(key, value, keys) do
     cond do

@@ -125,6 +125,19 @@ defmodule Sentry.ScrubberTest do
       assert scrubbed.params == %{"marker" => "registered"}
     end
 
+    test "a map-returning :header_scrubber still yields list-shaped req_headers" do
+      conn = %Plug.Conn{req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}]}
+
+      :ok =
+        Scrubber.put_conn_scrubber(
+          header_scrubber: fn conn -> conn.req_headers |> Map.new() |> Map.take(["x-keep"]) end
+        )
+
+      scrubbed = Scrubber.scrub(conn)
+      assert is_list(scrubbed.req_headers)
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+    end
+
     test "registered {module, function} tuple is invoked with the conn" do
       defmodule TupleScrubber do
         def stamp(_conn), do: %{"marker" => "from-mf"}
