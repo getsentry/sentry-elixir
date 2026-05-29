@@ -315,6 +315,7 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.1"
   @spec scrub(Plug.Conn.t()) :: Plug.Conn.t()
   @spec scrub(map()) :: map()
+  @spec scrub(term()) :: term()
 
   def scrub(conn) when is_struct(conn, Plug.Conn) do
     Enum.reduce(@scrubbable_conn_fields, conn, fn {field, scrubber_key}, acc ->
@@ -324,16 +325,18 @@ defmodule Sentry.Scrubber do
 
   def scrub(map) when is_map(map) and not is_struct(map), do: scrub(map, [])
 
+  def scrub(other), do: other
+
   @doc """
-  Scrubs a value, dispatching on the first argument.
+  Scrubs a value with the given options, dispatching on the value's type.
 
-  ## Scrubbing a map or list — `scrub(map, opts)` / `scrub(list, opts)`
+  ## Scrubbing a map, list, or leaf value — `scrub(value, opts)`
 
-  Recursively scrubs a map. Any value whose key is in the configured sensitive
-  key list is replaced with the placeholder. Values matching the credit-card
-  pattern are also replaced. Nested maps, structs, and lists are scrubbed
-  recursively. A list given as the top-level value is scrubbed element-wise
-  using the same rules.
+  Recursively scrubs a map: any value whose key is in the configured sensitive
+  key list is replaced with the placeholder, and the remaining values are
+  scrubbed in turn. Lists are scrubbed element-wise, structs are scrubbed as
+  maps, and credit-card-shaped binaries are replaced with the placeholder. Any
+  other leaf value is returned unchanged.
 
   Accepts the same `:keys` option as the other scrubbing functions:
 
@@ -370,23 +373,26 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.0"
   @spec scrub(map(), [option()]) :: map()
   @spec scrub(list(), [option()]) :: list()
+  @spec scrub(term(), [option()]) :: term()
   @spec scrub(Plug.Conn.t(), :body | :headers | :cookies | :url) :: term()
-  def scrub(value, opts \\ [])
 
   def scrub(map, opts) when is_map(map) and not is_struct(map) and is_list(opts) do
     keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
-    Map.new(map, fn {key, value} -> {key, scrub_value(key, value, keys)} end)
-  end
 
-  def scrub(list, opts) when is_list(list) do
-    Enum.map(list, fn value ->
-      cond do
-        is_struct(value) -> value |> Map.from_struct() |> scrub(opts)
-        is_map(value) or is_list(value) -> scrub(value, opts)
-        true -> value
-      end
+    Map.new(map, fn {key, value} ->
+      {key, if(key in keys, do: @scrubbed_value, else: scrub(value, opts))}
     end)
   end
+
+  def scrub(struct, opts) when is_struct(struct) and is_list(opts),
+    do: struct |> Map.from_struct() |> scrub(opts)
+
+  def scrub(list, opts) when is_list(list), do: Enum.map(list, &scrub(&1, opts))
+
+  def scrub(value, opts) when is_binary(value) and is_list(opts),
+    do: if(value =~ credit_card_regex(), do: @scrubbed_value, else: value)
+
+  def scrub(value, opts) when is_list(opts), do: value
 
   # These are the SDK's default per-field scrubbers, captured as
   # `{__MODULE__, :scrub, [field]}` MFAs in `resolve_scrubber/3`. `scrub/1`
@@ -420,21 +426,11 @@ defmodule Sentry.Scrubber do
   # see `Sentry.PlugContext`'s `default_header_scrubber/1`), but `req_headers`
   # must be a list of `{name, value}` tuples, so `scrub/1` stays structurally
   # valid. Other fields pass through unchanged.
-  defp normalize(:req_headers, headers), do: to_header_list(headers)
-  defp normalize(_field, value), do: value
-
-  defp to_header_list(headers) when is_list(headers), do: headers
-  defp to_header_list(headers) when is_map(headers), do: Map.to_list(headers)
-
-  defp scrub_value(key, value, keys) do
-    cond do
-      key in keys -> @scrubbed_value
-      is_binary(value) and value =~ credit_card_regex() -> @scrubbed_value
-      is_struct(value) -> scrub(Map.from_struct(value), keys: keys)
-      is_map(value) or is_list(value) -> scrub(value, keys: keys)
-      true -> value
-    end
+  defp normalize(:req_headers, headers) do
+    if is_list(headers), do: headers, else: Map.to_list(headers)
   end
+
+  defp normalize(_field, value), do: value
 
   defp credit_card_regex, do: ~r/^(?:\d[ -]*?){13,16}$/
 end

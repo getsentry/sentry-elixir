@@ -242,4 +242,50 @@ defmodule Sentry.ScrubberTest do
       end
     end
   end
+
+  describe "scrub/1 dispatch" do
+    test "delegates Plug.Conn input to the conn scrubbers" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+        params: %{"password" => "hunter2"}
+      }
+
+      scrubbed = Scrubber.scrub(conn)
+
+      assert is_struct(scrubbed, Plug.Conn)
+      assert scrubbed.cookies == %{}
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+      assert scrubbed.params == %{"password" => "*********"}
+    end
+
+    test "honors a registered conn scrubber for the Plug.Conn dispatch path" do
+      defmodule ScrubValueMarkerScrubber do
+        def stamp(_conn), do: %{"marker" => "from-registered"}
+      end
+
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: {ScrubValueMarkerScrubber, :stamp})
+
+      scrubbed = Scrubber.scrub(%Plug.Conn{params: %{"password" => "hunter2"}})
+
+      assert scrubbed.params == %{"marker" => "from-registered"}
+    end
+
+    test "scrubs a plain map with default sensitive keys" do
+      assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
+               %{"password" => "*********", "ok" => 1}
+    end
+
+    test "returns integers, atoms, binaries, and lists unchanged" do
+      assert Scrubber.scrub(42) == 42
+      assert Scrubber.scrub(:foo) == :foo
+      assert Scrubber.scrub("hello") == "hello"
+      assert Scrubber.scrub([1, 2, 3]) == [1, 2, 3]
+    end
+
+    test "returns unrelated structs unchanged" do
+      uri = URI.parse("http://example.com")
+      assert Scrubber.scrub(uri) == uri
+    end
+  end
 end
