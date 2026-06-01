@@ -225,6 +225,24 @@ defmodule Sentry.PlugContextTest do
 
       assert scrubbed.params == %{"foo" => "kept"}
     end
+
+    test "registers the configured scrubber :conn_private_allow_list", %{conn: conn} do
+      Sentry.Test.Config.put(scrubber: [conn_private_allow_list: [:phoenix_action]])
+
+      call(conn, [])
+
+      # call/2 read the config value and registered it, so the :private_allow_list
+      # strategy now retains only the configured key.
+      scrubbed =
+        Sentry.Scrubber.scrub(
+          %Plug.Conn{
+            private: %{phoenix_action: :show, phoenix_controller: SomeApp.PageController}
+          },
+          private: :private_allow_list
+        )
+
+      assert scrubbed.private == %{phoenix_action: :show}
+    end
   end
 
   defp call(conn, opts) do

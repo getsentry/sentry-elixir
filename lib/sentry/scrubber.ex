@@ -49,8 +49,20 @@ defmodule Sentry.Scrubber do
       (typically from `Sentry.PlugContext.call/2`), falling back to the SDK
       default `scrub(conn, field)` clause when none is registered, or
     * a fixed tag — `:clear` replaces the field with `%{}`, `:params` scrubs the
-      field as a params-shaped map, and `:query_string` redacts sensitive params
-      from a raw query string.
+      field as a params-shaped map, `:query_string` redacts sensitive params from
+      a raw query string, and `:private_allow_list` keeps only the registered
+      allow-listed keys of the field (see `default_private_allow_list/0` and the
+      `:private_allow_list` option of `put_conn_scrubber/1`), dropping everything
+      else.
+
+  By default `scrub/1` redacts `cookies`, `req_headers`, and `params` (the
+  configurable fields), clears `req_cookies` and `assigns` to `%{}`, scrubs
+  `body_params` and `query_params` as params-shaped maps, and reduces `private`
+  to its allow-listed keys (`default_private_allow_list/0`). `assigns` is cleared
+  wholesale because auth libraries (Guardian, Pow, Coherence) routinely store
+  decoded tokens, full user structs, and session data there, where no key-based
+  heuristic redacts safely. `private` keeps only the allow-listed framework
+  metadata and drops everything else (notably `:plug_session`).
 
   The defaults can be overridden per call with `scrub(conn, overrides)`, where
   `overrides` is a `field: strategy` keyword list merged over the attribute —
@@ -67,35 +79,70 @@ defmodule Sentry.Scrubber do
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
+  # Keys retained when a `%Plug.Conn{}`'s `:private` map is scrubbed with the
+  # `:private_allow_list` strategy. These are Phoenix's routing/render metadata
+  # — safe, high-signal breadcrumbs for triaging which controller/action failed.
+  # Anything not listed (e.g. `:plug_session`, which holds decoded session data)
+  # is dropped. This is the SDK default; the `scrubber: [conn_private_allow_list: ...]`
+  # config option exposes it as a user-configurable option.
+  @default_private_allow_list [
+    :phoenix_controller,
+    :phoenix_action,
+    :phoenix_endpoint,
+    :phoenix_router,
+    :phoenix_view,
+    :phoenix_layout,
+    :phoenix_format,
+    :phoenix_template,
+    :phoenix_router_url,
+    :phoenix_static_url
+  ]
+
   # Default `field -> strategy` mapping applied by `scrub/1` (overridable per
   # call via `scrub(conn, overrides)`). A strategy is either a configurable
   # scrubber struct-key (resolved per process via `get/1`) or a fixed tag:
   # `:clear` -> `%{}`, `:params` -> params-shaped scrub (Unfetched-safe),
-  # `:query_string` -> redact sensitive params from the raw query string.
+  # `:query_string` -> redact sensitive params from the raw query string,
+  # `:private_allow_list` -> keep only the registered allow-listed keys.
   # Add an entry to make a new conn field scrubbed by default.
+  #
+  # `assigns` is cleared wholesale because auth libraries (Guardian, Pow,
+  # Coherence) routinely store decoded tokens, full user structs, and session
+  # data there — there is no reliable key-based heuristic to redact it safely.
+  # `private` mixes sensitive data (e.g. `:plug_session`) with high-signal
+  # framework metadata (Phoenix routing), so it uses an allow-list instead of
+  # clearing wholesale — see `@default_private_allow_list`.
   @scrubbable_conn_fields [
     cookies: :cookie_scrubber,
+    req_cookies: :clear,
     req_headers: :header_scrubber,
     params: :body_scrubber,
-    query_string: :query_string
+    body_params: :params,
+    query_params: :params,
+    query_string: :query_string,
+    assigns: :clear,
+    private: :private_allow_list
   ]
 
   @typedoc """
   A resolved set of per-field scrubbers for a `%Plug.Conn{}`.
 
   Each scrubber field holds a 1-arity function that takes the conn and returns
-  the scrubbed value for the corresponding field. Built by `put_conn_scrubber/1`
-  from `t:conn_scrubber_opts/0` and stored in the process dictionary.
+  the scrubbed value for the corresponding field. `private_allow_list` holds the
+  keys retained by the `:private_allow_list` strategy. Built by
+  `put_conn_scrubber/1` from `t:conn_scrubber_opts/0` and stored in the process
+  dictionary.
   """
   @type t :: %__MODULE__{
           body_scrubber: (Plug.Conn.t() -> term()),
           header_scrubber: (Plug.Conn.t() -> term()),
           cookie_scrubber: (Plug.Conn.t() -> term()),
-          url_scrubber: (Plug.Conn.t() -> String.t())
+          url_scrubber: (Plug.Conn.t() -> String.t()),
+          private_allow_list: [atom()]
         }
 
   @enforce_keys @scrubber_names
-  defstruct @scrubber_names
+  defstruct @scrubber_names ++ [private_allow_list: @default_private_allow_list]
 
   @doc false
   @spec scrubber_names() :: [atom()]
@@ -123,12 +170,14 @@ defmodule Sentry.Scrubber do
 
   Each `*_scrubber` key, when omitted, falls back to the field's default
   scrubber — the matching `scrub(conn, field)` clause of `scrub/2`.
+  `:private_allow_list` defaults to `default_private_allow_list/0`.
   """
   @type conn_scrubber_opts :: [
           body_scrubber: field_scrubber(),
           header_scrubber: field_scrubber(),
           cookie_scrubber: field_scrubber(),
-          url_scrubber: field_scrubber()
+          url_scrubber: field_scrubber(),
+          private_allow_list: [atom()]
         ]
 
   @doc """
@@ -151,6 +200,18 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.0"
   @spec default_header_keys() :: [String.t()]
   def default_header_keys, do: @default_scrubbed_header_keys
+
+  @doc """
+  Returns the default list of `%Plug.Conn{}` `:private` keys retained by the
+  `:private_allow_list` scrubbing strategy.
+
+  These are Phoenix's routing/render metadata keys, kept because they are
+  high-signal, non-sensitive breadcrumbs for triaging errors. This is the
+  default for the `scrubber: [conn_private_allow_list: ...]` configuration option.
+  """
+  @doc since: "13.1.1"
+  @spec default_private_allow_list() :: [atom()]
+  def default_private_allow_list, do: @default_private_allow_list
 
   @doc """
   Drops sensitive keys from a flat map.
@@ -261,7 +322,8 @@ defmodule Sentry.Scrubber do
       body_scrubber: resolve_scrubber(opts, :body_scrubber, :body),
       header_scrubber: resolve_scrubber(opts, :header_scrubber, :headers),
       cookie_scrubber: resolve_scrubber(opts, :cookie_scrubber, :cookies),
-      url_scrubber: resolve_scrubber(opts, :url_scrubber, :url)
+      url_scrubber: resolve_scrubber(opts, :url_scrubber, :url),
+      private_allow_list: Keyword.get(opts, :private_allow_list, @default_private_allow_list)
     }
   end
 
@@ -468,6 +530,8 @@ defmodule Sentry.Scrubber do
   #     params-shaped map, leaving `%Plug.Conn.Unfetched{}` untouched
   #   * `:query_string` — redacts sensitive params from THIS field (a raw query
   #     string) via `scrub_query_string/1`
+  #   * `:private_allow_list` — keeps only the registered allow-listed keys of
+  #     THIS field (a map), dropping everything else
   defp scrub_conn_field(conn, _field, scrubber_key) when scrubber_key in @scrubber_names,
     do: get(scrubber_key).(conn)
 
@@ -478,6 +542,9 @@ defmodule Sentry.Scrubber do
 
   defp scrub_conn_field(conn, field, :query_string),
     do: scrub_query_string(Map.fetch!(conn, field))
+
+  defp scrub_conn_field(conn, field, :private_allow_list),
+    do: Map.take(Map.fetch!(conn, field), scrubber().private_allow_list)
 
   # Scrubs a params-shaped value with the default sensitive keys, leaving
   # `%Plug.Conn.Unfetched{}` (and any non-plain-map) untouched. Shared by the

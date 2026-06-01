@@ -213,6 +213,37 @@ defmodule Sentry.PlugCaptureTest do
       refute arg2 =~ "secret", "non-conn params arg leaked into exception value: #{arg2}"
     end
 
+    test "retains allow-listed conn.private metadata when scrubbing ActionClauseError" do
+      # The embedded conn's :private map is reduced to the allow-list: Phoenix
+      # routing metadata is high-signal for triage and must survive, while
+      # non-allow-listed entries (e.g. the per-router pipeline key) are dropped.
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?password=secret")
+        |> call_phoenix_endpoint()
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+
+      # Sensitive data is still scrubbed (proves the scrubber ran)...
+      assert exception.value =~ ~s(params: %{"password" => "*********"})
+
+      # ...routing metadata in the allow-list survives...
+      assert exception.value =~ "phoenix_controller"
+      assert exception.value =~ "Sentry.PlugCaptureTest.PhoenixController"
+      assert exception.value =~ "phoenix_action"
+      assert exception.value =~ ":action_clause_error"
+
+      # ...but non-allow-listed private entries are dropped. Phoenix stores a
+      # per-router pipeline list under the router module key; it is not in the
+      # allow-list, so it must not appear in the reported conn.
+      refute exception.value =~ "Sentry.PlugCaptureTest.PhoenixRouter => []"
+    end
+
     test "scrubs Phoenix.ActionClauseError using PlugContext-configured body_scrubber" do
       Application.put_env(:sentry, PhoenixEndpointWithCustomPlugContext,
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]

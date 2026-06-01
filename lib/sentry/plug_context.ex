@@ -155,6 +155,7 @@ defmodule Sentry.PlugContext do
         # when no :url_scrubber is configured, fall back to the no-op
         # default_url_scrubber/1 rather than Sentry.Scrubber's scrubbing default.
         |> Keyword.put_new(:url_scrubber, {__MODULE__, :default_url_scrubber, []})
+        |> Keyword.put(:private_allow_list, Sentry.Config.scrubber()[:conn_private_allow_list])
 
       Sentry.Scrubber.put_conn_scrubber(conn_scrubber_opts)
 

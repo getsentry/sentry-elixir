@@ -514,6 +514,37 @@ defmodule Sentry.Config do
       `{Sentry.Test.Config, :namespace}` as the resolver to enable per-test
       configuration isolation via `Sentry.Test.Config.put/1`.
       """
+    ],
+    scrubber: [
+      type: :keyword_list,
+      default: [],
+      type_doc: "`t:keyword/0`",
+      doc: """
+      Configuration for how the SDK scrubs sensitive data out of captured events.
+
+      *Available since v13.1.1*.
+      """,
+      keys: [
+        conn_private_allow_list: [
+          type: {:list, :atom},
+          default: Sentry.Scrubber.default_private_allow_list(),
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          A list of keys that are retained in a `%Plug.Conn{}`'s `:private` map when
+          a captured error embeds a connection (for example a `Phoenix.ActionClauseError`
+          reported via `Sentry.PlugCapture`). All other `:private` keys are dropped.
+
+          The `:private` map can hold framework internals and sensitive data (such as
+          the decoded session under `:plug_session`), so it is not safe to report
+          wholesale. By default the SDK keeps only Phoenix's routing and render
+          metadata — see `Sentry.Scrubber.default_private_allow_list/0` — which is
+          high-signal for triaging which controller/action failed. Set this option to
+          extend or replace that list.
+
+          *Available since v13.1.1*.
+          """
+        ]
+      ]
     ]
   ]
 
@@ -913,6 +944,9 @@ defmodule Sentry.Config do
 
   @spec in_app_module_allow_list() :: [atom()]
   def in_app_module_allow_list, do: fetch!(:in_app_module_allow_list)
+
+  @spec scrubber() :: keyword()
+  def scrubber, do: fetch!(:scrubber)
 
   @spec send_result() :: :none | :sync
   def send_result, do: fetch!(:send_result)
