@@ -276,7 +276,7 @@ defmodule Sentry.Scrubber do
         mfa_to_fun({__MODULE__, :scrub, [field]})
 
       {:ok, nil} ->
-        nil_scrubber(field)
+        pass_through(field)
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
         mfa_to_fun({m, f, args})
@@ -289,8 +289,8 @@ defmodule Sentry.Scrubber do
     end
   end
 
-  defp nil_scrubber(:url), do: fn conn -> Plug.Conn.request_url(conn) end
-  defp nil_scrubber(_field), do: fn _conn -> %{} end
+  defp pass_through(:url), do: fn conn -> Plug.Conn.request_url(conn) end
+  defp pass_through(_field), do: fn _conn -> %{} end
 
   defp mfa_to_fun({m, f, args}), do: fn conn -> apply(m, f, [conn | args]) end
 
