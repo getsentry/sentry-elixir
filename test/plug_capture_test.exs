@@ -198,6 +198,12 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
       assert exception.value =~ ~s(params: %{"password" => "*********"})
+
+      # conn.query_string must be scrubbed too. The "query_string:" prefix isolates
+      # this from the conn's query_params map, which is not broadened into the
+      # scrubbed fields on this branch.
+      refute exception.value =~ ~s(query_string: "password=secret"),
+             "query_string leaked into exception value: #{exception.value}"
     end
 
     test "scrubs Phoenix.ActionClauseError using PlugContext-configured body_scrubber" do

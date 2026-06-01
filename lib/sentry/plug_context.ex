@@ -148,7 +148,9 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
-      Sentry.Scrubber.put_conn_scrubber(Keyword.take(opts, Sentry.Scrubber.scrubber_names()))
+      conn_scrubber_opts = Keyword.take(opts, Sentry.Scrubber.scrubber_names())
+
+      Sentry.Scrubber.put_conn_scrubber(conn_scrubber_opts)
 
       request = build_request_interface_data(conn, opts)
       Sentry.Context.set_request_context(request)

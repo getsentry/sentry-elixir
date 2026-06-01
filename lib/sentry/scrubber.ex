@@ -40,13 +40,23 @@ defmodule Sentry.Scrubber do
 
   ## Scrubbing a `%Plug.Conn{}`
 
-  Conn scrubbing is configured per process rather than per call. Register the
-  per-field scrubbers once with `put_conn_scrubber/1` (typically from
-  `Sentry.PlugContext.call/2`), then `scrub/1` redacts a conn's params,
-  headers, and cookies using that registration. The request URL is not a conn
-  field, so callers fetch the registered `:url_scrubber` with `get/1` and
-  apply it to the conn. Any field left unregistered falls back to the default
-  behavior implemented by `scrub/2`'s `scrub(conn, field)` clauses.
+  `scrub/1` redacts a conn by applying, to each field listed in the
+  `@scrubbable_conn_fields` attribute, that field's *strategy*. A strategy is
+  either:
+
+    * a configurable scrubber (`:cookie_scrubber`, `:header_scrubber`,
+      `:body_scrubber`) — resolved per process via `put_conn_scrubber/1`
+      (typically from `Sentry.PlugContext.call/2`), falling back to the SDK
+      default `scrub(conn, field)` clause when none is registered, or
+    * a fixed tag — `:clear` replaces the field with `%{}`, `:params` scrubs the
+      field as a params-shaped map, and `:query_string` redacts sensitive params
+      from a raw query string.
+
+  The defaults can be overridden per call with `scrub(conn, overrides)`, where
+  `overrides` is a `field: strategy` keyword list merged over the attribute —
+  for example `scrub(conn, assigns: :clear)`. The request URL is not a conn
+  field, so callers fetch the registered `:url_scrubber` with `get/1` and apply
+  it to the conn.
   """
 
   @moduledoc since: "13.1.0"
@@ -57,20 +67,24 @@ defmodule Sentry.Scrubber do
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
-  # `%Plug.Conn{}` fields scrubbed by `scrub/1`, each mapped to the struct key
-  # of the scrubber that redacts it. Add an entry to make a new field scrubbed
-  # by default.
+  # Default `field -> strategy` mapping applied by `scrub/1` (overridable per
+  # call via `scrub(conn, overrides)`). A strategy is either a configurable
+  # scrubber struct-key (resolved per process via `get/1`) or a fixed tag:
+  # `:clear` -> `%{}`, `:params` -> params-shaped scrub (Unfetched-safe),
+  # `:query_string` -> redact sensitive params from the raw query string.
+  # Add an entry to make a new conn field scrubbed by default.
   @scrubbable_conn_fields [
     cookies: :cookie_scrubber,
     req_headers: :header_scrubber,
-    params: :body_scrubber
+    params: :body_scrubber,
+    query_string: :query_string
   ]
 
   @typedoc """
   A resolved set of per-field scrubbers for a `%Plug.Conn{}`.
 
-  Each field holds a 1-arity function that takes the conn and returns the
-  scrubbed value for the corresponding field. Built by `put_conn_scrubber/1`
+  Each scrubber field holds a 1-arity function that takes the conn and returns
+  the scrubbed value for the corresponding field. Built by `put_conn_scrubber/1`
   from `t:conn_scrubber_opts/0` and stored in the process dictionary.
   """
   @type t :: %__MODULE__{
@@ -107,8 +121,8 @@ defmodule Sentry.Scrubber do
   @typedoc """
   Options accepted by `put_conn_scrubber/1`.
 
-  Each key, when omitted, falls back to the field's default scrubber — the
-  matching `scrub(conn, field)` clause of `scrub/2`.
+  Each `*_scrubber` key, when omitted, falls back to the field's default
+  scrubber — the matching `scrub(conn, field)` clause of `scrub/2`.
   """
   @type conn_scrubber_opts :: [
           body_scrubber: field_scrubber(),
@@ -308,11 +322,12 @@ defmodule Sentry.Scrubber do
   @doc """
   Scrubs a `%Plug.Conn{}` or a plain map.
 
-  Given a `%Plug.Conn{}`, scrubs its cookies, headers, and params using the
-  current process's registered scrubbers (see `put_conn_scrubber/1`), falling
-  back to the SDK defaults for any field without a registered scrubber. The
-  request URL is not a conn field; callers scrub it separately by applying the
-  `:url_scrubber` from `get/1` (whose default is `scrub(conn, :url)`).
+  Given a `%Plug.Conn{}`, scrubs each field listed in `@scrubbable_conn_fields`
+  according to its strategy — see the "Scrubbing a `%Plug.Conn{}`" section in
+  the module docs and `scrub/2` for the per-field defaults and how to override
+  them per call. The request URL is not a conn field; callers scrub it
+  separately by applying the `:url_scrubber` from `get/1` (whose default is
+  `scrub(conn, :url)`).
 
   Given a plain map, recursively scrubs it with the default sensitive keys —
   equivalent to `scrub(map, [])`. See `scrub/2`.
@@ -322,11 +337,7 @@ defmodule Sentry.Scrubber do
   @spec scrub(map()) :: map()
   @spec scrub(term()) :: term()
 
-  def scrub(conn) when is_struct(conn, Plug.Conn) do
-    Enum.reduce(@scrubbable_conn_fields, conn, fn {field, scrubber_key}, acc ->
-      Map.replace!(acc, field, normalize(field, get(scrubber_key).(conn)))
-    end)
-  end
+  def scrub(conn) when is_struct(conn, Plug.Conn), do: scrub(conn, [])
 
   def scrub(map) when is_map(map) and not is_struct(map), do: scrub(map, [])
 
@@ -375,11 +386,22 @@ defmodule Sentry.Scrubber do
           |> Map.drop(["my_secret_field"])
         end
       end
+
+  ## Scrubbing a whole `%Plug.Conn{}` with overrides — `scrub(conn, overrides)`
+
+  Behaves like `scrub/1` but merges the `field: strategy` keyword `overrides`
+  over the `@scrubbable_conn_fields` defaults, so a caller can scrub additional
+  fields or change a field's strategy for that call. Strategies are a
+  configurable scrubber struct-key, `:clear` (replace with `%{}`), or `:params`
+  (params-shaped scrub of that field):
+
+      Sentry.Scrubber.scrub(conn, assigns: :clear, query_params: :params)
   """
   @doc since: "13.1.0"
   @spec scrub(map(), [option()]) :: map()
   @spec scrub(list(), [option()]) :: list()
   @spec scrub(term(), [option()]) :: term()
+  @spec scrub(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
   @spec scrub(Plug.Conn.t(), :body | :headers | :cookies | :url) :: term()
 
   def scrub(map, opts) when is_map(map) and not is_struct(map) and is_list(opts) do
@@ -390,8 +412,17 @@ defmodule Sentry.Scrubber do
     end)
   end
 
-  def scrub(struct, opts) when is_struct(struct) and is_list(opts),
-    do: struct |> Map.from_struct() |> scrub(opts)
+  def scrub(conn, overrides) when is_struct(conn, Plug.Conn) and is_list(overrides) do
+    @scrubbable_conn_fields
+    |> Keyword.merge(overrides)
+    |> Enum.reduce(conn, fn {field, strategy}, acc ->
+      Map.replace(acc, field, normalize(field, scrub_conn_field(conn, field, strategy)))
+    end)
+  end
+
+  def scrub(struct, opts)
+      when is_struct(struct) and not is_struct(struct, Plug.Conn) and is_list(opts),
+      do: struct |> Map.from_struct() |> scrub(opts)
 
   def scrub(list, opts) when is_list(list), do: Enum.map(list, &scrub(&1, opts))
 
@@ -404,13 +435,8 @@ defmodule Sentry.Scrubber do
   # `{__MODULE__, :scrub, [field]}` MFAs in `resolve_scrubber/3`. `scrub/1`
   # (conn fields) and `get/1` (URL) apply the *registered* scrubbers; these
   # clauses are the defaults those registrations fall back to.
-  def scrub(conn, :body) when is_struct(conn, Plug.Conn) do
-    if is_map(conn.params) and not is_struct(conn.params) do
-      scrub(conn.params)
-    else
-      conn.params
-    end
-  end
+  def scrub(conn, :body) when is_struct(conn, Plug.Conn),
+    do: scrub_params_value(conn.params)
 
   def scrub(conn, :headers) when is_struct(conn, Plug.Conn) do
     Enum.reject(conn.req_headers, fn
@@ -426,6 +452,33 @@ defmodule Sentry.Scrubber do
 
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
     do: Plug.Conn.request_url(conn)
+
+  # Resolves a single conn field's strategy (from `@scrubbable_conn_fields` or a
+  # `scrub(conn, overrides)` override) to its scrubbed value:
+  #
+  #   * a configurable scrubber struct-key — resolved per-process via `get/1`,
+  #     honoring any `put_conn_scrubber/1` registration
+  #   * `:clear` — replaces the field with `%{}`
+  #   * `:params` — scrubs THIS field (read via `Map.fetch!/2`) as a
+  #     params-shaped map, leaving `%Plug.Conn.Unfetched{}` untouched
+  #   * `:query_string` — redacts sensitive params from THIS field (a raw query
+  #     string) via `scrub_query_string/1`
+  defp scrub_conn_field(conn, _field, scrubber_key) when scrubber_key in @scrubber_names,
+    do: get(scrubber_key).(conn)
+
+  defp scrub_conn_field(_conn, _field, :clear), do: %{}
+
+  defp scrub_conn_field(conn, field, :params),
+    do: scrub_params_value(Map.fetch!(conn, field))
+
+  defp scrub_conn_field(conn, field, :query_string),
+    do: scrub_query_string(Map.fetch!(conn, field))
+
+  # Scrubs a params-shaped value with the default sensitive keys, leaving
+  # `%Plug.Conn.Unfetched{}` (and any non-plain-map) untouched. Shared by the
+  # `:body` default clause and the `:params` strategy.
+  defp scrub_params_value(value) when is_map(value) and not is_struct(value), do: scrub(value)
+  defp scrub_params_value(value), do: value
 
   # Coerces a per-field scrubber result into the shape its `%Plug.Conn{}` field
   # requires. A header scrubber may return a map (the documented convention —

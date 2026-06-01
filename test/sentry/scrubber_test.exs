@@ -166,6 +166,79 @@ defmodule Sentry.ScrubberTest do
 
       assert changed == [:cookies, :params, :req_headers]
     end
+
+    test "scrubs sensitive params from query_string" do
+      conn = %Plug.Conn{
+        query_string: "password=secret&token=abc&card=4242424242424242&keep=ok"
+      }
+
+      scrubbed = Scrubber.scrub(conn).query_string
+
+      refute scrubbed =~ "secret"
+      refute scrubbed =~ "4242424242424242"
+      assert scrubbed =~ "token=abc"
+      assert scrubbed =~ "keep=ok"
+    end
+  end
+
+  describe "scrub/2 with conn field overrides" do
+    test ":clear override replaces additional fields with %{}" do
+      conn = %Plug.Conn{
+        params: %{"password" => "hunter2"},
+        assigns: %{current_user: %{password_hash: "secret"}},
+        private: %{guardian_token: "jwt"}
+      }
+
+      scrubbed = Scrubber.scrub(conn, assigns: :clear, private: :clear)
+
+      # default fields still scrubbed
+      assert scrubbed.params == %{"password" => "*********"}
+      # overridden fields cleared wholesale
+      assert scrubbed.assigns == %{}
+      assert scrubbed.private == %{}
+    end
+
+    test ":params override scrubs the named field by default sensitive keys" do
+      conn = %Plug.Conn{
+        body_params: %{"user" => %{"password" => "hunter2", "email" => "a@b.c"}},
+        query_params: %{"secret" => "leak", "page" => "1"}
+      }
+
+      scrubbed = Scrubber.scrub(conn, body_params: :params, query_params: :params)
+
+      assert scrubbed.body_params == %{
+               "user" => %{"password" => "*********", "email" => "a@b.c"}
+             }
+
+      assert scrubbed.query_params == %{"secret" => "*********", "page" => "1"}
+    end
+
+    test ":params override leaves %Plug.Conn.Unfetched{} untouched" do
+      unfetched = %Plug.Conn.Unfetched{aspect: :body_params}
+      conn = %Plug.Conn{body_params: unfetched}
+
+      scrubbed = Scrubber.scrub(conn, body_params: :params)
+
+      assert scrubbed.body_params == unfetched
+    end
+
+    test "an override can change a default field's strategy" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2", "name" => "Alice"}}
+
+      # default for :params is :body_scrubber (key-based); override to :clear
+      scrubbed = Scrubber.scrub(conn, params: :clear)
+
+      assert scrubbed.params == %{}
+    end
+
+    test "no overrides behaves like scrub/1" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        params: %{"password" => "hunter2"}
+      }
+
+      assert Scrubber.scrub(conn, []) == Scrubber.scrub(conn)
+    end
   end
 
   describe "put_conn_scrubber/1 + scrub/1" do
