@@ -289,7 +289,7 @@ defmodule Sentry.Scrubber do
     end
   end
 
-  defp nil_scrubber(:url), do: mfa_to_fun({__MODULE__, :scrub, [:url]})
+  defp nil_scrubber(:url), do: fn conn -> Plug.Conn.request_url(conn) end
   defp nil_scrubber(_field), do: fn _conn -> %{} end
 
   defp mfa_to_fun({m, f, args}), do: fn conn -> apply(m, f, [conn | args]) end
@@ -371,9 +371,9 @@ defmodule Sentry.Scrubber do
     * `:headers` — drops sensitive `conn.req_headers` case-insensitively,
       preserving the list-of-tuples shape.
     * `:cookies` — drops *all* cookies, returning `%{}`.
-    * `:url` — returns the request URL unchanged. Scrub sensitive data out of
-      URLs by configuring a custom `:url_scrubber` (see `Sentry.PlugContext`),
-      for example one built on `scrub_url/1`.
+    * `:url` — scrubs sensitive query parameters from the request URL via
+      `scrub_url/1`. To disable URL scrubbing, register a `:url_scrubber` of
+      `nil` (or a custom one); see `Sentry.PlugContext`.
 
   Because these clauses are the defaults (not the registered scrubbers), a
   custom `:body_scrubber` can safely compose on the default behavior without
@@ -451,7 +451,7 @@ defmodule Sentry.Scrubber do
   def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
 
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
-    do: Plug.Conn.request_url(conn)
+    do: scrub_url(Plug.Conn.request_url(conn))
 
   # Resolves a single conn field's strategy (from `@scrubbable_conn_fields` or a
   # `scrub(conn, overrides)` override) to its scrubbed value:

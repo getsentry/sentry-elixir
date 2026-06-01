@@ -148,7 +148,13 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
-      conn_scrubber_opts = Keyword.take(opts, Sentry.Scrubber.scrubber_names())
+      conn_scrubber_opts =
+        opts
+        |> Keyword.take(Sentry.Scrubber.scrubber_names())
+        # Preserve PlugContext's historical default of *not* scrubbing the URL:
+        # when no :url_scrubber is configured, fall back to the no-op
+        # default_url_scrubber/1 rather than Sentry.Scrubber's scrubbing default.
+        |> Keyword.put_new(:url_scrubber, {__MODULE__, :default_url_scrubber, []})
 
       Sentry.Scrubber.put_conn_scrubber(conn_scrubber_opts)
 

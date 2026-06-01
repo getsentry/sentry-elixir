@@ -101,7 +101,7 @@ defmodule Sentry.ScrubberTest do
   end
 
   describe "scrub/2 with a Plug.Conn field" do
-    test ":url returns the request URL unchanged, including sensitive query params" do
+    test ":url scrubs sensitive query parameters" do
       conn = %Plug.Conn{
         scheme: :http,
         host: "example.com",
@@ -110,8 +110,28 @@ defmodule Sentry.ScrubberTest do
         query_string: "password=secret&visible=ok"
       }
 
-      assert Scrubber.scrub(conn, :url) == Plug.Conn.request_url(conn)
-      assert Scrubber.scrub(conn, :url) =~ "password=secret"
+      scrubbed = Scrubber.scrub(conn, :url)
+
+      refute scrubbed =~ "secret"
+      assert scrubbed =~ "visible=ok"
+      assert scrubbed =~ "http://example.com/foo?"
+      # equivalent to scrubbing the URL directly
+      assert scrubbed == Scrubber.scrub_url(Plug.Conn.request_url(conn))
+    end
+
+    test "a nil :url_scrubber leaves the URL unchanged" do
+      conn = %Plug.Conn{
+        scheme: :http,
+        host: "example.com",
+        port: 80,
+        request_path: "/foo",
+        query_string: "password=secret&visible=ok"
+      }
+
+      :ok = Scrubber.put_conn_scrubber(url_scrubber: nil)
+
+      assert Scrubber.get(:url_scrubber).(conn) == Plug.Conn.request_url(conn)
+      assert Scrubber.get(:url_scrubber).(conn) =~ "password=secret"
     end
   end
 
