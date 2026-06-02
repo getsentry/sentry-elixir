@@ -468,9 +468,12 @@ defmodule Sentry.Event do
     # String.slice/3 would, while keeping inspect from materializing huge terms.
     inspect_opts = [printable_limit: max_length, limit: max(div(max_length, 3), 1)]
 
-    for {arg, index} <- Enum.with_index(args), into: %{} do
-      {"arg#{index}", String.slice(inspect(Sentry.Scrubber.scrub(arg), inspect_opts), 0, max_length)}
-    end
+    args
+    |> Sentry.Scrubber.StacktraceScrubber.scrub_args()
+    |> Enum.with_index()
+    |> Map.new(fn {arg, index} ->
+      {"arg#{index}", String.slice(inspect(arg, inspect_opts), 0, max_length)}
+    end)
   end
 
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)

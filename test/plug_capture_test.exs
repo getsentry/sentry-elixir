@@ -204,6 +204,13 @@ defmodule Sentry.PlugCaptureTest do
       # scrubbed fields on this branch.
       refute exception.value =~ ~s(query_string: "password=secret"),
              "query_string leaked into exception value: #{exception.value}"
+
+      # The action's second argument is the raw params map, a separate arg from
+      # the conn. It must be scrubbed too. Isolate the "# 2" argument block so
+      # this assertion is not confounded by the conn's query_params, which is not
+      # broadened into the scrubbed fields on this branch.
+      assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
+      refute arg2 =~ "secret", "non-conn params arg leaked into exception value: #{arg2}"
     end
 
     test "scrubs Phoenix.ActionClauseError using PlugContext-configured body_scrubber" do
@@ -234,6 +241,40 @@ defmodule Sentry.PlugCaptureTest do
 
              #{exception.value}
              """
+    end
+
+    test "applies the PlugContext body_scrubber to the non-conn params arg too" do
+      Application.put_env(:sentry, PhoenixEndpointWithCustomPlugContext,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithCustomPlugContext)
+      Process.link(pid)
+
+      # "ssn" is not a default-sensitive key, so only the user-configured
+      # body_scrubber (which replaces the params wholesale) hides it. Scrubbing
+      # the standalone params arg with the default key list would leak it.
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?ssn=123-45-6789")
+        |> Plug.run([{PhoenixEndpointWithCustomPlugContext, []}])
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+
+      # Isolate the action's second argument (the raw params map). The conn's own
+      # query_params is not broadened into the scrubbed fields on this branch, so
+      # a global assertion would be confounded by it.
+      assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
+
+      assert arg2 =~ ~s("scrubbed_by" => "custom_body_scrubber"),
+             "expected the non-conn params arg to honor the configured body_scrubber, got: #{arg2}"
+
+      refute arg2 =~ "123-45-6789", "ssn leaked through the non-conn params arg: #{arg2}"
     end
 
     test "can render feedback form in Phoenix ErrorView" do
