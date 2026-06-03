@@ -9,6 +9,14 @@ defmodule PhoenixAppWeb.PageController do
   plug Sentry.PlugContext,
        [body_scrubber: {__MODULE__, :marker_body_scrubber}] when action == :function_clause_error
 
+  plug Sentry.PlugContext, [] when action == :function_clause_error_default
+
+  plug Sentry.PlugContext, [] when action == :function_clause_error_private
+  plug :put_sensitive_private when action == :function_clause_error_private
+
+  plug Sentry.PlugContext, [] when action == :function_clause_error_cleared
+  plug :put_sensitive_assigns_and_cookies when action == :function_clause_error_cleared
+
   plug Sentry.PlugContext, [] when action == :generic_clause_error
 
   plug Sentry.PlugContext, [] when action == :checkout
@@ -22,6 +30,18 @@ defmodule PhoenixAppWeb.PageController do
   end
 
   def function_clause_error(_conn, %{"required" => _value}) do
+    :ok
+  end
+
+  def function_clause_error_default(_conn, %{"required" => _value}) do
+    :ok
+  end
+
+  def function_clause_error_private(_conn, %{"required" => _value}) do
+    :ok
+  end
+
+  def function_clause_error_cleared(_conn, %{"required" => _value}) do
     :ok
   end
 
@@ -55,6 +75,24 @@ defmodule PhoenixAppWeb.PageController do
 
   @doc false
   def marker_body_scrubber(_conn), do: %{"marker" => "custom-scrub-applied"}
+
+  # Injects a non-allow-listed key into conn.private so the captured
+  # Phoenix.ActionClauseError exercises the :private allow-list scrubbing: the
+  # injected key must be dropped, while Phoenix's routing metadata is retained.
+  defp put_sensitive_private(conn, _opts) do
+    Plug.Conn.put_private(conn, :plug_session, %{
+      "user_id" => 1,
+      "csrf_token" => "secret-csrf-value"
+    })
+  end
+
+  # Injects sensitive data into conn.assigns and req_cookies so the captured
+  # Phoenix.ActionClauseError exercises the :clear strategy: both fields must be
+  # cleared to %{} so none of this data reaches Sentry.
+  defp put_sensitive_assigns_and_cookies(conn, _opts) do
+    conn = Plug.Conn.assign(conn, :current_user, %{id: 1, password_hash: "secret-assigns-hash"})
+    %{conn | req_cookies: %{"sid" => "secret-cookie-session"}}
+  end
 
   def transaction(conn, _params) do
     Tracer.with_span "test_span" do

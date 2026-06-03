@@ -44,6 +44,80 @@ defmodule Sentry.Integrations.Phoenix.StacktraceVarsScrubbingTest do
            "user-provided body_scrubber marker missing from frame vars: #{frame_vars}"
   end
 
+  test "default scrubbing redacts sensitive params when no custom body_scrubber is configured",
+       %{conn: conn, ref: ref} do
+    conn =
+      conn
+      |> put_req_header("authorization", @auth_token)
+      |> put_req_header("cookie", "session=#{@cookie_value}")
+
+    assert_raise Phoenix.ActionClauseError, fn ->
+      post(
+        conn,
+        "/function-clause-error-default?password=qs-secret&keep_me=visible",
+        %{"password" => "body-secret", "username" => "alice"}
+      )
+    end
+
+    [[{%{"type" => "event"}, event_payload}]] = collect_envelopes(ref, 1, timeout: 2000)
+
+    value = exception_value(event_payload)
+
+    # Default key-based scrubbing redacts sensitive values wherever they appear:
+    # body params, query params, query string, the auth header, and cookies.
+    refute value =~ "body-secret", "body password leaked into exception value: #{value}"
+    refute value =~ "qs-secret", "query password leaked into exception value: #{value}"
+    refute value =~ @auth_token, "auth token leaked into exception value: #{value}"
+    refute value =~ @cookie_value, "session cookie leaked into exception value: #{value}"
+
+    # Non-sensitive data is preserved.
+    assert value =~ "alice"
+    assert value =~ "keep_me=visible"
+
+    # The user-provided marker is NOT applied on this endpoint (default path).
+    refute value =~ "custom-scrub-applied"
+  end
+
+  test "reduces conn.private to the allow-list (drops session data, keeps routing metadata)",
+       %{conn: conn, ref: ref} do
+    assert_raise Phoenix.ActionClauseError, fn ->
+      post(conn, ~p"/function-clause-error-private", %{})
+    end
+
+    [[{%{"type" => "event"}, event_payload}]] = collect_envelopes(ref, 1, timeout: 2000)
+
+    value = exception_value(event_payload)
+
+    # The non-allow-listed :private key injected on the conn (and its session data)
+    # is dropped from the captured exception.
+    refute value =~ "plug_session", "non-allow-listed :private key leaked: #{value}"
+    refute value =~ "secret-csrf-value", "session data leaked from conn.private: #{value}"
+
+    # High-signal Phoenix routing metadata is retained.
+    assert value =~ "phoenix_action", "expected routing metadata to be kept: #{value}"
+    assert value =~ "phoenix_controller", "expected routing metadata to be kept: #{value}"
+  end
+
+  test "clears conn.assigns and req_cookies wholesale",
+       %{conn: conn, ref: ref} do
+    assert_raise Phoenix.ActionClauseError, fn ->
+      post(conn, ~p"/function-clause-error-cleared", %{})
+    end
+
+    [[{%{"type" => "event"}, event_payload}]] = collect_envelopes(ref, 1, timeout: 2000)
+
+    value = exception_value(event_payload)
+
+    # assigns and req_cookies are cleared wholesale, so neither the injected
+    # assign data nor the cookie value reaches Sentry.
+    assert value =~ "assigns: %{}", "expected assigns to be cleared: #{value}"
+    assert value =~ "req_cookies: %{}", "expected req_cookies to be cleared: #{value}"
+
+    refute value =~ "secret-assigns-hash", "assigns data leaked: #{value}"
+    refute value =~ "current_user", "assigns key leaked: #{value}"
+    refute value =~ "secret-cookie-session", "req_cookies data leaked: #{value}"
+  end
+
   test "scrubs args of a generic FunctionClauseError raised inside an action",
        %{conn: conn, ref: ref} do
     # This is a plain Elixir FunctionClauseError (not a Phoenix.ActionClauseError),
@@ -102,5 +176,12 @@ defmodule Sentry.Integrations.Phoenix.StacktraceVarsScrubbingTest do
     |> get_in(["stacktrace", "frames"])
     |> Enum.flat_map(fn frame -> Map.values(frame["vars"] || %{}) end)
     |> Enum.join("\n")
+  end
+
+  defp exception_value(event_payload) do
+    event_payload
+    |> Map.fetch!("exception")
+    |> hd()
+    |> Map.fetch!("value")
   end
 end
