@@ -55,8 +55,6 @@ defmodule Sentry.Test.Scope.Registry do
   alias Sentry.Test.Registry, as: TestRegistry
   alias Sentry.Test.Scope
 
-  require Logger
-
   @counter_key :sentry_test_scope_counter
   @scope_key :sentry_test_scope
   @ancestor_walk_depth 8

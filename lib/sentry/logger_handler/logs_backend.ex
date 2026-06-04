@@ -9,8 +9,6 @@ defmodule Sentry.LoggerHandler.LogsBackend do
 
   @behaviour Sentry.LoggerHandler.Backend
 
-  require Logger
-
   alias Sentry.{Config, LogEvent, LoggerUtils, TelemetryProcessor}
 
   @impl true

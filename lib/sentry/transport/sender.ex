@@ -5,8 +5,6 @@ defmodule Sentry.Transport.Sender do
 
   alias Sentry.{Envelope, Event, Metric, Transport, Transaction}
 
-  require Logger
-
   @registry Sentry.Transport.SenderRegistry
 
   ## Public API

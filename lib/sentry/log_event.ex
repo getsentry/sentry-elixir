@@ -142,7 +142,6 @@ defmodule Sentry.LogEvent do
   #   - Positional: "Hello %s" with ["Jane"]
   #   - Named: "Hello %{name}" with %{name: "Jane"}
   # Returns {body, template, parameters} tuple
-  defp interpolate_template(message, nil), do: {message, nil, nil}
   defp interpolate_template(message, []), do: {message, nil, nil}
   defp interpolate_template(message, params) when params == %{}, do: {message, nil, nil}
 

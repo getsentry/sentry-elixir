@@ -5,7 +5,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @type t :: %__MODULE__{}
 
     require Record
-    require OpenTelemetry
 
     @fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
     Record.defrecordp(:span, @fields)
