@@ -1,7 +1,13 @@
+defmodule Sentry.Scrubber.StacktraceScrubberTest.Card do
+  @moduledoc false
+  defstruct [:card_number, :name]
+end
+
 defmodule Sentry.Scrubber.StacktraceScrubberTest do
   use ExUnit.Case, async: true
 
   alias Sentry.Scrubber.StacktraceScrubber
+  alias Sentry.Scrubber.StacktraceScrubberTest.Card
 
   describe "scrub_args/1" do
     test "scrubs each arg with Sentry.Scrubber.scrub/1" do
@@ -20,6 +26,19 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
 
       # a plain map is key-scrubbed
       assert scrubbed_map == %{"password" => "*********", "ok" => "fine"}
+    end
+
+    test "scrubs a non-Plug.Conn struct's fields but keeps its type" do
+      args = [%Card{card_number: "4242424242424242", name: "Alice"}]
+
+      assert [scrubbed] = StacktraceScrubber.scrub_args(args)
+
+      # The struct keeps its type (so it inspects as %Card{...} in the frame var,
+      # not a bare map)...
+      assert is_struct(scrubbed, Card)
+      # ...while its fields are still scrubbed (here via the credit-card heuristic).
+      assert scrubbed.card_number == "*********"
+      assert scrubbed.name == "Alice"
     end
 
     test "scrubs each arg independently, with no conn/params mirroring" do
