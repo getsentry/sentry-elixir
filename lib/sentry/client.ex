@@ -21,8 +21,6 @@ defmodule Sentry.Client do
     Transport
   }
 
-  require Logger
-
   # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
   @max_message_length 8_192
 

@@ -255,13 +255,11 @@ defmodule Sentry.Test do
   defp tag_scheduler(processor_name) do
     scheduler_pid = Sentry.TelemetryProcessor.get_scheduler(processor_name)
 
-    if scheduler_pid do
-      # Goes through the unified `:sentry_test_scope` key, which also
-      # populates the merged routing ETS row so `Config.namespace/1`
-      # resolves the scheduler pid back to this test's scope.
-      Sentry.Test.Registry.claim_allow(self(), scheduler_pid, :soft)
-      tag_processor_for_allowed_pid(self(), scheduler_pid)
-    end
+    # Goes through the unified `:sentry_test_scope` key, which also
+    # populates the merged routing ETS row so `Config.namespace/1`
+    # resolves the scheduler pid back to this test's scope.
+    Sentry.Test.Registry.claim_allow(self(), scheduler_pid, :soft)
+    tag_processor_for_allowed_pid(self(), scheduler_pid)
 
     :ok
   end

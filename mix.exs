@@ -64,9 +64,20 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]],
       aliases: aliases()
-    ]
+    ] ++ xref_options()
+  end
+
+  defp xref_options do
+    if Version.match?(System.version(), ">= 1.20.0") do
+      [
+        elixirc_options: [
+          no_warn_undefined: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]
+        ]
+      ]
+    else
+      [xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]]]
+    end
   end
 
   def application do

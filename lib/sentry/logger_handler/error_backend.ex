@@ -9,8 +9,6 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
 
   @behaviour Sentry.LoggerHandler.Backend
 
-  require Logger
-
   alias Sentry.LoggerHandler.RateLimiter
   alias Sentry.LoggerUtils
   alias Sentry.Transport.SenderPool
