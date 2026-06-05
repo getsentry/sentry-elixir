@@ -330,7 +330,10 @@ defmodule Sentry.Scrubber do
   `scrub(conn, :url)`).
 
   Given a plain map, recursively scrubs it with the default sensitive keys —
-  equivalent to `scrub(map, [])`. See `scrub/2`.
+  equivalent to `scrub(map, [])`. Any other struct is converted to a map and
+  scrubbed the same way, so a sensitive field can't slip through unredacted —
+  for example when the struct is inspected into stacktrace frame vars. See
+  `scrub/2`.
   """
   @doc since: "13.1.1"
   @spec scrub(Plug.Conn.t()) :: Plug.Conn.t()
@@ -339,7 +342,9 @@ defmodule Sentry.Scrubber do
 
   def scrub(conn) when is_struct(conn, Plug.Conn), do: scrub(conn, [])
 
-  def scrub(map) when is_map(map) and not is_struct(map), do: scrub(map, [])
+  def scrub(struct) when is_struct(struct), do: scrub(struct, [])
+
+  def scrub(map) when is_map(map), do: scrub(map, [])
 
   def scrub(other), do: other
 

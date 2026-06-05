@@ -1,7 +1,13 @@
+defmodule Sentry.ScrubberTest.LeakyStruct do
+  @moduledoc false
+  defstruct [:card_number, :name]
+end
+
 defmodule Sentry.ScrubberTest do
   use ExUnit.Case, async: true
 
   alias Sentry.Scrubber
+  alias Sentry.ScrubberTest.LeakyStruct
 
   describe "new/1" do
     test "new/0 builds an all-defaults scrubber" do
@@ -391,9 +397,25 @@ defmodule Sentry.ScrubberTest do
       assert Scrubber.scrub([1, 2, 3]) == [1, 2, 3]
     end
 
-    test "returns unrelated structs unchanged" do
-      uri = URI.parse("http://example.com")
-      assert Scrubber.scrub(uri) == uri
+    test "scrubs non-Plug.Conn structs by converting them to a map" do
+      uri = URI.parse("http://example.com/path")
+
+      scrubbed = Scrubber.scrub(uri)
+
+      # The struct is converted to a plain map and scrubbed, never returned as-is.
+      refute is_struct(scrubbed)
+      assert is_map(scrubbed)
+      assert scrubbed.host == "example.com"
+    end
+
+    test "redacts value-detectable secrets in a non-Plug.Conn struct" do
+      scrubbed = Scrubber.scrub(%LeakyStruct{card_number: "4242424242424242", name: "Alice"})
+
+      refute is_struct(scrubbed)
+      # Once the struct is a map, value-based heuristics reach its fields: the
+      # credit-card-shaped value is redacted, non-sensitive data is preserved.
+      assert scrubbed.card_number == "*********"
+      assert scrubbed.name == "Alice"
     end
   end
 end
