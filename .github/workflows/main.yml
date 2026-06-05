@@ -22,10 +22,15 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.19.3-otp-28'
-            otp: '28.1'
+          - elixir: '1.20.0-otp-29'
+            otp: '29.0.1'
             lint: true
             dialyzer: true
+            release_test: true
+            os: ubuntu-latest
+
+          - elixir: '1.19.3-otp-28'
+            otp: '28.1'
             release_test: true
             os: ubuntu-latest
 
