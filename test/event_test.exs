@@ -6,6 +6,10 @@ defmodule Sentry.EventTest do
   alias Sentry.Event
   alias Sentry.Interfaces
 
+  defmodule SampleStruct do
+    defstruct [:name, :payload]
+  end
+
   doctest Event, import: true
 
   def event_generated_by_exception(extra \\ %{}) do
@@ -14,6 +18,22 @@ defmodule Sentry.EventTest do
     rescue
       e -> Event.transform_exception(e, stacktrace: __STACKTRACE__, extra: extra)
     end
+  end
+
+  defp event_with_stacktrace_args(args) do
+    try do
+      apply(Event, :not_a_function, args)
+    rescue
+      e -> Event.transform_exception(e, stacktrace: __STACKTRACE__)
+    end
+  end
+
+  defp vars_for_failing_frame(event) do
+    Enum.find_value(event.exception, fn %Interfaces.Exception{} = exception ->
+      Enum.find_value(exception.stacktrace.frames, fn frame ->
+        if frame.function == "Sentry.Event.not_a_function/1", do: frame.vars
+      end)
+    end)
   end
 
   test "parses error exception" do
@@ -69,6 +89,38 @@ defmodule Sentry.EventTest do
     assert is_binary(event.contexts.os.version)
     assert is_binary(event.contexts.runtime.name)
     assert is_binary(event.contexts.runtime.version)
+  end
+
+  describe "stacktrace args (vars)" do
+    test "truncates each inspected arg to :max_stacktrace_arg_length characters" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 20)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) == 20
+    end
+
+    test "renders structs with their type rather than garbling them when truncated" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      struct = %SampleStruct{name: "test", payload: String.duplicate("x", 100)}
+      event = event_with_stacktrace_args([struct])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.starts_with?(arg0, "%Sentry.EventTest.SampleStruct{")
+    end
+
+    test "respects a higher :max_stacktrace_arg_length than the old 513 default" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) > 513
+    end
   end
 
   test "respects extra information passed in" do

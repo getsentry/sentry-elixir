@@ -324,6 +324,16 @@ defmodule Sentry.Config do
       The maximum number of breadcrumbs to keep. See `Sentry.Context.add_breadcrumb/1`.
       """
     ],
+    max_stacktrace_arg_length: [
+      type: :non_neg_integer,
+      default: 10_000,
+      doc: """
+      The maximum length (in Unicode graphemes) of each inspected function argument reported in
+      the `vars` of a stacktrace frame. Arguments are inspected and then truncated to this
+      length. This guards against very large terms (such as big structs) blowing up the
+      size of an event. *Available since v13.2.0*.
+      """
+    ],
     report_deps: [
       type: :boolean,
       default: true,
@@ -949,6 +959,9 @@ defmodule Sentry.Config do
 
   @spec max_breadcrumbs() :: non_neg_integer()
   def max_breadcrumbs, do: fetch!(:max_breadcrumbs)
+
+  @spec max_stacktrace_arg_length() :: non_neg_integer()
+  def max_stacktrace_arg_length, do: fetch!(:max_stacktrace_arg_length)
 
   @spec dedup_events?() :: boolean()
   def dedup_events?, do: fetch!(:dedup_events)

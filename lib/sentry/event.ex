@@ -461,8 +461,15 @@ defmodule Sentry.Event do
   defp args_from_stacktrace([_other | _rest]), do: %{}
 
   defp stacktrace_args_to_vars(args) do
+    max_length = Config.max_stacktrace_arg_length()
+
+    # An inspected element costs at least ~3 chars (with comma and spaces), so capping the
+    # collection limit at max_length/3 never truncates earlier than the final
+    # String.slice/3 would, while keeping inspect from materializing huge terms.
+    inspect_opts = [printable_limit: max_length, limit: max(div(max_length, 3), 1)]
+
     for {arg, index} <- Enum.with_index(args), into: %{} do
-      {"arg#{index}", String.slice(inspect(arg), 0, 513)}
+      {"arg#{index}", String.slice(inspect(arg, inspect_opts), 0, max_length)}
     end
   end
 
