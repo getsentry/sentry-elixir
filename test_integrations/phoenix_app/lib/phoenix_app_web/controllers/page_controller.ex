@@ -6,6 +6,13 @@ defmodule PhoenixAppWeb.PageController do
 
   alias PhoenixApp.{Repo, Accounts.User}
 
+  plug Sentry.PlugContext,
+       [body_scrubber: {__MODULE__, :marker_body_scrubber}] when action == :function_clause_error
+
+  plug Sentry.PlugContext, [] when action == :generic_clause_error
+
+  plug Sentry.PlugContext, [] when action == :checkout
+
   def home(conn, _params) do
     render(conn, :home, layout: false)
   end
@@ -13,6 +20,41 @@ defmodule PhoenixAppWeb.PageController do
   def exception(_conn, _params) do
     raise "Test exception"
   end
+
+  def function_clause_error(_conn, %{"required" => _value}) do
+    :ok
+  end
+
+  # Fabricates a *generic* FunctionClauseError (NOT a Phoenix.ActionClauseError):
+  # the action itself matches fine, then calls a private helper whose only clause
+  # does not match the given argument. The sensitive data rides on that helper's
+  # argument, so it surfaces in the captured stacktrace frame vars and must be
+  # scrubbed there — independently of PlugCapture's ActionClauseError handling.
+  def generic_clause_error(conn, _params) do
+    build_widget(%{"password" => "raw-secret-password", "username" => "alice"})
+    json(conn, %{})
+  end
+
+  defp build_widget(%{"required" => value}), do: value
+
+  # A realistic checkout: build a %Billing.CreditCard{} value struct from the
+  # payment form and hand it to the billing context. The currency here is one the
+  # processor does not support, so PhoenixApp.Billing.charge/3 matches no clause
+  # and raises a *generic* FunctionClauseError. The card struct rides along in that
+  # frame's stacktrace args, where Sentry must scrub it before reporting.
+  def checkout(conn, _params) do
+    card = %PhoenixApp.Billing.CreditCard{
+      cardholder: "Alice Example",
+      number: "4242424242424242",
+      cvv: "123"
+    }
+
+    PhoenixApp.Billing.charge(card, 4200, "ZZZ")
+    json(conn, %{})
+  end
+
+  @doc false
+  def marker_body_scrubber(_conn), do: %{"marker" => "custom-scrub-applied"}
 
   def transaction(conn, _params) do
     Tracer.with_span "test_span" do

@@ -413,7 +413,7 @@ defmodule Sentry.Scrubber do
     keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
 
     Map.new(map, fn {key, value} ->
-      {key, if(key in keys, do: @scrubbed_value, else: scrub(value, opts))}
+      {key, if(sensitive_key?(key, keys), do: @scrubbed_value, else: scrub(value, opts))}
     end)
   end
 
@@ -495,6 +495,12 @@ defmodule Sentry.Scrubber do
   end
 
   defp normalize(_field, value), do: value
+
+  # Matches a map key against the configured sensitive-key list. The list is
+  # string-based (HTTP params), but maps built from structs via `Map.from_struct/1`
+  # have atom keys, so atoms are also compared by their string form.
+  defp sensitive_key?(key, keys),
+    do: key in keys or (is_atom(key) and Atom.to_string(key) in keys)
 
   defp credit_card_regex, do: ~r/^(?:\d[ -]*?){13,16}$/
 end

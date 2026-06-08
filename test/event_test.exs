@@ -128,6 +128,39 @@ defmodule Sentry.EventTest do
     assert event.extra == %{extra_data: "data"}
   end
 
+  test "scrubs sensitive data from Plug.Conn and map args in stacktrace frame vars" do
+    put_test_config(enable_source_code_context: false)
+
+    conn = %Plug.Conn{
+      req_headers: [
+        {"authorization", "Bearer leaky-token"},
+        {"cookie", "session=leaky-cookie"},
+        {"x-request-id", "ok-to-keep"}
+      ],
+      cookies: %{"session" => "leaky-cookie"},
+      params: %{"password" => "leaky-password", "name" => "Alice"}
+    }
+
+    stack = [
+      {SomeMod, :some_fun, [conn, %{"password" => "another-leak", "ok" => "fine"}],
+       [file: ~c"x.ex", line: 1]}
+    ]
+
+    exception = %FunctionClauseError{module: SomeMod, function: :some_fun, arity: 2}
+    event = Event.transform_exception(exception, stacktrace: stack)
+
+    %{vars: vars} = hd(hd(event.exception).stacktrace.frames)
+
+    refute vars["arg0"] =~ "leaky-token"
+    refute vars["arg0"] =~ "leaky-cookie"
+    refute vars["arg0"] =~ "leaky-password"
+    assert vars["arg0"] =~ "x-request-id"
+    assert vars["arg0"] =~ "Alice"
+
+    refute vars["arg1"] =~ "another-leak"
+    assert vars["arg1"] =~ "fine"
+  end
+
   describe "create_event/1" do
     test "uses all the right defaults when called without options" do
       assert %Event{} = event = Event.create_event([])

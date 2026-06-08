@@ -55,11 +55,17 @@ defmodule Sentry.PlugCapture do
   out if there are `Plug.Conn` structs to scrub. Right now, the strategy we
   use follows these steps:
 
-    1. if the error is `Phoenix.ActionClauseError`, we scrub the `Plug.Conn` structs
-      from the `args` field of that exception
+    1. if the error is `Phoenix.ActionClauseError`, we scrub the `Plug.Conn` in the
+      `args` field of that exception, and mirror that conn's scrubbed params onto the
+      action's standalone params argument so both are redacted consistently
+
+  Scrubbing goes through the same `Sentry.Scrubber` implementation as
+  `Sentry.PlugContext`, so it honors the per-field scrubbers (`:body_scrubber`,
+  `:header_scrubber`, `:cookie_scrubber`, `:url_scrubber`) configured on
+  `Sentry.PlugContext` for the current request.
 
   Otherwise, we don't perform any scrubbing. To configure scrubbing, you can use the
-  `:scrubbing` option (see below).
+  `:scrubber` option (see below).
 
   ## Options
 
@@ -134,14 +140,17 @@ defmodule Sentry.PlugCapture do
 
   @doc false
   def __capture_exception__(exception, stacktrace, scrubber) do
-    # We can't pattern match here, because we're not guaranteed to have
-    # Phoenix available.
+    # `Phoenix.ActionClauseError` is the one error whose args we know the shape of —
+    # a controller action is invoked as `apply(controller, action, [conn, conn.params])`.
+    # We handle it explicitly: `StacktraceScrubber` does the generic per-arg scrubbing,
+    # and we instruct it (via the callback) to scrub the conn through the configured
+    # `:scrubber` and mirror the conn's scrubbed params onto the standalone params arg.
     exception =
       if is_struct(exception, Phoenix.ActionClauseError) do
-        update_in(exception, [Access.key!(:args), Access.all()], fn
-          conn when is_struct(conn, Plug.Conn) -> apply_scrubber(conn, scrubber)
-          other -> other
-        end)
+        Sentry.Scrubber.StacktraceScrubber.scrub(
+          exception,
+          &scrub_action_clause_args(&1, scrubber)
+        )
       else
         exception
       end
@@ -154,6 +163,18 @@ defmodule Sentry.PlugCapture do
       )
 
     :ok
+  end
+
+  defp scrub_action_clause_args(args, scrubber) do
+    conn = Enum.find(args, &is_struct(&1, Plug.Conn))
+    scrubbed_conn = apply_scrubber(conn, scrubber)
+    params = conn.params
+
+    Enum.map(args, fn
+      ^conn -> scrubbed_conn
+      ^params -> scrubbed_conn.params
+      other -> Sentry.Scrubber.scrub(other)
+    end)
   end
 
   @doc false
