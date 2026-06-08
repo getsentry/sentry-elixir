@@ -80,9 +80,16 @@ defmodule Sentry.PlugCapture do
       request. When no `Sentry.PlugContext` has run, falls back to the
       defaults defined by `Sentry.Scrubber.scrub/2`:
 
-      * scrubs *all* cookies
+      * scrubs *all* cookies (`cookies` and `req_cookies`)
       * drops sensitive request headers (`authorization`, `authentication`, `cookie`)
-      * scrubs sensitive body params (`password`, `passwd`, `secret`)
+      * scrubs `params` and `body_params` through the configured `body_scrubber`
+        (defaulting to the sensitive params `password`, `passwd`, `secret`; a
+        `nil` `body_scrubber` empties both), and scrubs the same sensitive params
+        in `query_params`
+      * clears `assigns` (where auth libraries store user structs and tokens)
+      * reduces `private` to an allow-list of framework metadata, dropping
+        everything else (notably the decoded session under `:plug_session`);
+        configurable via the `scrubber: [conn_private_allow_list: ...]` option
 
   """
   defmacro __using__(opts) do
