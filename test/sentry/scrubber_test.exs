@@ -228,10 +228,11 @@ defmodule Sentry.ScrubberTest do
              }
     end
 
-    test "scrubs body_params with default sensitive keys", %{scrubbed: scrubbed} do
-      assert scrubbed.body_params == %{
-               "user" => %{"email" => "alice@example.com", "password" => "*********"}
-             }
+    test "mirrors the scrubbed params onto body_params (shares :body_scrubber)",
+         %{scrubbed: scrubbed} do
+      # body_params is wired to the same configurable :body_scrubber as params,
+      # so it reflects the body scrubber's output rather than its own raw value.
+      assert scrubbed.body_params == scrubbed.params
     end
 
     test "scrubs query_params with default sensitive keys", %{scrubbed: scrubbed} do
@@ -269,15 +270,20 @@ defmodule Sentry.ScrubberTest do
       assert is_struct(scrubbed, Plug.Conn)
     end
 
-    test "leaves %Plug.Conn.Unfetched{} body_params/query_params alone" do
+    test "passes %Plug.Conn.Unfetched{} through (body_params mirrors params, query_params untouched)" do
       conn = %Plug.Conn{
+        params: %Plug.Conn.Unfetched{aspect: :params},
         body_params: %Plug.Conn.Unfetched{aspect: :body_params},
         query_params: %Plug.Conn.Unfetched{aspect: :query_params}
       }
 
       scrubbed = Scrubber.scrub(conn)
 
-      assert scrubbed.body_params == %Plug.Conn.Unfetched{aspect: :body_params}
+      # params/body_params share the Unfetched-safe :body_scrubber default, so
+      # body_params reflects the (unfetched) params rather than its own value.
+      assert scrubbed.params == %Plug.Conn.Unfetched{aspect: :params}
+      assert scrubbed.body_params == %Plug.Conn.Unfetched{aspect: :params}
+      # query_params keeps the fixed :params strategy, which leaves Unfetched alone.
       assert scrubbed.query_params == %Plug.Conn.Unfetched{aspect: :query_params}
     end
 
@@ -450,7 +456,8 @@ defmodule Sentry.ScrubberTest do
       conn = %Plug.Conn{
         cookies: %{"session" => "secret"},
         req_headers: [{"authorization", "Bearer x"}],
-        params: %{"password" => "hunter2"}
+        params: %{"password" => "hunter2"},
+        body_params: %{"ssn" => "123-45-6789"}
       }
 
       :ok = Scrubber.put_conn_scrubber(body_scrubber: nil, cookie_scrubber: nil)
@@ -458,6 +465,28 @@ defmodule Sentry.ScrubberTest do
       scrubbed = Scrubber.scrub(conn)
       assert scrubbed.params == %{}
       assert scrubbed.cookies == %{}
+      # body_params shares :body_scrubber, so a nil body_scrubber empties it too —
+      # the non-default "ssn" key no longer rides along in embedded conns.
+      assert scrubbed.body_params == %{}
+    end
+
+    test "a custom body_scrubber governs body_params too" do
+      conn = %Plug.Conn{
+        params: %{"my_secret" => "leak", "name" => "Alice"},
+        body_params: %{"my_secret" => "leak", "name" => "Alice"}
+      }
+
+      :ok =
+        Scrubber.put_conn_scrubber(
+          body_scrubber: fn conn -> Map.drop(conn.params, ["my_secret"]) end
+        )
+
+      scrubbed = Scrubber.scrub(conn)
+
+      # The custom scrubber drops the non-default "my_secret"; body_params honors
+      # it instead of falling back to a fixed default-key scrub that would leak it.
+      assert scrubbed.body_params == %{"name" => "Alice"}
+      assert scrubbed.body_params == scrubbed.params
     end
 
     test "missing keys fall back to Sentry.PlugContext defaults" do

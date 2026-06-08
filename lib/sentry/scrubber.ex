@@ -55,9 +55,11 @@ defmodule Sentry.Scrubber do
       `:private_allow_list` option of `put_conn_scrubber/1`), dropping everything
       else.
 
-  By default `scrub/1` redacts `cookies`, `req_headers`, and `params` (the
-  configurable fields), clears `req_cookies` and `assigns` to `%{}`, scrubs
-  `body_params` and `query_params` as params-shaped maps, and reduces `private`
+  By default `scrub/1` redacts `cookies`, `req_headers`, `params`, and
+  `body_params` (the configurable fields — `body_params` shares the
+  `:body_scrubber` with `params`, so it honors the same registered scrubber and
+  is emptied when `body_scrubber` is `nil`), clears `req_cookies` and `assigns`
+  to `%{}`, scrubs `query_params` as a params-shaped map, and reduces `private`
   to its allow-listed keys (`default_private_allow_list/0`). `assigns` is cleared
   wholesale because auth libraries (Guardian, Pow, Coherence) routinely store
   decoded tokens, full user structs, and session data there, where no key-based
@@ -117,7 +119,7 @@ defmodule Sentry.Scrubber do
     req_cookies: :clear,
     req_headers: :header_scrubber,
     params: :body_scrubber,
-    body_params: :params,
+    body_params: :body_scrubber,
     query_params: :params,
     query_string: :query_string,
     assigns: :clear,
