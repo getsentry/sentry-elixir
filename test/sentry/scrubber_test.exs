@@ -1,44 +1,77 @@
+defmodule Sentry.ScrubberTest.LeakyStruct do
+  @moduledoc false
+  defstruct [:card_number, :name]
+end
+
 defmodule Sentry.ScrubberTest do
   use ExUnit.Case, async: true
 
   alias Sentry.Scrubber
+  alias Sentry.ScrubberTest.LeakyStruct
 
-  describe "scrub_map/2" do
+  describe "new/1" do
+    test "new/0 builds an all-defaults scrubber" do
+      scrubber = Scrubber.new()
+
+      assert %Scrubber{} = scrubber
+
+      for field <- Scrubber.scrubber_names() do
+        assert is_function(Map.fetch!(scrubber, field), 1)
+      end
+    end
+
+    test "uses the given per-field scrubber and defaults the rest" do
+      marker = fn _conn -> %{"marker" => "custom"} end
+      scrubber = Scrubber.new(body_scrubber: marker)
+
+      assert scrubber.body_scrubber == marker
+      assert is_function(scrubber.header_scrubber, 1)
+    end
+
+    test "does not register the scrubber for the process" do
+      _ = Scrubber.new(body_scrubber: fn _conn -> %{"marker" => "unregistered"} end)
+
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+      assert Scrubber.scrub(conn).params == %{"password" => "*********"}
+    end
+  end
+
+  describe "scrub/2" do
     test "redacts sensitive top-level keys" do
-      assert Scrubber.scrub_map(%{"password" => "x", "ok" => 1}) ==
+      assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
                %{"password" => "*********", "ok" => 1}
     end
 
     test "recurses into nested maps" do
-      assert Scrubber.scrub_map(%{"outer" => %{"secret" => "shh"}}) ==
+      assert Scrubber.scrub(%{"outer" => %{"secret" => "shh"}}) ==
                %{"outer" => %{"secret" => "*********"}}
     end
 
     test "recurses into lists of maps" do
-      assert Scrubber.scrub_map(%{"items" => [%{"passwd" => "1"}, %{"ok" => 2}]}) ==
+      assert Scrubber.scrub(%{"items" => [%{"passwd" => "1"}, %{"ok" => 2}]}) ==
                %{"items" => [%{"passwd" => "*********"}, %{"ok" => 2}]}
     end
 
     test "redacts credit-card-shaped values" do
-      assert Scrubber.scrub_map(%{"cc" => "4111111111111111"}) ==
+      assert Scrubber.scrub(%{"cc" => "4111111111111111"}) ==
                %{"cc" => "*********"}
     end
 
     test "scrubs structs by converting them to maps" do
       uri = URI.parse("http://example.com")
-      assert %{"u" => scrubbed} = Scrubber.scrub_map(%{"u" => uri})
+      assert %{"u" => scrubbed} = Scrubber.scrub(%{"u" => uri})
       assert is_map(scrubbed)
       refute Map.has_key?(scrubbed, :__struct__)
     end
 
     test "respects custom :keys option" do
-      assert Scrubber.scrub_map(%{"api_key" => "x", "password" => "y"}, keys: ["api_key"]) ==
+      assert Scrubber.scrub(%{"api_key" => "x", "password" => "y"}, keys: ["api_key"]) ==
                %{"api_key" => "*********", "password" => "y"}
     end
 
     test "leaves non-sensitive values untouched" do
       data = %{"name" => "alice", "age" => 30}
-      assert Scrubber.scrub_map(data) == data
+      assert Scrubber.scrub(data) == data
     end
   end
 
@@ -73,11 +106,316 @@ defmodule Sentry.ScrubberTest do
     end
   end
 
+  describe "scrub/2 with a Plug.Conn field" do
+    test ":url scrubs sensitive query parameters" do
+      conn = %Plug.Conn{
+        scheme: :http,
+        host: "example.com",
+        port: 80,
+        request_path: "/foo",
+        query_string: "password=secret&visible=ok"
+      }
+
+      scrubbed = Scrubber.scrub(conn, :url)
+
+      refute scrubbed =~ "secret"
+      assert scrubbed =~ "visible=ok"
+      assert scrubbed =~ "http://example.com/foo?"
+      # equivalent to scrubbing the URL directly
+      assert scrubbed == Scrubber.scrub_url(Plug.Conn.request_url(conn))
+    end
+
+    test "a nil :url_scrubber leaves the URL unchanged" do
+      conn = %Plug.Conn{
+        scheme: :http,
+        host: "example.com",
+        port: 80,
+        request_path: "/foo",
+        query_string: "password=secret&visible=ok"
+      }
+
+      :ok = Scrubber.put_conn_scrubber(url_scrubber: nil)
+
+      assert Scrubber.get(:url_scrubber).(conn) == Plug.Conn.request_url(conn)
+      assert Scrubber.get(:url_scrubber).(conn) =~ "password=secret"
+    end
+  end
+
   describe "scrub_query_string/2" do
     test "redacts sensitive params" do
       scrubbed = Scrubber.scrub_query_string("password=hunter2&visible=ok")
       refute scrubbed =~ "hunter2"
       assert scrubbed =~ "visible=ok"
+    end
+  end
+
+  describe "scrub/1 with no registered scrubber" do
+    setup do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret-session"},
+        req_headers: [
+          {"Authorization", "Bearer secret-token"},
+          {"cookie", "session=secret-session"},
+          {"x-request-id", "abc-123"}
+        ],
+        params: %{"password" => "hunter2", "name" => "Alice"}
+      }
+
+      %{conn: conn, scrubbed: Scrubber.scrub(conn)}
+    end
+
+    test "clears cookies", %{scrubbed: scrubbed} do
+      assert scrubbed.cookies == %{}
+    end
+
+    test "drops sensitive req_headers case-insensitively and keeps list shape",
+         %{scrubbed: scrubbed} do
+      assert scrubbed.req_headers == [{"x-request-id", "abc-123"}]
+      assert is_list(scrubbed.req_headers)
+    end
+
+    test "scrubs params", %{scrubbed: scrubbed} do
+      assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
+    end
+
+    test "returns a %Plug.Conn{} struct", %{scrubbed: scrubbed} do
+      assert is_struct(scrubbed, Plug.Conn)
+    end
+
+    test "rewrites only cookies, req_headers, and params", %{conn: conn, scrubbed: scrubbed} do
+      changed =
+        conn
+        |> Map.from_struct()
+        |> Enum.filter(fn {key, value} -> Map.fetch!(scrubbed, key) != value end)
+        |> Enum.map(fn {key, _value} -> key end)
+        |> Enum.sort()
+
+      assert changed == [:cookies, :params, :req_headers]
+    end
+
+    test "scrubs sensitive params from query_string" do
+      conn = %Plug.Conn{
+        query_string: "password=secret&token=abc&card=4242424242424242&keep=ok"
+      }
+
+      scrubbed = Scrubber.scrub(conn).query_string
+
+      refute scrubbed =~ "secret"
+      refute scrubbed =~ "4242424242424242"
+      assert scrubbed =~ "token=abc"
+      assert scrubbed =~ "keep=ok"
+    end
+  end
+
+  describe "scrub/2 with conn field overrides" do
+    test ":clear override replaces additional fields with %{}" do
+      conn = %Plug.Conn{
+        params: %{"password" => "hunter2"},
+        assigns: %{current_user: %{password_hash: "secret"}},
+        private: %{guardian_token: "jwt"}
+      }
+
+      scrubbed = Scrubber.scrub(conn, assigns: :clear, private: :clear)
+
+      # default fields still scrubbed
+      assert scrubbed.params == %{"password" => "*********"}
+      # overridden fields cleared wholesale
+      assert scrubbed.assigns == %{}
+      assert scrubbed.private == %{}
+    end
+
+    test ":params override scrubs the named field by default sensitive keys" do
+      conn = %Plug.Conn{
+        body_params: %{"user" => %{"password" => "hunter2", "email" => "a@b.c"}},
+        query_params: %{"secret" => "leak", "page" => "1"}
+      }
+
+      scrubbed = Scrubber.scrub(conn, body_params: :params, query_params: :params)
+
+      assert scrubbed.body_params == %{
+               "user" => %{"password" => "*********", "email" => "a@b.c"}
+             }
+
+      assert scrubbed.query_params == %{"secret" => "*********", "page" => "1"}
+    end
+
+    test ":params override leaves %Plug.Conn.Unfetched{} untouched" do
+      unfetched = %Plug.Conn.Unfetched{aspect: :body_params}
+      conn = %Plug.Conn{body_params: unfetched}
+
+      scrubbed = Scrubber.scrub(conn, body_params: :params)
+
+      assert scrubbed.body_params == unfetched
+    end
+
+    test "an override can change a default field's strategy" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2", "name" => "Alice"}}
+
+      # default for :params is :body_scrubber (key-based); override to :clear
+      scrubbed = Scrubber.scrub(conn, params: :clear)
+
+      assert scrubbed.params == %{}
+    end
+
+    test "no overrides behaves like scrub/1" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        params: %{"password" => "hunter2"}
+      }
+
+      assert Scrubber.scrub(conn, []) == Scrubber.scrub(conn)
+    end
+  end
+
+  describe "put_conn_scrubber/1 + scrub/1" do
+    test "registered :body_scrubber wins over the default" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "registered"} end)
+
+      scrubbed = Scrubber.scrub(conn)
+      assert scrubbed.params == %{"marker" => "registered"}
+    end
+
+    test "a map-returning :header_scrubber still yields list-shaped req_headers" do
+      conn = %Plug.Conn{req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}]}
+
+      :ok =
+        Scrubber.put_conn_scrubber(
+          header_scrubber: fn conn -> conn.req_headers |> Map.new() |> Map.take(["x-keep"]) end
+        )
+
+      scrubbed = Scrubber.scrub(conn)
+      assert is_list(scrubbed.req_headers)
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+    end
+
+    test "registered {module, function} tuple is invoked with the conn" do
+      defmodule TupleScrubber do
+        def stamp(_conn), do: %{"marker" => "from-mf"}
+      end
+
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: {TupleScrubber, :stamp})
+
+      assert Scrubber.scrub(conn).params == %{"marker" => "from-mf"}
+    end
+
+    test "a nil scrubber for a field clears that field to %{}" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}],
+        params: %{"password" => "hunter2"}
+      }
+
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: nil, cookie_scrubber: nil)
+
+      scrubbed = Scrubber.scrub(conn)
+      assert scrubbed.params == %{}
+      assert scrubbed.cookies == %{}
+    end
+
+    test "missing keys fall back to Sentry.PlugContext defaults" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+        params: %{"password" => "hunter2", "name" => "Alice"}
+      }
+
+      :ok = Scrubber.put_conn_scrubber([])
+
+      scrubbed = Scrubber.scrub(conn)
+      assert scrubbed.cookies == %{}
+      assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
+      assert is_list(scrubbed.req_headers)
+      assert {"x-keep", "yes"} in scrubbed.req_headers
+      refute Enum.any?(scrubbed.req_headers, fn {k, _v} -> k == "authorization" end)
+    end
+
+    test "registration is process-local" do
+      conn = %Plug.Conn{params: %{"password" => "hunter2"}}
+
+      task =
+        Task.async(fn ->
+          :ok = Scrubber.put_conn_scrubber(body_scrubber: fn _ -> %{"marker" => "task-only"} end)
+          Scrubber.scrub(conn)
+        end)
+
+      task_result = Task.await(task)
+      assert task_result.params == %{"marker" => "task-only"}
+
+      # The current process never registered a scrubber, so scrub/1 lazily
+      # initializes defaults instead of inheriting the task's marker scrubber.
+      scrubbed = Scrubber.scrub(conn)
+      assert scrubbed.params == %{"password" => "*********"}
+    end
+
+    test "validates the opts shape on put" do
+      assert_raise FunctionClauseError, fn ->
+        Scrubber.put_conn_scrubber({"not", "an", "mfa"})
+      end
+    end
+  end
+
+  describe "scrub/1 dispatch" do
+    test "delegates Plug.Conn input to the conn scrubbers" do
+      conn = %Plug.Conn{
+        cookies: %{"session" => "secret"},
+        req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+        params: %{"password" => "hunter2"}
+      }
+
+      scrubbed = Scrubber.scrub(conn)
+
+      assert is_struct(scrubbed, Plug.Conn)
+      assert scrubbed.cookies == %{}
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+      assert scrubbed.params == %{"password" => "*********"}
+    end
+
+    test "honors a registered conn scrubber for the Plug.Conn dispatch path" do
+      defmodule ScrubValueMarkerScrubber do
+        def stamp(_conn), do: %{"marker" => "from-registered"}
+      end
+
+      :ok = Scrubber.put_conn_scrubber(body_scrubber: {ScrubValueMarkerScrubber, :stamp})
+
+      scrubbed = Scrubber.scrub(%Plug.Conn{params: %{"password" => "hunter2"}})
+
+      assert scrubbed.params == %{"marker" => "from-registered"}
+    end
+
+    test "scrubs a plain map with default sensitive keys" do
+      assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
+               %{"password" => "*********", "ok" => 1}
+    end
+
+    test "returns integers, atoms, binaries, and lists unchanged" do
+      assert Scrubber.scrub(42) == 42
+      assert Scrubber.scrub(:foo) == :foo
+      assert Scrubber.scrub("hello") == "hello"
+      assert Scrubber.scrub([1, 2, 3]) == [1, 2, 3]
+    end
+
+    test "scrubs non-Plug.Conn structs by converting them to a map" do
+      uri = URI.parse("http://example.com/path")
+
+      scrubbed = Scrubber.scrub(uri)
+
+      # The struct is converted to a plain map and scrubbed, never returned as-is.
+      refute is_struct(scrubbed)
+      assert is_map(scrubbed)
+      assert scrubbed.host == "example.com"
+    end
+
+    test "redacts value-detectable secrets in a non-Plug.Conn struct" do
+      scrubbed = Scrubber.scrub(%LeakyStruct{card_number: "4242424242424242", name: "Alice"})
+
+      refute is_struct(scrubbed)
+      # Once the struct is a map, value-based heuristics reach its fields: the
+      # credit-card-shaped value is redacted, non-sensitive data is preserved.
+      assert scrubbed.card_number == "*********"
+      assert scrubbed.name == "Alice"
     end
   end
 end

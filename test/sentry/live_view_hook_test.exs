@@ -24,7 +24,7 @@ defmodule SentryTest.Live do
 end
 
 defmodule SentryTest.CustomScrubber do
-  def scrub(data), do: Sentry.Scrubber.scrub_map(data, keys: ["api_key"])
+  def scrub(data), do: Sentry.Scrubber.scrub(data, keys: ["api_key"])
 end
 
 defmodule SentryTest.CustomScrubberLive do

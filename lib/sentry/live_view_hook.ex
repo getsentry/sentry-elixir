@@ -56,7 +56,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     LiveView events and `handle_params` calls frequently carry user-submitted
     form data, which may include passwords or other sensitive values. Before
     storing this data in breadcrumbs, this hook scrubs it using
-    `Sentry.Scrubber.scrub_map/2`. URI query strings stored in breadcrumbs are
+    `Sentry.Scrubber.scrub/2`. URI query strings stored in breadcrumbs are
     scrubbed via `Sentry.Scrubber.scrub_url/2`.
 
     To customize the scrubbing logic, pass a `:scrubber` option when attaching
@@ -107,13 +107,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     @doc """
     The default scrubber applied to LiveView breadcrumb data.
 
-    Delegates to `Sentry.Scrubber.scrub_map/2` with the default sensitive
+    Delegates to `Sentry.Scrubber.scrub/2` with the default sensitive
     parameter keys.
     """
     @doc since: "13.1.0"
     @spec default_scrubber(map()) :: map()
     def default_scrubber(data) when is_map(data) do
-      Sentry.Scrubber.scrub_map(data)
+      Sentry.Scrubber.scrub(data)
     end
 
     ## Helpers
