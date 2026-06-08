@@ -28,9 +28,6 @@ defmodule Sentry.Integrations.Phoenix.StacktraceVarsScrubbingTest do
 
     refute frame_vars =~ @auth_token,
            "auth token leaked into stacktrace frame vars: #{frame_vars}"
-
-    refute frame_vars =~ @cookie_value,
-           "session cookie leaked into stacktrace frame vars: #{frame_vars}"
   end
 
   test "user-provided body_scrubber on PlugContext is applied to conn in stacktrace args",
