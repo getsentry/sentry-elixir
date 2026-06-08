@@ -42,6 +42,11 @@ defmodule Sentry.ScrubberTest do
                %{"password" => "*********", "ok" => 1}
     end
 
+    test "redacts sensitive keys given as atoms (e.g. struct fields)" do
+      assert Scrubber.scrub(%{password: "x", ok: 1}) ==
+               %{password: "*********", ok: 1}
+    end
+
     test "recurses into nested maps" do
       assert Scrubber.scrub(%{"outer" => %{"secret" => "shh"}}) ==
                %{"outer" => %{"secret" => "*********"}}

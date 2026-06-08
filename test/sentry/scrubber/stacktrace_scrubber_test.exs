@@ -1,6 +1,6 @@
 defmodule Sentry.Scrubber.StacktraceScrubberTest.Card do
   @moduledoc false
-  defstruct [:card_number, :name]
+  defstruct [:card_number, :name, :secret]
 end
 
 defmodule Sentry.Scrubber.StacktraceScrubberTest do
@@ -29,15 +29,17 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
     end
 
     test "scrubs a non-Plug.Conn struct's fields but keeps its type" do
-      args = [%Card{card_number: "4242424242424242", name: "Alice"}]
+      args = [%Card{card_number: "4242424242424242", name: "Alice", secret: "top-secret"}]
 
       assert [scrubbed] = StacktraceScrubber.scrub_args(args)
 
       # The struct keeps its type (so it inspects as %Card{...} in the frame var,
       # not a bare map)...
       assert is_struct(scrubbed, Card)
-      # ...while its fields are still scrubbed (here via the credit-card heuristic).
+      # ...while its fields are scrubbed by value (credit-card heuristic) and by
+      # name (the atom key :secret matches the sensitive-key list).
       assert scrubbed.card_number == "*********"
+      assert scrubbed.secret == "*********"
       assert scrubbed.name == "Alice"
     end
 
