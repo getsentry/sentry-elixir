@@ -224,6 +224,51 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
   end
 
+  describe "capturing Logger messages as error events (logs.capture_log_messages)" do
+    setup %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      put_test_config(logs: [level: :info, capture_log_messages: true, capture_level: :error])
+
+      name = :"sentry_capture_handler_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        level: Sentry.Config.logs_capture_level(),
+        capture_log_messages: Sentry.Config.logs_capture_log_messages?()
+      }
+
+      assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
+
+      on_exit(fn -> _ = :logger.remove_handler(name) end)
+
+      %{handler_name: name}
+    end
+
+    test "Logger.error is sent as both an error event and a structured log" do
+      Logger.error("boom from logger")
+
+      assert_sentry_report(:event, message: %{formatted: "boom from logger"})
+      assert_sentry_log(:error, "boom from logger")
+    end
+
+    test "messages below :capture_level are sent as logs but not as error events" do
+      Logger.info("just an info line")
+      Logger.warning("a warning line")
+
+      assert_sentry_log(:info, "just an info line")
+      assert_sentry_log(:warn, "a warning line")
+
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "structured log keyword data is reported as an error event too" do
+      Logger.error(some: "structured", value: 42)
+
+      event = assert_sentry_report(:event, [])
+      assert event.message.formatted =~ "structured"
+    end
+  end
+
   describe "OpenTelemetry integration with opentelemetry_logger_metadata" do
     setup do
       :ok = OpentelemetryLoggerMetadata.setup()

@@ -135,7 +135,14 @@ defmodule Sentry.Application do
   defp maybe_add_logger_handler do
     if Config.enable_logs?() do
       unless sentry_logger_handler_registered?() do
-        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{config: %{}}) do
+        handler_config = %{
+          level: Config.logs_capture_level(),
+          capture_log_messages: Config.logs_capture_log_messages?()
+        }
+
+        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
+               config: handler_config
+             }) do
           :ok ->
             :ok
 

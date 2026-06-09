@@ -83,6 +83,22 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":logs capture options" do
+      defaults = Config.validate!([])[:logs]
+      assert defaults[:capture_log_messages] == false
+      assert defaults[:capture_level] == :error
+
+      configured =
+        Config.validate!(logs: [capture_log_messages: true, capture_level: :warning])[:logs]
+
+      assert configured[:capture_log_messages] == true
+      assert configured[:capture_level] == :warning
+
+      assert_raise ArgumentError, ~r/invalid value for :capture_level option/, fn ->
+        Config.validate!(logs: [capture_level: :invalid])
+      end
+    end
+
     test ":source_code_path_pattern" do
       assert Config.validate!(source_code_path_pattern: "*.ex")[:source_code_path_pattern] ==
                "*.ex"

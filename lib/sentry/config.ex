@@ -401,6 +401,10 @@ defmodule Sentry.Config do
       Whether to enable sending log events to Sentry. When enabled, the SDK will
       automatically attach a `Sentry.LoggerHandler` to capture and send structured
       log events according to the [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
+      The auto-attached handler also reports **crashes** to Sentry as error events, and
+      can be configured (via the `:capture_log_messages` and `:capture_level` keys of the
+      `:logs` option) to report standalone `Logger` messages as error events too, so you
+      do not need to add `Sentry.LoggerHandler` manually.
       The handler is not added if a `Sentry.LoggerHandler` is already registered.
       Use the `:logs` option to configure the auto-attached handler.
       *Available since 12.0.0*.
@@ -422,7 +426,10 @@ defmodule Sentry.Config do
       default: [],
       doc: """
       Configuration for the auto-attached logger handler. Only used when `:enable_logs`
-      is `true`. *Available since 12.0.0*.
+      is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
+      **structured logs** sent to Sentry's Logs Protocol, while `:capture_log_messages`
+      and `:capture_level` configure whether `Logger` messages are also reported as
+      **error events**. *Available since 12.0.0*.
       """,
       keys: [
         level: [
@@ -450,6 +457,30 @@ defmodule Sentry.Config do
           doc: """
           Logger metadata keys to include as attributes in log events. If set to `:all`,
           all metadata will be included.
+          """
+        ],
+        capture_log_messages: [
+          type: :boolean,
+          default: false,
+          doc: """
+          When `true`, the auto-attached handler also reports standalone log messages
+          (such as `Logger.error("oops")`) to Sentry as **error events**, on top of the
+          always-on crash reports. Messages are filtered by `:capture_level`. This mirrors
+          the `:capture_log_messages` option of `Sentry.LoggerHandler`. *Available since
+          13.2.0*.
+          """
+        ],
+        capture_level: [
+          type:
+            {:in,
+             [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+          default: :error,
+          type_doc: "`t:Logger.level/0`",
+          doc: """
+          The minimum Logger level for messages captured as **error events** when
+          `:capture_log_messages` is `true`. This is independent of `:level`, which controls
+          the level for structured logs sent to Sentry's Logs Protocol. *Available since
+          13.2.0*.
           """
         ]
       ]
@@ -1033,6 +1064,12 @@ defmodule Sentry.Config do
 
   @spec logs_metadata() :: [atom()] | :all
   def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
+
+  @spec logs_capture_log_messages?() :: boolean()
+  def logs_capture_log_messages?, do: Keyword.fetch!(logs(), :capture_log_messages)
+
+  @spec logs_capture_level() :: Logger.level()
+  def logs_capture_level, do: Keyword.fetch!(logs(), :capture_level)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)

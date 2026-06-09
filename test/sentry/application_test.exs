@@ -20,6 +20,21 @@ defmodule Sentry.ApplicationTest do
       assert Sentry.Config.logs_level() == :info
       assert Sentry.Config.logs_excluded_domains() == []
       assert Sentry.Config.logs_metadata() == []
+
+      assert config.config.capture_log_messages == false
+      assert config.config.level == :error
+    end
+
+    test "respects logs.capture_log_messages and logs.capture_level config" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_log_messages: true, capture_level: :warning]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.capture_log_messages == true
+      assert config.config.level == :warning
     end
 
     test "respects logs.level config" do
