@@ -43,7 +43,7 @@ if Code.ensure_loaded?(Igniter) do
     def info(_argv, _composing_task) do
       %Igniter.Mix.Task.Info{
         group: :sentry,
-        adds_deps: [{:jason, "~> 1.2"}, {:hackney, "~> 1.8"}],
+        adds_deps: [{:jason, "~> 1.4"}, {:finch, "~> 0.21"}],
         example: __MODULE__.Docs.example(),
         schema: [dsn: :string],
         defaults: [dsn: "<your_dsn>"]
@@ -63,7 +63,7 @@ if Code.ensure_loaded?(Igniter) do
         "prod.exs",
         :sentry,
         [:environment_name],
-        {:code, quote(do: Mix.env())}
+        {:code, quote(do: config_env())}
       )
       |> Igniter.Project.Config.configure(
         "prod.exs",
@@ -138,13 +138,23 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp setup_endpoint(igniter, endpoint) do
+      # Sentry.PlugCapture is only recommended for Cowboy; on Bandit it can
+      # result in duplicate errors.
+      uses_cowboy? = Igniter.Project.Deps.has_dep?(igniter, :plug_cowboy)
+
       Igniter.Project.Module.find_and_update_module!(igniter, endpoint, fn zipper ->
         zipper
-        |> Igniter.Code.Common.within(&add_plug_capture/1)
+        |> maybe_add_plug_capture(uses_cowboy?)
         |> Igniter.Code.Common.within(&add_plug_context/1)
         |> then(&{:ok, &1})
       end)
     end
+
+    defp maybe_add_plug_capture(zipper, true) do
+      Igniter.Code.Common.within(zipper, &add_plug_capture/1)
+    end
+
+    defp maybe_add_plug_capture(zipper, false), do: zipper
 
     defp add_plug_capture(zipper) do
       with :error <- Igniter.Code.Module.move_to_use(zipper, Sentry.PlugCapture),

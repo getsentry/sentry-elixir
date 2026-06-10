@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     ]
   end
 
-  test "installation adds jason and hackney dependencies", %{igniter: igniter} do
+  test "installation adds jason and finch dependencies", %{igniter: igniter} do
     igniter
     |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
     |> assert_creates("config/prod.exs", """
@@ -45,12 +45,9 @@ defmodule Mix.Tasks.Sentry.InstallTest do
 
     config :sentry,
       dsn: "test_dsn",
-      environment_name: Mix.env(),
+      environment_name: config_env(),
       enable_source_code_context: true,
       root_source_code_paths: [File.cwd!()]
-    """)
-    |> assert_has_patch("lib/test_web/endpoint.ex", """
-    + |  use Sentry.PlugCapture
     """)
     |> assert_has_patch("lib/test_web/endpoint.ex", """
     + |  plug(Sentry.PlugContext)
@@ -59,6 +56,28 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     + |    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
     + |      config: %{metadata: [:file, :line]}
     + |    })
+    """)
+  end
+
+  test "installation does not add Sentry.PlugCapture without plug_cowboy", %{igniter: igniter} do
+    endpoint =
+      igniter
+      |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
+      |> apply_igniter!()
+      |> then(& &1.assigns[:test_files]["lib/test_web/endpoint.ex"])
+
+    refute endpoint =~ "Sentry.PlugCapture"
+  end
+
+  test "installation adds Sentry.PlugCapture when the project uses plug_cowboy", %{
+    igniter: igniter
+  } do
+    igniter
+    |> Igniter.Project.Deps.add_dep({:plug_cowboy, "~> 2.7"})
+    |> apply_igniter!()
+    |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
+    |> assert_has_patch("lib/test_web/endpoint.ex", """
+    + |  use Sentry.PlugCapture
     """)
   end
 

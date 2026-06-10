@@ -29,7 +29,7 @@ defp deps do
 
     {:sentry, "~> 11.0"},
     {:jason, "~> 1.4"},
-    {:finch, "~> 0.17.0"}
+    {:finch, "~> 0.21"}
   ]
 end
 ```
