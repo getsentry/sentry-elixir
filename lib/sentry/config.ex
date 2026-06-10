@@ -427,9 +427,9 @@ defmodule Sentry.Config do
       doc: """
       Configuration for the auto-attached logger handler. Only used when `:enable_logs`
       is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
-      **structured logs** sent to Sentry's Logs Protocol, while `:capture_log_messages`
-      and `:capture_level` configure whether `Logger` messages are also reported as
-      **error events**. *Available since 12.0.0*.
+      **structured logs** sent to Sentry's Logs Protocol, while `:capture_log_messages`,
+      `:capture_level`, and `:capture_metadata` configure whether (and how) `Logger`
+      messages are also reported as **error events**. *Available since 12.0.0*.
       """,
       keys: [
         level: [
@@ -455,8 +455,9 @@ defmodule Sentry.Config do
           default: [],
           type_doc: "list of `t:atom/0`, or `:all`",
           doc: """
-          Logger metadata keys to include as attributes in log events. If set to `:all`,
-          all metadata will be included.
+          Logger metadata keys to include as attributes in log events sent to Sentry's Logs
+          Protocol. If set to `:all`, all metadata will be included. This does not affect
+          error events; use `:capture_metadata` for those.
           """
         ],
         capture_log_messages: [
@@ -481,6 +482,17 @@ defmodule Sentry.Config do
           `:capture_log_messages` is `true`. This is independent of `:level`, which controls
           the level for structured logs sent to Sentry's Logs Protocol. *Available since
           13.2.0*.
+          """
+        ],
+        capture_metadata: [
+          type: {:or, [{:list, :atom}, {:in, [:all]}]},
+          default: [],
+          type_doc: "list of `t:atom/0`, or `:all`",
+          doc: """
+          Logger metadata keys to include in **error events** captured by the auto-attached
+          handler, added under `:extra` as `logger_metadata`. If set to `:all`, all metadata
+          will be included. This is independent of `:metadata`, which controls metadata for
+          structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
           """
         ]
       ]
@@ -1070,6 +1082,9 @@ defmodule Sentry.Config do
 
   @spec logs_capture_level() :: Logger.level()
   def logs_capture_level, do: Keyword.fetch!(logs(), :capture_level)
+
+  @spec logs_capture_metadata() :: [atom()] | :all
+  def logs_capture_metadata, do: Keyword.fetch!(logs(), :capture_metadata)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)

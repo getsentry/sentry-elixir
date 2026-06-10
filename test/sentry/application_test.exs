@@ -23,6 +23,7 @@ defmodule Sentry.ApplicationTest do
 
       assert config.config.capture_log_messages == false
       assert config.config.level == :error
+      assert config.config.metadata == []
     end
 
     test "respects logs.capture_log_messages and logs.capture_level config" do
@@ -66,8 +67,22 @@ defmodule Sentry.ApplicationTest do
         logs: [metadata: [:request_id, :user_id]]
       )
 
-      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_metadata() == [:request_id, :user_id]
+      # :metadata is for the Logs UI only; it must not leak into error-event metadata,
+      # which is governed by the separate :capture_metadata option.
+      assert config.config.metadata == []
+    end
+
+    test "respects logs.capture_metadata config" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id, :user_id]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id, :user_id]
     end
 
     test "does not attach handler when enable_logs is false" do

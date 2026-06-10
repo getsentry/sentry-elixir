@@ -259,17 +259,21 @@ defmodule Sentry.LoggerHandler do
         logs: [
           level: :info,                # structured logs at :info and above -> Logs UI
           capture_log_messages: true,  # also report messages as error events...
-          capture_level: :error        # ...but only at :error and above
+          capture_level: :error,       # ...but only at :error and above
+          capture_metadata: :all       # include Logger metadata in those error events
         ]
 
-  > #### `:logs` metadata vs handler metadata {: .info}
+  > #### Including `Logger` metadata {: .info}
   >
-  > The `:metadata` key **under `:logs`** controls which `Logger` metadata is attached to
-  > **structured log** events (as attributes shown in the Logs UI). The `:metadata`
-  > [configuration option](#module-configuration) of this handler is different: it controls
-  > metadata attached to **error events** (under `:extra`). If your custom metadata shows up
-  > in your server logs but not in Sentry's Logs UI, make sure it is listed under
-  > `config :sentry, logs: [metadata: [...]]` (or use `:all`).
+  > For the auto-attached handler, metadata for the two destinations is configured
+  > separately. The `:metadata` key **under `:logs`** lists the `Logger` metadata attached
+  > as attributes on **structured logs** (shown in the Logs UI). The `:capture_metadata`
+  > key lists the metadata attached under `:extra` (as `logger_metadata`) on **error
+  > events**. Both accept a list of keys or `:all`, and both default to `[]`. So if your
+  > custom metadata is missing from a captured *error event*, set
+  > `config :sentry, logs: [capture_metadata: [...]]` (or `:all`). When you add the handler
+  > manually instead, use this module's own `:metadata`
+  > [configuration option](#module-configuration).
 
   ## Configuration
 
