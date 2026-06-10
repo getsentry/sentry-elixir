@@ -137,13 +137,14 @@ defmodule Sentry.Application do
       unless sentry_logger_handler_registered?() do
         # The :logs config drives both backends of the auto-attached handler: LogsBackend
         # reads its options (level, excluded_domains, metadata) from Config at runtime,
-        # while the ErrorBackend options are passed here at attach time. ErrorBackend's
-        # :metadata comes from the separate :capture_metadata option so that error-event
-        # metadata is opt-in and independent from the Logs UI :metadata.
+        # while the ErrorBackend options are passed here at attach time. The error-event
+        # options come from the separate :capture_* keys so they stay independent from the
+        # Logs UI ones (e.g. error-event metadata/excluded_domains are opt-in).
         handler_config = %{
           level: Config.logs_capture_level(),
           capture_log_messages: Config.logs_capture_log_messages?(),
-          metadata: Config.logs_capture_metadata()
+          metadata: Config.logs_capture_metadata(),
+          excluded_domains: Config.logs_capture_excluded_domains()
         }
 
         case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{

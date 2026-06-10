@@ -88,15 +88,22 @@ defmodule Sentry.ConfigTest do
       assert defaults[:capture_log_messages] == false
       assert defaults[:capture_level] == :error
       assert defaults[:capture_metadata] == []
+      assert defaults[:capture_excluded_domains] == [:cowboy, :bandit]
 
       configured =
         Config.validate!(
-          logs: [capture_log_messages: true, capture_level: :warning, capture_metadata: :all]
+          logs: [
+            capture_log_messages: true,
+            capture_level: :warning,
+            capture_metadata: :all,
+            capture_excluded_domains: [:cowboy, :ranch]
+          ]
         )[:logs]
 
       assert configured[:capture_log_messages] == true
       assert configured[:capture_level] == :warning
       assert configured[:capture_metadata] == :all
+      assert configured[:capture_excluded_domains] == [:cowboy, :ranch]
 
       assert_raise ArgumentError, ~r/invalid value for :capture_level option/, fn ->
         Config.validate!(logs: [capture_level: :invalid])

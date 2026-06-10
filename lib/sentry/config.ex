@@ -427,9 +427,10 @@ defmodule Sentry.Config do
       doc: """
       Configuration for the auto-attached logger handler. Only used when `:enable_logs`
       is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
-      **structured logs** sent to Sentry's Logs Protocol, while `:capture_log_messages`,
-      `:capture_level`, and `:capture_metadata` configure whether (and how) `Logger`
-      messages are also reported as **error events**. *Available since 12.0.0*.
+      **structured logs** sent to Sentry's Logs Protocol, while the `:capture_*` keys
+      (`:capture_log_messages`, `:capture_level`, `:capture_metadata`, and
+      `:capture_excluded_domains`) configure whether (and how) `Logger` messages are also
+      reported as **error events**. *Available since 12.0.0*.
       """,
       keys: [
         level: [
@@ -447,7 +448,8 @@ defmodule Sentry.Config do
           default: [],
           type_doc: "list of `t:atom/0`",
           doc: """
-          Domains to exclude from logs sent to Sentry's Logs Protocol.
+          Domains to exclude from logs sent to Sentry's Logs Protocol. This does not affect
+          error events; use `:capture_excluded_domains` for those.
           """
         ],
         metadata: [
@@ -492,6 +494,17 @@ defmodule Sentry.Config do
           Logger metadata keys to include in **error events** captured by the auto-attached
           handler, added under `:extra` as `logger_metadata`. If set to `:all`, all metadata
           will be included. This is independent of `:metadata`, which controls metadata for
+          structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
+          """
+        ],
+        capture_excluded_domains: [
+          type: {:list, :atom},
+          default: [:cowboy, :bandit],
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          Domains to exclude from **error events** captured by the auto-attached handler.
+          Defaults to `[:cowboy, :bandit]` to avoid double-reporting events already captured
+          by `Sentry.PlugCapture`. This is independent of `:excluded_domains`, which controls
           structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
           """
         ]
@@ -1085,6 +1098,9 @@ defmodule Sentry.Config do
 
   @spec logs_capture_metadata() :: [atom()] | :all
   def logs_capture_metadata, do: Keyword.fetch!(logs(), :capture_metadata)
+
+  @spec logs_capture_excluded_domains() :: [atom()]
+  def logs_capture_excluded_domains, do: Keyword.fetch!(logs(), :capture_excluded_domains)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)

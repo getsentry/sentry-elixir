@@ -320,6 +320,40 @@ defmodule Sentry.LoggerHandler.LogsTest do
       log = assert_sentry_log(:error, "no meta in event")
       assert log.attributes[:secret_info] == "hidden"
     end
+
+    test "capture_excluded_domains drops error events but keeps the structured log",
+         %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      # The domain is excluded from error events but not from the Logs UI.
+      put_test_config(
+        logs: [
+          level: :info,
+          excluded_domains: [],
+          capture_log_messages: true,
+          capture_level: :error,
+          capture_excluded_domains: [:myapp]
+        ]
+      )
+
+      name = :"sentry_excluded_domain_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        level: Sentry.Config.logs_capture_level(),
+        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
+        excluded_domains: Sentry.Config.logs_capture_excluded_domains()
+      }
+
+      assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
+      on_exit(fn -> _ = :logger.remove_handler(name) end)
+
+      Logger.error("error from excluded domain", domain: [:myapp])
+
+      # The structured log is still captured (Logs UI :excluded_domains is []).
+      assert_sentry_log(:error, "error from excluded domain")
+      # But no error event, because the domain is in :capture_excluded_domains.
+      assert SentryTest.pop_sentry_reports() == []
+    end
   end
 
   describe "OpenTelemetry integration with opentelemetry_logger_metadata" do

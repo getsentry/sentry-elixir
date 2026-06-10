@@ -251,17 +251,22 @@ defmodule Sentry.LoggerHandler do
   By default the auto-attached handler reports **crashes** as error events but leaves
   standalone messages (such as `Logger.error("oops")`) as structured logs only. To also
   report those messages as error events — for example, to turn `Logger.error/1` calls into
-  Sentry issues while keeping `Logger.info/1` out of your issues stream — set
-  `:capture_log_messages` and `:capture_level` under `:logs`:
+  Sentry issues while keeping `Logger.info/1` out of your issues stream — use the `:capture_*`
+  keys under `:logs`:
 
       config :sentry,
         enable_logs: true,
         logs: [
-          level: :info,                # structured logs at :info and above -> Logs UI
-          capture_log_messages: true,  # also report messages as error events...
-          capture_level: :error,       # ...but only at :error and above
-          capture_metadata: :all       # include Logger metadata in those error events
+          level: :info,                          # structured logs at :info and above -> Logs UI
+          capture_log_messages: true,            # also report messages as error events...
+          capture_level: :error,                 # ...but only at :error and above
+          capture_metadata: :all,                # include Logger metadata in those error events
+          capture_excluded_domains: [:cowboy]    # domains to exclude from those error events
         ]
+
+  The `:capture_*` keys configure the **error-event** side and are independent from the
+  matching Logs-UI keys (`:metadata`/`:capture_metadata`,
+  `:excluded_domains`/`:capture_excluded_domains`).
 
   > #### Including `Logger` metadata {: .info}
   >
