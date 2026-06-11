@@ -211,7 +211,12 @@ defmodule Sentry.Mixfile do
   end
 
   defp setup_integration(integration, opts) do
-    run_in_integration(integration, ["deps.get"], opts)
+    deps_get_args =
+      if Version.match?(System.version(), ">= 1.14.0"),
+        do: ["deps.get", "--check-locked"],
+        else: ["deps.get"]
+
+    run_in_integration(integration, deps_get_args, opts)
   end
 
   defp run_in_integration(integration, args, opts) do
