@@ -1,7 +1,7 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
-  @version "13.1.0"
+  @version "13.2.0"
   @source_url "https://github.com/getsentry/sentry-elixir"
 
   def project do
@@ -112,7 +112,7 @@ defmodule Sentry.Mixfile do
       {:nimble_ownership, "~> 1.0"},
 
       # Optional dependencies
-      {:hackney, "~> 1.8", optional: true},
+      {:hackney, ">= 1.8.0 and < 5.0.0", optional: true},
       {:finch, "~> 0.21", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
@@ -211,7 +211,12 @@ defmodule Sentry.Mixfile do
   end
 
   defp setup_integration(integration, opts) do
-    run_in_integration(integration, ["deps.get"], opts)
+    deps_get_args =
+      if Version.match?(System.version(), ">= 1.14.0"),
+        do: ["deps.get", "--check-locked"],
+        else: ["deps.get"]
+
+    run_in_integration(integration, deps_get_args, opts)
   end
 
   defp run_in_integration(integration, args, opts) do
