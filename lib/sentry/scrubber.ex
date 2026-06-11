@@ -211,7 +211,7 @@ defmodule Sentry.Scrubber do
   high-signal, non-sensitive breadcrumbs for triaging errors. This is the
   default for the `scrubber: [conn_private_allow_list: ...]` configuration option.
   """
-  @doc since: "13.1.1"
+  @doc since: "13.2.0"
   @spec default_private_allow_list() :: [atom()]
   def default_private_allow_list, do: @default_private_allow_list
 
@@ -299,7 +299,7 @@ defmodule Sentry.Scrubber do
 
   Returns `:ok`.
   """
-  @doc since: "13.1.1"
+  @doc since: "13.2.0"
   @spec put_conn_scrubber(conn_scrubber_opts()) :: :ok
   def put_conn_scrubber(opts) when is_list(opts) do
     Process.put(@scrubber_pdict_key, new(opts))
@@ -317,7 +317,7 @@ defmodule Sentry.Scrubber do
   Unlike `put_conn_scrubber/1`, this only constructs the struct — it does not
   register it for the current process.
   """
-  @doc since: "13.1.1"
+  @doc since: "13.2.0"
   @spec new(conn_scrubber_opts()) :: t()
   def new(opts \\ []) when is_list(opts) do
     %__MODULE__{
@@ -379,7 +379,7 @@ defmodule Sentry.Scrubber do
   returned function takes a `%Plug.Conn{}` and returns the scrubbed value, so
   callers apply it as `Sentry.Scrubber.get(:url_scrubber).(conn)`.
   """
-  @doc since: "13.1.1"
+  @doc since: "13.2.0"
   @spec get(atom()) :: (Plug.Conn.t() -> term())
   def get(key) when key in @scrubber_names, do: Map.get(scrubber(), key)
 
@@ -399,7 +399,7 @@ defmodule Sentry.Scrubber do
   for example when the struct is inspected into stacktrace frame vars. See
   `scrub/2`.
   """
-  @doc since: "13.1.1"
+  @doc since: "13.2.0"
   @spec scrub(Plug.Conn.t()) :: Plug.Conn.t()
   @spec scrub(map()) :: map()
   @spec scrub(term()) :: term()

@@ -522,7 +522,7 @@ defmodule Sentry.Config do
       doc: """
       Configuration for how the SDK scrubs sensitive data out of captured events.
 
-      *Available since v13.1.1*.
+      *Available since v13.2.0*.
       """,
       keys: [
         conn_private_allow_list: [
@@ -541,7 +541,7 @@ defmodule Sentry.Config do
           high-signal for triaging which controller/action failed. Set this option to
           extend or replace that list.
 
-          *Available since v13.1.1*.
+          *Available since v13.2.0*.
           """
         ]
       ]
