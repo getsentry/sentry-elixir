@@ -1,3 +1,27 @@
+## 13.2.0
+
+### New Features ✨
+
+- (scrubbing) Implement PII scrubbing for stacktrace args by @solnic in [#1068](https://github.com/getsentry/sentry-elixir/pull/1068)
+
+### Bug Fixes 🐛
+
+- (oban) Handle non-list stacktraces in Oban error reporter by @whatyouhide in [#1071](https://github.com/getsentry/sentry-elixir/pull/1071)
+- (plug) Broader scrubbing by @solnic in [#1070](https://github.com/getsentry/sentry-elixir/pull/1070)
+
+### Internal Changes 🔧
+
+- (ci) Add Elixir 1.20.0-OTP-29 to the matrix by @solnic in [#1075](https://github.com/getsentry/sentry-elixir/pull/1075)
+- Allow usage of hackney 4.x by @sax in [#1054](https://github.com/getsentry/sentry-elixir/pull/1054)
+
+### Other
+
+- Prep 13.2.0 by @solnic in [#1078](https://github.com/getsentry/sentry-elixir/pull/1078)
+- refa(plug): consolidate access to the plug scrubber by @solnic in [#1069](https://github.com/getsentry/sentry-elixir/pull/1069)
+- Bump inspect limit for stacktrace args by @whatyouhide in [#1076](https://github.com/getsentry/sentry-elixir/pull/1076)
+- Fix all Elixir 1.20 warnings by @whatyouhide in [#1074](https://github.com/getsentry/sentry-elixir/pull/1074)
+- Exclude :bandit domain by default by @dinokovac-river in [#1073](https://github.com/getsentry/sentry-elixir/pull/1073)
+
 ## 13.1.0
 
 ### New Features ✨
