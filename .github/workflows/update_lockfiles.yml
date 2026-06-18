@@ -45,10 +45,10 @@ jobs:
 
       - name: Bump lockfiles
         id: bump
-        # TEMPORARY: on PRs, run in --dry-run mode so the lockfiles are restored and no
-        # changes are committed — we only want to confirm the task runs green in CI.
-        env:
-          DRY_RUN: ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
+        # # TEMPORARY: on PRs, run in --dry-run mode so the lockfiles are restored and no
+        # # changes are committed — we only want to confirm the task runs green in CI.
+        # env:
+        #   DRY_RUN: ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
         run: |
           # Carefully bump patch/minor versions, verifying each against the full test
           # suite. Only updates that keep everything green are written to the lockfiles;
