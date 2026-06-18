@@ -13,7 +13,10 @@ jobs:
   update-lockfiles:
     name: Refresh mix.lock files
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The smart bump runs the full test suite (including integration tests) to verify
+    # each update, and may bisect dependency-by-dependency on failure, so it needs a
+    # much larger budget than a blunt `mix deps.update --all`.
+    timeout-minutes: 120
     steps:
       - name: Get auth token
         id: token
@@ -33,13 +36,33 @@ jobs:
           elixir-version: "1.18"
           otp-version: "27.2"
 
-      - name: Refresh lockfiles
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Bump lockfiles
+        id: bump
         run: |
-          for lock in mix.lock test_integrations/*/mix.lock; do
-            dir=$(dirname "$lock")
-            echo "==> Refreshing mix.lock in $dir"
-            (cd "$dir" && mix deps.update --all)
-          done
+          # Carefully bump patch/minor versions, verifying each against the full test
+          # suite. Only updates that keep everything green are written to the lockfiles;
+          # major bumps and anything that breaks tests are held back and reported.
+          #
+          # No --keep-going on purpose: if the task can't assemble a green set of
+          # lockfiles it exits non-zero and fails this step, so no PR is opened with a
+          # broken set. The report and logs are still published by the always() upload
+          # step below, so a failed week is visible via the workflow artifact.
+          mix sentry.bump_lockfiles --output-dir tmp/lockfile-bump --timeout 600
+
+          # The run directory is timestamped; expose the newest one to later steps.
+          run_dir=$(ls -dt tmp/lockfile-bump/run-* | head -1)
+          echo "run_dir=$run_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bump report and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lockfile-bump-report
+          path: tmp/lockfile-bump/run-*
+          if-no-files-found: ignore
 
       - name: Configure git
         run: |
@@ -76,20 +99,60 @@ jobs:
         env:
           BRANCH_NAME: ${{ steps.create-branch.outputs.branch_name }}
           COMMIT_TITLE: ${{ steps.create-branch.outputs.commit_title }}
+          RUN_DIR: ${{ steps.bump.outputs.run_dir }}
         with:
           github-token: ${{ steps.token.outputs.token }}
           script: |
+            const fs = require('fs');
             const branchName = process.env.BRANCH_NAME;
             const commitTitle = process.env.COMMIT_TITLE;
-            const prBody = `Automated weekly refresh of the committed \`mix.lock\` files via \`mix deps.update --all\`, keeping dependency pins current with the latest security patches allowed by each project's version constraints.
 
-            #skip-changelog
+            // Build a per-project summary from the bump report.
+            let summary = '';
+            try {
+              const report = JSON.parse(fs.readFileSync(`${process.env.RUN_DIR}/report.json`, 'utf8'));
+              const s = report.summary;
+              summary += `**Status:** \`${report.overall_status}\` — bumped ${s.bumped}, skipped (major) ${s.skipped_major}, failed ${s.failed}\n\n`;
 
-            ## Action required
-            - If CI passes on this PR, it's safe to approve and merge.
-            - If CI fails, a dependency update broke something — investigate before merging.
+              for (const p of report.projects) {
+                if (!p.bumped.length && !p.skipped_major.length && !p.failed.length) continue;
+                summary += `<details><summary><code>${p.name}</code> — ${p.status}</summary>\n\n`;
+                if (p.bumped.length) {
+                  summary += `**Bumped**\n`;
+                  for (const b of p.bumped) summary += `- \`${b.dep}\` ${b.from} → ${b.to}\n`;
+                  summary += `\n`;
+                }
+                if (p.skipped_major.length) {
+                  summary += `**Held back (would cross a major boundary)**\n`;
+                  for (const sk of p.skipped_major) summary += `- \`${sk.dep}\` ${sk.from} → ${sk.to} (${sk.reason})\n`;
+                  summary += `\n`;
+                }
+                if (p.failed.length) {
+                  summary += `**Failed verification**\n`;
+                  for (const f of p.failed) summary += `- \`${f.dep}\` ${f.from} → ${f.to} — ${f.failure_type} (log: \`${f.log_file}\`)\n`;
+                  summary += `\n`;
+                }
+                summary += `</details>\n\n`;
+              }
+            } catch (e) {
+              summary = `_Could not read bump report: ${e.message}_\n\n`;
+            }
 
-            _🤖 Automatically created by [.github/workflows/update_lockfiles.yml](https://github.com/getsentry/sentry-elixir/blob/master/.github/workflows/update_lockfiles.yml)._`.replace(/^ {12}/gm, '');
+            const prBody = [
+              "Automated weekly lockfile update produced by `mix sentry.bump_lockfiles`.",
+              "",
+              "Only patch/minor bumps that keep the full test suite (including integration tests) green are written to the lockfiles. Major bumps — and anything that broke the build or tests — are held back and listed below as candidates for manual follow-up.",
+              "",
+              "#skip-changelog",
+              "",
+              "## Summary",
+              summary,
+              "## Details",
+              "- Per-step logs and the full JSON report are attached as the **lockfile-bump-report** workflow artifact.",
+              "- CI on this PR re-validates the changes; if it passes it's safe to approve and merge.",
+              "",
+              "_🤖 Automatically created by [.github/workflows/update_lockfiles.yml](https://github.com/getsentry/sentry-elixir/blob/master/.github/workflows/update_lockfiles.yml)._",
+            ].join("\n");
 
             // Close superseded lockfile PRs — they're now obsolete.
             const existingPRs = await github.paginate(github.rest.pulls.list, {
