@@ -147,7 +147,15 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      files: ["lib", "LICENSE", "mix.exs", "*.md"],
+      files: [
+        "lib",
+        "LICENSE",
+        "mix.exs",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "ISSUE_TEMPLATE.md",
+        "README.md"
+      ],
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
