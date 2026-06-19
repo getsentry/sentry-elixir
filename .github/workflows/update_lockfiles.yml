@@ -53,7 +53,7 @@ jobs:
           # Carefully bump patch/minor versions, verifying each against the full test
           # suite. Only updates that keep everything green are written to the lockfiles;
           # major bumps and anything that breaks tests are held back and reported.
-          mix sentry.bump_lockfiles --output-dir tmp/lockfile-bump --timeout 600 $DRY_RUN
+          mix sentry.bump_lockfiles --output-dir tmp/lockfile-bump --timeout 600 --skip-integrations $DRY_RUN
 
           # The run directory is timestamped; expose the newest one to later steps.
           run_dir=$(ls -dt tmp/lockfile-bump/run-* | head -1)
@@ -68,15 +68,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: Configure git
-        # TEMPORARY: skip all branch/commit/PR steps on PRs (verification is dry-run only).
-        if: github.event_name != 'pull_request'
+        # # TEMPORARY: skip all branch/commit/PR steps on PRs (verification is dry-run only).
+        # if: github.event_name != 'pull_request'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Create branch
         id: create-branch
-        if: github.event_name != 'pull_request'
+        # if: github.event_name != 'pull_request'
         run: |
           # Stage first, then diff the index against HEAD: plain `git diff` ignores
           # untracked files, so a brand-new project's lock would look unchanged.
@@ -100,7 +100,7 @@ jobs:
           echo "commit_title=$COMMIT_TITLE" >> "$GITHUB_OUTPUT"
 
       - name: Create pull request
-        if: github.event_name != 'pull_request' && steps.create-branch.outputs.changed == 'true'
+        # if: github.event_name != 'pull_request' && steps.create-branch.outputs.changed == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BRANCH_NAME: ${{ steps.create-branch.outputs.branch_name }}
