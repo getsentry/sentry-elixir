@@ -147,15 +147,16 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      files: [
-        "lib",
-        "LICENSE",
-        "mix.exs",
-        "CHANGELOG.md",
-        "CONTRIBUTING.md",
-        "ISSUE_TEMPLATE.md",
-        "README.md"
-      ],
+      files:
+        package_lib_files() ++
+          [
+            "LICENSE",
+            "mix.exs",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "ISSUE_TEMPLATE.md",
+            "README.md"
+          ],
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
@@ -163,6 +164,18 @@ defmodule Sentry.Mixfile do
         "GitHub" => @source_url
       }
     ]
+  end
+
+  # Ship all of `lib`, minus the `mix sentry.bump_lockfiles` dev/CI tooling
+  # (`Sentry.Dev.*` and the Mix task). That tooling lives under `lib` so it compiles
+  # with the project, but it is not part of the public API and must not leak into the
+  # published Hex package.
+  defp package_lib_files do
+    excluded = ["lib/sentry/dev.ex", "lib/mix/tasks/sentry.bump_lockfiles.ex"]
+
+    "lib/**/*.ex"
+    |> Path.wildcard()
+    |> Enum.reject(&(&1 in excluded or String.starts_with?(&1, "lib/sentry/dev/")))
   end
 
   defp aliases do
