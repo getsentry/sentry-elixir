@@ -322,24 +322,70 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
 
   # This is only causing issues on OTP 25 apparently.
   # TODO: remove special-cased Ranch handling when we depend on OTP 26+.
-  defp capture_from_ranch_error(
-         _args = [
-           _listener,
-           _connection_process,
-           _stream,
-           _request_process,
-           _reason = {{exception, stacktrace}, _}
-         ],
-         sentry_opts,
-         config
-       )
-       when is_exception(exception) do
-    sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
-    capture(:exception, exception, sentry_opts, config)
+  #
+  # The reason is always the *last* element of the Ranch args list, but the list's
+  # arity varies across ranch/cowboy versions (4-element for :cowboy_clear crashes,
+  # 5-element for others), so we pull it positionally rather than matching a fixed
+  # arity. The reason itself shows up in a few shapes, and we want to preserve the
+  # stacktrace whenever one is present:
+  #
+  #   * {{exception, stacktrace}, _} or {exception, stacktrace} -> structured exception.
+  #   * {reason, stacktrace} where reason is not an exception (like {:badmatch, _},
+  #     {:case_clause, _}, atoms) -> message event that still carries the stacktrace,
+  #     reusing the same path as log_from_crash_reason/4.
+  #   * anything else -> plain message with inspect(args).
+  defp capture_from_ranch_error(args, sentry_opts, config) when is_list(args) do
+    case normalize_ranch_reason(List.last(args)) do
+      {:exception, exception, stacktrace, extra} ->
+        sentry_opts = Keyword.merge(sentry_opts, stacktrace: stacktrace, handled: false)
+
+        sentry_opts =
+          if extra do
+            add_extra_to_sentry_opts(sentry_opts, %{
+              ranch_extra: inspect(extra, printable_limit: 4096, limit: 100)
+            })
+          else
+            sentry_opts
+          end
+
+        capture(:exception, exception, sentry_opts, config)
+
+      {:reason, reason, stacktrace} ->
+        message = "Ranch listener error: #{inspect(args)}"
+        log_from_crash_reason({reason, stacktrace}, message, sentry_opts, config)
+
+      :error ->
+        capture(:message, "Ranch listener error: #{inspect(args)}", sentry_opts, config)
+    end
   end
 
   defp capture_from_ranch_error(args, sentry_opts, config) do
     capture(:message, "Ranch listener error: #{inspect(args)}", sentry_opts, config)
+  end
+
+  # Doubly-nested {{exception, stacktrace}, extra} (the original matched shape). The
+  # trailing "extra" is Cowboy's context about what it was doing (often an MFA or
+  # partial request/stream state), so we preserve it under the event's extra metadata.
+  defp normalize_ranch_reason({{exception, stacktrace}, extra})
+       when is_exception(exception) and is_list(stacktrace) do
+    {:exception, exception, stacktrace, extra}
+  end
+
+  # Bare {exception, stacktrace}, with no trailing Cowboy context.
+  defp normalize_ranch_reason({exception, stacktrace})
+       when is_exception(exception) and is_list(stacktrace) do
+    {:exception, exception, stacktrace, _extra = nil}
+  end
+
+  # Non-exception reason (throw/badmatch/exit term) that still carries a stacktrace.
+  # The whole reason (including any trailing term) is captured as extra by
+  # log_from_crash_reason/4, so there's nothing extra to thread through here.
+  defp normalize_ranch_reason({reason, stacktrace}) when is_list(stacktrace) do
+    {:reason, reason, stacktrace}
+  end
+
+  defp normalize_ranch_reason(_other) do
+    :error
   end
 
   defp add_extra_to_sentry_opts(sentry_opts, new_extra) do
