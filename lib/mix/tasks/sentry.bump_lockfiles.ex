@@ -133,7 +133,9 @@ defmodule Mix.Tasks.Sentry.BumpLockfiles do
   end
 
   defp apply_report(path, opts) do
-    summary = path |> report_path() |> Report.read() |> Applier.apply(opts)
+    report_file = report_path(path)
+    report = report_file |> Report.read() |> relocate_locks_dir(report_file)
+    summary = Applier.apply(report, opts)
     Applier.print_summary(summary)
 
     if not summary.all_applied? and not opts[:keep_going] do
@@ -145,6 +147,23 @@ defmodule Mix.Tasks.Sentry.BumpLockfiles do
   # `--apply` accepts either a run directory or a direct path to its report.json.
   defp report_path(path) do
     if File.dir?(path), do: Path.join(path, "report.json"), else: path
+  end
+
+  # The verified lockfiles are always a sibling of the report (`<run_dir>/locks` next to
+  # `<run_dir>/report.json`), but the report stores `verified_locks_dir` relative to the
+  # bump-time cwd. Re-anchor it to the report's actual directory so `--apply` works from
+  # any working directory and on a run directory that was moved or downloaded (e.g. the
+  # CI artifact), rather than only from the original cwd with `tmp/` still in place.
+  @doc false
+  def relocate_locks_dir(report, report_file) do
+    case report["verified_locks_dir"] do
+      nil ->
+        report
+
+      locks_dir ->
+        relocated = Path.join(Path.dirname(report_file), Path.basename(locks_dir))
+        Map.put(report, "verified_locks_dir", relocated)
+    end
   end
 
   defp bump(opts) do
