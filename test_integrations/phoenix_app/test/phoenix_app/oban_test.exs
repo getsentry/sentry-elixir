@@ -419,6 +419,133 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     end
   end
 
+  describe "setup_sentry/1 with allowance: [Oban]" do
+    setup do
+      Sentry.Test.setup_sentry(allowance: [Oban])
+      Sentry.Integrations.Oban.ErrorReporter.attach()
+      on_exit(fn -> :telemetry.detach(Sentry.Integrations.Oban.ErrorReporter) end)
+    end
+
+    test "captures events from a real Oban worker with no manual telemetry plumbing" do
+      job = %Oban.Job{
+        id: System.unique_integer([:positive]),
+        args: %{"should_fail" => true},
+        worker: "Sentry.Integrations.Phoenix.ObanTest.FailingWorker",
+        queue: "background",
+        attempt: 1,
+        max_attempts: 1,
+        meta: %{},
+        inserted_at: DateTime.utc_now(),
+        scheduled_at: DateTime.utc_now(),
+        attempted_at: DateTime.utc_now()
+      }
+
+      # Phase 1: simulate the insert-time engine event in the test pid.
+      # The allowance handler tags this job's id with self() so the
+      # detached worker can be routed back here on :start.
+      :telemetry.execute(
+        [:oban, :engine, :insert_job, :stop],
+        %{},
+        %{job: job, conf: %{name: Oban}}
+      )
+
+      assert Sentry.Test.Registry.lookup_oban_job(job.id) == self()
+
+      # Phase 2: run the worker in a detached process — no `$callers`
+      # link to this test, so the only path that can route the worker's
+      # captured events back is the tag established above.
+      run_job_in_detached_process(job)
+
+      # The FailingWorker raises; the Oban error reporter turns it into
+      # an event, and the allowance routing delivers it to this test.
+      assert [%Sentry.Event{} = event] = Sentry.Test.pop_sentry_reports()
+
+      assert [%Sentry.Interfaces.Exception{} = exception] = event.exception
+      assert exception.value == "intentional failure for testing"
+    end
+
+    test "captures Sentry.Metrics.count/3 from a real Oban worker" do
+      job = %Oban.Job{
+        id: System.unique_integer([:positive]),
+        args: %{},
+        worker: "Sentry.Integrations.Phoenix.ObanTest.FailingWorker",
+        queue: "background",
+        attempt: 1,
+        max_attempts: 1,
+        meta: %{},
+        inserted_at: DateTime.utc_now(),
+        scheduled_at: DateTime.utc_now(),
+        attempted_at: DateTime.utc_now()
+      }
+
+      :telemetry.execute(
+        [:oban, :engine, :insert_job, :stop],
+        %{},
+        %{job: job, conf: %{name: Oban}}
+      )
+
+      assert Sentry.Test.Registry.lookup_oban_job(job.id) == self()
+
+      emit_metric_in_detached_process(job, fn ->
+        Sentry.Metrics.count("oban.allowance.metric.test", 1)
+      end)
+
+      Sentry.TelemetryProcessor.flush()
+      Sentry.TelemetryProcessor.flush(Sentry.TelemetryProcessor)
+
+      metrics = Sentry.Test.pop_sentry_metrics()
+
+      assert Enum.any?(metrics, &(&1.name == "oban.allowance.metric.test")),
+             "expected metric emitted from the Oban worker process to land in the " <>
+               "test collector, got: #{inspect(metrics)}"
+    end
+  end
+
+  defp run_job_in_detached_process(job) do
+    parent = self()
+    ref = make_ref()
+
+    spawn(fn ->
+      start_metadata = %{job: job, conf: %{name: Oban}}
+
+      :telemetry.execute(
+        [:oban, :job, :start],
+        %{system_time: System.system_time()},
+        start_metadata
+      )
+
+      {kind, reason, stacktrace} =
+        try do
+          FailingWorker.perform(job)
+          {:ok, nil, []}
+        catch
+          kind, reason -> {kind, reason, __STACKTRACE__}
+        end
+
+      :telemetry.execute(
+        [:oban, :job, :exception],
+        %{duration: 0},
+        Map.merge(start_metadata, %{
+          kind: kind,
+          reason: reason,
+          error: reason,
+          stacktrace: stacktrace,
+          state: :failure
+        })
+      )
+
+      send(parent, {ref, :done})
+    end)
+
+    receive do
+      {^ref, :done} -> :ok
+    after
+      5_000 -> flunk("worker process did not finish in time")
+    end
+
+    Process.sleep(50)
+  end
+
   defp run_failing_worker_in_detached_process(opts) do
     parent = self()
     ref = make_ref()
@@ -440,7 +567,12 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       }
 
       start_metadata = %{job: job, conf: %{name: Oban}}
-      :telemetry.execute([:oban, :job, :start], %{system_time: System.system_time()}, start_metadata)
+
+      :telemetry.execute(
+        [:oban, :job, :start],
+        %{system_time: System.system_time()},
+        start_metadata
+      )
 
       {kind, reason, stacktrace} =
         try do
@@ -463,6 +595,39 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
         [:oban, :job, :exception],
         %{duration: 0},
         exception_metadata
+      )
+
+      send(parent, {ref, :done})
+    end)
+
+    receive do
+      {^ref, :done} -> :ok
+    after
+      5_000 -> flunk("worker process did not finish in time")
+    end
+
+    Process.sleep(50)
+  end
+
+  defp emit_metric_in_detached_process(job, fun) do
+    parent = self()
+    ref = make_ref()
+
+    spawn(fn ->
+      start_metadata = %{job: job, conf: %{name: Oban}}
+
+      :telemetry.execute(
+        [:oban, :job, :start],
+        %{system_time: System.system_time()},
+        start_metadata
+      )
+
+      fun.()
+
+      :telemetry.execute(
+        [:oban, :job, :stop],
+        %{duration: 0},
+        Map.merge(start_metadata, %{state: :success, result: :ok})
       )
 
       send(parent, {ref, :done})
