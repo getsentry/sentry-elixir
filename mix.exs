@@ -126,7 +126,9 @@ defmodule Sentry.Mixfile do
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
-      {:bandit, "~> 1.0", only: [:test]},
+      # bandit >= 1.12 uses Elixir 1.15-only syntax (lib/bandit/extractor.ex) and
+      # fails to compile on 1.13, which we still support.
+      {:bandit, ">= 1.0.0 and < 1.12.0", only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29", only: :dev},
