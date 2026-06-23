@@ -462,7 +462,7 @@ defmodule Sentry.Event do
 
   defp stacktrace_args_to_vars(args) do
     for {arg, index} <- Enum.with_index(args), into: %{} do
-      {"arg#{index}", String.slice(inspect(arg), 0, 513)}
+      {"arg#{index}", inspect(arg)}
     end
   end
 

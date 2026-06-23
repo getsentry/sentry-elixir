@@ -23,8 +23,6 @@ defmodule Sentry.Client do
 
   require Logger
 
-  # Max message length per https://github.com/getsentry/sentry/blob/0fcec33ac94ad81a205f86f208072b0f57b39ff4/src/sentry/conf/server.py#L1021
-  @max_message_length 8_192
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
@@ -350,8 +348,6 @@ defmodule Sentry.Client do
   end
 
   defp sanitize_message(%Interfaces.Message{} = message, json_library) do
-    message = update_in(message.formatted, &String.slice(&1, 0, @max_message_length))
-
     message
     |> Map.from_struct()
     |> sanitize_non_jsonable_values(json_library)
