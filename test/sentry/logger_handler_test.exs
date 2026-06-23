@@ -527,6 +527,97 @@ defmodule Sentry.LoggerHandlerTest do
     end
   end
 
+  describe "with a Ranch listener error" do
+    # The stacktrace mimics a Phoenix socket serializer raising while decoding a
+    # malformed WebSocket frame, which is the real-world shape this handling targets.
+    @ranch_stacktrace [
+      {Phoenix.Socket.V2.JSONSerializer, :decode_text, 1,
+       [file: ~c"lib/phoenix/socket/serializers/v2_json_serializer.ex", line: 113]},
+      {Phoenix.Socket, :__in__, 2, [file: ~c"lib/phoenix/socket.ex", line: 521]},
+      {:cowboy_websocket, :handler_call, 6, [file: ~c"src/cowboy_websocket.erl", line: 0]},
+      {:proc_lib, :wake_up, 3, [file: ~c"proc_lib.erl", line: 0]}
+    ]
+
+    test "with a 4-element args list reports a structured exception (arity robustness)",
+         %{sender_ref: ref} do
+      # Only 4 elements (e.g. a :cowboy_clear crash), so the old fixed 5-arity clause
+      # would have missed this and produced a plain message event.
+      log_ranch_error([
+        MyApp.Endpoint.HTTP,
+        :cowboy_clear,
+        self(),
+        {{%RuntimeError{message: "malformed frame"}, @ranch_stacktrace},
+         {:cowboy_handler, :execute, 2}}
+      ])
+
+      assert_receive {^ref, event}
+      assert [exception] = event.exception
+      assert exception.type == "RuntimeError"
+      assert exception.value == "malformed frame"
+
+      assert Enum.find(
+               exception.stacktrace.frames,
+               &(&1.function == "Phoenix.Socket.V2.JSONSerializer.decode_text/1")
+             )
+
+      # The trailing Cowboy context is preserved as extra metadata.
+      assert event.extra.ranch_extra == inspect({:cowboy_handler, :execute, 2})
+    end
+
+    test "with a bare {exception, stacktrace} reason reports a structured exception",
+         %{sender_ref: ref} do
+      log_ranch_error([
+        MyApp.Endpoint.HTTP,
+        :cowboy_clear,
+        self(),
+        :some_stream,
+        {%RuntimeError{message: "malformed frame"}, @ranch_stacktrace}
+      ])
+
+      assert_receive {^ref, event}
+      assert [exception] = event.exception
+      assert exception.type == "RuntimeError"
+      assert exception.value == "malformed frame"
+
+      assert Enum.find(
+               exception.stacktrace.frames,
+               &(&1.function == "Phoenix.Socket.V2.JSONSerializer.decode_text/1")
+             )
+
+      # No trailing Cowboy context in this shape, so no ranch_extra is added.
+      refute Map.has_key?(event.extra, :ranch_extra)
+    end
+
+    test "with a non-exception {{:badmatch, term}, stacktrace} reason reports a message " <>
+           "event that still carries the stacktrace",
+         %{sender_ref: ref} do
+      reason =
+        {{:badmatch, %{"text" => "irrelevant", "type" => "contextual_update"}}, @ranch_stacktrace}
+
+      log_ranch_error([MyApp.Endpoint.HTTP, :cowboy_clear, self(), reason])
+
+      assert_receive {^ref, event}
+
+      assert event.exception == []
+      assert event.message.formatted =~ "Ranch listener error:"
+
+      assert [%{stacktrace: stacktrace}] = event.threads
+
+      assert Enum.find(
+               stacktrace.frames,
+               &(&1.function == "Phoenix.Socket.V2.JSONSerializer.decode_text/1")
+             )
+    end
+
+    defp log_ranch_error(args) do
+      :logger.error(%{
+        format:
+          ~c"Ranch listener ~p had connection process started with ~p:~p/4 exit with reason: ~p",
+        args: args
+      })
+    end
+  end
+
   describe "rate limiting" do
     @tag handler_config: %{
            rate_limiting: [max_events: 2, interval: 150],
