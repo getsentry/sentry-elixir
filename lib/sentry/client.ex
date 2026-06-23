@@ -21,7 +21,6 @@ defmodule Sentry.Client do
     Transport
   }
 
-
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}
   def send_check_in(%CheckIn{} = check_in, opts) when is_list(opts) do
