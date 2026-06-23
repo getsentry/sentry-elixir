@@ -21,3 +21,4 @@ test_integrations/*/test-results/
 
 # Local Claude Code settings that should not be committed
 .claude/settings.local.json
+.tool-versions
