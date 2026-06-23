@@ -22,10 +22,15 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.19.3-otp-28'
-            otp: '28.1'
+          - elixir: '1.20.0-otp-29'
+            otp: '29.0.1'
             lint: true
             dialyzer: true
+            release_test: true
+            os: ubuntu-latest
+
+          - elixir: '1.19.3-otp-28'
+            otp: '28.1'
             release_test: true
             os: ubuntu-latest
 
@@ -53,7 +58,7 @@ jobs:
 
     steps:
     - name: Check out this repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
     - name: Setup Elixir and Erlang
       uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
@@ -62,7 +67,7 @@ jobs:
         otp-version: ${{ matrix.otp }}
 
     - name: Cache downloaded dependencies
-      uses: actions/cache@v5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       id: mix-downloaded-deps-cache
       with:
         path: |
@@ -95,7 +100,7 @@ jobs:
     # We need to manually restore and then save, so that we can save the "_build" directory
     # *without* the Elixir compiled code in it.
     - name: Cache compiled Elixir code
-      uses: actions/cache@v5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       id: mix-cache
       with:
         path: |
@@ -125,6 +130,10 @@ jobs:
         SKIP_TRACING_E2E: "true"
       run: mix test.integrations
 
+    - name: Ensure lockfiles are unchanged
+      if: matrix.elixir == '1.13'
+      run: git diff --exit-code -- mix.lock 'test_integrations/*/mix.lock'
+
     - name: Check `mix release` with phoenix_app and sentry configured
       if: matrix.release_test
       run: |
@@ -132,7 +141,7 @@ jobs:
         MIX_ENV=prod mix release
 
     - name: Cache Dialyzer PLT
-      uses: actions/cache@v5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       if: matrix.dialyzer
       id: plt-cache
       with:

@@ -1,7 +1,7 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
-  @version "13.1.0"
+  @version "13.2.0"
   @source_url "https://github.com/getsentry/sentry-elixir"
 
   def project do
@@ -64,9 +64,20 @@ defmodule Sentry.Mixfile do
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
-      xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]],
       aliases: aliases()
-    ]
+    ] ++ xref_options()
+  end
+
+  defp xref_options do
+    if Version.match?(System.version(), ">= 1.20.0") do
+      [
+        elixirc_options: [
+          no_warn_undefined: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]
+        ]
+      ]
+    else
+      [xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]]]
+    end
   end
 
   def application do
@@ -101,7 +112,7 @@ defmodule Sentry.Mixfile do
       {:nimble_ownership, "~> 1.0"},
 
       # Optional dependencies
-      {:hackney, "~> 1.8", optional: true},
+      {:hackney, ">= 1.8.0 and < 5.0.0", optional: true},
       {:finch, "~> 0.21", optional: true},
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
@@ -136,7 +147,15 @@ defmodule Sentry.Mixfile do
 
   defp package do
     [
-      files: ["lib", "LICENSE", "mix.exs", "*.md"],
+      files: [
+        "lib",
+        "LICENSE",
+        "mix.exs",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "ISSUE_TEMPLATE.md",
+        "README.md"
+      ],
       maintainers: ["Mitchell Henke", "Jason Stiebs"],
       licenses: ["MIT"],
       links: %{
@@ -200,7 +219,12 @@ defmodule Sentry.Mixfile do
   end
 
   defp setup_integration(integration, opts) do
-    run_in_integration(integration, ["deps.get"], opts)
+    deps_get_args =
+      if Version.match?(System.version(), ">= 1.14.0"),
+        do: ["deps.get", "--check-locked"],
+        else: ["deps.get"]
+
+    run_in_integration(integration, deps_get_args, opts)
   end
 
   defp run_in_integration(integration, args, opts) do

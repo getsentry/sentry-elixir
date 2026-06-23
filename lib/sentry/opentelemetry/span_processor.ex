@@ -4,14 +4,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @behaviour :otel_span_processor
 
-    require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+    alias OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
     require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
     require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
-    require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+    alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
     require Logger
-    require Record
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span

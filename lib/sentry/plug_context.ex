@@ -28,7 +28,7 @@ defmodule Sentry.PlugContext do
 
       defmodule MySentryScrubber do
         def scrub_params(conn) do
-          # Makes use of the default body_scrubber to avoid sending password
+          # Makes use of the default body scrubbing to avoid sending password
           # and credit card information in plain text. To also prevent sending
           # our sensitive "my_secret_field" and "other_sensitive_data" fields,
           # we simply drop those keys.
@@ -60,9 +60,10 @@ defmodule Sentry.PlugContext do
       defmodule MySentryScrubber do
         def scrub_headers(conn) do
           # In this example, we do not want to include Content-Type or User-Agent
-          # in reported headers, so we drop them.
-          conn.req_headers
-          |> Map.new()
+          # in reported headers, so we drop them. `default_header_scrubber/1`
+          # takes the conn and returns a map of the retained headers, which we
+          # then trim further.
+          conn
           |> Sentry.PlugContext.default_header_scrubber()
           |> Map.drop(["content-type", "user-agent"])
         end
@@ -147,6 +148,17 @@ defmodule Sentry.PlugContext do
 
     @impl Plug
     def call(conn, opts) do
+      conn_scrubber_opts =
+        opts
+        |> Keyword.take(Sentry.Scrubber.scrubber_names())
+        # Preserve PlugContext's historical default of *not* scrubbing the URL:
+        # when no :url_scrubber is configured, fall back to the no-op
+        # default_url_scrubber/1 rather than Sentry.Scrubber's scrubbing default.
+        |> Keyword.put_new(:url_scrubber, {__MODULE__, :default_url_scrubber, []})
+        |> Keyword.put(:private_allow_list, Sentry.Config.scrubber()[:conn_private_allow_list])
+
+      Sentry.Scrubber.put_conn_scrubber(conn_scrubber_opts)
+
       request = build_request_interface_data(conn, opts)
       Sentry.Context.set_request_context(request)
       conn
@@ -160,11 +172,6 @@ defmodule Sentry.PlugContext do
   @doc false
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
   def build_request_interface_data(conn, opts) do
-    body_scrubber = Keyword.get(opts, :body_scrubber, {__MODULE__, :default_body_scrubber})
-    header_scrubber = Keyword.get(opts, :header_scrubber, {__MODULE__, :default_header_scrubber})
-    cookie_scrubber = Keyword.get(opts, :cookie_scrubber, {__MODULE__, :default_cookie_scrubber})
-    url_scrubber = Keyword.get(opts, :url_scrubber, {__MODULE__, :default_url_scrubber})
-
     remote_address_reader =
       Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
 
@@ -174,13 +181,15 @@ defmodule Sentry.PlugContext do
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
 
+    scrubbed = Sentry.Scrubber.scrub(conn)
+
     %{
-      url: apply_fun_with_conn(conn, url_scrubber, Plug.Conn.request_url(conn)),
+      url: Sentry.Scrubber.get(:url_scrubber).(conn),
       method: conn.method,
-      data: apply_fun_with_conn(conn, body_scrubber, %{}),
+      data: scrubbed.params,
       query_string: conn.query_string,
-      cookies: apply_fun_with_conn(conn, cookie_scrubber, %{}),
-      headers: apply_fun_with_conn(conn, header_scrubber, %{}),
+      cookies: scrubbed.cookies,
+      headers: Map.new(scrubbed.req_headers),
       env: %{
         "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader, %{}),
         "REMOTE_PORT" => remote_port(conn),
@@ -229,19 +238,19 @@ defmodule Sentry.PlugContext do
   defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
-  Scrubs **all** cookies off of the request.
-  """
-  @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
-  def default_cookie_scrubber(_conn) do
-    %{}
-  end
-
-  @doc """
   Returns the request URL without modifying it.
   """
   @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
   def default_url_scrubber(conn) do
     Plug.Conn.request_url(conn)
+  end
+
+  @doc """
+  Scrubs **all** cookies off of the request.
+  """
+  @spec default_cookie_scrubber(Plug.Conn.t()) :: map()
+  def default_cookie_scrubber(conn) do
+    Sentry.Scrubber.scrub(conn, :cookies)
   end
 
   @doc """
@@ -253,9 +262,9 @@ defmodule Sentry.PlugContext do
   """
   @spec default_header_scrubber(Plug.Conn.t()) :: map()
   def default_header_scrubber(conn) do
-    conn.req_headers
+    conn
+    |> Sentry.Scrubber.scrub(:headers)
     |> Map.new()
-    |> Sentry.Scrubber.drop_keys()
   end
 
   @doc """
@@ -267,6 +276,6 @@ defmodule Sentry.PlugContext do
   """
   @spec default_body_scrubber(Plug.Conn.t()) :: map()
   def default_body_scrubber(conn) do
-    Sentry.Scrubber.scrub_map(conn.params)
+    Sentry.Scrubber.scrub(conn, :body)
   end
 end

@@ -461,9 +461,16 @@ defmodule Sentry.Event do
   defp args_from_stacktrace([_other | _rest]), do: %{}
 
   defp stacktrace_args_to_vars(args) do
-    for {arg, index} <- Enum.with_index(args), into: %{} do
-      {"arg#{index}", inspect(arg)}
-    end
+    max_length = Config.max_stacktrace_arg_length()
+
+    inspect_opts = [printable_limit: max_length, limit: max(div(max_length, 3), 1)]
+
+    args
+    |> Sentry.Scrubber.StacktraceScrubber.scrub_args()
+    |> Enum.with_index()
+    |> Map.new(fn {arg, index} ->
+      {"arg#{index}", inspect(arg, inspect_opts)}
+    end)
   end
 
   defp arity_to_integer(arity) when is_list(arity), do: Enum.count(arity)

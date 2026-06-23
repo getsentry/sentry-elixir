@@ -55,11 +55,17 @@ defmodule Sentry.PlugCapture do
   out if there are `Plug.Conn` structs to scrub. Right now, the strategy we
   use follows these steps:
 
-    1. if the error is `Phoenix.ActionClauseError`, we scrub the `Plug.Conn` structs
-      from the `args` field of that exception
+    1. if the error is `Phoenix.ActionClauseError`, we scrub the `Plug.Conn` in the
+      `args` field of that exception, and mirror that conn's scrubbed params onto the
+      action's standalone params argument so both are redacted consistently
+
+  Scrubbing goes through the same `Sentry.Scrubber` implementation as
+  `Sentry.PlugContext`, so it honors the per-field scrubbers (`:body_scrubber`,
+  `:header_scrubber`, `:cookie_scrubber`, `:url_scrubber`) configured on
+  `Sentry.PlugContext` for the current request.
 
   Otherwise, we don't perform any scrubbing. To configure scrubbing, you can use the
-  `:scrubbing` option (see below).
+  `:scrubber` option (see below).
 
   ## Options
 
@@ -68,11 +74,22 @@ defmodule Sentry.PlugCapture do
       `Plug.Conn` struct is prepended to `args` before invoking the function,
       so that the final function will be called as `apply(module, function, [conn | args])`.
       The function must return a `Plug.Conn` struct. By default, the built-in
-      scrubber does this:
+      scrubber delegates to `Sentry.Scrubber.scrub/1`, which honors any
+      `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`, or
+      `:url_scrubber` opts configured on `Sentry.PlugContext` for the current
+      request. When no `Sentry.PlugContext` has run, falls back to the
+      defaults defined by `Sentry.Scrubber.scrub/2`:
 
-      * scrubs *all* cookies
-      * scrubs sensitive headers just like `Sentry.PlugContext.default_header_scrubber/1`
-      * scrubs sensitive body params just like `Sentry.PlugContext.default_body_scrubber/1`
+      * scrubs *all* cookies (`cookies` and `req_cookies`)
+      * drops sensitive request headers (`authorization`, `authentication`, `cookie`)
+      * scrubs `params` and `body_params` through the configured `body_scrubber`
+        (defaulting to the sensitive params `password`, `passwd`, `secret`; a
+        `nil` `body_scrubber` empties both), and scrubs the same sensitive params
+        in `query_params`
+      * clears `assigns` (where auth libraries store user structs and tokens)
+      * reduces `private` to an allow-list of framework metadata, dropping
+        everything else (notably the decoded session under `:plug_session`);
+        configurable via the `scrubber: [conn_private_allow_list: ...]` option
 
   """
   defmacro __using__(opts) do
@@ -130,14 +147,17 @@ defmodule Sentry.PlugCapture do
 
   @doc false
   def __capture_exception__(exception, stacktrace, scrubber) do
-    # We can't pattern match here, because we're not guaranteed to have
-    # Phoenix available.
+    # `Phoenix.ActionClauseError` is the one error whose args we know the shape of —
+    # a controller action is invoked as `apply(controller, action, [conn, conn.params])`.
+    # We handle it explicitly: `StacktraceScrubber` does the generic per-arg scrubbing,
+    # and we instruct it (via the callback) to scrub the conn through the configured
+    # `:scrubber` and mirror the conn's scrubbed params onto the standalone params arg.
     exception =
       if is_struct(exception, Phoenix.ActionClauseError) do
-        update_in(exception, [Access.key!(:args), Access.all()], fn
-          conn when is_struct(conn, Plug.Conn) -> apply_scrubber(conn, scrubber)
-          other -> other
-        end)
+        Sentry.Scrubber.StacktraceScrubber.scrub(
+          exception,
+          &scrub_action_clause_args(&1, scrubber)
+        )
       else
         exception
       end
@@ -152,15 +172,20 @@ defmodule Sentry.PlugCapture do
     :ok
   end
 
-  @doc false
-  def default_scrubber(conn) do
-    %{
-      conn
-      | cookies: %{},
-        req_headers: Sentry.PlugContext.default_header_scrubber(conn),
-        params: Sentry.PlugContext.default_body_scrubber(conn)
-    }
+  defp scrub_action_clause_args(args, scrubber) do
+    conn = Enum.find(args, &is_struct(&1, Plug.Conn))
+    scrubbed_conn = apply_scrubber(conn, scrubber)
+    params = conn.params
+
+    Enum.map(args, fn
+      ^conn -> scrubbed_conn
+      ^params -> scrubbed_conn.params
+      other -> Sentry.Scrubber.scrub(other)
+    end)
   end
+
+  @doc false
+  def default_scrubber(conn), do: Sentry.Scrubber.scrub(conn)
 
   defp apply_scrubber(conn, {mod, fun, args} = _scrubber) do
     case apply(mod, fun, [conn | args]) do

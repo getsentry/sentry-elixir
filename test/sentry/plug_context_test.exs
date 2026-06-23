@@ -110,11 +110,27 @@ defmodule Sentry.PlugContextTest do
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
   end
 
+  test "does not scrub the URL by default" do
+    conn = conn(:get, "/test?password=hunter2")
+    call(conn, [])
+
+    assert "http://www.example.com/test?password=hunter2" ==
+             Sentry.Context.get_all().request.url
+  end
+
   test "allows configuring URL scrubber" do
     conn = conn(:get, "/secret-token/secret")
     call(conn, url_scrubber: {__MODULE__, :url_scrubber})
 
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
+  end
+
+  test "url_scrubber: nil falls back to the request URL unchanged" do
+    conn = conn(:get, "/test?password=hunter2")
+    call(conn, url_scrubber: nil)
+
+    assert "http://www.example.com/test?password=hunter2" ==
+             Sentry.Context.get_all().request.url
   end
 
   test "allows configuring request id header", %{conn: conn} do
@@ -180,6 +196,53 @@ defmodule Sentry.PlugContextTest do
                path: "test/fixtures/my_image.png"
              }
            }
+  end
+
+  describe "scrubber registration" do
+    test "registers a conn scrubber accessible via Sentry.Scrubber.scrub/1", %{conn: conn} do
+      call(conn, [])
+
+      scrubbed =
+        Sentry.Scrubber.scrub(%Plug.Conn{
+          cookies: %{"session" => "secret"},
+          req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}],
+          params: %{"password" => "hunter2", "ok" => "fine"}
+        })
+
+      assert scrubbed.cookies == %{}
+      assert scrubbed.req_headers == [{"x-keep", "yes"}]
+      assert scrubbed.params == %{"password" => "*********", "ok" => "fine"}
+    end
+
+    test "honors a custom body_scrubber when scrub/1 is called downstream",
+         %{conn: conn} do
+      call(conn, body_scrubber: {__MODULE__, :body_scrubber})
+
+      scrubbed =
+        Sentry.Scrubber.scrub(%Plug.Conn{
+          params: %{"foo" => "kept", "bar" => "dropped"}
+        })
+
+      assert scrubbed.params == %{"foo" => "kept"}
+    end
+
+    test "registers the configured scrubber :conn_private_allow_list", %{conn: conn} do
+      Sentry.Test.Config.put(scrubber: [conn_private_allow_list: [:phoenix_action]])
+
+      call(conn, [])
+
+      # call/2 read the config value and registered it, so the :private_allow_list
+      # strategy now retains only the configured key.
+      scrubbed =
+        Sentry.Scrubber.scrub(
+          %Plug.Conn{
+            private: %{phoenix_action: :show, phoenix_controller: SomeApp.PageController}
+          },
+          private: :private_allow_list
+        )
+
+      assert scrubbed.private == %{phoenix_action: :show}
+    end
   end
 
   defp call(conn, opts) do

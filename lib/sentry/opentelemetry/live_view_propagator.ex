@@ -56,7 +56,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
 
     @moduledoc since: "12.0.0"
 
-    require Logger
     require Record
 
     @span_ctx_fields Record.extract(:span_ctx,

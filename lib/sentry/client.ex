@@ -21,8 +21,6 @@ defmodule Sentry.Client do
     Transport
   }
 
-  require Logger
-
 
   @spec send_check_in(CheckIn.t(), keyword()) ::
           {:ok, check_in_id :: String.t()} | :ignored | {:error, ClientError.t()}

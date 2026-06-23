@@ -11,7 +11,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     require Record
     require Logger
-    require OpenTelemetry.Tracer, as: Tracer
+    alias OpenTelemetry.Tracer, as: Tracer
 
     @behaviour :otel_propagator_text_map
 
@@ -38,7 +38,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           baggage_value = :otel_ctx.get_value(ctx, @sentry_baggage_ctx_key, :not_found)
           baggage_value = ensure_org_id_in_baggage(baggage_value)
 
-          if is_binary(baggage_value) and baggage_value != :not_found do
+          if is_binary(baggage_value) do
             setter.(@sentry_baggage_key, baggage_value, carrier)
           else
             carrier

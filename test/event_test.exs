@@ -6,6 +6,10 @@ defmodule Sentry.EventTest do
   alias Sentry.Event
   alias Sentry.Interfaces
 
+  defmodule SampleStruct do
+    defstruct [:name, :payload]
+  end
+
   doctest Event, import: true
 
   def event_generated_by_exception(extra \\ %{}) do
@@ -14,6 +18,22 @@ defmodule Sentry.EventTest do
     rescue
       e -> Event.transform_exception(e, stacktrace: __STACKTRACE__, extra: extra)
     end
+  end
+
+  defp event_with_stacktrace_args(args) do
+    try do
+      apply(Event, :not_a_function, args)
+    rescue
+      e -> Event.transform_exception(e, stacktrace: __STACKTRACE__)
+    end
+  end
+
+  defp vars_for_failing_frame(event) do
+    Enum.find_value(event.exception, fn %Interfaces.Exception{} = exception ->
+      Enum.find_value(exception.stacktrace.frames, fn frame ->
+        if frame.function == "Sentry.Event.not_a_function/1", do: frame.vars
+      end)
+    end)
   end
 
   test "parses error exception" do
@@ -71,9 +91,74 @@ defmodule Sentry.EventTest do
     assert is_binary(event.contexts.runtime.version)
   end
 
+  describe "stacktrace args (vars)" do
+    test "bounds inspected args via inspect opts without hard truncation" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 20)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) < 1_000
+    end
+
+    test "renders structs with their type rather than garbling them when truncated" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      struct = %SampleStruct{name: "test", payload: String.duplicate("x", 100)}
+      event = event_with_stacktrace_args([struct])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.starts_with?(arg0, "%Sentry.EventTest.SampleStruct{")
+    end
+
+    test "respects a higher :max_stacktrace_arg_length than the old 513 default" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) > 513
+    end
+  end
+
   test "respects extra information passed in" do
     event = event_generated_by_exception(%{extra_data: "data"})
     assert event.extra == %{extra_data: "data"}
+  end
+
+  test "scrubs sensitive data from Plug.Conn and map args in stacktrace frame vars" do
+    put_test_config(enable_source_code_context: false)
+
+    conn = %Plug.Conn{
+      req_headers: [
+        {"authorization", "Bearer leaky-token"},
+        {"cookie", "session=leaky-cookie"},
+        {"x-request-id", "ok-to-keep"}
+      ],
+      cookies: %{"session" => "leaky-cookie"},
+      params: %{"password" => "leaky-password", "name" => "Alice"}
+    }
+
+    stack = [
+      {SomeMod, :some_fun, [conn, %{"password" => "another-leak", "ok" => "fine"}],
+       [file: ~c"x.ex", line: 1]}
+    ]
+
+    exception = %FunctionClauseError{module: SomeMod, function: :some_fun, arity: 2}
+    event = Event.transform_exception(exception, stacktrace: stack)
+
+    %{vars: vars} = hd(hd(event.exception).stacktrace.frames)
+
+    refute vars["arg0"] =~ "leaky-token"
+    refute vars["arg0"] =~ "leaky-cookie"
+    refute vars["arg0"] =~ "leaky-password"
+    assert vars["arg0"] =~ "x-request-id"
+    assert vars["arg0"] =~ "Alice"
+
+    refute vars["arg1"] =~ "another-leak"
+    assert vars["arg1"] =~ "fine"
   end
 
   describe "create_event/1" do

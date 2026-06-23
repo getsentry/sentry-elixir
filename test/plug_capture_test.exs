@@ -56,6 +56,22 @@ defmodule Sentry.PlugCaptureTest do
     plug PhoenixRouter
   end
 
+  defmodule CustomBodyScrubber do
+    def scrub(_conn), do: %{"scrubbed_by" => "custom_body_scrubber"}
+  end
+
+  defmodule PhoenixEndpointWithCustomPlugContext do
+    use Sentry.PlugCapture
+    use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
+
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
+    plug Sentry.PlugContext, body_scrubber: {CustomBodyScrubber, :scrub}
+    plug PhoenixRouter
+  end
+
   setup do
     SentryTest.setup_sentry()
   end
@@ -182,6 +198,114 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
       assert exception.value =~ ~s(params: %{"password" => "*********"})
+
+      # conn.query_string must be scrubbed too. The "query_string:" prefix isolates
+      # this from the conn's query_params map, which is not broadened into the
+      # scrubbed fields on this branch.
+      refute exception.value =~ ~s(query_string: "password=secret"),
+             "query_string leaked into exception value: #{exception.value}"
+
+      # The action's second argument is the raw params map, a separate arg from
+      # the conn. It must be scrubbed too. Isolate the "# 2" argument block so
+      # this assertion is not confounded by the conn's query_params, which is not
+      # broadened into the scrubbed fields on this branch.
+      assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
+      refute arg2 =~ "secret", "non-conn params arg leaked into exception value: #{arg2}"
+    end
+
+    test "retains allow-listed conn.private metadata when scrubbing ActionClauseError" do
+      # The embedded conn's :private map is reduced to the allow-list: Phoenix
+      # routing metadata is high-signal for triage and must survive, while
+      # non-allow-listed entries (e.g. the per-router pipeline key) are dropped.
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?password=secret")
+        |> call_phoenix_endpoint()
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+
+      # Sensitive data is still scrubbed (proves the scrubber ran)...
+      assert exception.value =~ ~s(params: %{"password" => "*********"})
+
+      # ...routing metadata in the allow-list survives...
+      assert exception.value =~ "phoenix_controller"
+      assert exception.value =~ "Sentry.PlugCaptureTest.PhoenixController"
+      assert exception.value =~ "phoenix_action"
+      assert exception.value =~ ":action_clause_error"
+
+      # ...but non-allow-listed private entries are dropped. Phoenix stores a
+      # per-router pipeline list under the router module key; it is not in the
+      # allow-list, so it must not appear in the reported conn.
+      refute exception.value =~ "Sentry.PlugCaptureTest.PhoenixRouter => []"
+    end
+
+    test "scrubs Phoenix.ActionClauseError using PlugContext-configured body_scrubber" do
+      Application.put_env(:sentry, PhoenixEndpointWithCustomPlugContext,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithCustomPlugContext)
+      Process.link(pid)
+
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?password=secret")
+        |> Plug.run([{PhoenixEndpointWithCustomPlugContext, []}])
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+      assert exception.type == "Phoenix.ActionClauseError"
+
+      assert exception.value =~ ~s("scrubbed_by" => "custom_body_scrubber"),
+             """
+             expected the embedded conn's params to be scrubbed by the user-configured \
+             body_scrubber from Sentry.PlugContext, but got:
+
+             #{exception.value}
+             """
+    end
+
+    test "applies the PlugContext body_scrubber to the non-conn params arg too" do
+      Application.put_env(:sentry, PhoenixEndpointWithCustomPlugContext,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithCustomPlugContext)
+      Process.link(pid)
+
+      # "ssn" is not a default-sensitive key, so only the user-configured
+      # body_scrubber (which replaces the params wholesale) hides it. Scrubbing
+      # the standalone params arg with the default key list would leak it.
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?ssn=123-45-6789")
+        |> Plug.run([{PhoenixEndpointWithCustomPlugContext, []}])
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+
+      # Isolate the action's second argument (the raw params map). The conn's own
+      # query_params is not broadened into the scrubbed fields on this branch, so
+      # a global assertion would be confounded by it.
+      assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
+
+      assert arg2 =~ ~s("scrubbed_by" => "custom_body_scrubber"),
+             "expected the non-conn params arg to honor the configured body_scrubber, got: #{arg2}"
+
+      refute arg2 =~ "123-45-6789", "ssn leaked through the non-conn params arg: #{arg2}"
     end
 
     test "can render feedback form in Phoenix ErrorView" do
