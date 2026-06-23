@@ -120,6 +120,9 @@ defmodule Sentry.Mixfile do
       {:plug, "~> 1.6", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
+      # Pulled in transitively by :igniter. Capped below 1.2 because rewrite >= 1.2
+      # requires Elixir ~> 1.15, and we still support 1.13.
+      {:rewrite, "~> 1.1.0", optional: true, override: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
