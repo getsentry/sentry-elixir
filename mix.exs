@@ -117,7 +117,9 @@ defmodule Sentry.Mixfile do
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
-      {:plug, "~> 1.6", optional: true},
+      # plug >= 1.19 starts Plug.Upload under a PartitionSupervisor, which only exists
+      # on Elixir 1.14+; cap below it while we still support 1.13.
+      {:plug, "~> 1.6 and < 1.19.0", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
       # Pulled in transitively by :igniter. Capped below 1.2 because rewrite >= 1.2
