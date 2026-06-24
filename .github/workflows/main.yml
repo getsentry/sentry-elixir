@@ -22,7 +22,7 @@ jobs:
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html#compatibility-between-elixir-and-erlang-otp
         include:
           # Newest supported Elixir/Erlang pair.
-          - elixir: '1.20.0-otp-29'
+          - elixir: '1.20.2-otp-29'
             otp: '29.0.1'
             lint: true
             dialyzer: true
@@ -97,8 +97,9 @@ jobs:
           fi
         fi
 
-    # We need to manually restore and then save, so that we can save the "_build" directory
-    # *without* the Elixir compiled code in it.
+    # Key this cache on the full mix.lock hash with NO restore-keys: a fallback prefix would
+    # restore "_build" compiled against an older lockfile, leaving stale compiled deps that
+    # fail "mix test"'s dependency check after a dependency bump.
     - name: Cache compiled Elixir code
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       id: mix-cache
@@ -108,8 +109,6 @@ jobs:
           test_integrations/phoenix_app/_build
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
 
     - name: Compile Elixir code (with --warnings-as-errors)
       if: matrix.lint

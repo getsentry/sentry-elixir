@@ -117,13 +117,20 @@ defmodule Sentry.Mixfile do
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
-      {:plug, "~> 1.6", optional: true},
+      # plug >= 1.19 starts Plug.Upload under a PartitionSupervisor, which only exists
+      # on Elixir 1.14+; cap below it while we still support 1.13.
+      {:plug, "~> 1.6 and < 1.19.0", optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
+      # Pulled in transitively by :igniter. Capped below 1.2 because rewrite >= 1.2
+      # requires Elixir ~> 1.15, and we still support 1.13.
+      {:rewrite, "~> 1.1.0", optional: true, override: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
-      {:bandit, "~> 1.0", only: [:test]},
+      # bandit >= 1.12 uses Elixir 1.15-only syntax (lib/bandit/extractor.ex) and
+      # fails to compile on 1.13, which we still support.
+      {:bandit, ">= 1.0.0 and < 1.12.0", only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29", only: :dev},
