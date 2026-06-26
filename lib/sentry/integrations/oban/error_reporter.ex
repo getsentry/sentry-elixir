@@ -95,13 +95,17 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
     tags = merge_oban_tags(base_tags, config[:oban_tags_to_sentry_tags], job)
 
+    extra =
+      job
+      |> Map.take([:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker])
+      |> Map.update!(:args, &Sentry.Scrubber.scrub/1)
+
     opts =
       [
         stacktrace: stacktrace,
         tags: tags,
         fingerprint: [job.worker, "{{ default }}"],
-        extra:
-          Map.take(job, [:args, :attempt, :id, :max_attempts, :meta, :queue, :tags, :worker]),
+        extra: extra,
         integration_meta: %{oban: %{job: job}}
       ]
 
