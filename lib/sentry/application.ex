@@ -134,34 +134,53 @@ defmodule Sentry.Application do
 
   defp maybe_add_logger_handler do
     if Config.enable_logs?() do
-      unless sentry_logger_handler_registered?() do
-        # The :logs config drives both backends of the auto-attached handler: LogsBackend
-        # reads its options (level, excluded_domains, metadata) from Config at runtime,
-        # while the ErrorBackend options are passed here at attach time. The error-event
-        # options come from the separate :capture_* keys so they stay independent from the
-        # Logs UI ones (e.g. error-event metadata/excluded_domains are opt-in).
-        handler_config = %{
-          level: Config.logs_capture_level(),
-          capture_log_messages: Config.logs_capture_log_messages?(),
-          metadata: Config.logs_capture_metadata(),
-          excluded_domains: Config.logs_capture_excluded_domains()
-        }
+      # The :logs config drives both backends of the auto-attached handler: LogsBackend
+      # reads its options (level, excluded_domains, metadata) from Config at runtime,
+      # while the ErrorBackend options are passed here at attach time. The error-event
+      # options come from the separate :capture_* keys so they stay independent from the
+      # Logs UI ones (e.g. error-event metadata/excluded_domains are opt-in).
+      handler_config = %{
+        level: Config.logs_capture_level(),
+        capture_log_messages: Config.logs_capture_log_messages?(),
+        metadata: Config.logs_capture_metadata(),
+        excluded_domains: Config.logs_capture_excluded_domains()
+      }
 
-        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
-               config: handler_config
-             }) do
-          :ok ->
-            :ok
+      cond do
+        # The auto handler is still registered, which happens when the :sentry application
+        # is stopped and restarted within the same VM: the handler lives in :logger, not in
+        # our supervision tree, so it survives the stop. Re-sync its config so updated :logs
+        # settings reach the ErrorBackend, whose options are frozen at attach time and would
+        # otherwise stay stale across the restart.
+        auto_logger_handler_registered?() ->
+          _ = :logger.update_handler_config(:sentry_log_handler, :config, handler_config)
+          :ok
 
-          {:error, reason} ->
-            Logger.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
-        end
+        # A user registered their own Sentry.LoggerHandler; don't attach the auto one to
+        # avoid duplicate capture.
+        sentry_logger_handler_registered?() ->
+          :ok
+
+        true ->
+          case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
+                 config: handler_config
+               }) do
+            :ok ->
+              :ok
+
+            {:error, reason} ->
+              Logger.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
+          end
       end
     else
       _ = :logger.remove_handler(:sentry_log_handler)
     end
 
     :ok
+  end
+
+  defp auto_logger_handler_registered? do
+    match?({:ok, _config}, :logger.get_handler_config(:sentry_log_handler))
   end
 
   defp sentry_logger_handler_registered? do

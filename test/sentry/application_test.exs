@@ -100,6 +100,30 @@ defmodule Sentry.ApplicationTest do
       assert config.config.metadata == [:request_id, :user_id]
     end
 
+    test "re-syncs the handler's capture config when restarted while already registered" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id], capture_excluded_domains: [:cowboy]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id]
+      assert config.config.excluded_domains == [:cowboy]
+
+      # Restart again WITHOUT removing the handler first. The handler survives the stop, so
+      # the start path must re-sync the ErrorBackend's frozen options to the new config.
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id, :user_id], capture_excluded_domains: [:ranch]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id, :user_id]
+      assert config.config.excluded_domains == [:ranch]
+    end
+
     test "does not attach handler when enable_logs is false" do
       restart_sentry_with(enable_logs: false)
 
