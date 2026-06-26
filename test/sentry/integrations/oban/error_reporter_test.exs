@@ -317,13 +317,35 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert exception.type == "RuntimeError"
       assert exception.value == "oops"
     end
+
+    test "scrubs sensitive values from the job args in the event extra" do
+      emit_telemetry_for_failed_job(
+        :error,
+        %RuntimeError{message: "oops"},
+        [],
+        [],
+        %{"id" => "123", "password" => "hunter2", "entity" => "user"}
+      )
+
+      event = assert_sentry_report(:event, fingerprint: [@worker_as_string, "{{ default }}"])
+
+      assert event.extra[:args]["password"] == "*********"
+      assert event.extra[:args]["id"] == "123"
+      assert event.extra[:args]["entity"] == "user"
+    end
   end
 
   ## Helpers
 
-  defp emit_telemetry_for_failed_job(kind, reason, stacktrace, config \\ []) do
+  defp emit_telemetry_for_failed_job(
+         kind,
+         reason,
+         stacktrace,
+         config \\ [],
+         args \\ %{"id" => "123", "entity" => "user", "type" => "delete"}
+       ) do
     job =
-      %{"id" => "123", "entity" => "user", "type" => "delete"}
+      args
       |> MyWorker.new()
       |> Ecto.Changeset.apply_action!(:validate)
 
