@@ -11,7 +11,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
     ## Why This Is Needed
 
     When a browser requests a page with a LiveView, the HTTP request comes with distributed
-    tracing headers (e.g., `sentry-trace`, `traceparent`). OpenTelemetry propagators extract
+    tracing headers (`sentry-trace` and `baggage`). OpenTelemetry propagators extract
     these headers and attach the trace context to the request process.
 
     However, Phoenix LiveView creates fresh BEAM processes for each lifecycle callback
@@ -96,6 +96,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
 
     @session_key "__sentry_lv_ctx__"
 
+    # The only request headers the SDK extracts trace context from. Everything
+    # else in the request (authorization, cookie, proxy headers, ...) must never
+    # be persisted in the session by the header fallback below.
+    #
+    # `sentry-trace` and `baggage` are Sentry's own propagation headers:
+    # https://develop.sentry.dev/sdk/foundations/trace-propagation/
+    @trace_header_keys ~w(sentry-trace baggage)
+
     @impl Plug
     def init(opts), do: opts
 
@@ -174,11 +182,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
 
     defp extract_from_headers(conn) do
       # Build a carrier from conn headers
-      headers_carrier = Map.new(conn.req_headers)
+      headers_carrier =
+        conn.req_headers
+        |> Map.new()
+        |> Map.take(@trace_header_keys)
 
       # Check if we have trace headers
-      if Map.has_key?(headers_carrier, "sentry-trace") or
-           Map.has_key?(headers_carrier, "traceparent") do
+      if Map.has_key?(headers_carrier, "sentry-trace") do
         # Return the headers directly as the carrier - this will be extracted
         # in the LiveView process by the Propagator
         headers_carrier
