@@ -114,16 +114,26 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
            <<trace_hex::binary-size(32), "-", span_hex::binary-size(16), "-",
              sampled::binary-size(1)>>
          ) do
-      {:ok, {trace_hex, span_hex, sampled == "1"}}
+      if valid_hex?(trace_hex) and valid_hex?(span_hex) do
+        {:ok, {trace_hex, span_hex, sampled == "1"}}
+      else
+        {:error, :invalid_format}
+      end
     end
 
     defp decode_sentry_trace(<<trace_hex::binary-size(32), "-", span_hex::binary-size(16)>>) do
-      {:ok, {trace_hex, span_hex, false}}
+      if valid_hex?(trace_hex) and valid_hex?(span_hex) do
+        {:ok, {trace_hex, span_hex, false}}
+      else
+        {:error, :invalid_format}
+      end
     end
 
     defp decode_sentry_trace(_invalid) do
       {:error, :invalid_format}
     end
+
+    defp valid_hex?(value), do: match?({:ok, _}, Base.decode16(value, case: :mixed))
 
     defp maybe_set_baggage(ctx, :undefined), do: ctx
     defp maybe_set_baggage(ctx, ""), do: ctx

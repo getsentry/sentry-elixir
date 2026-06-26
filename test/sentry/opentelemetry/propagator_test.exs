@@ -121,7 +121,9 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
         invalid_headers = [
           "invalid",
           "1234-5678",
-          "toolong1234567890abcdef1234567890abcdef-1234567890abcdef-1"
+          "toolong1234567890abcdef1234567890abcdef-1234567890abcdef-1",
+          "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG-HHHHHHHHHHHHHHHH-1",
+          "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG-HHHHHHHHHHHHHHHH"
         ]
 
         for invalid_header <- invalid_headers do
