@@ -467,10 +467,11 @@ defmodule Sentry.Config do
           default: false,
           doc: """
           When `true`, the auto-attached handler also reports standalone log messages
-          (such as `Logger.error("oops")`) to Sentry as **error events**, on top of the
-          always-on crash reports. Messages are filtered by `:capture_level`. This mirrors
-          the `:capture_log_messages` option of `Sentry.LoggerHandler`. *Available since
-          13.2.0*.
+          (such as `Logger.error("oops")`) to Sentry as **error events**, in addition to
+          crash reports. Crash reports are sent whether or not this option is enabled, so
+          you do not need to turn it on to capture crashes. Both crashes and messages are
+          gated by `:capture_level`. This mirrors the `:capture_log_messages` option of
+          `Sentry.LoggerHandler`. *Available since 13.2.0*.
           """
         ],
         capture_level: [
@@ -480,10 +481,13 @@ defmodule Sentry.Config do
           default: :error,
           type_doc: "`t:Logger.level/0`",
           doc: """
-          The minimum Logger level for messages captured as **error events** when
-          `:capture_log_messages` is `true`. This is independent of `:level`, which controls
-          the level for structured logs sent to Sentry's Logs Protocol. *Available since
-          13.2.0*.
+          The minimum Logger level for **error events**, including crashes. At the default
+          `:error`, crashes (which are logged at `:error`) are reported; raising this above
+          `:error` suppresses crashes too, mirroring the `:level` option of
+          `Sentry.LoggerHandler`. When `:capture_log_messages` is `true`, this also gates
+          which standalone `Logger` messages become error events. This is independent of
+          `:level`, which controls the level for structured logs sent to Sentry's Logs
+          Protocol. *Available since 13.2.0*.
           """
         ],
         capture_metadata: [
