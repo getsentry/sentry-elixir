@@ -463,16 +463,13 @@ defmodule Sentry.Event do
   defp stacktrace_args_to_vars(args) do
     max_length = Config.max_stacktrace_arg_length()
 
-    # An inspected element costs at least ~3 chars (with comma and spaces), so capping the
-    # collection limit at max_length/3 never truncates earlier than the final
-    # String.slice/3 would, while keeping inspect from materializing huge terms.
     inspect_opts = [printable_limit: max_length, limit: max(div(max_length, 3), 1)]
 
     args
     |> Sentry.Scrubber.StacktraceScrubber.scrub_args()
     |> Enum.with_index()
     |> Map.new(fn {arg, index} ->
-      {"arg#{index}", String.slice(inspect(arg, inspect_opts), 0, max_length)}
+      {"arg#{index}", inspect(arg, inspect_opts)}
     end)
   end
 

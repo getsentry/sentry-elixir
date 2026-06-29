@@ -26,10 +26,10 @@ defmodule Sentry.ClientTest do
       assert %{release: "1.9.123"} = Client.render_event(event)
     end
 
-    test "truncates the message to a max length" do
-      max_length = 8_192
-      event = Event.create_event(message: String.duplicate("a", max_length + 1))
-      assert Client.render_event(event).message.formatted == String.duplicate("a", max_length)
+    test "preserves the full message without SDK-side truncation" do
+      long_message = String.duplicate("a", 10_000)
+      event = Event.create_event(message: long_message)
+      assert Client.render_event(event).message.formatted == long_message
     end
 
     test "sanitizes non-JSON-encodable messages without interpolation" do

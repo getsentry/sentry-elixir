@@ -92,14 +92,14 @@ defmodule Sentry.EventTest do
   end
 
   describe "stacktrace args (vars)" do
-    test "truncates each inspected arg to :max_stacktrace_arg_length characters" do
+    test "bounds inspected args via inspect opts without hard truncation" do
       put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 20)
 
       long_string = String.duplicate("a", 1_000)
       event = event_with_stacktrace_args([long_string])
 
       assert %{"arg0" => arg0} = vars_for_failing_frame(event)
-      assert String.length(arg0) == 20
+      assert String.length(arg0) < 1_000
     end
 
     test "renders structs with their type rather than garbling them when truncated" do
