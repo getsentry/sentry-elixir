@@ -23,6 +23,12 @@ defmodule Sentry.PlugContextTest do
     conn |> Plug.Conn.request_url() |> String.replace(~r/secret-token\/\w+/, "secret-token/****")
   end
 
+  def query_url_scrubber(conn) do
+    conn
+    |> Plug.Conn.request_url()
+    |> String.replace(~r/api_key=[^&]+/, "api_key=*********")
+  end
+
   def remote_address_reader(conn) do
     case get_req_header(conn, "cf-connecting-ip") do
       [remote_ip | _] -> remote_ip
@@ -110,12 +116,20 @@ defmodule Sentry.PlugContextTest do
     assert %{"not-secret" => "not-secret"} == Sentry.Context.get_all().request.cookies
   end
 
-  test "does not scrub the URL by default" do
+  test "scrubs the URL by default" do
     conn = conn(:get, "/test?password=hunter2")
     call(conn, [])
 
-    assert "http://www.example.com/test?password=hunter2" ==
+    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}" ==
              Sentry.Context.get_all().request.url
+  end
+
+  test "scrubs query string by default" do
+    conn = conn(:get, "/test?password=hunter2&hello=world")
+    call(conn, [])
+
+    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.query_string
   end
 
   test "allows configuring URL scrubber" do
@@ -125,12 +139,24 @@ defmodule Sentry.PlugContextTest do
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
+  test "uses the configured URL scrubber for query string" do
+    conn = conn(:get, "/test?api_key=sk_live_secret123&hello=world")
+    call(conn, url_scrubber: {__MODULE__, :query_url_scrubber})
+
+    assert "http://www.example.com/test?api_key=*********&hello=world" ==
+             Sentry.Context.get_all().request.url
+
+    assert "api_key=*********&hello=world" == Sentry.Context.get_all().request.query_string
+  end
+
   test "url_scrubber: nil falls back to the request URL unchanged" do
     conn = conn(:get, "/test?password=hunter2")
     call(conn, url_scrubber: nil)
 
     assert "http://www.example.com/test?password=hunter2" ==
              Sentry.Context.get_all().request.url
+
+    assert "password=hunter2" == Sentry.Context.get_all().request.query_string
   end
 
   test "allows configuring request id header", %{conn: conn} do
@@ -247,5 +273,9 @@ defmodule Sentry.PlugContextTest do
 
   defp call(conn, opts) do
     Plug.run(conn, [{Sentry.PlugContext, opts}])
+  end
+
+  defp encoded_scrubbed_value do
+    URI.encode_www_form(Sentry.Scrubber.scrubbed_value())
   end
 end
