@@ -62,7 +62,41 @@ config :sentry,
 
 ### Usage
 
-This library comes with a [`:logger` handler][logger-handlers] to capture error messages coming from process crashes. To enable this, add [`Sentry.LoggerHandler`](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html) to your production configuration:
+This library comes with a [`:logger` handler][logger-handlers],
+[`Sentry.LoggerHandler`](https://hexdocs.pm/sentry/Sentry.LoggerHandler.html), that does two
+things: it reports crashes (and, optionally, `Logger` messages) to Sentry as **error events**,
+and it forwards log entries to [Sentry's Logs UI](https://develop.sentry.dev/sdk/telemetry/logs/)
+as **structured logs**.
+
+The recommended way to enable it is to set `enable_logs: true` in your Sentry config. The SDK
+then **attaches the handler automatically** — you don't need to touch your `:logger`
+configuration or your `application.ex`:
+
+```elixir
+# config/prod.exs
+config :sentry,
+  # ...your other Sentry config...
+  enable_logs: true,
+  logs: [
+    # Structured logs sent to Sentry's Logs UI:
+    level: :info,
+    metadata: [:request_id],
+    # Also turn standalone Logger messages into Sentry error events.
+    # Omit these to only report crashes as error events.
+    capture_log_messages: true,
+    capture_level: :error,
+    capture_metadata: [:request_id]
+  ]
+```
+
+With the configuration above, `Logger.info/1` and higher are sent to the Logs UI, while
+`Logger.error/1` and higher are *also* captured as error events (crashes are always reported).
+
+#### Advanced: configuring the handler manually
+
+If you want full control over the handler's options (such as `:rate_limiting` or
+`:tags_from_metadata`), or you want error reporting *without* structured logs, you can add the
+handler yourself instead of using `enable_logs`:
 
 ```elixir
 # config/prod.exs
@@ -78,7 +112,6 @@ config :my_app, :logger, [
     }
   }}
 ]
-
 ```
 
 And then add your logger when your application starts:

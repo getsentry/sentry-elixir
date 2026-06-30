@@ -20,6 +20,23 @@ defmodule Sentry.ApplicationTest do
       assert Sentry.Config.logs_level() == :info
       assert Sentry.Config.logs_excluded_domains() == []
       assert Sentry.Config.logs_metadata() == []
+
+      assert config.config.capture_log_messages == false
+      assert config.config.level == :error
+      assert config.config.metadata == []
+      assert config.config.excluded_domains == [:cowboy, :bandit]
+    end
+
+    test "respects logs.capture_log_messages and logs.capture_level config" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_log_messages: true, capture_level: :warning]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.capture_log_messages == true
+      assert config.config.level == :warning
     end
 
     test "respects logs.level config" do
@@ -40,8 +57,22 @@ defmodule Sentry.ApplicationTest do
         logs: [excluded_domains: [:cowboy, :ranch]]
       )
 
-      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_excluded_domains() == [:cowboy, :ranch]
+      # :excluded_domains is for the Logs UI only; error-event exclusions are governed by
+      # the separate :capture_excluded_domains option (defaults to [:cowboy, :bandit]).
+      assert config.config.excluded_domains == [:cowboy, :bandit]
+    end
+
+    test "respects logs.capture_excluded_domains config" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_excluded_domains: [:cowboy, :ranch]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.excluded_domains == [:cowboy, :ranch]
     end
 
     test "respects logs.metadata config" do
@@ -51,8 +82,46 @@ defmodule Sentry.ApplicationTest do
         logs: [metadata: [:request_id, :user_id]]
       )
 
-      assert {:ok, _config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_metadata() == [:request_id, :user_id]
+      # :metadata is for the Logs UI only; it must not leak into error-event metadata,
+      # which is governed by the separate :capture_metadata option.
+      assert config.config.metadata == []
+    end
+
+    test "respects logs.capture_metadata config" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id, :user_id]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id, :user_id]
+    end
+
+    test "re-syncs the handler's capture config when restarted while already registered" do
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id], capture_excluded_domains: [:cowboy]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id]
+      assert config.config.excluded_domains == [:cowboy]
+
+      # Restart again WITHOUT removing the handler first. The handler survives the stop, so
+      # the start path must re-sync the ErrorBackend's frozen options to the new config.
+      restart_sentry_with(
+        dsn: "https://public@sentry.example.com/1",
+        enable_logs: true,
+        logs: [capture_metadata: [:request_id, :user_id], capture_excluded_domains: [:ranch]]
+      )
+
+      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert config.config.metadata == [:request_id, :user_id]
+      assert config.config.excluded_domains == [:ranch]
     end
 
     test "does not attach handler when enable_logs is false" do

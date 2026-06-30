@@ -224,6 +224,138 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
   end
 
+  describe "capturing Logger messages as error events (logs.capture_log_messages)" do
+    setup %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      put_test_config(
+        logs: [
+          level: :info,
+          metadata: :all,
+          capture_log_messages: true,
+          capture_level: :error,
+          capture_metadata: :all
+        ]
+      )
+
+      name = :"sentry_capture_handler_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        level: Sentry.Config.logs_capture_level(),
+        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
+        metadata: Sentry.Config.logs_capture_metadata()
+      }
+
+      assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
+
+      on_exit(fn -> _ = :logger.remove_handler(name) end)
+
+      %{handler_name: name}
+    end
+
+    test "Logger.error is sent as both an error event and a structured log" do
+      Logger.error("boom from logger")
+
+      assert_sentry_report(:event, message: %{formatted: "boom from logger"})
+      assert_sentry_log(:error, "boom from logger")
+    end
+
+    test "messages below :capture_level are sent as logs but not as error events" do
+      Logger.info("just an info line")
+      Logger.warning("a warning line")
+
+      assert_sentry_log(:info, "just an info line")
+      assert_sentry_log(:warn, "a warning line")
+
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "structured log keyword data is reported as an error event too" do
+      Logger.error(some: "structured", value: 42)
+
+      event = assert_sentry_report(:event, [])
+      assert event.message.formatted =~ "structured"
+    end
+
+    test "includes custom Logger metadata in the captured error event" do
+      Logger.error("Hello Buggy Bug", some_info: "boom!")
+
+      event = assert_sentry_report(:event, message: %{formatted: "Hello Buggy Bug"})
+      assert event.extra.logger_metadata.some_info == "boom!"
+    end
+
+    test "logs.metadata feeds the Logs UI but not error events (capture_metadata governs that)",
+         %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      # Metadata is configured for the Logs UI, but capture_metadata is left at its
+      # default ([]), so error events must not include the metadata.
+      put_test_config(
+        logs: [
+          level: :info,
+          metadata: :all,
+          capture_log_messages: true,
+          capture_level: :error,
+          capture_metadata: []
+        ]
+      )
+
+      name = :"sentry_no_capture_meta_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        level: Sentry.Config.logs_capture_level(),
+        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
+        metadata: Sentry.Config.logs_capture_metadata()
+      }
+
+      assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
+      on_exit(fn -> _ = :logger.remove_handler(name) end)
+
+      Logger.error("no meta in event", secret_info: "hidden")
+
+      event = assert_sentry_report(:event, message: %{formatted: "no meta in event"})
+      assert event.extra.logger_metadata == %{}
+
+      # The structured log still carries the metadata, since :metadata is :all.
+      log = assert_sentry_log(:error, "no meta in event")
+      assert log.attributes[:secret_info] == "hidden"
+    end
+
+    test "capture_excluded_domains drops error events but keeps the structured log",
+         %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      # The domain is excluded from error events but not from the Logs UI.
+      put_test_config(
+        logs: [
+          level: :info,
+          excluded_domains: [],
+          capture_log_messages: true,
+          capture_level: :error,
+          capture_excluded_domains: [:myapp]
+        ]
+      )
+
+      name = :"sentry_excluded_domain_#{System.unique_integer([:positive])}"
+
+      handler_config = %{
+        level: Sentry.Config.logs_capture_level(),
+        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
+        excluded_domains: Sentry.Config.logs_capture_excluded_domains()
+      }
+
+      assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
+      on_exit(fn -> _ = :logger.remove_handler(name) end)
+
+      Logger.error("error from excluded domain", domain: [:myapp])
+
+      # The structured log is still captured (Logs UI :excluded_domains is []).
+      assert_sentry_log(:error, "error from excluded domain")
+      # But no error event, because the domain is in :capture_excluded_domains.
+      assert SentryTest.pop_sentry_reports() == []
+    end
+  end
+
   describe "OpenTelemetry integration with opentelemetry_logger_metadata" do
     setup do
       :ok = OpentelemetryLoggerMetadata.setup()

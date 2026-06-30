@@ -401,6 +401,10 @@ defmodule Sentry.Config do
       Whether to enable sending log events to Sentry. When enabled, the SDK will
       automatically attach a `Sentry.LoggerHandler` to capture and send structured
       log events according to the [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
+      The auto-attached handler also reports **crashes** to Sentry as error events, and
+      can be configured (via the `:capture_log_messages` and `:capture_level` keys of the
+      `:logs` option) to report standalone `Logger` messages as error events too, so you
+      do not need to add `Sentry.LoggerHandler` manually.
       The handler is not added if a `Sentry.LoggerHandler` is already registered.
       Use the `:logs` option to configure the auto-attached handler.
       *Available since 12.0.0*.
@@ -422,7 +426,11 @@ defmodule Sentry.Config do
       default: [],
       doc: """
       Configuration for the auto-attached logger handler. Only used when `:enable_logs`
-      is `true`. *Available since 12.0.0*.
+      is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
+      **structured logs** sent to Sentry's Logs Protocol, while the `:capture_*` keys
+      (`:capture_log_messages`, `:capture_level`, `:capture_metadata`, and
+      `:capture_excluded_domains`) configure whether (and how) `Logger` messages are also
+      reported as **error events**. *Available since 12.0.0*.
       """,
       keys: [
         level: [
@@ -440,7 +448,8 @@ defmodule Sentry.Config do
           default: [],
           type_doc: "list of `t:atom/0`",
           doc: """
-          Domains to exclude from logs sent to Sentry's Logs Protocol.
+          Domains to exclude from logs sent to Sentry's Logs Protocol. This does not affect
+          error events; use `:capture_excluded_domains` for those.
           """
         ],
         metadata: [
@@ -448,8 +457,59 @@ defmodule Sentry.Config do
           default: [],
           type_doc: "list of `t:atom/0`, or `:all`",
           doc: """
-          Logger metadata keys to include as attributes in log events. If set to `:all`,
-          all metadata will be included.
+          Logger metadata keys to include as attributes in log events sent to Sentry's Logs
+          Protocol. If set to `:all`, all metadata will be included. This does not affect
+          error events; use `:capture_metadata` for those.
+          """
+        ],
+        capture_log_messages: [
+          type: :boolean,
+          default: false,
+          doc: """
+          When `true`, the auto-attached handler also reports standalone log messages
+          (such as `Logger.error("oops")`) to Sentry as **error events**, in addition to
+          crash reports. Crash reports are sent whether or not this option is enabled, so
+          you do not need to turn it on to capture crashes. Both crashes and messages are
+          gated by `:capture_level`. This mirrors the `:capture_log_messages` option of
+          `Sentry.LoggerHandler`. *Available since 13.2.0*.
+          """
+        ],
+        capture_level: [
+          type:
+            {:in,
+             [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+          default: :error,
+          type_doc: "`t:Logger.level/0`",
+          doc: """
+          The minimum Logger level for **error events**, including crashes. At the default
+          `:error`, crashes (which are logged at `:error`) are reported; raising this above
+          `:error` suppresses crashes too, mirroring the `:level` option of
+          `Sentry.LoggerHandler`. When `:capture_log_messages` is `true`, this also gates
+          which standalone `Logger` messages become error events. This is independent of
+          `:level`, which controls the level for structured logs sent to Sentry's Logs
+          Protocol. *Available since 13.2.0*.
+          """
+        ],
+        capture_metadata: [
+          type: {:or, [{:list, :atom}, {:in, [:all]}]},
+          default: [],
+          type_doc: "list of `t:atom/0`, or `:all`",
+          doc: """
+          Logger metadata keys to include in **error events** captured by the auto-attached
+          handler, added under `:extra` as `logger_metadata`. If set to `:all`, all metadata
+          will be included. This is independent of `:metadata`, which controls metadata for
+          structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
+          """
+        ],
+        capture_excluded_domains: [
+          type: {:list, :atom},
+          default: [:cowboy, :bandit],
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          Domains to exclude from **error events** captured by the auto-attached handler.
+          Defaults to `[:cowboy, :bandit]` to avoid double-reporting events already captured
+          by `Sentry.PlugCapture`. This is independent of `:excluded_domains`, which controls
+          structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
           """
         ]
       ]
@@ -1033,6 +1093,18 @@ defmodule Sentry.Config do
 
   @spec logs_metadata() :: [atom()] | :all
   def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
+
+  @spec logs_capture_log_messages?() :: boolean()
+  def logs_capture_log_messages?, do: Keyword.fetch!(logs(), :capture_log_messages)
+
+  @spec logs_capture_level() :: Logger.level()
+  def logs_capture_level, do: Keyword.fetch!(logs(), :capture_level)
+
+  @spec logs_capture_metadata() :: [atom()] | :all
+  def logs_capture_metadata, do: Keyword.fetch!(logs(), :capture_metadata)
+
+  @spec logs_capture_excluded_domains() :: [atom()]
+  def logs_capture_excluded_domains, do: Keyword.fetch!(logs(), :capture_excluded_domains)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
