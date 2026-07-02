@@ -119,6 +119,31 @@ defmodule Sentry.LoggerHandler do
 
   *This module is available since v9.0.0 of this library*.
 
+  This handler can do **two distinct things** with the messages it receives:
+
+    * **Error events** — report crashes and (optionally) `Logger` messages such as
+      `Logger.error("oops")` to Sentry as **errors/messages**, the same way
+      `Sentry.capture_exception/2` and `Sentry.capture_message/2` do. This is always
+      active when the handler is attached.
+
+    * **Structured logs** — forward log entries to [Sentry's Logs
+      UI](https://develop.sentry.dev/sdk/telemetry/logs/) as structured log events. This
+      is active when `:enable_logs` is `true` in your Sentry configuration.
+
+  The two are independent: a single log can become an error event, a structured log, both,
+  or neither, depending on configuration.
+
+  > #### You usually don't add this handler manually {: .tip}
+  >
+  > Setting `config :sentry, enable_logs: true` makes the SDK **automatically attach**
+  > this handler at startup — you do **not** need to call `:logger.add_handler/3` or
+  > `Logger.add_handlers/1` yourself. Configure it through the `:logs` option of your
+  > Sentry config (see the [Sentry configuration](Sentry.html#module-configuration) and the
+  > ["Sending logs to Sentry"](#module-sending-logs-to-sentry) section below). Add the
+  > handler manually only when you want full control over the options documented under
+  > ["Configuration"](#module-configuration), or when you want error reporting **without**
+  > structured logs.
+
   > #### When to Use the Handler vs the Backend? {: .info}
   >
   > Sentry's Elixir SDK also ships with `Sentry.LoggerBackend`, an Elixir `Logger`
@@ -204,6 +229,56 @@ defmodule Sentry.LoggerHandler do
 
         # ...
       end
+
+  ## Sending logs to Sentry
+
+  To send structured logs to [Sentry's Logs UI](https://develop.sentry.dev/sdk/telemetry/logs/),
+  enable logs in your Sentry configuration. This auto-attaches the handler — there is
+  **no need** to configure `:logger` or call `:logger.add_handler/3`:
+
+      config :sentry,
+        # ...
+        enable_logs: true,
+        logs: [level: :info, metadata: [:request_id]]
+
+  With this configuration, every `Logger` call at `:info` or above becomes a structured log
+  event in Sentry, and crashes are still reported as **error events** (just like the manual
+  setup above). The `:logs` options are documented in the
+  [Sentry configuration](Sentry.html#module-configuration).
+
+  ### Also capturing `Logger` messages as error events
+
+  By default the auto-attached handler reports **crashes** as error events but leaves
+  standalone messages (such as `Logger.error("oops")`) as structured logs only. To also
+  report those messages as error events — for example, to turn `Logger.error/1` calls into
+  Sentry issues while keeping `Logger.info/1` out of your issues stream — use the `:capture_*`
+  keys under `:logs`:
+
+      config :sentry,
+        enable_logs: true,
+        logs: [
+          level: :info,                          # structured logs at :info and above -> Logs UI
+          capture_log_messages: true,            # also report messages as error events...
+          capture_level: :error,                 # ...but only at :error and above
+          capture_metadata: :all,                # include Logger metadata in those error events
+          capture_excluded_domains: [:cowboy]    # domains to exclude from those error events
+        ]
+
+  The `:capture_*` keys configure the **error-event** side and are independent from the
+  matching Logs-UI keys (`:metadata`/`:capture_metadata`,
+  `:excluded_domains`/`:capture_excluded_domains`).
+
+  > #### Including `Logger` metadata {: .info}
+  >
+  > For the auto-attached handler, metadata for the two destinations is configured
+  > separately. The `:metadata` key **under `:logs`** lists the `Logger` metadata attached
+  > as attributes on **structured logs** (shown in the Logs UI). The `:capture_metadata`
+  > key lists the metadata attached under `:extra` (as `logger_metadata`) on **error
+  > events**. Both accept a list of keys or `:all`, and both default to `[]`. So if your
+  > custom metadata is missing from a captured *error event*, set
+  > `config :sentry, logs: [capture_metadata: [...]]` (or `:all`). When you add the handler
+  > manually instead, use this module's own `:metadata`
+  > [configuration option](#module-configuration).
 
   ## Configuration
 
