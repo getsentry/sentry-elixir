@@ -91,14 +91,20 @@ defmodule Sentry.PlugContext do
 
   *Available since v10.2.0.*
 
-  If any of your URLs contain sensitive tokens or other data, you should scrub them
-  to remove the sensitive data. This can be configured similarly to body params,
-  through the `:url_scrubber` configuration option. It should return a string:
+  By default, `Sentry.PlugContext` scrubs sensitive query parameters (such as
+  `password`, `passwd`, and `secret`) from the request URL before sending it to
+  Sentry. To disable URL scrubbing entirely, set `:url_scrubber` to `nil`:
+
+      plug Sentry.PlugContext, url_scrubber: nil
+
+  If your URLs contain sensitive tokens or other data that the default scrubber
+  does not cover, you can provide a custom scrubber via `:url_scrubber`. It
+  should return a string. You can compose on top of the default behavior:
 
       defmodule MySentryScrubber do
         def scrub_url(conn) do
           conn
-          |> Plug.Conn.request_url()
+          |> Sentry.PlugContext.default_url_scrubber()
           |> String.replace(~r/secret-token\/\w+/, "secret-token/****")
         end
       end
@@ -151,9 +157,6 @@ defmodule Sentry.PlugContext do
       conn_scrubber_opts =
         opts
         |> Keyword.take(Sentry.Scrubber.scrubber_names())
-        # Preserve PlugContext's historical default of *not* scrubbing the URL:
-        # when no :url_scrubber is configured, fall back to the no-op
-        # default_url_scrubber/1 rather than Sentry.Scrubber's scrubbing default.
         |> Keyword.put_new(:url_scrubber, {__MODULE__, :default_url_scrubber, []})
         |> Keyword.put(:private_allow_list, Sentry.Config.scrubber()[:conn_private_allow_list])
 
@@ -182,12 +185,13 @@ defmodule Sentry.PlugContext do
       |> Plug.Conn.fetch_query_params()
 
     scrubbed = Sentry.Scrubber.scrub(conn)
+    url = Sentry.Scrubber.get(:url_scrubber).(conn)
 
     %{
-      url: Sentry.Scrubber.get(:url_scrubber).(conn),
+      url: url,
       method: conn.method,
       data: scrubbed.params,
-      query_string: conn.query_string,
+      query_string: query_string_from_url(url),
       cookies: scrubbed.cookies,
       headers: Map.new(scrubbed.req_headers),
       env: %{
@@ -233,16 +237,37 @@ defmodule Sentry.PlugContext do
     end
   end
 
+  defp query_string_from_url(url) do
+    case URI.parse(url) do
+      %URI{query: query} when is_binary(query) -> query
+      _ -> ""
+    end
+  end
+
   defp apply_fun_with_conn(_conn, _function = nil, default), do: default
   defp apply_fun_with_conn(conn, {module, fun}, _default), do: apply(module, fun, [conn])
   defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
-  Returns the request URL without modifying it.
+  Scrubs sensitive query parameters from the request URL.
+
+  This is the default URL scrubber used by `Sentry.PlugContext` when no
+  `:url_scrubber` option is configured. It delegates to `Sentry.Scrubber.scrub_url/1`.
+  To compose on top of this default in a custom scrubber:
+
+      defmodule MySentryScrubber do
+        def scrub_url(conn) do
+          conn
+          |> Sentry.PlugContext.default_url_scrubber()
+          |> String.replace(~r/secret-token\/\w+/, "secret-token/****")
+        end
+      end
   """
   @spec default_url_scrubber(Plug.Conn.t()) :: String.t()
   def default_url_scrubber(conn) do
-    Plug.Conn.request_url(conn)
+    conn
+    |> Plug.Conn.request_url()
+    |> Sentry.Scrubber.scrub_url()
   end
 
   @doc """
