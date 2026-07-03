@@ -183,6 +183,12 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp record_discarded_transaction() do
       ClientReport.Sender.record_discarded_events(:sample_rate, "transaction")
+
+      # A dropped transaction also drops its spans. The sampling decision happens
+      # before any child spans are recorded, so only the transaction itself is
+      # extracted as a span (0 spans + 1).
+      # https://develop.sentry.dev/sdk/telemetry/client-reports/#span-outcomes
+      ClientReport.Sender.record_discarded_events(:sample_rate, "span")
     end
   end
 end

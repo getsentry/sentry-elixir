@@ -33,7 +33,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                )
 
       state = :sys.get_state(ClientReport.Sender)
-      assert state == %{{:sample_rate, "transaction"} => 1}
+      assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
 
     test "records and samples spans not in drop list" do
@@ -87,7 +87,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       assert {"sentry-sampled", "false"} in tracestate
 
       state = :sys.get_state(ClientReport.Sender)
-      assert state == %{{:sample_rate, "transaction"} => 1}
+      assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
 
     test "always samples when sample rate is 1.0" do
@@ -148,7 +148,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                Sampler.should_sample(test_ctx, 123, nil, "test span", nil, nil, drop: [])
 
       state = :sys.get_state(ClientReport.Sender)
-      assert state == %{{:sample_rate, "transaction"} => 1}
+      assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
   end
 
@@ -194,7 +194,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
         assert returned_tracestate == trace_tracestate
 
         state = :sys.get_state(ClientReport.Sender)
-        assert state == %{{:sample_rate, "transaction"} => 1}
+        assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
       after
         :otel_ctx.detach(token)
       end
