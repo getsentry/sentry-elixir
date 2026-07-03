@@ -44,7 +44,7 @@ config :sentry,
   logs: [
     level: :info,
     excluded_domains: [:cowboy, :ranch],
-    metadata: [:request_id, :user_id]
+    metadata: :all
   ]
 
 config :opentelemetry, span_processor: {Sentry.OpenTelemetry.SpanProcessor, []}

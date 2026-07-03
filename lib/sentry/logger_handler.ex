@@ -319,6 +319,11 @@ defmodule Sentry.LoggerHandler do
   alias Sentry.LoggerHandler.{ErrorBackend, LogsBackend, RateLimiter}
 
   # The config for this logger handler.
+  #
+  # The `:level`, `:excluded_domains`, `:metadata`, and other fields above `:backends`
+  # configure the error-event side (ErrorBackend). The `:logs_*` fields hold the
+  # structured-logs side (LogsBackend) settings, read from the global `:logs`
+  # configuration when the handler is set up.
   defstruct [
     :level,
     :excluded_domains,
@@ -329,6 +334,9 @@ defmodule Sentry.LoggerHandler do
     :sync_threshold,
     :discard_threshold,
     :enable_logs,
+    :logs_level,
+    :logs_excluded_domains,
+    :logs_metadata,
     backends: []
   ]
 
@@ -354,6 +362,8 @@ defmodule Sentry.LoggerHandler do
 
     backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}
+
+    handler_config = prepare_logs_config(handler_config)
 
     config = Map.put(config, :config, handler_config)
 
@@ -386,12 +396,24 @@ defmodule Sentry.LoggerHandler do
   def changing_config(:update, old_config, new_config) do
     new_sentry_config =
       if is_struct(new_config.config, __MODULE__) do
-        new_config.config |> Map.from_struct() |> Map.delete(:backends)
+        # Drop the internally-managed fields that are not part of the user-facing
+        # options schema so they don't trip NimbleOptions validation: :backends is
+        # carried over from the existing config, and the :logs_* settings are
+        # re-derived from the current global config by prepare_logs_config/1 below.
+        new_config.config
+        |> Map.from_struct()
+        |> Map.drop([:backends, :logs_level, :logs_excluded_domains, :logs_metadata])
       else
         new_config.config
       end
 
-    updated_config = update_in(old_config.config, &cast_config(&1, new_sentry_config))
+    # Re-read the structured-logs settings whenever the handler is reconfigured, so
+    # updating (or re-adding via the application's auto-attach path) refreshes the
+    # :logs_* values instead of leaving stale ones.
+    updated_config =
+      old_config
+      |> update_in([:config], &cast_config(&1, new_sentry_config))
+      |> update_in([:config], &prepare_logs_config/1)
 
     _ignored =
       cond do
@@ -447,6 +469,23 @@ defmodule Sentry.LoggerHandler do
   end
 
   ## Helpers
+
+  # Reads the structured-logs settings (level, excluded domains, metadata) from the
+  # global :logs configuration into the handler config. Only done when LogsBackend is
+  # active for the handler; otherwise the :logs_* fields stay nil since they would never
+  # be read.
+  defp prepare_logs_config(%__MODULE__{backends: backends} = config) do
+    if LogsBackend in backends do
+      %{
+        config
+        | logs_level: Config.logs_level(),
+          logs_excluded_domains: Config.logs_excluded_domains(),
+          logs_metadata: Config.logs_metadata()
+      }
+    else
+      config
+    end
+  end
 
   defp cast_config(%__MODULE__{} = existing_config, %{} = new_config) do
     validated_config =
