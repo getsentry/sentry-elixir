@@ -88,7 +88,7 @@ defmodule Sentry.ConfigTest do
       assert defaults[:capture_log_messages] == false
       assert defaults[:capture_level] == :error
       assert defaults[:capture_metadata] == []
-      assert defaults[:capture_excluded_domains] == [:cowboy, :bandit]
+      assert defaults[:capture_excluded_domains] == [:cowboy]
 
       configured =
         Config.validate!(
