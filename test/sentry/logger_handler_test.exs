@@ -36,13 +36,25 @@ defmodule Sentry.LoggerHandlerTest do
     Logger.warning("Warning message")
 
     # Change the level to :info and make sure that :debug messages are not reported.
-    assert :ok = :logger.update_handler_config(handler_name, :level, :info)
+    assert :ok = :logger.update_handler_config(handler_name, :capture_level, :info)
 
     on_exit(fn ->
-      :logger.update_handler_config(handler_name, :level, :error)
+      :logger.update_handler_config(handler_name, :capture_level, :error)
     end)
 
     Logger.debug("Debug message")
+  end
+
+  @tag handler_config: %{
+         level: :warning,
+         excluded_domains: [:test_domain],
+         metadata: [:request_id]
+       }
+  test "accepts legacy capture option names", %{handler_name: handler_name} do
+    assert {:ok, %{config: config}} = :logger.get_handler_config(handler_name)
+    assert config.capture_level == :warning
+    assert config.capture_excluded_domains == [:test_domain]
+    assert config.capture_metadata == [:request_id]
   end
 
   test "a logged raised exception is reported", %{sender_ref: ref} do
@@ -74,7 +86,7 @@ defmodule Sentry.LoggerHandlerTest do
   describe "with Plug" do
     if System.otp_release() < "26", do: @describetag(:skip)
 
-    @tag handler_config: %{excluded_domains: []}
+    @tag handler_config: %{capture_excluded_domains: []}
     test "captures errors from spawn/0 in Plug app", %{sender_ref: ref} do
       :get
       |> Plug.Test.conn("/spawn_error_route")
@@ -96,7 +108,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.original_exception == %RuntimeError{message: "Error"}
     end
 
-    @tag handler_config: %{excluded_domains: []}
+    @tag handler_config: %{capture_excluded_domains: []}
     test "sends two errors when a Plug process crashes if cowboy domain is not excluded",
          %{sender_ref: ref} do
       start_supervised!(Sentry.ExamplePlugApplication, restart: :temporary)
@@ -111,7 +123,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert second_event.original_exception == %RuntimeError{message: "Error"}
     end
 
-    @tag handler_config: %{excluded_domains: []}
+    @tag handler_config: %{capture_excluded_domains: []}
     test "sends two errors when a Plug process crashes if PlugCapture is used and :bandit not excluded",
          %{sender_ref: ref} do
       start_supervised!({Sentry.ExamplePlugApplication, server: :bandit}, restart: :temporary)
@@ -209,8 +221,8 @@ defmodule Sentry.LoggerHandlerTest do
       refute_received {^ref, _event}, 100
     end
 
-    @tag handler_config: %{capture_log_messages: true, level: :warning}
-    test "respects the configured :level", %{sender_ref: ref} do
+    @tag handler_config: %{capture_log_messages: true, capture_level: :warning}
+    test "respects the configured :capture_level", %{sender_ref: ref} do
       Logger.log(:warning, "Testing warning")
       Logger.log(:info, "Testing info")
 
@@ -232,7 +244,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.message.formatted == "Error"
     end
 
-    @tag handler_config: %{capture_log_messages: true, excluded_domains: [:test_domain]}
+    @tag handler_config: %{capture_log_messages: true, capture_excluded_domains: [:test_domain]}
     test "ignores log messages with excluded domains", %{sender_ref: ref} do
       Logger.error("no domain")
       Logger.error("test_domain", domain: [:test_domain])
@@ -377,7 +389,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert Enum.find(stacktrace.frames, &(&1.function == "GenServer.call/3"))
     end
 
-    @tag handler_config: %{metadata: [:string, :number, :map, :list, :chardata]}
+    @tag handler_config: %{capture_metadata: [:string, :number, :map, :list, :chardata]}
     test "includes Logger metadata for keys configured to be included",
          %{sender_ref: ref, test_genserver: test_genserver} do
       run_and_catch_exit(test_genserver, fn ->
@@ -400,7 +412,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.extra.logger_metadata.chardata == "π's unicode is π"
     end
 
-    @tag handler_config: %{metadata: []}
+    @tag handler_config: %{capture_metadata: []}
     test "does not include Logger metadata when disabled",
          %{sender_ref: ref, test_genserver: test_genserver} do
       run_and_catch_exit(test_genserver, fn ->
@@ -418,7 +430,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert event.extra.logger_metadata == %{}
     end
 
-    @tag handler_config: %{metadata: :all}
+    @tag handler_config: %{capture_metadata: :all}
     test "supports :all for Logger metadata", %{sender_ref: ref, test_genserver: test_genserver} do
       run_and_catch_exit(test_genserver, fn ->
         Logger.metadata(my_string: "some string")
