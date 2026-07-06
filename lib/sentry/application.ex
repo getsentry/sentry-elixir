@@ -134,25 +134,13 @@ defmodule Sentry.Application do
 
   defp maybe_add_logger_handler do
     if Config.enable_logs?() do
-      # The :logs config drives both backends of the auto-attached handler. Only the
-      # error-event (ErrorBackend) options are passed here explicitly; they come from the
-      # separate :capture_* keys so they stay independent from the Logs UI ones (e.g.
-      # error-event metadata/excluded_domains are opt-in). The LogsBackend options (level,
-      # excluded_domains, metadata) are read from the global :logs config by the handler
-      # itself when it is added or reconfigured, so they do not need to be threaded through
-      # here.
-      handler_config = %{
-        level: Config.logs_capture_level(),
-        capture_log_messages: Config.logs_capture_log_messages?(),
-        metadata: Config.logs_capture_metadata(),
-        excluded_domains: Config.logs_capture_excluded_domains()
-      }
+      handler_config = logger_handler_config(Config.logs())
 
       cond do
         # The auto handler is still registered, which happens when the :sentry application
         # is stopped and restarted within the same VM: the handler lives in :logger, not in
         # our supervision tree, so it survives the stop. Re-sync its config so updated :logs
-        # settings reach the ErrorBackend, whose options are frozen at attach time and would
+        # settings reach the handler, whose options are frozen at attach time and would
         # otherwise stay stale across the restart.
         auto_logger_handler_registered?() ->
           _ = :logger.update_handler_config(:sentry_log_handler, :config, handler_config)
@@ -179,6 +167,19 @@ defmodule Sentry.Application do
     end
 
     :ok
+  end
+
+  defp logger_handler_config(logs) do
+    [
+      enable_logs: true,
+      capture_log_messages: Keyword.fetch!(logs, :capture_log_messages),
+      capture_level: Keyword.fetch!(logs, :capture_level),
+      capture_metadata: Keyword.fetch!(logs, :capture_metadata),
+      capture_excluded_domains: Keyword.fetch!(logs, :capture_excluded_domains),
+      logs_level: Keyword.fetch!(logs, :level),
+      logs_metadata: Keyword.fetch!(logs, :metadata),
+      logs_excluded_domains: Keyword.fetch!(logs, :excluded_domains)
+    ]
   end
 
   defp auto_logger_handler_registered? do
