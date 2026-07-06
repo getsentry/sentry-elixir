@@ -271,8 +271,10 @@ defmodule Sentry.Client do
        ) do
     if Config.telemetry_processor_category?(:transaction) do
       case TelemetryProcessor.add(transaction) do
-        {:ok, {:rate_limited, data_category}} ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+        {:ok, {:rate_limited, _data_category}} ->
+          # Pass the transaction itself (rather than its string data category) so
+          # that the discarded spans are also recorded in the client report.
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, [transaction])
 
         :ok ->
           :ok

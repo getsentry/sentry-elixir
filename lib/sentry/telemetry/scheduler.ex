@@ -527,12 +527,21 @@ defmodule Sentry.Telemetry.Scheduler do
     buffer = Map.fetch!(state.buffers, category)
     items = Buffer.drain(buffer)
 
-    if items != [] do
-      data_category = Category.data_category(category)
+    cond do
+      items == [] ->
+        :ok
 
-      Enum.each(items, fn _item ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-      end)
+      # Transactions carry spans, so pass the actual structs through the
+      # list-based recorder to also record the discarded "span" outcomes.
+      category == :transaction ->
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
+
+      true ->
+        data_category = Category.data_category(category)
+
+        Enum.each(items, fn _item ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+        end)
     end
 
     state

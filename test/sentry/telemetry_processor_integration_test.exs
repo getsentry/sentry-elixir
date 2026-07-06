@@ -488,6 +488,67 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
   end
 
+  describe "scheduler draining a rate-limited buffer" do
+    setup ctx do
+      put_test_config(telemetry_processor_categories: [:transaction, :log])
+      Sentry.ClientReport.Sender.flush()
+      flush_ref_messages(ctx.ref)
+
+      # The scheduler runs in its own process (with no `:rate_limiter_table_name`
+      # in its dictionary), so it reads the default rate limiter table rather
+      # than this test's uniquely-named one.
+      on_exit(fn ->
+        try do
+          :ets.delete(Sentry.Transport.RateLimiter, "transaction")
+        catch
+          :error, :badarg -> :ok
+        end
+      end)
+
+      :ok
+    end
+
+    test "records span outcomes when a buffered transaction is dropped by rate limiting", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+
+      # Buffer a transaction with two spans *before* the category becomes
+      # rate-limited, so it reaches the scheduler's drain path (not the
+      # pre-buffer rate limit check).
+      :sys.suspend(scheduler)
+
+      transaction = %{make_transaction() | spans: [create_span(), create_span()]}
+      TelemetryProcessor.add(ctx.processor, transaction)
+      assert Buffer.size(transaction_buffer) == 1
+
+      :ets.insert(
+        Sentry.Transport.RateLimiter,
+        {"transaction", System.system_time(:second) + 60}
+      )
+
+      :sys.resume(scheduler)
+      GenServer.cast(scheduler, :signal)
+
+      poll_until(fn -> Buffer.size(transaction_buffer) == 0 end)
+
+      Sentry.ClientReport.Sender.flush()
+
+      ref = ctx.ref
+      assert_receive {:bypass_envelope, ^ref, body}, 2000
+      assert [{%{"type" => "client_report"}, client_report}] = decode_envelope!(body)
+
+      outcomes =
+        for event <- client_report["discarded_events"],
+            event["reason"] == "ratelimit_backoff",
+            into: %{},
+            do: {event["category"], event["quantity"]}
+
+      # The transaction itself plus a "span" outcome of 2 spans + 1 = 3.
+      assert outcomes["transaction"] == 1
+      assert outcomes["span"] == 3
+    end
+  end
+
   defp make_transaction do
     now = System.system_time(:microsecond)
 

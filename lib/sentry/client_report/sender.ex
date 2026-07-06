@@ -6,7 +6,7 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope}
+  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
 
   @send_interval 30_000
 
@@ -30,7 +30,7 @@ defmodule Sentry.ClientReport.Sender do
   @spec record_discarded_events(atom(), String.t(), GenServer.server()) :: :ok
   def record_discarded_events(reason, data_category, genserver)
       when is_binary(data_category) do
-    GenServer.cast(genserver, {:record_discarded_events, reason, data_category})
+    GenServer.cast(genserver, {:record_discarded_events, reason, data_category, 1})
   end
 
   @spec record_discarded_events(atom(), [item], GenServer.server()) :: :ok
@@ -45,16 +45,28 @@ defmodule Sentry.ClientReport.Sender do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
     # https://develop.sentry.dev/sdk/client-reports/
     if Enum.member?(@client_report_reasons, reason) do
-      Enum.each(
-        event_items,
-        fn item ->
-          GenServer.cast(
-            genserver,
-            {:record_discarded_events, reason, Envelope.get_data_category(item)}
-          )
+      Enum.each(event_items, fn item ->
+        for {category, quantity} <- data_categories(item) do
+          GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
         end
-      )
+      end)
     end
+
+    :ok
+  end
+
+  # A dropped transaction also drops the spans it contains. Per Sentry's client
+  # report spec, we must record an additional `span` outcome whose quantity is
+  # the number of spans in the transaction plus one, because Relay extracts an
+  # extra span from the transaction itself.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/#span-outcomes
+  defp data_categories(%Transaction{spans: spans} = transaction) do
+    span_count = length(List.wrap(spans)) + 1
+    [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
+  end
+
+  defp data_categories(item) do
+    [{Envelope.get_data_category(item), 1}]
   end
 
   ## Callbacks
@@ -71,8 +83,8 @@ defmodule Sentry.ClientReport.Sender do
   end
 
   @impl true
-  def handle_cast({:record_discarded_events, reason, category}, discarded_events) do
-    {:noreply, Map.update(discarded_events, {reason, category}, 1, &(&1 + 1))}
+  def handle_cast({:record_discarded_events, reason, category, quantity}, discarded_events) do
+    {:noreply, Map.update(discarded_events, {reason, category}, quantity, &(&1 + quantity))}
   end
 
   @impl true
