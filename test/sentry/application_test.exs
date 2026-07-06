@@ -24,7 +24,7 @@ defmodule Sentry.ApplicationTest do
       assert config.config.capture_log_messages == false
       assert config.config.level == :error
       assert config.config.metadata == []
-      assert config.config.excluded_domains == [:cowboy, :bandit]
+      assert config.config.excluded_domains == [:cowboy]
     end
 
     test "respects logs.capture_log_messages and logs.capture_level config" do
@@ -60,8 +60,8 @@ defmodule Sentry.ApplicationTest do
       assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_excluded_domains() == [:cowboy, :ranch]
       # :excluded_domains is for the Logs UI only; error-event exclusions are governed by
-      # the separate :capture_excluded_domains option (defaults to [:cowboy, :bandit]).
-      assert config.config.excluded_domains == [:cowboy, :bandit]
+      # the separate :capture_excluded_domains option.
+      assert config.config.excluded_domains == [:cowboy]
     end
 
     test "respects logs.capture_excluded_domains config" do

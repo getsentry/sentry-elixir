@@ -503,11 +503,11 @@ defmodule Sentry.Config do
         ],
         capture_excluded_domains: [
           type: {:list, :atom},
-          default: [:cowboy, :bandit],
+          default: [:cowboy],
           type_doc: "list of `t:atom/0`",
           doc: """
           Domains to exclude from **error events** captured by the auto-attached handler.
-          Defaults to `[:cowboy, :bandit]` to avoid double-reporting events already captured
+          Defaults to `[:cowboy]` to avoid double-reporting events already captured
           by `Sentry.PlugCapture`. This is independent of `:excluded_domains`, which controls
           structured logs sent to Sentry's Logs Protocol. *Available since 13.2.0*.
           """
