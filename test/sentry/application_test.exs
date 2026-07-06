@@ -15,22 +15,22 @@ defmodule Sentry.ApplicationTest do
     test "attaches :sentry_log_handler with defaults" do
       restart_sentry_with(dsn: "https://public@sentry.example.com/1", enable_logs: true)
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.module == Sentry.LoggerHandler
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.module == Sentry.LoggerHandler
       assert Sentry.Config.logs_level() == :info
       assert Sentry.Config.logs_excluded_domains() == []
       assert Sentry.Config.logs_metadata() == []
 
-      assert config.config.capture_log_messages == false
-      assert config.config.level == :error
-      assert config.config.metadata == []
-      assert config.config.excluded_domains == [:cowboy, :bandit]
+      assert handler.config.capture_log_messages == false
+      assert handler.config.level == :error
+      assert handler.config.metadata == []
+      assert handler.config.excluded_domains == [:cowboy, :bandit]
 
-      # The structured-logs (LogsBackend) settings are frozen from the global :logs
-      # config into the handler config struct.
-      assert config.config.logs_level == :info
-      assert config.config.logs_excluded_domains == []
-      assert config.config.logs_metadata == []
+      # The logs feature settings are frozen from the global :logs config into
+      # the handler config struct used by LogsBackend.
+      assert handler.config.logs_level == :info
+      assert handler.config.logs_excluded_domains == []
+      assert handler.config.logs_metadata == []
     end
 
     test "respects logs.capture_log_messages and logs.capture_level config" do
@@ -40,9 +40,9 @@ defmodule Sentry.ApplicationTest do
         logs: [capture_log_messages: true, capture_level: :warning]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.capture_log_messages == true
-      assert config.config.level == :warning
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.capture_log_messages == true
+      assert handler.config.level == :warning
     end
 
     test "respects logs.level config" do
@@ -52,9 +52,9 @@ defmodule Sentry.ApplicationTest do
         logs: [level: :warning]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_level() == :warning
-      assert config.config.logs_level == :warning
+      assert handler.config.logs_level == :warning
     end
 
     test "respects logs.excluded_domains config" do
@@ -64,13 +64,14 @@ defmodule Sentry.ApplicationTest do
         logs: [excluded_domains: [:cowboy, :ranch]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_excluded_domains() == [:cowboy, :ranch]
-      # :excluded_domains is for the Logs UI only; error-event exclusions are governed by
-      # the separate :capture_excluded_domains option (defaults to [:cowboy, :bandit]).
-      assert config.config.excluded_domains == [:cowboy, :bandit]
-      # The Logs UI exclusions are frozen into the handler config for the LogsBackend.
-      assert config.config.logs_excluded_domains == [:cowboy, :ranch]
+
+      # :excluded_domains is for the logs feature; captured Sentry event exclusions are
+      # governed by the separate :capture_excluded_domains option.
+      assert handler.config.excluded_domains == [:cowboy, :bandit]
+      # The logs feature exclusions are frozen into the handler config for LogsBackend.
+      assert handler.config.logs_excluded_domains == [:cowboy, :ranch]
     end
 
     test "respects logs.capture_excluded_domains config" do
@@ -80,8 +81,8 @@ defmodule Sentry.ApplicationTest do
         logs: [capture_excluded_domains: [:cowboy, :ranch]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.excluded_domains == [:cowboy, :ranch]
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.excluded_domains == [:cowboy, :ranch]
     end
 
     test "respects logs.metadata config" do
@@ -91,13 +92,14 @@ defmodule Sentry.ApplicationTest do
         logs: [metadata: [:request_id, :user_id]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
       assert Sentry.Config.logs_metadata() == [:request_id, :user_id]
-      # :metadata is for the Logs UI only; it must not leak into error-event metadata,
+
+      # :metadata is for the logs feature; it must not leak into captured event metadata,
       # which is governed by the separate :capture_metadata option.
-      assert config.config.metadata == []
-      # The Logs UI metadata selection is frozen into the handler config for the LogsBackend.
-      assert config.config.logs_metadata == [:request_id, :user_id]
+      assert handler.config.metadata == []
+      # The logs feature metadata selection is set in the handler config for LogsBackend.
+      assert handler.config.logs_metadata == [:request_id, :user_id]
     end
 
     test "respects logs.capture_metadata config" do
@@ -107,8 +109,8 @@ defmodule Sentry.ApplicationTest do
         logs: [capture_metadata: [:request_id, :user_id]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.metadata == [:request_id, :user_id]
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.metadata == [:request_id, :user_id]
     end
 
     test "re-syncs the handler's capture config when restarted while already registered" do
@@ -118,21 +120,21 @@ defmodule Sentry.ApplicationTest do
         logs: [capture_metadata: [:request_id], capture_excluded_domains: [:cowboy]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.metadata == [:request_id]
-      assert config.config.excluded_domains == [:cowboy]
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.metadata == [:request_id]
+      assert handler.config.excluded_domains == [:cowboy]
 
       # Restart again WITHOUT removing the handler first. The handler survives the stop, so
-      # the start path must re-sync the ErrorBackend's frozen options to the new config.
+      # the start path must re-sync the event-capture backend's frozen options to the new config.
       restart_sentry_with(
         dsn: "https://public@sentry.example.com/1",
         enable_logs: true,
         logs: [capture_metadata: [:request_id, :user_id], capture_excluded_domains: [:ranch]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.metadata == [:request_id, :user_id]
-      assert config.config.excluded_domains == [:ranch]
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.metadata == [:request_id, :user_id]
+      assert handler.config.excluded_domains == [:ranch]
     end
 
     test "re-freezes the handler's structured-logs config when restarted while already registered" do
@@ -142,10 +144,10 @@ defmodule Sentry.ApplicationTest do
         logs: [level: :info, excluded_domains: [:cowboy], metadata: [:request_id]]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.logs_level == :info
-      assert config.config.logs_excluded_domains == [:cowboy]
-      assert config.config.logs_metadata == [:request_id]
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.logs_level == :info
+      assert handler.config.logs_excluded_domains == [:cowboy]
+      assert handler.config.logs_metadata == [:request_id]
 
       # Restart WITHOUT removing the handler first. The handler survives the stop, so the
       # start path must re-sync (re-freeze) the LogsBackend's frozen options to the new
@@ -156,10 +158,10 @@ defmodule Sentry.ApplicationTest do
         logs: [level: :warning, excluded_domains: [:ranch], metadata: :all]
       )
 
-      assert {:ok, config} = :logger.get_handler_config(:sentry_log_handler)
-      assert config.config.logs_level == :warning
-      assert config.config.logs_excluded_domains == [:ranch]
-      assert config.config.logs_metadata == :all
+      assert {:ok, handler} = :logger.get_handler_config(:sentry_log_handler)
+      assert handler.config.logs_level == :warning
+      assert handler.config.logs_excluded_domains == [:ranch]
+      assert handler.config.logs_metadata == :all
     end
 
     test "does not attach handler when enable_logs is false" do
