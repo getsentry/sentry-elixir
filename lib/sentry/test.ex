@@ -52,7 +52,7 @@ defmodule Sentry.Test do
 
   @moduledoc since: "10.2.0"
 
-  @compile {:no_warn_undefined, [Bypass, Plug.Conn, :telemetry]}
+  @compile {:no_warn_undefined, [Bypass, Plug.Conn, :telemetry, Broadway]}
 
   @ownership_server Sentry.Test.OwnershipServer
 
@@ -75,9 +75,9 @@ defmodule Sentry.Test do
 
   ## Options
 
-    * `:allowance` - a list of integration module atoms (currently `Oban`)
-      to enable automatic `Sentry.Test.allow_sentry_reports/2` wiring for.
-      See the "Oban tests" section below.
+    * `:allowance` - a list of integration module atoms (currently `Oban`
+      and `Broadway`) to enable automatic `Sentry.Test.allow_sentry_reports/2`
+      wiring for. See the "Oban tests" and "Broadway tests" sections below.
 
   Any other key is forwarded to the per-test Sentry config (e.g.,
   `dedup_events: false`, `traces_sample_rate: 1.0`).
@@ -124,6 +124,41 @@ defmodule Sentry.Test do
   Jobs inserted by other processes (cron plugins, jobs scheduling
   jobs) are not auto-tagged and require manual
   `Sentry.Test.allow_sentry_reports/2`.
+
+  ## Broadway tests
+
+  To route events from a Broadway processor or batch-processor back
+  to your test, pass `:sentry_test_owner` in the message metadata
+  when injecting messages via `Broadway.test_message/3` or
+  `Broadway.test_batch/3`:
+
+      setup do
+        Sentry.Test.setup_sentry(allowance: [Broadway])
+        start_supervised!(MyPipeline)
+        :ok
+      end
+
+      test "captures events from the processor" do
+        ref =
+          Broadway.test_message(MyPipeline, payload,
+            metadata: %{sentry_test_owner: self()}
+          )
+
+        assert_receive {:ack, ^ref, [_succeeded], []}
+
+        assert [%Sentry.Event{}] = Sentry.Test.pop_sentry_reports()
+      end
+
+  This mirrors the [Ecto sandbox pattern documented in
+  Broadway](https://hexdocs.pm/broadway/Broadway.html#module-testing-with-ecto):
+  the test owner travels with the message itself, so two `async: true`
+  tests racing through the same pipeline are routed independently.
+
+  Messages submitted without the `:sentry_test_owner` metadata are not
+  auto-allowed — the handler silently skips them. For production
+  producers (Kafka, SQS, etc.) that need the same routing, attach the
+  same key to the messages they emit; the handler reads it regardless
+  of source.
 
   ## Examples
 
@@ -948,6 +983,17 @@ defmodule Sentry.Test do
     ]
   end
 
+  defp allowance_handlers(Broadway) do
+    # Both events fire once per worker invocation (per batch) in the
+    # processor / batch-processor pid, with metadata.messages giving
+    # the full batch. Reading the owner from message metadata is the
+    # documented Broadway pattern (same shape as `ecto_sandbox`).
+    [
+      {[:broadway, :processor, :start], {__MODULE__, :__handle_broadway_batch_start__}},
+      {[:broadway, :batch_processor, :start], {__MODULE__, :__handle_broadway_batch_start__}}
+    ]
+  end
+
   defp allowance_handlers(_other), do: :unknown
 
   # ── Oban allowance handlers ──
@@ -995,6 +1041,33 @@ defmodule Sentry.Test do
   end
 
   def __handle_oban_job_finish__(_event, _measurements, _metadata, _config), do: :ok
+
+  # ── Broadway allowance handler ──
+  #
+  # The handler walks the batch's messages looking for a
+  # `:sentry_test_owner` metadata entry — the documented Broadway test
+  # pattern, identical in shape to the `:ecto_sandbox` example in the
+  # Broadway testing guide. Tests submit messages via
+  # `Broadway.test_message/3` with
+  # `metadata: %{sentry_test_owner: self()}` (or any custom producer
+  # that propagates `:metadata` onto `%Broadway.Message{}`).
+  @doc false
+  def __handle_broadway_batch_start__(_event, _measurements, %{messages: messages}, _config)
+      when is_list(messages) do
+    case find_broadway_owner(messages) do
+      nil -> :ok
+      owner_pid -> safe_allow(owner_pid, self())
+    end
+  end
+
+  def __handle_broadway_batch_start__(_event, _measurements, _metadata, _config), do: :ok
+
+  defp find_broadway_owner(messages) do
+    Enum.find_value(messages, fn
+      %{metadata: %{sentry_test_owner: pid}} when is_pid(pid) -> pid
+      _ -> nil
+    end)
+  end
 
   # Best-effort allow used by the Oban / Broadway dispatch handlers.
   # Swallows the `ArgumentError` that `allow_sentry_reports/2` raises
