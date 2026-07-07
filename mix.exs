@@ -1,7 +1,7 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
-  @version "13.2.0"
+  @version "13.3.0"
   @source_url "https://github.com/getsentry/sentry-elixir"
 
   def project do
@@ -120,7 +120,7 @@ defmodule Sentry.Mixfile do
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
-      {:rewrite, dep_version(:rewrite, current_elixir_version()), optional: true, override: true},
+      {:rewrite, dep_version(:rewrite, current_elixir_version()), optional: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},

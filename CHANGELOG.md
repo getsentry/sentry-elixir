@@ -1,3 +1,37 @@
+## 13.3.0
+
+### New Features ✨
+
+- (logs) Support for `capture_*` config by @solnic in [#1077](https://github.com/getsentry/sentry-elixir/pull/1077)
+- Add spans to client reports by @whatyouhide in [#1104](https://github.com/getsentry/sentry-elixir/pull/1104)
+- Remove SDK-side data truncation, defer to Relay by @dingsdax in [#1093](https://github.com/getsentry/sentry-elixir/pull/1093)
+
+#### Other
+
+- (deps) Cap various deps depending on Elixir version by @solnic in [#1109](https://github.com/getsentry/sentry-elixir/pull/1109)
+- (live_view) Limit trace context to only what's needed by @solnic in [#1095](https://github.com/getsentry/sentry-elixir/pull/1095)
+- (oban) Scrub sensitive info from errors by @solnic in [#1096](https://github.com/getsentry/sentry-elixir/pull/1096)
+- (plug) Scrub query string by default by @solnic in [#1100](https://github.com/getsentry/sentry-elixir/pull/1100)
+- (tracing) Stricter handling of trace/span format by @solnic in [#1097](https://github.com/getsentry/sentry-elixir/pull/1097)
+- Improve Ranch errors in Sentry.LoggerHandler by @whatyouhide in [#1088](https://github.com/getsentry/sentry-elixir/pull/1088)
+
+### Internal Changes 🔧
+
+#### CI
+
+- Add update-lockfiles automation wf by @solnic in [#1081](https://github.com/getsentry/sentry-elixir/pull/1081)
+- Ensure mix.lock was not changed under 1.13 by @solnic in [#1082](https://github.com/getsentry/sentry-elixir/pull/1082)
+
+#### Deps
+
+- Bump lockfile dependencies by @solnic in [#1106](https://github.com/getsentry/sentry-elixir/pull/1106)
+- Pinning hardening by @solnic in [#1080](https://github.com/getsentry/sentry-elixir/pull/1080)
+
+#### Other
+
+- Update Igniter install task by @andreas-ementio in [#1079](https://github.com/getsentry/sentry-elixir/pull/1079)
+- Exclude AGENTS.md/CLAUDE.md from the package by @solnic in [#1086](https://github.com/getsentry/sentry-elixir/pull/1086)
+
 ## 13.2.0
 
 ### New Features ✨
