@@ -65,10 +65,6 @@ defmodule PhoenixApp.MixProject do
       {:bandit, "~> 1.5"},
       {:bypass, "~> 2.1", only: :test},
       {:sentry, path: "../.."},
-      # The SDK supports Elixir 1.13 and caps plug below 1.19 (which needs 1.14+);
-      # pin plug here too so this fixture's resolver lands below 1.19 and converges
-      # with the SDK's optional plug requirement.
-      {:plug, "~> 1.18.0", override: true},
       {:opentelemetry, "~> 1.5"},
       {:opentelemetry_api, "~> 1.4"},
       {:opentelemetry_exporter, "~> 1.8"},

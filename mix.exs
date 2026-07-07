@@ -117,20 +117,14 @@ defmodule Sentry.Mixfile do
       {:jason, "~> 1.1", optional: true},
       {:phoenix, "~> 1.6", optional: true},
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
-      # plug >= 1.19 starts Plug.Upload under a PartitionSupervisor, which only exists
-      # on Elixir 1.14+; cap below it while we still support 1.13.
-      {:plug, "~> 1.6 and < 1.19.0", optional: true},
+      {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
-      # Pulled in transitively by :igniter. Capped below 1.2 because rewrite >= 1.2
-      # requires Elixir ~> 1.15, and we still support 1.13.
-      {:rewrite, "~> 1.1.0", optional: true, override: true},
+      {:rewrite, dep_version(:rewrite, current_elixir_version()), optional: true, override: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
-      # bandit >= 1.12 uses Elixir 1.15-only syntax (lib/bandit/extractor.ex) and
-      # fails to compile on 1.13, which we still support.
-      {:bandit, ">= 1.0.0 and < 1.12.0", only: [:test]},
+      {:bandit, dep_version(:bandit, current_elixir_version()), only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:ex_doc, "~> 0.29", only: :dev},
@@ -151,6 +145,27 @@ defmodule Sentry.Mixfile do
       {:opentelemetry_logger_metadata, "~> 0.2.0", only: :test}
     ]
   end
+
+  # Plug >= 1.19 starts Plug.Upload under a PartitionSupervisor, which only
+  # exists on Elixir 1.14+.
+  defp dep_version(:plug, %Version{major: 1, minor: minor}) when minor < 14,
+    do: "~> 1.6 and < 1.19.0"
+
+  defp dep_version(:plug, %Version{}), do: "~> 1.6"
+
+  # Rewrite >= 1.2 requires Elixir ~> 1.15.
+  defp dep_version(:rewrite, %Version{major: 1, minor: minor}) when minor < 15,
+    do: "~> 1.1.0"
+
+  defp dep_version(:rewrite, %Version{}), do: ">= 1.1.1 and < 2.0.0-0"
+
+  # Bandit >= 1.12 uses Elixir 1.15-only syntax.
+  defp dep_version(:bandit, %Version{major: 1, minor: minor}) when minor < 15,
+    do: ">= 1.0.0 and < 1.12.0"
+
+  defp dep_version(:bandit, %Version{}), do: "~> 1.0"
+
+  defp current_elixir_version, do: Version.parse!(System.version())
 
   defp package do
     [
