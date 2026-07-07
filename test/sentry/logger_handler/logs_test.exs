@@ -215,6 +215,26 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
+    test "manually-added handler with no enable_logs inherits global enable_logs: true", %{
+      handler_name: handler_name
+    } do
+      :ok = :logger.remove_handler(handler_name)
+
+      inherit_handler_name =
+        :"sentry_logs_handler_inherit_#{System.unique_integer([:positive])}"
+
+      put_test_config(enable_logs: true)
+
+      assert :ok =
+               :logger.add_handler(inherit_handler_name, Sentry.LoggerHandler, %{config: %{}})
+
+      on_exit(fn -> _ = :logger.remove_handler(inherit_handler_name) end)
+
+      Logger.info("Inherited enable_logs message")
+
+      assert_sentry_log(:info, "Inherited enable_logs message")
+    end
+
     test "rejects non-boolean :enable_logs in handler config", %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 

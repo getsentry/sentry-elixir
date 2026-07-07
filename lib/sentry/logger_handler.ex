@@ -353,6 +353,7 @@ defmodule Sentry.LoggerHandler do
 
   @moduledoc since: "9.0.0"
 
+  alias Sentry.Config
   alias Sentry.LoggerHandler.{ErrorBackend, LogsBackend, RateLimiter}
 
   # The config for this logger handler.
@@ -386,7 +387,14 @@ defmodule Sentry.LoggerHandler do
 
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
-    enable_logs? = handler_config.enable_logs == true
+    # A handler-level :enable_logs takes precedence; when it's not set (nil), fall
+    # back to the global config so a manually-added handler still forwards structured
+    # logs when logs are enabled globally. This runs once at attach time, not per log.
+    enable_logs? =
+      case handler_config.enable_logs do
+        nil -> Config.enable_logs?()
+        bool -> bool
+      end
 
     backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}
