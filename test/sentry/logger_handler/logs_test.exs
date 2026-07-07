@@ -235,6 +235,43 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_sentry_log(:info, "Inherited enable_logs message")
     end
 
+    test "runtime handler config update disables structured logs", %{handler_name: handler_name} do
+      assert :ok =
+               :logger.update_handler_config(handler_name, :config, %{enable_logs: false})
+
+      initial_size = TelemetryProcessor.buffer_size(:log)
+
+      Logger.info("Runtime disabled message")
+
+      wait_for_buffer_stable(nil, initial_size)
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
+    end
+
+    test "runtime handler config update enables structured logs", %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      disabled_handler_name =
+        :"sentry_logs_handler_runtime_enable_#{System.unique_integer([:positive])}"
+
+      put_test_config(enable_logs: false)
+
+      assert :ok =
+               :logger.add_handler(disabled_handler_name, Sentry.LoggerHandler, %{
+                 config: %{enable_logs: false}
+               })
+
+      on_exit(fn -> _ = :logger.remove_handler(disabled_handler_name) end)
+
+      assert :ok =
+               :logger.update_handler_config(disabled_handler_name, :config, %{
+                 enable_logs: true
+               })
+
+      Logger.info("Runtime enabled message")
+
+      assert_sentry_log(:info, "Runtime enabled message")
+    end
+
     test "rejects non-boolean :enable_logs in handler config", %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
