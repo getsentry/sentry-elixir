@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
   clearLoggedEvents,
   getLoggedEvents,
@@ -12,6 +12,10 @@ import {
 const PHOENIX_URL = process.env.SENTRY_E2E_PHOENIX_APP_URL;
 if (!PHOENIX_URL) {
   throw new Error("Required environment variable SENTRY_E2E_PHOENIX_APP_URL is not set.");
+}
+
+async function waitForLiveView(page: Page) {
+  await page.waitForSelector("[data-phx-main].phx-connected");
 }
 
 test.describe("Tracing", () => {
@@ -234,6 +238,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await waitForLiveView(page);
       await expect(page.locator("#counter-value")).toHaveText("0");
 
       const logged = await waitForEvents(
@@ -284,6 +289,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
+      await waitForLiveView(page);
       await expect(page.locator("#increment-btn")).toBeVisible();
 
       await page.click("#increment-btn");
@@ -326,7 +332,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
-      await page.waitForSelector("[data-phx-main].phx-connected");
+      await waitForLiveView(page);
       await expect(page.locator("#counter-value")).toHaveText("0");
 
       await page.click("#increment-btn");
@@ -393,7 +399,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
 
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
-      await page.waitForSelector("[data-phx-main].phx-connected");
+      await waitForLiveView(page);
       await expect(page.locator("#params-link")).toBeVisible();
 
       await page.click("#params-link");
@@ -429,7 +435,7 @@ test.describe("Tracing", () => {
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
       await expect(page.locator("#counter-value")).toHaveText("0");
 
-      await page.waitForSelector("[data-phx-main].phx-connected");
+      await waitForLiveView(page);
 
       await page.click("#increment-btn");
       await expect(page.locator("#counter-value")).toHaveText("1");
@@ -493,7 +499,7 @@ test.describe("Tracing", () => {
     test("LiveView handle_event records transaction with Ecto spans in correct hierarchy", async ({ page }) => {
       await page.goto(`${PHOENIX_URL}/tracing-test`);
       await expect(page.locator("#tracing-test-live h1")).toContainText("LiveView Tracing Test");
-      await page.waitForSelector("[data-phx-main].phx-connected");
+      await waitForLiveView(page);
 
       await expect(page.locator("#fetch-data-btn")).toBeVisible();
 
@@ -562,6 +568,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/test-worker`);
 
       await expect(page.locator("h3").first()).toContainText("Schedule Test Worker");
+      await waitForLiveView(page);
       await expect(page.locator("#schedule-job-btn")).toBeVisible();
 
       // Set a short sleep time so the job completes quickly
@@ -615,6 +622,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/test-worker`);
 
       await expect(page.locator("#schedule-job-btn")).toBeVisible();
+      await waitForLiveView(page);
       await page.fill("#sleep-time-input", "10");
 
       clearLoggedEvents();
@@ -684,6 +692,7 @@ test.describe("Tracing", () => {
       await page.goto(`${PHOENIX_URL}/test-worker`);
 
       await expect(page.locator("#schedule-job-btn")).toBeVisible();
+      await waitForLiveView(page);
       await page.fill("#sleep-time-input", "10");
 
       clearLoggedEvents();
