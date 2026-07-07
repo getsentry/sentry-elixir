@@ -36,6 +36,7 @@ defmodule Sentry.LoggerHandler do
       doc: """
       The minimum [`Logger`
       level](https://hexdocs.pm/logger/Logger.html#module-levels) to send Sentry events for.
+      *Available since v13.3.0*.
       """
     ],
     capture_excluded_domains: [
@@ -45,6 +46,7 @@ defmodule Sentry.LoggerHandler do
       doc: """
       Any messages with a domain in the configured list will not be sent as Sentry events.
       The default avoids double-reporting events from `Sentry.PlugCapture`.
+      *Available since v13.3.0*.
       """
     ],
     capture_metadata: [
@@ -55,7 +57,7 @@ defmodule Sentry.LoggerHandler do
       Use this to include non-Sentry logger metadata in captured Sentry events. If it's a
       list of keys, metadata in those keys will be added in the `:extra` context (see
       `Sentry.Context.set_extra_context/1`) under the `:logger_metadata` key.
-      If set to `:all`, all metadata will be included.
+      If set to `:all`, all metadata will be included. *Available since v13.3.0*.
       """
     ],
     tags_from_metadata: [
