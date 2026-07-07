@@ -4,29 +4,31 @@ defmodule Sentry.LoggerHandler.LogsBackend do
   # Backend that sends log events to Sentry's Logs Protocol.
   #
   # This backend is enabled at handler setup time when `enable_logs: true` is set
-  # in Sentry configuration. Logs configuration (level, excluded_domains, metadata)
-  # is read from `Sentry.Config` at runtime.
+  # in Sentry configuration. Its configuration (level, excluded_domains, metadata) is
+  # frozen into the `%Sentry.LoggerHandler{}` config struct when the handler is set up,
+  # so this backend reads those settings from the config it is given for each event
+  # rather than reading `Sentry.Config` on the logging hot path.
 
   @behaviour Sentry.LoggerHandler.Backend
 
-  alias Sentry.{Config, LogEvent, LoggerUtils, TelemetryProcessor}
+  alias Sentry.{LogEvent, LoggerUtils, TelemetryProcessor}
 
   @impl true
-  def handle_event(%{level: log_level, meta: log_meta} = log_event, _config, _handler_id) do
+  def handle_event(%{level: log_level, meta: log_meta} = log_event, config, _handler_id) do
     cond do
-      Logger.compare_levels(log_level, Config.logs_level()) == :lt ->
+      Logger.compare_levels(log_level, config.logs_level) == :lt ->
         :ok
 
-      LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), Config.logs_excluded_domains()) ->
+      LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.logs_excluded_domains) ->
         :ok
 
       true ->
-        send_log_event(log_event)
+        send_log_event(log_event, config.logs_metadata)
     end
   end
 
-  defp send_log_event(%{meta: log_meta} = log_event) do
-    attributes = extract_metadata(log_meta, Config.logs_metadata())
+  defp send_log_event(%{meta: log_meta} = log_event, logs_metadata) do
+    attributes = extract_metadata(log_meta, logs_metadata)
 
     # Extract parameters for message template interpolation (if provided via metadata)
     parameters = Map.get(log_meta, :parameters)

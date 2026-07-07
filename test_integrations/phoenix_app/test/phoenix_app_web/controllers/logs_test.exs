@@ -2,7 +2,6 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
   use PhoenixAppWeb.ConnCase, async: false
 
   import Sentry.Test.Assertions
-  import Sentry.TestHelpers, only: [put_test_config: 1]
 
   setup do
     original_level = Logger.level()
@@ -85,8 +84,6 @@ defmodule Sentry.Integrations.Phoenix.LogsTest do
 
   describe "structured logging with complex metadata" do
     test "GET /logs-with-structs captures struct attributes", %{conn: conn} do
-      put_test_config(logs: [level: :info, excluded_domains: [:cowboy, :ranch], metadata: :all])
-
       get(conn, ~p"/logs-with-structs")
 
       log = assert_sentry_log(:info, "Log with struct metadata")

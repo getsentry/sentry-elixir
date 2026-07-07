@@ -16,10 +16,13 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
   @impl true
   def handle_event(%{level: log_level, meta: log_meta} = log_event, config, handler_id) do
     cond do
-      Logger.compare_levels(log_level, config.level) == :lt ->
+      Logger.compare_levels(log_level, config.capture_level) == :lt ->
         :ok
 
-      LoggerUtils.excluded_domain?(Map.get(log_meta, :domain, []), config.excluded_domains) ->
+      LoggerUtils.excluded_domain?(
+        Map.get(log_meta, :domain, []),
+        config.capture_excluded_domains
+      ) ->
         :ok
 
       config.rate_limiting && RateLimiter.increment(handler_id) == :rate_limited ->
@@ -38,7 +41,7 @@ defmodule Sentry.LoggerHandler.ErrorBackend do
             log_level,
             log_meta[:sentry],
             log_meta,
-            config.metadata,
+            config.capture_metadata,
             config.tags_from_metadata
           )
 

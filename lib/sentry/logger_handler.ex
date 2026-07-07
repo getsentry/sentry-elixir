@@ -17,29 +17,43 @@ defmodule Sentry.LoggerHandler do
       type:
         {:in,
          [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
+      doc: false
+    ],
+    excluded_domains: [
+      type: {:list, :atom},
+      doc: false
+    ],
+    metadata: [
+      type: {:or, [{:list, :atom}, {:in, [:all]}]},
+      doc: false
+    ],
+    capture_level: [
+      type:
+        {:in,
+         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
       default: :error,
       type_doc: "`t:Logger.level/0`",
       doc: """
       The minimum [`Logger`
-      level](https://hexdocs.pm/logger/Logger.html#module-levels) to send events for.
+      level](https://hexdocs.pm/logger/Logger.html#module-levels) to send Sentry events for.
       """
     ],
-    excluded_domains: [
+    capture_excluded_domains: [
       type: {:list, :atom},
-      default: [:cowboy],
+      default: [:cowboy, :bandit],
       type_doc: "list of `t:atom/0`",
       doc: """
-      Any messages with a domain in the configured list will not be sent. The default is so as
-      to avoid double-reporting events from `Sentry.PlugCapture`.
+      Any messages with a domain in the configured list will not be sent as Sentry events.
+      The default avoids double-reporting events from `Sentry.PlugCapture`.
       """
     ],
-    metadata: [
+    capture_metadata: [
       type: {:or, [{:list, :atom}, {:in, [:all]}]},
       default: [],
       type_doc: "list of `t:atom/0`, or `:all`",
       doc: """
-      Use this to include non-Sentry logger metadata in reports. If it's a list of keys, metadata
-      in those keys will be added in the `:extra` context (see
+      Use this to include non-Sentry logger metadata in captured Sentry events. If it's a
+      list of keys, metadata in those keys will be added in the `:extra` context (see
       `Sentry.Context.set_extra_context/1`) under the `:logger_metadata` key.
       If set to `:all`, all metadata will be included.
       """
@@ -57,9 +71,9 @@ defmodule Sentry.LoggerHandler do
       default: false,
       doc: """
       When `true`, this module will report all logged messages to Sentry (provided they're not
-      filtered by `:excluded_domains` and `:level`). The default of `false` means that the
-      handler will only send **crash reports**, which are messages with metadata that has the
-      shape of an exit reason and a stacktrace.
+      filtered by `:capture_excluded_domains` and `:capture_level`). The default of `false`
+      means that the handler will only send **crash reports**, which are messages with
+      metadata that has the shape of an exit reason and a stacktrace.
       """
     ],
     rate_limiting: [
@@ -108,6 +122,22 @@ defmodule Sentry.LoggerHandler do
       type: {:or, [:boolean, nil]},
       default: nil,
       doc: false
+    ],
+    logs_level: [
+      type:
+        {:in, [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+      default: :info,
+      doc: false
+    ],
+    logs_excluded_domains: [
+      type: {:list, :atom},
+      default: [],
+      doc: false
+    ],
+    logs_metadata: [
+      type: {:or, [{:list, :atom}, {:in, [:all]}]},
+      default: [],
+      doc: false
     ]
   ]
 
@@ -121,8 +151,8 @@ defmodule Sentry.LoggerHandler do
 
   This handler can do **two distinct things** with the messages it receives:
 
-    * **Error events** — report crashes and (optionally) `Logger` messages such as
-      `Logger.error("oops")` to Sentry as **errors/messages**, the same way
+    * **Captured Sentry events** — report crashes and (optionally) `Logger` messages such as
+      `Logger.error("oops")` to Sentry as events, the same way
       `Sentry.capture_exception/2` and `Sentry.capture_message/2` do. This is always
       active when the handler is attached.
 
@@ -130,8 +160,8 @@ defmodule Sentry.LoggerHandler do
       UI](https://develop.sentry.dev/sdk/telemetry/logs/) as structured log events. This
       is active when `:enable_logs` is `true` in your Sentry configuration.
 
-  The two are independent: a single log can become an error event, a structured log, both,
-  or neither, depending on configuration.
+  The two are independent: a single log can become a captured Sentry event, a structured
+  log, both, or neither, depending on configuration.
 
   > #### You usually don't add this handler manually {: .tip}
   >
@@ -205,7 +235,7 @@ defmodule Sentry.LoggerHandler do
 
       config :my_app, :logger, [
         {:handler, :my_sentry_handler, Sentry.LoggerHandler, %{
-          config: %{metadata: [:file, :line]}
+          config: %{capture_metadata: [:file, :line]}
         }}
       ]
 
@@ -224,7 +254,7 @@ defmodule Sentry.LoggerHandler do
 
       def start(_type, _args) do
         :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
-          config: %{metadata: [:file, :line]}
+          config: %{capture_metadata: [:file, :line]}
         })
 
         # ...
@@ -232,7 +262,7 @@ defmodule Sentry.LoggerHandler do
 
   ## Sending logs to Sentry
 
-  To send structured logs to [Sentry's Logs UI](https://develop.sentry.dev/sdk/telemetry/logs/),
+  To send structured logs to [Sentry's logs feature](https://develop.sentry.dev/sdk/telemetry/logs/),
   enable logs in your Sentry configuration. This auto-attaches the handler — there is
   **no need** to configure `:logger` or call `:logger.add_handler/3`:
 
@@ -242,42 +272,42 @@ defmodule Sentry.LoggerHandler do
         logs: [level: :info, metadata: [:request_id]]
 
   With this configuration, every `Logger` call at `:info` or above becomes a structured log
-  event in Sentry, and crashes are still reported as **error events** (just like the manual
+  event in Sentry, and crashes are still reported as captured Sentry events (just like the manual
   setup above). The `:logs` options are documented in the
   [Sentry configuration](Sentry.html#module-configuration).
 
-  ### Also capturing `Logger` messages as error events
+  ### Also capturing `Logger` messages as Sentry events
 
-  By default the auto-attached handler reports **crashes** as error events but leaves
+  By default the auto-attached handler reports **crashes** as Sentry events but leaves
   standalone messages (such as `Logger.error("oops")`) as structured logs only. To also
-  report those messages as error events — for example, to turn `Logger.error/1` calls into
+  report those messages as Sentry events — for example, to turn `Logger.error/1` calls into
   Sentry issues while keeping `Logger.info/1` out of your issues stream — use the `:capture_*`
   keys under `:logs`:
 
       config :sentry,
         enable_logs: true,
         logs: [
-          level: :info,                          # structured logs at :info and above -> Logs UI
-          capture_log_messages: true,            # also report messages as error events...
+          level: :info,                          # structured logs at :info and above
+          capture_log_messages: true,            # also report messages as Sentry events...
           capture_level: :error,                 # ...but only at :error and above
-          capture_metadata: :all,                # include Logger metadata in those error events
-          capture_excluded_domains: [:cowboy]    # domains to exclude from those error events
+          capture_metadata: :all,                # include Logger metadata in those events
+          capture_excluded_domains: [:cowboy]    # domains to exclude from those events
         ]
 
-  The `:capture_*` keys configure the **error-event** side and are independent from the
-  matching Logs-UI keys (`:metadata`/`:capture_metadata`,
+  The `:capture_*` keys configure captured Sentry events and are independent from the
+  matching logs feature keys (`:metadata`/`:capture_metadata`,
   `:excluded_domains`/`:capture_excluded_domains`).
 
   > #### Including `Logger` metadata {: .info}
   >
   > For the auto-attached handler, metadata for the two destinations is configured
   > separately. The `:metadata` key **under `:logs`** lists the `Logger` metadata attached
-  > as attributes on **structured logs** (shown in the Logs UI). The `:capture_metadata`
-  > key lists the metadata attached under `:extra` (as `logger_metadata`) on **error
-  > events**. Both accept a list of keys or `:all`, and both default to `[]`. So if your
-  > custom metadata is missing from a captured *error event*, set
+  > as attributes on **structured logs**. The `:capture_metadata`
+  > key lists the metadata attached under `:extra` (as `logger_metadata`) on captured
+  > Sentry events. Both accept a list of keys or `:all`, and both default to `[]`. So if your
+  > custom metadata is missing from a captured event, set
   > `config :sentry, logs: [capture_metadata: [...]]` (or `:all`). When you add the handler
-  > manually instead, use this module's own `:metadata`
+  > manually instead, use this module's own `:capture_metadata`
   > [configuration option](#module-configuration).
 
   ## Configuration
@@ -286,6 +316,10 @@ defmodule Sentry.LoggerHandler do
 
   #{NimbleOptions.docs(@options_schema)}
 
+  The previous handler option names `:level`, `:excluded_domains`, and `:metadata` are
+  still accepted as aliases for `:capture_level`, `:capture_excluded_domains`, and
+  `:capture_metadata`, respectively.
+
   ## Examples
 
   To log all messages with level `:error` and above to Sentry, set `:capture_log_messages`
@@ -293,7 +327,11 @@ defmodule Sentry.LoggerHandler do
 
       config :my_app, :logger, [
         {:handler, :my_sentry_handler, Sentry.LoggerHandler, %{
-          config: %{metadata: [:file, :line], capture_log_messages: true, level: :error}
+          config: %{
+            capture_metadata: [:file, :line],
+            capture_log_messages: true,
+            capture_level: :error
+          }
         }}
       ]
 
@@ -315,20 +353,25 @@ defmodule Sentry.LoggerHandler do
 
   @moduledoc since: "9.0.0"
 
-  alias Sentry.Config
   alias Sentry.LoggerHandler.{ErrorBackend, LogsBackend, RateLimiter}
 
   # The config for this logger handler.
+  #
+  # The `:capture_*` fields configure captured Sentry events. The `:logs_*` fields
+  # configure structured logs for the auto-attached handler.
   defstruct [
-    :level,
-    :excluded_domains,
-    :metadata,
+    :capture_level,
+    :capture_excluded_domains,
+    :capture_metadata,
     :tags_from_metadata,
     :capture_log_messages,
     :rate_limiting,
     :sync_threshold,
     :discard_threshold,
     :enable_logs,
+    :logs_level,
+    :logs_excluded_domains,
+    :logs_metadata,
     backends: []
   ]
 
@@ -343,14 +386,7 @@ defmodule Sentry.LoggerHandler do
 
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
-    # When :enable_logs is set on the handler config, it takes precedence over
-    # the global Config.enable_logs?() — which may not resolve correctly in the
-    # logger-server process during async tests.
-    enable_logs? =
-      case handler_config.enable_logs do
-        nil -> Config.enable_logs?()
-        bool -> bool
-      end
+    enable_logs? = handler_config.enable_logs == true
 
     backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
     handler_config = %{handler_config | backends: backends}
@@ -386,12 +422,18 @@ defmodule Sentry.LoggerHandler do
   def changing_config(:update, old_config, new_config) do
     new_sentry_config =
       if is_struct(new_config.config, __MODULE__) do
-        new_config.config |> Map.from_struct() |> Map.delete(:backends)
+        # Drop the internally-managed fields that are not part of the user-facing
+        # options schema so they don't trip NimbleOptions validation.
+        new_config.config
+        |> Map.from_struct()
+        |> Map.drop([:backends])
       else
         new_config.config
       end
 
-    updated_config = update_in(old_config.config, &cast_config(&1, new_sentry_config))
+    updated_config =
+      old_config
+      |> update_in([:config], &cast_config(&1, new_sentry_config))
 
     _ignored =
       cond do
@@ -448,13 +490,15 @@ defmodule Sentry.LoggerHandler do
 
   ## Helpers
 
-  defp cast_config(%__MODULE__{} = existing_config, %{} = new_config) do
+  defp cast_config(%__MODULE__{} = existing_config, new_config)
+       when is_map(new_config) or is_list(new_config) do
     validated_config =
       new_config
-      |> Map.to_list()
+      |> config_to_list()
+      |> normalize_aliases()
       |> NimbleOptions.validate!(@options_schema)
 
-    config = struct!(existing_config, validated_config)
+    config = struct!(existing_config, canonical_config(validated_config))
 
     if config.sync_threshold && config.discard_threshold do
       raise ArgumentError,
@@ -462,5 +506,33 @@ defmodule Sentry.LoggerHandler do
     else
       config
     end
+  end
+
+  defp config_to_list(config) when is_map(config), do: Map.to_list(config)
+  defp config_to_list(config) when is_list(config), do: config
+
+  defp normalize_aliases(config) do
+    config
+    |> maybe_put_alias(:level, :capture_level)
+    |> maybe_put_alias(:excluded_domains, :capture_excluded_domains)
+    |> maybe_put_alias(:metadata, :capture_metadata)
+  end
+
+  defp maybe_put_alias(config, alias_key, canonical_key) do
+    cond do
+      Keyword.has_key?(config, canonical_key) ->
+        config
+
+      Keyword.has_key?(config, alias_key) ->
+        Keyword.put(config, canonical_key, Keyword.fetch!(config, alias_key))
+
+      true ->
+        config
+    end
+  end
+
+  defp canonical_config(validated_config) do
+    validated_config
+    |> Keyword.drop([:level, :excluded_domains, :metadata])
   end
 end

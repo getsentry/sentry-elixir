@@ -33,8 +33,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert is_number(log.timestamp)
     end
 
-    test "filters logs below configured level" do
-      put_test_config(logs: [level: :warning])
+    test "filters logs below configured level", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, level: :warning)
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -56,8 +56,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_sentry_log(:error, "Error message")
     end
 
-    test "filters excluded domains" do
-      put_test_config(logs: [excluded_domains: [:cowboy]])
+    test "filters excluded domains", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, excluded_domains: [:cowboy])
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -68,8 +68,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
-    test "includes logs from non-excluded domains" do
-      put_test_config(logs: [excluded_domains: [:cowboy]])
+    test "includes logs from non-excluded domains", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, excluded_domains: [:cowboy])
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -79,8 +79,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_buffer_size(nil, initial_size + 2)
     end
 
-    test "includes metadata as attributes" do
-      put_test_config(logs: [metadata: [:request_id, :user_id]])
+    test "includes metadata as attributes", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, metadata: [:request_id, :user_id])
 
       Logger.metadata(request_id: "abc123", user_id: 42, other_meta: "should not be included")
       Logger.info("Request processed")
@@ -93,8 +93,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       refute Map.has_key?(log.attributes, :other_meta)
     end
 
-    test "safely serializes struct metadata as string attributes" do
-      put_test_config(logs: [metadata: [:my_uri]])
+    test "safely serializes struct metadata as string attributes", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, metadata: [:my_uri])
 
       uri = URI.parse("https://example.com/path")
       Logger.metadata(my_uri: uri)
@@ -106,8 +106,8 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert log.attributes[:my_uri] == uri
     end
 
-    test "includes all metadata when configured with :all" do
-      put_test_config(logs: [metadata: :all])
+    test "includes all metadata when configured with :all", %{handler_name: handler_name} do
+      reconfigure_logs_handler(handler_name, metadata: :all)
 
       Logger.metadata(request_id: "abc123", user_id: 42, custom_field: "value")
       Logger.info("Request with metadata")
@@ -115,6 +115,44 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_sentry_log(:info, "Request with metadata",
         attributes: %{request_id: "abc123", user_id: 42, custom_field: "value"}
       )
+    end
+
+    test "freezes structured-logs config at setup and ignores later config changes" do
+      # The handler was attached in setup with logs level :info. Raising the level
+      # afterwards must NOT affect the already-attached handler, because the logs
+      # settings are frozen into the handler config when it is set up.
+      put_test_config(logs: [level: :error])
+
+      Logger.info("Frozen info message")
+
+      assert_sentry_log(:info, "Frozen info message")
+    end
+
+    test "reconfiguring the handler through its own mechanism picks up new logs settings",
+         %{handler_name: handler_name} do
+      # The handler was attached in setup at logs level :info. Reconfiguring it through
+      # the handler's own OTP mechanism with a new config updates the frozen settings.
+
+      put_test_config(logs: [level: :warning])
+
+      assert :ok =
+               :logger.update_handler_config(
+                 handler_name,
+                 :config,
+                 handler_config_from_logs()
+               )
+
+      initial_size = TelemetryProcessor.buffer_size(:log)
+
+      # Below the new level: now filtered by the reconfigured handler.
+      Logger.info("Info message should now be filtered")
+      wait_for_buffer_stable(nil, initial_size)
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
+
+      # At or above the new level: still captured, confirming the handler picked up
+      # the new settings rather than being disabled.
+      Logger.warning("Warning message should be captured")
+      assert_sentry_log(:warn, "Warning message should be captured")
     end
 
     test "does not send logs when enable_logs is false at handler setup time", %{
@@ -224,7 +262,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
   end
 
-  describe "capturing Logger messages as error events (logs.capture_log_messages)" do
+  describe "capturing Logger messages as Sentry events (logs.capture_log_messages)" do
     setup %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
@@ -240,11 +278,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       name = :"sentry_capture_handler_#{System.unique_integer([:positive])}"
 
-      handler_config = %{
-        level: Sentry.Config.logs_capture_level(),
-        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
-        metadata: Sentry.Config.logs_capture_metadata()
-      }
+      handler_config = handler_config_from_logs()
 
       assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
 
@@ -253,14 +287,14 @@ defmodule Sentry.LoggerHandler.LogsTest do
       %{handler_name: name}
     end
 
-    test "Logger.error is sent as both an error event and a structured log" do
+    test "Logger.error is sent as both a captured event and a structured log" do
       Logger.error("boom from logger")
 
       assert_sentry_report(:event, message: %{formatted: "boom from logger"})
       assert_sentry_log(:error, "boom from logger")
     end
 
-    test "messages below :capture_level are sent as logs but not as error events" do
+    test "messages below :capture_level are sent as logs but not as captured events" do
       Logger.info("just an info line")
       Logger.warning("a warning line")
 
@@ -270,26 +304,26 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert SentryTest.pop_sentry_reports() == []
     end
 
-    test "structured log keyword data is reported as an error event too" do
+    test "structured log keyword data is reported as a captured event too" do
       Logger.error(some: "structured", value: 42)
 
       event = assert_sentry_report(:event, [])
       assert event.message.formatted =~ "structured"
     end
 
-    test "includes custom Logger metadata in the captured error event" do
+    test "includes custom Logger metadata in the captured event" do
       Logger.error("Hello Buggy Bug", some_info: "boom!")
 
       event = assert_sentry_report(:event, message: %{formatted: "Hello Buggy Bug"})
       assert event.extra.logger_metadata.some_info == "boom!"
     end
 
-    test "logs.metadata feeds the Logs UI but not error events (capture_metadata governs that)",
+    test "logs.metadata feeds the logs feature but not captured events (capture_metadata governs that)",
          %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
-      # Metadata is configured for the Logs UI, but capture_metadata is left at its
-      # default ([]), so error events must not include the metadata.
+      # Metadata is configured for the logs feature, but capture_metadata is left at its
+      # default ([]), so captured events must not include the metadata.
       put_test_config(
         logs: [
           level: :info,
@@ -302,11 +336,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       name = :"sentry_no_capture_meta_#{System.unique_integer([:positive])}"
 
-      handler_config = %{
-        level: Sentry.Config.logs_capture_level(),
-        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
-        metadata: Sentry.Config.logs_capture_metadata()
-      }
+      handler_config = handler_config_from_logs()
 
       assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
       on_exit(fn -> _ = :logger.remove_handler(name) end)
@@ -321,11 +351,11 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert log.attributes[:secret_info] == "hidden"
     end
 
-    test "capture_excluded_domains drops error events but keeps the structured log",
+    test "capture_excluded_domains drops captured events but keeps the structured log",
          %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
-      # The domain is excluded from error events but not from the Logs UI.
+      # The domain is excluded from captured events but not from the logs feature.
       put_test_config(
         logs: [
           level: :info,
@@ -338,20 +368,16 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       name = :"sentry_excluded_domain_#{System.unique_integer([:positive])}"
 
-      handler_config = %{
-        level: Sentry.Config.logs_capture_level(),
-        capture_log_messages: Sentry.Config.logs_capture_log_messages?(),
-        excluded_domains: Sentry.Config.logs_capture_excluded_domains()
-      }
+      handler_config = handler_config_from_logs()
 
       assert :ok = :logger.add_handler(name, Sentry.LoggerHandler, %{config: handler_config})
       on_exit(fn -> _ = :logger.remove_handler(name) end)
 
       Logger.error("error from excluded domain", domain: [:myapp])
 
-      # The structured log is still captured (Logs UI :excluded_domains is []).
+      # The structured log is still captured (logs feature :excluded_domains is []).
       assert_sentry_log(:error, "error from excluded domain")
-      # But no error event, because the domain is in :capture_excluded_domains.
+      # But no captured event, because the domain is in :capture_excluded_domains.
       assert SentryTest.pop_sentry_reports() == []
     end
   end
@@ -502,7 +528,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
   defp add_logs_handler(_context) do
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 
-    handler_config = %{config: %{}}
+    handler_config = %{config: handler_config_from_logs()}
 
     assert :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
 
@@ -511,6 +537,43 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end)
 
     %{handler_name: handler_name}
+  end
+
+  # The structured-logs settings (level, excluded_domains, metadata) are frozen into
+  # the handler config when the handler is set up, so changing the :logs config after
+  # the handler is attached has no effect. To exercise a different logs configuration,
+  # tests remove the handler added in setup, set the desired :logs config, and attach a
+  # fresh handler with that config.
+  defp reconfigure_logs_handler(handler_name, logs_config) do
+    :ok = :logger.remove_handler(handler_name)
+
+    put_test_config(logs: logs_config)
+
+    new_handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
+
+    assert :ok =
+             :logger.add_handler(new_handler_name, Sentry.LoggerHandler, %{
+               config: handler_config_from_logs()
+             })
+
+    on_exit(fn -> _ = :logger.remove_handler(new_handler_name) end)
+
+    new_handler_name
+  end
+
+  defp handler_config_from_logs do
+    logs = Sentry.Config.logs()
+
+    [
+      enable_logs: true,
+      capture_log_messages: Keyword.fetch!(logs, :capture_log_messages),
+      capture_level: Keyword.fetch!(logs, :capture_level),
+      capture_metadata: Keyword.fetch!(logs, :capture_metadata),
+      capture_excluded_domains: Keyword.fetch!(logs, :capture_excluded_domains),
+      logs_level: Keyword.fetch!(logs, :level),
+      logs_metadata: Keyword.fetch!(logs, :metadata),
+      logs_excluded_domains: Keyword.fetch!(logs, :excluded_domains)
+    ]
   end
 
   defp assert_buffer_size(_buffer, expected_size, timeout \\ 1000) do
