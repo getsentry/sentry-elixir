@@ -1,3 +1,48 @@
+## 13.3.0
+
+### New Features ✨
+
+- (logs) Support for `capture_*` config by @solnic in [#1077](https://github.com/getsentry/sentry-elixir/pull/1077)
+
+### Bug Fixes 🐛
+
+#### Logs
+
+- Default to Config.enable_logs? if handler config does not specify it by @solnic in [#1107](https://github.com/getsentry/sentry-elixir/pull/1107)
+- Stop reading logs config at runtime by @solnic in [#1103](https://github.com/getsentry/sentry-elixir/pull/1103)
+
+#### Other
+
+- (deps) Cap various deps depending on Elixir version by @solnic in [#1109](https://github.com/getsentry/sentry-elixir/pull/1109)
+- (lv) Limit trace context to only what's needed by @solnic in [#1095](https://github.com/getsentry/sentry-elixir/pull/1095)
+- (oban) Scrub sensitive info from errors by @solnic in [#1096](https://github.com/getsentry/sentry-elixir/pull/1096)
+- (plug) Scrub query string by default by @solnic in [#1100](https://github.com/getsentry/sentry-elixir/pull/1100)
+- (tracing) Stricter handling of trace/span format by @solnic in [#1097](https://github.com/getsentry/sentry-elixir/pull/1097)
+- Revert "Exclude :bandit domain by default (#1073)" by @martosaur in [#1099](https://github.com/getsentry/sentry-elixir/pull/1099)
+- Improve Ranch errors in Sentry.LoggerHandler by @whatyouhide in [#1088](https://github.com/getsentry/sentry-elixir/pull/1088)
+
+### Internal Changes 🔧
+
+#### Ci
+
+- Add update-lockfiles automation wf by @solnic in [#1081](https://github.com/getsentry/sentry-elixir/pull/1081)
+- Ensure mix.lock was not changed under 1.13 by @solnic in [#1082](https://github.com/getsentry/sentry-elixir/pull/1082)
+
+#### Deps
+
+- Bump lockfile dependencies by @solnic in [#1106](https://github.com/getsentry/sentry-elixir/pull/1106)
+- Pinning hardening by @solnic in [#1080](https://github.com/getsentry/sentry-elixir/pull/1080)
+
+#### Other
+
+- (config) Remove bandit from capture_excluded_domains by @solnic in [#1102](https://github.com/getsentry/sentry-elixir/pull/1102)
+- (deps-dev) Bump vite and @sveltejs/vite-plugin-svelte in /test_integrations/tracing/svelte_mini by @dependabot in [#1094](https://github.com/getsentry/sentry-elixir/pull/1094)
+- (docs) Properly mark availability for 13.3.0 by @solnic in [#1108](https://github.com/getsentry/sentry-elixir/pull/1108)
+- Add spans to client reports by @whatyouhide in [#1104](https://github.com/getsentry/sentry-elixir/pull/1104)
+- Update Igniter install task by @andreas-ementio in [#1079](https://github.com/getsentry/sentry-elixir/pull/1079)
+- Remove SDK-side data truncation, defer to Relay by @dingsdax in [#1093](https://github.com/getsentry/sentry-elixir/pull/1093)
+- Exclude AGENTS.md/CLAUDE.md from the package by @solnic in [#1086](https://github.com/getsentry/sentry-elixir/pull/1086)
+
 ## 13.2.0
 
 ### New Features ✨
