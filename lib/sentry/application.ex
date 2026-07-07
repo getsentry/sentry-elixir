@@ -171,7 +171,6 @@ defmodule Sentry.Application do
 
   defp logger_handler_config(logs) do
     [
-      enable_logs: true,
       capture_log_messages: Keyword.fetch!(logs, :capture_log_messages),
       capture_level: Keyword.fetch!(logs, :capture_level),
       capture_metadata: Keyword.fetch!(logs, :capture_metadata),

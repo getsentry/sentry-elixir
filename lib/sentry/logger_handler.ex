@@ -353,6 +353,7 @@ defmodule Sentry.LoggerHandler do
 
   @moduledoc since: "9.0.0"
 
+  alias Sentry.Config
   alias Sentry.LoggerHandler.{ErrorBackend, LogsBackend, RateLimiter}
 
   # The config for this logger handler.
@@ -386,10 +387,7 @@ defmodule Sentry.LoggerHandler do
 
     handler_config = cast_config(%__MODULE__{}, sentry_config)
 
-    enable_logs? = handler_config.enable_logs == true
-
-    backends = [ErrorBackend] ++ if enable_logs?, do: [LogsBackend], else: []
-    handler_config = %{handler_config | backends: backends}
+    handler_config = put_backends(handler_config)
 
     config = Map.put(config, :config, handler_config)
 
@@ -433,7 +431,11 @@ defmodule Sentry.LoggerHandler do
 
     updated_config =
       old_config
-      |> update_in([:config], &cast_config(&1, new_sentry_config))
+      |> update_in([:config], fn config ->
+        config
+        |> cast_config(new_sentry_config)
+        |> put_backends()
+      end)
 
     _ignored =
       cond do
@@ -535,4 +537,13 @@ defmodule Sentry.LoggerHandler do
     validated_config
     |> Keyword.drop([:level, :excluded_domains, :metadata])
   end
+
+  defp put_backends(%__MODULE__{} = config) do
+    backends = [ErrorBackend] ++ if enable_logs?(config), do: [LogsBackend], else: []
+
+    %{config | backends: backends}
+  end
+
+  defp enable_logs?(%__MODULE__{enable_logs: nil}), do: Config.enable_logs?()
+  defp enable_logs?(%__MODULE__{enable_logs: enable_logs?}), do: enable_logs?
 end
