@@ -72,11 +72,31 @@ defmodule Sentry.Mixfile do
     if Version.match?(System.version(), ">= 1.20.0") do
       [
         elixirc_options: [
-          no_warn_undefined: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]
+          no_warn_undefined: [
+            Finch,
+            :hackney,
+            :hackney_pool,
+            Plug.Conn,
+            :telemetry,
+            :otel_tracer,
+            :otel_span
+          ]
         ]
       ]
     else
-      [xref: [exclude: [Finch, :hackney, :hackney_pool, Plug.Conn, :telemetry]]]
+      [
+        xref: [
+          exclude: [
+            Finch,
+            :hackney,
+            :hackney_pool,
+            Plug.Conn,
+            :telemetry,
+            :otel_tracer,
+            :otel_span
+          ]
+        ]
+      ]
     end
   end
 
