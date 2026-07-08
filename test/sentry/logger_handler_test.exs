@@ -144,21 +144,21 @@ defmodule Sentry.LoggerHandlerTest do
     test "doesn't send error messages by default", %{sender_ref: ref} do
       Logger.error("Testing error")
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: false}
     test "doesn't send structured logs keyword", %{sender_ref: ref} do
       Logger.error(foo: "bar")
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: false}
     test "doesn't send structured logs map", %{sender_ref: ref} do
       Logger.error(%{foo: "bar"})
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: false}
@@ -184,7 +184,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message.formatted == "Testing error"
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: true}
@@ -194,7 +194,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message.formatted == "[foo: \"bar\"]"
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: true}
@@ -204,7 +204,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message.formatted == "%{foo: \"bar\"}"
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     defmodule Foo do
@@ -218,7 +218,7 @@ defmodule Sentry.LoggerHandlerTest do
       assert_receive {^ref, event}
       assert event.message.formatted == "%Sentry.LoggerHandlerTest.Foo{bar: nil}"
 
-      refute_received {^ref, _event}, 100
+      refute_receive {^ref, _event}, 100
     end
 
     @tag handler_config: %{capture_log_messages: true, capture_level: :warning}
