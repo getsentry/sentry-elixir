@@ -1,7 +1,6 @@
 defmodule PhoenixAppWeb.UserLiveTest do
   use PhoenixAppWeb.ConnCase, async: false
 
-  import Sentry.TestHelpers
   import Sentry.Test.Assertions
   import Phoenix.LiveViewTest
   import PhoenixApp.AccountsFixtures

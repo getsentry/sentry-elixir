@@ -3,7 +3,6 @@ defmodule PhoenixApp.RepoTest do
 
   alias PhoenixApp.{Repo, Accounts.User}
 
-  import Sentry.TestHelpers
   import Sentry.Test.Assertions
 
   setup do
