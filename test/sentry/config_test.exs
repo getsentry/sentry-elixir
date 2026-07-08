@@ -428,7 +428,7 @@ defmodule Sentry.ConfigTest do
 
     test "validates the given key" do
       assert_raise ArgumentError, ~r/unknown option :non_existing/, fn ->
-        Config.put_config(:non_existing, "value")
+        Config.put_config(invalid_value(:non_existing), "value")
       end
     end
   end

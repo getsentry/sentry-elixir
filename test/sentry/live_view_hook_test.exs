@@ -271,7 +271,15 @@ defmodule Sentry.LiveViewHookTest do
     assert_raise ArgumentError,
                  ~r/expected :scrubber to be a \{module, function, args\} tuple/,
                  fn ->
-                   Sentry.LiveViewHook.on_mount([scrubber: :not_a_tuple], %{}, %{}, %{})
+                   # The socket is laundered to term() so the type checker does not
+                   # reject the throwaway %{} placeholder; the point of the test is
+                   # the invalid :scrubber option, which is validated at runtime.
+                   Sentry.LiveViewHook.on_mount(
+                     [scrubber: :not_a_tuple],
+                     %{},
+                     %{},
+                     Sentry.TestHelpers.invalid_value(%{})
+                   )
                  end
   end
 

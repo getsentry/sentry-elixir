@@ -34,6 +34,19 @@ defmodule Sentry.TestHelpers do
     Enum.sort(for {{:sentry_config, key}, value} <- :persistent_term.get(), do: {key, value})
   end
 
+  @doc """
+  Returns `value` unchanged, but typed as `term()`.
+
+  Negative tests that intentionally pass an invalid value to a function (to
+  exercise its runtime validation) otherwise trip the Elixir 1.20 type
+  checker, which narrows the literal argument and reports an "incompatible
+  types" warning. Routing the deliberately-wrong value through this function
+  presents a `term()` to the checker while still feeding the bad value at
+  runtime, so the test keeps asserting the expected failure.
+  """
+  @spec invalid_value(term()) :: term()
+  def invalid_value(value), do: value
+
   def create_span(attrs \\ %{}) do
     Map.merge(
       %Span{
