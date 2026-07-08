@@ -164,7 +164,16 @@ defmodule Sentry.Mixfile do
       {:opentelemetry_exporter, ">= 0.0.0", optional: true},
       {:opentelemetry_semantic_conventions, ">= 0.0.0", optional: true},
       {:opentelemetry_logger_metadata, "~> 0.2.0", only: :test}
-    ]
+    ] ++ logger_backends_dep()
+  end
+
+  # This will go away when we remove `LoggerBackend` in `14.0.0`
+  defp logger_backends_dep do
+    if Version.match?(System.version(), ">= 1.15.0") do
+      [{:logger_backends, "~> 1.0", only: [:test]}]
+    else
+      []
+    end
   end
 
   # Plug >= 1.19 starts Plug.Upload under a PartitionSupervisor, which only
