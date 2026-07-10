@@ -526,7 +526,7 @@ defmodule Sentry.ScrubberTest do
 
     test "validates the opts shape on put" do
       assert_raise FunctionClauseError, fn ->
-        Scrubber.put_conn_scrubber({"not", "an", "mfa"})
+        Scrubber.put_conn_scrubber(Sentry.TestHelpers.invalid_value({"not", "an", "mfa"}))
       end
     end
   end

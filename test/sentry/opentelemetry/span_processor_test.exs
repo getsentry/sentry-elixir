@@ -2,11 +2,11 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
   require OpenTelemetry.Tracer, as: Tracer
-  require OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
-  require OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
-  require OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
-  require OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
-  require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
+  alias OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+  alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+  alias OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
+  alias OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+  alias OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
   import Sentry.Test.Assertions
   import Sentry.TestHelpers
