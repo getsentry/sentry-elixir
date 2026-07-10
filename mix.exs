@@ -178,6 +178,9 @@ defmodule Sentry.Mixfile do
   defp dep_version(:igniter, %Version{major: 1, minor: minor}) when minor < 15,
     do: "~> 0.6.3 and < 0.6.4"
 
+  defp dep_version(:igniter, %Version{major: 1, minor: minor}) when minor < 18,
+    do: "~> 0.7.9 and < 0.8.0"
+
   defp dep_version(:igniter, %Version{}), do: "~> 0.5"
 
   # Rewrite >= 1.2 requires Elixir ~> 1.15.
