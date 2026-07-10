@@ -36,7 +36,7 @@ jobs:
             _build
             test_integrations/phoenix_app/deps
             test_integrations/phoenix_app/_build
-          key: ${{ runner.os }}-elixir-1.18-otp-27.2-mix-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-elixir-1.18-otp-27.2-mix-${{ hashFiles('**/mix*.lock') }}
           restore-keys: |
             ${{ runner.os }}-elixir-1.18-otp-27.2-mix-
 
