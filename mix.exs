@@ -9,6 +9,7 @@ defmodule Sentry.Mixfile do
       app: :sentry,
       version: @version,
       elixir: "~> 1.13",
+      lockfile: lockfile(current_elixir_version()),
       description: "The Official Elixir client for Sentry",
       package: package(),
       deps: deps(),
@@ -186,6 +187,14 @@ defmodule Sentry.Mixfile do
   defp dep_version(:bandit, %Version{}), do: "~> 1.0"
 
   defp current_elixir_version, do: Version.parse!(System.version())
+
+  defp lockfile(%Version{major: 1, minor: minor}) when minor < 15,
+    do: "mix-1.13-1.14.lock"
+
+  defp lockfile(%Version{major: 1, minor: minor}) when minor < 18,
+    do: "mix-1.15-1.17.lock"
+
+  defp lockfile(%Version{}), do: "mix.lock"
 
   defp package do
     [

@@ -76,16 +76,12 @@ jobs:
           test_integrations/phoenix_app/deps
           test_integrations/legacy_otel/deps
         key: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix.lock') }}
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix*.lock') }}
 
     - name: Download Mix dependencies
       if: steps.mix-downloaded-deps-cache.outputs.cache-hit != 'true'
       run: |
-        if [ ${{ matrix.elixir }} != '1.13' ]; then
-          mix deps.get --check-locked
-        else
-          mix deps.get
-        fi
+        mix deps.get --check-locked
 
         if [ ${{ matrix.elixir }} != '1.13' ]; then
           cd test_integrations/phoenix_app
@@ -108,7 +104,7 @@ jobs:
           _build
           test_integrations/phoenix_app/_build
         key: |
-          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+          ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix*.lock') }}
 
     - name: Compile Elixir code (with --warnings-as-errors)
       if: matrix.lint
@@ -131,7 +127,7 @@ jobs:
 
     - name: Ensure lockfiles are unchanged
       if: matrix.elixir == '1.13'
-      run: git diff --exit-code -- mix.lock 'test_integrations/*/mix.lock'
+      run: git diff --exit-code -- mix-1.13-1.14.lock mix-1.15-1.17.lock mix.lock 'test_integrations/*/mix.lock'
 
     - name: Check `mix release` with phoenix_app and sentry configured
       if: matrix.release_test
