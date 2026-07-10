@@ -43,11 +43,19 @@ if Code.ensure_loaded?(Igniter) do
     def info(_argv, _composing_task) do
       %Igniter.Mix.Task.Info{
         group: :sentry,
-        adds_deps: [{:jason, "~> 1.4"}, {:finch, "~> 0.21"}],
+        adds_deps: dependencies(),
         example: __MODULE__.Docs.example(),
         schema: [dsn: :string],
         defaults: [dsn: "<your_dsn>"]
       }
+    end
+
+    defp dependencies do
+      if Code.ensure_loaded?(JSON) do
+        [{:finch, "~> 0.21"}]
+      else
+        [{:jason, "~> 1.4"}, {:finch, "~> 0.21"}]
+      end
     end
 
     @impl Igniter.Mix.Task
