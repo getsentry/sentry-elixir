@@ -140,7 +140,7 @@ defmodule Sentry.Mixfile do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
-      {:igniter, "~> 0.5", optional: true},
+      {:igniter, dep_version(:igniter, current_elixir_version()), optional: true},
       {:rewrite, dep_version(:rewrite, current_elixir_version()), optional: true},
 
       # Dev and test dependencies
@@ -173,6 +173,15 @@ defmodule Sentry.Mixfile do
     do: "~> 1.6 and < 1.19.0"
 
   defp dep_version(:plug, %Version{}), do: "~> 1.6"
+
+  # Igniter >= 0.6.4 requires Elixir ~> 1.15.
+  defp dep_version(:igniter, %Version{major: 1, minor: minor}) when minor < 15,
+    do: "~> 0.6.3 and < 0.6.4"
+
+  defp dep_version(:igniter, %Version{major: 1, minor: minor}) when minor < 18,
+    do: "~> 0.7.9 and < 0.8.0"
+
+  defp dep_version(:igniter, %Version{}), do: "~> 0.5"
 
   # Rewrite >= 1.2 requires Elixir ~> 1.15.
   defp dep_version(:rewrite, %Version{major: 1, minor: minor}) when minor < 15,

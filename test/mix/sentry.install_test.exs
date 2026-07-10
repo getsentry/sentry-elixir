@@ -37,7 +37,19 @@ defmodule Mix.Tasks.Sentry.InstallTest do
     ]
   end
 
-  test "installation adds jason and finch dependencies", %{igniter: igniter} do
+  test "installation adds dependencies required by the current Elixir version", %{
+    igniter: igniter
+  } do
+    dependencies = Mix.Tasks.Sentry.Install.info([], nil).adds_deps
+
+    assert {:finch, "~> 0.21"} in dependencies
+
+    if Code.ensure_loaded?(JSON) do
+      refute {:jason, "~> 1.4"} in dependencies
+    else
+      assert {:jason, "~> 1.4"} in dependencies
+    end
+
     igniter
     |> Igniter.compose_task("sentry.install", ["--dsn", "test_dsn"])
     |> assert_creates("config/prod.exs", """
