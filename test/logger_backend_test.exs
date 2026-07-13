@@ -10,18 +10,17 @@ defmodule Sentry.LoggerBackendTest do
   @moduletag :capture_log
 
   setup do
-    # The legacy Logger backend runs in a child of Logger.Supervisor. Tag that
-    # supervisor with this test's scope so Config lookups inside the backend
-    # resolve against the current test's overrides (via ancestor walk). Safe
-    # because this suite is async: false and is the only one using
-    # Sentry.LoggerBackend.
-    Sentry.Test.Config.allow(self(), Process.whereis(Logger.Supervisor))
+    # The legacy Logger backend's callbacks run inside the backend manager process.
+    # Tag that process with this test's scope so Config lookups made from inside
+    # the backend resolve against the current test's overrides. Safe because this
+    # suite is `async: false` and is the only one using Sentry.LoggerBackend.
+    Sentry.Test.Config.allow(self(), logger_backend_owner())
 
-    assert {:ok, _} = Logger.add_backend(Sentry.LoggerBackend)
+    assert {:ok, _} = add_logger_backend(Sentry.LoggerBackend)
 
     on_exit(fn ->
-      Logger.configure_backend(Sentry.LoggerBackend, [])
-      :ok = Logger.remove_backend(Sentry.LoggerBackend)
+      configure_logger_backend(Sentry.LoggerBackend, [])
+      :ok = remove_logger_backend(Sentry.LoggerBackend)
     end)
   end
 
@@ -137,7 +136,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "sends two errors when a Plug process crashes if cowboy domain is not excluded" do
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
+    configure_logger_backend(Sentry.LoggerBackend, excluded_domains: [])
 
     ref = register_before_send()
 
@@ -149,11 +148,11 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, _event}, 1000
     assert_receive {^ref, _event}, 1000
   after
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
+    configure_logger_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
   end
 
   test "sends two errors when a Plug process crashes if PlugCapture is used and :bandit not excluded" do
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [])
+    configure_logger_backend(Sentry.LoggerBackend, excluded_domains: [])
 
     ref = register_before_send()
 
@@ -165,11 +164,11 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, _event}, 1000
     assert_receive {^ref, _event}, 1000
   after
-    Logger.configure_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
+    configure_logger_backend(Sentry.LoggerBackend, excluded_domains: [:cowboy, :bandit])
   end
 
   test "ignores log messages with excluded domains" do
-    Logger.configure_backend(Sentry.LoggerBackend,
+    configure_logger_backend(Sentry.LoggerBackend,
       capture_log_messages: true,
       excluded_domains: [:test_domain]
     )
@@ -184,7 +183,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "includes Logger metadata for keys configured to be included" do
-    Logger.configure_backend(Sentry.LoggerBackend,
+    configure_logger_backend(Sentry.LoggerBackend,
       metadata: [:string, :number, :map, :list, :chardata]
     )
 
@@ -212,7 +211,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "does not include Logger metadata when disabled" do
-    Logger.configure_backend(Sentry.LoggerBackend, metadata: [])
+    configure_logger_backend(Sentry.LoggerBackend, metadata: [])
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
@@ -232,7 +231,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "supports :all for Logger metadata" do
-    Logger.configure_backend(Sentry.LoggerBackend, metadata: :all)
+    configure_logger_backend(Sentry.LoggerBackend, metadata: :all)
     ref = register_before_send()
 
     pid = start_supervised!(TestGenServer)
@@ -259,7 +258,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "sends all messages if :capture_log_messages is true" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: true)
 
     ref = register_before_send()
 
@@ -268,11 +267,11 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert event.message.formatted == "Testing"
   after
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: false)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: false)
   end
 
   test "sends warning messages when configured to :warning" do
-    Logger.configure_backend(Sentry.LoggerBackend,
+    configure_logger_backend(Sentry.LoggerBackend,
       level: :warning,
       capture_log_messages: true
     )
@@ -287,11 +286,11 @@ defmodule Sentry.LoggerBackendTest do
     assert event.message.formatted == "Testing"
     assert event.user.user_id == 3
   after
-    Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
+    configure_logger_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
   test "does not send debug messages when configured to :error" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: true)
 
     ref = register_before_send()
 
@@ -303,11 +302,11 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert_formatted_message_matches(event, "Error")
   after
-    Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
+    configure_logger_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
   test "Sentry metadata and extra context are retrieved from callers" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: true)
     ref = register_before_send()
 
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
@@ -327,7 +326,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "handles malformed :callers metadata" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: true)
     ref = register_before_send()
 
     dead_pid = spawn(fn -> :ok end)
@@ -339,7 +338,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "doesn't log events with :sentry as a domain" do
-    Logger.configure_backend(Sentry.LoggerBackend, capture_log_messages: true)
+    configure_logger_backend(Sentry.LoggerBackend, capture_log_messages: true)
     ref = register_before_send()
 
     Logger.error("Error", domain: [:sentry])
@@ -348,7 +347,7 @@ defmodule Sentry.LoggerBackendTest do
   end
 
   test "sets event level to Logger message level" do
-    Logger.configure_backend(Sentry.LoggerBackend,
+    configure_logger_backend(Sentry.LoggerBackend,
       level: :warning,
       capture_log_messages: true
     )
@@ -360,7 +359,7 @@ defmodule Sentry.LoggerBackendTest do
     assert_receive {^ref, event}
     assert event.level == :warning
   after
-    Logger.configure_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
+    configure_logger_backend(Sentry.LoggerBackend, level: :error, capture_log_messages: false)
   end
 
   def task(parent, fun \\ fn -> raise "oops" end) do
@@ -404,5 +403,27 @@ defmodule Sentry.LoggerBackendTest do
 
     #{inspect(event, pretty: true, limit: :infinity)}
     """
+  end
+
+  # This is only needed for the `LoggerBackend` that will be deprecated
+  # and removed in `14.0.0`.
+  if Code.ensure_loaded?(LoggerBackends) do
+    def add_logger_backend(backend), do: LoggerBackends.add(backend)
+
+    def configure_logger_backend(backend, options),
+      do: LoggerBackends.configure(backend, options)
+
+    def remove_logger_backend(backend), do: LoggerBackends.remove(backend)
+
+    def logger_backend_owner, do: Process.whereis(LoggerBackends)
+  else
+    def add_logger_backend(backend), do: Logger.add_backend(backend)
+
+    def configure_logger_backend(backend, options),
+      do: Logger.configure_backend(backend, options)
+
+    def remove_logger_backend(backend), do: Logger.remove_backend(backend)
+
+    def logger_backend_owner, do: Process.whereis(Logger.Supervisor)
   end
 end
