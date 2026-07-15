@@ -267,6 +267,27 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
 
+    test "reads the Retry-After response header case-insensitively", %{bypass: bypass} do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("Retry-After", "0")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      assert :rate_limited =
+               error(fn ->
+                 Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+               end)
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
+      end)
+
+      assert {:ok, "123"} = Transport.encode_and_post_envelope(envelope, FinchClient)
+    end
+
     test "fails immediately when Sentry replies with 413 (envelope too large)", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
       test_pid = self()

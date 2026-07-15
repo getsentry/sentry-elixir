@@ -248,6 +248,47 @@ defmodule SentryTest do
       assert_sentry_report(:transaction, transaction: "test-transaction")
     end
 
+    test "does not apply categorized error rate limits to transactions", %{
+      bypass: bypass,
+      transaction: transaction
+    } do
+      test_pid = self()
+      ref = make_ref()
+      request_count = :counters.new(1, [])
+      put_test_config(client: Sentry.FinchClient)
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        request_number = :counters.get(request_count, 1)
+        :counters.add(request_count, 1, 1)
+
+        if request_number == 0 do
+          conn
+          |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:error:organization")
+          |> Plug.Conn.resp(429, ~s<{"error": "Rate limited"}>)
+        else
+          {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+          if body =~ ~s("type":"transaction") do
+            send(test_pid, {:bypass_envelope, ref, body})
+          end
+
+          Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+        end
+      end)
+
+      assert {:error, %Sentry.ClientError{reason: :rate_limited}} =
+               Sentry.capture_message(
+                 "rate-limited-error",
+                 result: :sync,
+                 request_retries: []
+               )
+
+      assert {:ok, _event_id} =
+               Sentry.send_transaction(transaction, result: :sync, request_retries: [])
+
+      assert_sentry_transaction(ref, transaction: "test-transaction")
+    end
+
     test "validates options", %{transaction: transaction} do
       assert_raise NimbleOptions.ValidationError, fn ->
         Sentry.send_transaction(transaction, client: "oops")

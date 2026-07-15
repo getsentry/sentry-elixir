@@ -311,9 +311,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       ref = make_ref()
       request_count = :counters.new(1, [])
 
-      # Use HackneyClient because FinchClient (Mint) lowercases response headers,
-      # which prevents the transport from matching "X-Sentry-Rate-Limits".
-      put_test_config(client: Sentry.HackneyClient)
+      put_test_config(client: Sentry.FinchClient)
 
       Bypass.expect(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
         count = :counters.get(request_count, 1)
