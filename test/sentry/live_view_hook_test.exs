@@ -92,7 +92,7 @@ defmodule SentryTest.DeadLive do
 end
 
 defmodule SentryTest.PageController do
-  use Phoenix.Controller
+  use Phoenix.Controller, formats: []
   use Phoenix.Component
 
   def page(conn, _params) do
