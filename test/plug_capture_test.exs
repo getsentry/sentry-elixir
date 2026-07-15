@@ -7,7 +7,7 @@ defmodule Sentry.PlugCaptureTest do
   alias Sentry.Test, as: SentryTest
 
   defmodule PhoenixController do
-    use Phoenix.Controller
+    use Phoenix.Controller, formats: []
 
     def error(_conn, _params), do: raise("PhoenixError")
     def exit(_conn, _params), do: exit(:test)
