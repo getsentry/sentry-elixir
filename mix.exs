@@ -152,6 +152,7 @@ defmodule Sentry.Mixfile do
       {:excoveralls, "~> 0.17.1", only: [:test]},
       # Required by Phoenix.LiveView's testing
       {:floki, ">= 0.30.0", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:oban, "~> 2.17 and >= 2.17.6", only: [:test]},
       {:quantum, "~> 3.0", only: [:test]},
 
