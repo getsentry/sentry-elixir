@@ -348,13 +348,16 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
             max_attempts: 3
           }
 
+          error = %RuntimeError{message: "worker failed"}
+
           :telemetry.execute(
             [:oban, :job, :exception],
             %{duration: 1000},
             %{
               job: job,
               kind: :error,
-              reason: %RuntimeError{message: "worker failed"},
+              reason: error,
+              error: error,
               stacktrace: []
             }
           )
@@ -440,7 +443,12 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
       }
 
       start_metadata = %{job: job, conf: %{name: Oban}}
-      :telemetry.execute([:oban, :job, :start], %{system_time: System.system_time()}, start_metadata)
+
+      :telemetry.execute(
+        [:oban, :job, :start],
+        %{system_time: System.system_time()},
+        start_metadata
+      )
 
       {kind, reason, stacktrace} =
         try do
