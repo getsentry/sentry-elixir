@@ -7,18 +7,23 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
   import Sentry.TestHelpers
 
+  require Record
+
+  @span_ctx_fields Record.extract(:span_ctx,
+                     from_lib: "opentelemetry_api/include/opentelemetry.hrl"
+                   )
+  Record.defrecordp(:span_ctx, @span_ctx_fields)
+
   defp create_test_span_context(span_id \\ 123_456_789) do
-    {
-      :span_ctx,
-      12_345_678_901_234_567_890_123_456_789_012,
-      span_id,
-      1,
-      [],
-      true,
-      false,
-      true,
-      nil
-    }
+    span_ctx(
+      trace_id: 12_345_678_901_234_567_890_123_456_789_012,
+      span_id: span_id,
+      trace_flags: 1,
+      tracestate: [],
+      is_valid: true,
+      is_remote: false,
+      is_recording: true
+    )
   end
 
   describe "span name dropping" do
@@ -154,17 +159,15 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
   describe "trace-level sampling consistency" do
     defp create_span_context_with_tracestate(trace_id, tracestate) do
-      {
-        :span_ctx,
-        trace_id,
-        123_456_789,
-        1,
-        tracestate,
-        true,
-        false,
-        true,
-        nil
-      }
+      span_ctx(
+        trace_id: trace_id,
+        span_id: 123_456_789,
+        trace_flags: 1,
+        tracestate: tracestate,
+        is_valid: true,
+        is_remote: false,
+        is_recording: true
+      )
     end
 
     test "all spans in trace inherit sampling decision to drop when trace was not sampled" do
