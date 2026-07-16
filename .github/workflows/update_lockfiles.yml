@@ -27,9 +27,12 @@ jobs:
           - bucket: "1.15-1.17"
             elixir: "1.17"
             otp: "26.2"
-          - bucket: "default"
+          - bucket: "1.18"
             elixir: "1.18"
             otp: "27.2"
+          - bucket: "default"
+            elixir: "1.20.2-otp-29"
+            otp: "29.0.1"
 
     steps:
       - name: Check out this repository
@@ -55,7 +58,7 @@ jobs:
           mapfile -t lockfiles < <(git ls-files -- "$suffix" "test_integrations/*/$suffix")
 
           # Parses `mix hex.outdated`'s plain-text table (not --json: two of the
-          # three matrix buckets run OTP < 27, which --json requires) for rows
+          # four matrix buckets run OTP < 27, which --json requires) for rows
           # whose Status is exactly "Update possible", printing "<dep> <latest>"
           # one per line. The optional "Only" column (test/dev/...) is blank for
           # deps used in every env, which shifts field positions, so fields are
