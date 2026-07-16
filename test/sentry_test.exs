@@ -51,11 +51,10 @@ defmodule SentryTest do
 
     put_test_config(finch_request_opts: [receive_timeout: 50])
 
-    assert {:error,
-            %Sentry.ClientError{
-              reason: {:request_failure, %Mint.TransportError{reason: :timeout}}
-            }} =
+    assert {:error, %Sentry.ClientError{reason: {:request_failure, error}}} =
              Sentry.capture_message("error", request_retries: [], result: :sync)
+
+    assert %{reason: :timeout} = error
 
     Bypass.pass(bypass)
   end
