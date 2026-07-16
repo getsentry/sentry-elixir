@@ -11,7 +11,71 @@ permissions:
 
 jobs:
   update-lockfiles:
-    name: Refresh mix.lock files
+    name: Refresh mix.lock files (${{ matrix.bucket }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each project's mix.exs picks its lockfile based on the running Elixir
+        # version (see `lockfile/1` in mix.exs), so one Elixir version per
+        # supported range is needed to refresh every lockfile bucket.
+        include:
+          - bucket: "1.13-1.14"
+            elixir: "1.13"
+            otp: "25.3"
+          - bucket: "1.15-1.17"
+            elixir: "1.17"
+            otp: "26.2"
+          - bucket: "default"
+            elixir: "1.18"
+            otp: "27.2"
+
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Elixir and Erlang
+        uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+
+      - name: Refresh lockfiles
+        id: refresh
+        run: |
+          if [ "${{ matrix.bucket }}" = "default" ]; then
+            suffix="mix.lock"
+          else
+            suffix="mix-${{ matrix.bucket }}.lock"
+          fi
+
+          # Only refresh lockfiles that already exist and target this bucket -
+          # not every project has (or needs) a dedicated lockfile per range.
+          mapfile -t lockfiles < <(git ls-files -- "$suffix" "test_integrations/*/$suffix")
+
+          for lock in "${lockfiles[@]}"; do
+            dir=$(dirname "$lock")
+            echo "==> Refreshing $lock in $dir"
+            (cd "$dir" && mix deps.update --all)
+          done
+
+          {
+            echo "paths<<LOCKFILES_EOF"
+            printf '%s\n' "${lockfiles[@]}"
+            echo "LOCKFILES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload updated lockfiles
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lockfiles-${{ matrix.bucket }}
+          path: ${{ steps.refresh.outputs.paths }}
+          if-no-files-found: error
+
+  create-pr:
+    name: Create pull request
+    needs: update-lockfiles
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,19 +91,11 @@ jobs:
         with:
           token: ${{ steps.token.outputs.token }}
 
-      - name: Setup Elixir and Erlang
-        uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
+      - name: Download updated lockfiles
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          elixir-version: "1.18"
-          otp-version: "27.2"
-
-      - name: Refresh lockfiles
-        run: |
-          for lock in mix.lock test_integrations/*/mix.lock; do
-            dir=$(dirname "$lock")
-            echo "==> Refreshing mix.lock in $dir"
-            (cd "$dir" && mix deps.update --all)
-          done
+          pattern: lockfiles-*
+          merge-multiple: true
 
       - name: Configure git
         run: |
@@ -51,7 +107,8 @@ jobs:
         run: |
           # Stage first, then diff the index against HEAD: plain `git diff` ignores
           # untracked files, so a brand-new project's lock would look unchanged.
-          git add mix.lock 'test_integrations/*/mix.lock'
+          mapfile -t lockfiles < <(git ls-files -- 'mix.lock' 'mix-*.lock' 'test_integrations/*/mix.lock' 'test_integrations/*/mix-*.lock')
+          git add "${lockfiles[@]}"
 
           if git diff --cached --quiet; then
             echo "No lockfile changes; nothing to do."
@@ -81,7 +138,7 @@ jobs:
           script: |
             const branchName = process.env.BRANCH_NAME;
             const commitTitle = process.env.COMMIT_TITLE;
-            const prBody = `Automated weekly refresh of the committed \`mix.lock\` files via \`mix deps.update --all\`, keeping dependency pins current with the latest security patches allowed by each project's version constraints.
+            const prBody = `Automated weekly refresh of the committed \`mix.lock\` files (including the per-Elixir-version-range lockfiles) via \`mix deps.update --all\`, keeping dependency pins current with the latest security patches allowed by each project's version constraints.
 
             #skip-changelog
 
