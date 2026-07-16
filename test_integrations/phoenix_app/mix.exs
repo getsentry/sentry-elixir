@@ -6,6 +6,7 @@ defmodule PhoenixApp.MixProject do
       app: :phoenix_app,
       version: "0.1.0",
       elixir: "~> 1.14",
+      lockfile: lockfile(current_elixir_version()),
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
@@ -96,4 +97,11 @@ defmodule PhoenixApp.MixProject do
       ]
     ]
   end
+
+  defp current_elixir_version, do: Version.parse!(System.version())
+
+  defp lockfile(%Version{major: 1, minor: minor}) when minor < 18,
+    do: "mix-1.15-1.17.lock"
+
+  defp lockfile(%Version{}), do: "mix.lock"
 end
