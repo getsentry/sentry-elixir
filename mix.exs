@@ -165,8 +165,15 @@ defmodule Sentry.Mixfile do
       {:opentelemetry_exporter, ">= 0.0.0", optional: true},
       {:opentelemetry_semantic_conventions, ">= 0.0.0", optional: true},
       {:opentelemetry_logger_metadata, "~> 0.2.0", only: :test}
-    ] ++ logger_backends_dep()
+    ] ++ logger_backends_dep() ++ ex_ast_dep(current_elixir_version())
   end
+
+  # ex_ast >= 0.12.1 (pulled in transitively via igniter >= 0.8) requires
+  # Elixir ~> 1.19, which breaks Elixir 1.18 - pin the last compatible release.
+  defp ex_ast_dep(%Version{major: 1, minor: 18}),
+    do: [{:ex_ast, ">= 0.12.0 and < 0.12.1", optional: true}]
+
+  defp ex_ast_dep(%Version{}), do: []
 
   # This will go away when we remove `LoggerBackend` in `14.0.0`
   defp logger_backends_dep do
@@ -212,6 +219,10 @@ defmodule Sentry.Mixfile do
 
   defp lockfile(%Version{major: 1, minor: minor}) when minor < 18,
     do: "mix-1.15-1.17.lock"
+
+  # ex_ast (see ex_ast_dep/1) forces a dedicated lockfile for 1.18: newer
+  # ex_ast releases required by later Elixir versions don't support it.
+  defp lockfile(%Version{major: 1, minor: 18}), do: "mix-1.18.lock"
 
   defp lockfile(%Version{}), do: "mix.lock"
 
