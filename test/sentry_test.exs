@@ -135,6 +135,32 @@ defmodule SentryTest do
     assert :ignored = Sentry.send_event(event)
   end
 
+  test "reads Retry-After response headers case-insensitively", %{bypass: bypass} do
+    request_count = :counters.new(1, [])
+    put_test_config(client: Sentry.FinchClient)
+
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+      request_number = :counters.get(request_count, 1)
+      :counters.add(request_count, 1, 1)
+
+      if request_number == 0 do
+        conn
+        |> Plug.Conn.put_resp_header("Retry-After", "0")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      else
+        Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+      end
+    end)
+
+    assert {:error, %Sentry.ClientError{reason: :rate_limited}} =
+             Sentry.capture_message("rate-limited", result: :sync, request_retries: [])
+
+    assert {:ok, _event_id} =
+             Sentry.capture_message("accepted", result: :sync, request_retries: [])
+
+    assert :counters.get(request_count, 1) == 2
+  end
+
   describe "send_check_in/1" do
     test "posts a check-in with all the explicit arguments", %{bypass: bypass} do
       put_test_config(environment_name: "test", release: "1.3.2")
