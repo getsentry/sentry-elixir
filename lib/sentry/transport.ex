@@ -136,7 +136,7 @@ defmodule Sentry.Transport do
   end
 
   defp update_rate_limits(headers, status) do
-    rate_limits_header = get_header(headers, "X-Sentry-Rate-Limits")
+    rate_limits_header = get_header(headers, "x-sentry-rate-limits")
 
     cond do
       is_binary(rate_limits_header) ->
@@ -154,7 +154,7 @@ defmodule Sentry.Transport do
   end
 
   defp get_global_delay(headers) do
-    with timeout when is_binary(timeout) <- get_header(headers, "Retry-After"),
+    with timeout when is_binary(timeout) <- get_header(headers, "retry-after"),
          {delay, ""} <- Integer.parse(timeout) do
       delay
     else
@@ -164,12 +164,10 @@ defmodule Sentry.Transport do
     end
   end
 
-  defp get_header(headers, name) do
-    downcased_name = String.downcase(name)
-
+  defp get_header(headers, lowercase_name) do
     Enum.find_value(headers, fn
       {header_name, value} when is_binary(header_name) ->
-        if String.downcase(header_name) == downcased_name, do: value
+        if String.downcase(header_name) == lowercase_name, do: value
 
       _other ->
         nil
