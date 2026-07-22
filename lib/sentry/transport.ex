@@ -136,7 +136,7 @@ defmodule Sentry.Transport do
   end
 
   defp update_rate_limits(headers, status) do
-    rate_limits_header = :proplists.get_value("X-Sentry-Rate-Limits", headers, nil)
+    rate_limits_header = get_header(headers, "x-sentry-rate-limits")
 
     cond do
       is_binary(rate_limits_header) ->
@@ -154,7 +154,7 @@ defmodule Sentry.Transport do
   end
 
   defp get_global_delay(headers) do
-    with timeout when is_binary(timeout) <- :proplists.get_value("Retry-After", headers, nil),
+    with timeout when is_binary(timeout) <- get_header(headers, "retry-after"),
          {delay, ""} <- Integer.parse(timeout) do
       delay
     else
@@ -162,6 +162,16 @@ defmodule Sentry.Transport do
       # https://develop.sentry.dev/sdk/rate-limiting/#stage-1-parse-response-headers
       _ -> 60
     end
+  end
+
+  defp get_header(headers, lowercase_name) do
+    Enum.find_value(headers, fn
+      {header_name, value} when is_binary(header_name) ->
+        if String.downcase(header_name) == lowercase_name, do: value
+
+      _other ->
+        nil
+    end)
   end
 
   defp get_endpoint_and_headers do
