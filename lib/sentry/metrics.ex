@@ -135,8 +135,8 @@ defmodule Sentry.Metrics do
       metric = Metric.attach_default_attributes(metric)
 
       case TelemetryProcessor.add(metric) do
-        {:ok, {:rate_limited, data_category}} ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+        {:ok, {:rate_limited, _data_category}} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, [metric])
 
         :ok ->
           :ok

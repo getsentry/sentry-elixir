@@ -393,6 +393,58 @@ defmodule Sentry.TransportTest do
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
     end
+
+    test "drops log envelopes when a log_byte rate limit is active", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:log_byte:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "first"} = Transport.encode_and_post_envelope(first, HackneyClient)
+      assert Transport.RateLimiter.rate_limited?("log_byte")
+
+      log_envelope = Envelope.from_log_events([make_log_event("dropped")])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(log_envelope, HackneyClient, _retries = [])
+    end
+
+    test "drops metric envelopes when a trace_metric_byte rate limit is active", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:trace_metric_byte:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "first"} = Transport.encode_and_post_envelope(first, HackneyClient)
+      assert Transport.RateLimiter.rate_limited?("trace_metric_byte")
+
+      metric_envelope = Envelope.from_metric_events([make_metric("dropped", 1)])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(metric_envelope, HackneyClient, _retries = [])
+    end
+  end
+
+  defp make_log_event(body) do
+    %Sentry.LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name, value) do
+    %Sentry.Metric{
+      type: :counter,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
+    }
   end
 
   defp error(fun) do
