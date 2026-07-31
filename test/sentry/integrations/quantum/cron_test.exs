@@ -3,6 +3,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   alias Sentry.Integrations.CheckInIDMappings
 
+  import ExUnit.CaptureLog
   import Sentry.Test.Assertions
 
   alias Sentry.Test, as: SentryTest
@@ -171,10 +172,16 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
-    :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
-      job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
-      telemetry_span_context: span_ref
-    })
+    log =
+      capture_log([metadata: [:domain]], fn ->
+        :telemetry.execute([:quantum, :job, :stop], %{duration: duration}, %{
+          job: Scheduler.new_job(schedule: Crontab.CronExpression.Parser.parse!("@daily")),
+          telemetry_span_context: span_ref
+        })
+      end)
+
+    assert log =~ "Sentry cannot report Quantum cron jobs correctly if they don't have a :name"
+    assert log =~ ~r/domain=(\w+\.)*sentry/
 
     [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
     assert_sentry_report(check_in_body, monitor_slug: "quantum-generic-job")

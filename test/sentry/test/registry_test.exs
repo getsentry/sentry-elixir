@@ -11,13 +11,14 @@ defmodule Sentry.Test.RegistryTest do
       on_exit(fn -> Sentry.put_config(:dsn, nil) end)
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           Registry.maybe_warn_about_dsn_override("http://public:secret@localhost:4000/1")
         end)
 
       assert log =~ "test_mode is enabled but a DSN was already configured"
       assert log =~ "example.com"
       assert log =~ "localhost:4000"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
     test "stays silent when no DSN is configured" do
