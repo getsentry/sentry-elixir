@@ -395,13 +395,22 @@ defmodule SentryTest do
   end
 
   describe "flush/1" do
-    test "returns :ok silently when TelemetryProcessor is not running" do
-      # Default TelemetryProcessor is not started in test — this is the :noproc path
+    test "warns and returns :ok when the TelemetryProcessor is not running" do
+      # The default TelemetryProcessor runs under the application supervisor, so it has
+      # to be taken down to reach the :noproc path.
+      :ok = Supervisor.terminate_child(Sentry.Supervisor, Sentry.TelemetryProcessor)
+
+      on_exit(fn ->
+        {:ok, _} = Supervisor.restart_child(Sentry.Supervisor, Sentry.TelemetryProcessor)
+      end)
+
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           assert :ok = Sentry.flush()
         end)
 
+      assert log =~ "Sentry.flush/1 failed: TelemetryProcessor not running"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
       refute log =~ "failed unexpectedly"
     end
   end
