@@ -1287,9 +1287,7 @@ defmodule Sentry.Config do
 
     if not is_nil(traces_sample_rate) and
          not Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
-      require Logger
-
-      Logger.warning("""
+      Sentry.LoggerUtils.warning("""
       Sentry tracing is configured with traces_sample_rate: #{inspect(traces_sample_rate)}, \
       but the required OpenTelemetry dependencies are not satisfied. \
       Tracing will be disabled. Please ensure you have compatible versions of: \

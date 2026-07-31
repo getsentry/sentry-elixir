@@ -6,7 +6,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias Sentry.ClientReport
     alias SamplingContext
 
-    require Logger
+    alias Sentry.LoggerUtils
 
     @behaviour :otel_sampler
 
@@ -155,7 +155,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
           make_sampling_decision(sample_rate)
         else
-          Logger.warning(
+          LoggerUtils.warning(
             "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
           )
 
@@ -163,7 +163,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         end
       rescue
         error ->
-          Logger.warning("traces_sampler function failed: #{inspect(error)}")
+          LoggerUtils.warning("traces_sampler function failed: #{inspect(error)}")
 
           make_sampling_decision(0.0)
       end

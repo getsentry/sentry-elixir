@@ -3,7 +3,7 @@ defmodule Sentry.Test.Registry do
 
   use GenServer
 
-  require Logger
+  alias Sentry.LoggerUtils
 
   # Bypass and Plug.Conn may not be available at compile time (optional deps).
   @compile {:no_warn_undefined,
@@ -438,7 +438,7 @@ defmodule Sentry.Test.Registry do
   def maybe_warn_about_dsn_override(new_dsn) do
     case Sentry.Config.dsn() do
       %Sentry.DSN{original_dsn: existing} ->
-        Logger.warning("""
+        LoggerUtils.warning("""
         [Sentry] test_mode is enabled but a DSN was already configured \
         (#{inspect(existing)}). Overriding it with the local Bypass sink at \
         #{new_dsn} to prevent test events from being sent to a real Sentry \

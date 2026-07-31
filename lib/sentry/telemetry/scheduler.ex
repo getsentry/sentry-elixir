@@ -30,8 +30,6 @@ defmodule Sentry.Telemetry.Scheduler do
 
   use GenServer
 
-  require Logger
-
   alias __MODULE__
 
   alias Sentry.Telemetry.{Buffer, Category}
@@ -43,6 +41,7 @@ defmodule Sentry.Telemetry.Scheduler do
     Envelope,
     Event,
     LogEvent,
+    LoggerUtils,
     Metric,
     Transaction,
     Transport
@@ -200,7 +199,9 @@ defmodule Sentry.Telemetry.Scheduler do
   @impl true
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{active_ref: ref} = state) do
     if reason != :normal do
-      Logger.warning("Sentry transport send process exited abnormally: #{inspect(reason)}")
+      LoggerUtils.log(fn ->
+        "Sentry transport send process exited abnormally: #{inspect(reason)}"
+      end)
     end
 
     state = %{
@@ -365,7 +366,7 @@ defmodule Sentry.Telemetry.Scheduler do
     function.(log_event)
   rescue
     error ->
-      Logger.warning("before_send_log callback failed: #{inspect(error)}")
+      LoggerUtils.warning("before_send_log callback failed: #{inspect(error)}")
 
       log_event
   end
@@ -374,7 +375,7 @@ defmodule Sentry.Telemetry.Scheduler do
     apply(mod, fun, [log_event])
   rescue
     error ->
-      Logger.warning("before_send_log callback failed: #{inspect(error)}")
+      LoggerUtils.warning("before_send_log callback failed: #{inspect(error)}")
 
       log_event
   end
@@ -409,7 +410,7 @@ defmodule Sentry.Telemetry.Scheduler do
     item_count = Envelope.item_count(envelope)
 
     if state.size + item_count > state.capacity do
-      Logger.warning("Sentry: transport queue full, dropping #{item_count} item(s)")
+      LoggerUtils.log(fn -> "Sentry: transport queue full, dropping #{item_count} item(s)" end)
 
       ClientReport.Sender.record_discarded_events(:queue_overflow, envelope.items)
       state
@@ -442,7 +443,9 @@ defmodule Sentry.Telemetry.Scheduler do
           :ok
 
         {:error, error} ->
-          Logger.warning("Sentry: failed to send envelope: #{Exception.message(error)}")
+          LoggerUtils.log(fn ->
+            "Sentry: failed to send envelope: #{Exception.message(error)}"
+          end)
 
           {:error, error}
       end

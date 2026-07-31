@@ -10,6 +10,7 @@ defmodule Sentry.Metric do
   @moduledoc since: "13.0.0"
 
   alias Sentry.Config
+  alias Sentry.LoggerUtils
 
   @type metric_type :: :counter | :gauge | :distribution
 
@@ -96,8 +97,7 @@ defmodule Sentry.Metric do
     function.(metric)
   rescue
     error ->
-      require Logger
-      Logger.warning("before_send_metric callback failed: #{inspect(error)}")
+      LoggerUtils.warning("before_send_metric callback failed: #{inspect(error)}")
       metric
   end
 
@@ -105,8 +105,7 @@ defmodule Sentry.Metric do
     apply(mod, fun, [metric])
   rescue
     error ->
-      require Logger
-      Logger.warning("before_send_metric callback failed: #{inspect(error)}")
+      LoggerUtils.warning("before_send_metric callback failed: #{inspect(error)}")
       metric
   end
 

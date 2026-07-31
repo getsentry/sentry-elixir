@@ -3,9 +3,8 @@ defmodule Sentry.Application do
 
   use Application
 
-  require Logger
-
   alias Sentry.Config
+  alias Sentry.LoggerUtils
 
   @compile {:no_warn_undefined, [NimbleOwnership]}
 
@@ -159,7 +158,7 @@ defmodule Sentry.Application do
               :ok
 
             {:error, reason} ->
-              Logger.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
+              LoggerUtils.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
           end
       end
     else

@@ -4,7 +4,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  require Logger
+  alias Sentry.LoggerUtils
 
   @spec attach(keyword()) :: :ok
   def attach(config \\ []) when is_list(config) do
@@ -55,7 +55,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           mod
 
         {:error, _} ->
-          Logger.warning(
+          LoggerUtils.warning(
             "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
           )
 
@@ -66,7 +66,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       callback.(worker, job) == true
     rescue
       error ->
-        Logger.warning("""
+        LoggerUtils.warning("""
         :should_report_error_callback failed for worker #{inspect(worker)} \
         (job ID #{job.id}):
 
@@ -160,7 +160,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       if is_map(custom_tags) do
         Map.merge(base_tags, custom_tags)
       else
-        Logger.warning(
+        LoggerUtils.warning(
           "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
         )
 
@@ -168,7 +168,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
       end
     rescue
       error ->
-        Logger.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
+        LoggerUtils.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
 
         base_tags
     end

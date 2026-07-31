@@ -2,7 +2,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
   @moduledoc false
   alias Sentry.Integrations.CheckInIDMappings
 
-  require Logger
+  alias Sentry.LoggerUtils
 
   @events [
     [:quantum, :job, :start],
@@ -103,7 +103,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
   defp timezone_to_string(_job_without_timezone_key_for_some_reason), do: "Etc/UTC"
 
   defp slugify(job_name) when is_reference(job_name) do
-    Logger.error(
+    LoggerUtils.error(
       """
       Sentry cannot report Quantum cron jobs correctly if they don't have a :name set up, and \
       will just report them as "quantum-generic-job".\

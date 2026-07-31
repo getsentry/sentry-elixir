@@ -80,8 +80,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     import Phoenix.LiveView, only: [attach_hook: 4, get_connect_info: 2]
 
     alias Sentry.Context
-
-    require Logger
+    alias Sentry.LoggerUtils
 
     @scrubber_pdict_key {__MODULE__, :scrubber}
 
@@ -139,7 +138,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
             result
 
           other ->
-            Logger.error(
+            LoggerUtils.error(
               "Sentry.LiveViewHook scrubber returned non-map value: #{inspect(other)}; " <>
                 "falling back to redacted data",
               event_source: :logger
@@ -151,7 +150,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         # We must NEVER raise an error in a hook, as it will crash the LiveView process
         # and we don't want Sentry to be responsible for that.
         kind, reason ->
-          Logger.error(
+          LoggerUtils.error(
             "Sentry.LiveViewHook scrubber raised an error: #{Exception.format(kind, reason)}; " <>
               "falling back to redacted data",
             event_source: :logger
@@ -202,7 +201,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       # We must NEVER raise an error in a hook, as it will crash the LiveView process
       # and we don't want Sentry to be responsible for that.
       kind, reason ->
-        Logger.error(
+        LoggerUtils.error(
           "Sentry.LiveView.on_mount hook errored out: #{Exception.format(kind, reason)}",
           event_source: :logger
         )
