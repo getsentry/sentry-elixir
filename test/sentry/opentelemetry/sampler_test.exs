@@ -5,6 +5,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
   alias Sentry.ClientReport
   alias SamplingContext
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   require Record
@@ -462,8 +463,15 @@ defmodule Sentry.Opentelemetry.SamplerTest do
 
       test_ctx = create_test_span_context()
 
-      assert {:drop, [], _tracestate} =
-               Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          assert {:drop, [], _tracestate} =
+                   Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+        end)
+
+      assert log =~ "traces_sampler function failed"
+      assert log =~ "sampler error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
     test "handles invalid traces_sampler return values gracefully" do
@@ -478,17 +486,23 @@ defmodule Sentry.Opentelemetry.SamplerTest do
         nil
       ]
 
-      Enum.each(test_cases, fn invalid_value ->
-        put_test_config(traces_sampler: fn _ -> invalid_value end)
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          Enum.each(test_cases, fn invalid_value ->
+            put_test_config(traces_sampler: fn _ -> invalid_value end)
 
-        test_ctx = create_test_span_context()
+            test_ctx = create_test_span_context()
 
-        result = Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+            result = Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
 
-        assert {:drop, [], tracestate} = result
-        assert {"sentry-sample_rate", "0.0"} in tracestate
-        assert {"sentry-sampled", "false"} in tracestate
-      end)
+            assert {:drop, [], tracestate} = result
+            assert {"sentry-sample_rate", "0.0"} in tracestate
+            assert {"sentry-sampled", "false"} in tracestate
+          end)
+        end)
+
+      assert log =~ "traces_sampler function returned an invalid sample rate"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
     test "supports MFA tuple for traces_sampler" do
