@@ -1,6 +1,7 @@
 defmodule Sentry.OpenTelemetry.PropagatorTest do
   use Sentry.Case, async: false
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   alias Sentry.OpenTelemetry.Propagator
@@ -312,9 +313,17 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
           _, _ -> :undefined
         end
 
-        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+        {ctx, log} =
+          with_log([metadata: [:domain]], fn ->
+            Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+          end)
 
         assert Tracer.current_span_ctx(ctx) == :undefined
+
+        assert log =~
+                 "[Sentry] Not continuing trace: org ID mismatch (sdk: \"99\", incoming: \"42\")"
+
+        assert log =~ ~r/domain=(\w+\.)*sentry/
       end
 
       test "strict=true, baggage missing org ID: trace is NOT continued" do
@@ -332,9 +341,17 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
           _, _ -> :undefined
         end
 
-        ctx = Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+        {ctx, log} =
+          with_log([metadata: [:domain]], fn ->
+            Propagator.extract(:otel_ctx.new(), %{}, nil, getter, [])
+          end)
 
         assert Tracer.current_span_ctx(ctx) == :undefined
+
+        assert log =~
+                 "[Sentry] Not continuing trace: org ID missing (strict mode) (sdk: \"99\", incoming: nil)"
+
+        assert log =~ ~r/domain=(\w+\.)*sentry/
       end
 
       test "inject adds sentry-org_id to outgoing baggage when SDK org is configured" do

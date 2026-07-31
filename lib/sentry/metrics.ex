@@ -42,7 +42,7 @@ defmodule Sentry.Metrics do
   """
   @moduledoc since: "13.0.0"
 
-  alias Sentry.{ClientReport, Config, Metric, TelemetryProcessor}
+  alias Sentry.{ClientReport, Config, LoggerUtils, Metric, TelemetryProcessor}
 
   @doc """
   Records a counter metric.
@@ -163,8 +163,7 @@ defmodule Sentry.Metrics do
     end
   rescue
     e in [UndefinedFunctionError, ArgumentError] ->
-      require Logger
-      Logger.debug("Failed to extract OpenTelemetry trace context: #{inspect(e)}")
+      LoggerUtils.debug("Failed to extract OpenTelemetry trace context: #{inspect(e)}")
       {nil, nil}
   end
 

@@ -8,6 +8,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   alias OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
   alias OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
+  import ExUnit.CaptureLog
   import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
@@ -114,6 +115,23 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
              SpanStorage.get_child_spans(tx["contexts"]["trace"]["span_id"],
                table_name: table_name
              )
+  end
+
+  @tag span_storage: true
+  test "logs at the configured :log_level when the transaction cannot be sent", %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0, log_level: :info)
+
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+      Plug.Conn.resp(conn, 500, ~s<{"error": "internal"}>)
+    end)
+
+    log =
+      capture_log([metadata: [:domain]], fn ->
+        TestEndpoint.child_instrumented_function("one")
+      end)
+
+    # Elixir < 1.15 pads the level, so the gap before the message is not always one space.
+    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send transaction to Sentry/
   end
 
   defp assert_valid_iso8601(timestamp) do

@@ -175,7 +175,9 @@ defmodule Sentry.Telemetry.SchedulerTest do
       buffers = start_test_buffers(batch_size: 1)
       test_pid = self()
 
+      # A broken callback is not a failed send, so :log_level must not demote it.
       put_test_config(
+        log_level: :debug,
         before_send_log: fn _log_event ->
           raise "boom"
         end
@@ -189,7 +191,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
         )
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           Buffer.add(buffers.log, make_log_event("test"))
           Scheduler.signal(pid)
 
@@ -198,7 +200,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
           assert [%Sentry.LogBatch{log_events: [%LogEvent{body: "test"}]}] = envelope.items
         end)
 
-      assert log =~ "before_send_log callback failed"
+      assert log =~ ~r/domain=(\w+\.)*sentry \[warning\]\s+before_send_log callback failed/
 
       GenServer.stop(pid)
       stop_buffers(buffers)
@@ -316,15 +318,47 @@ defmodule Sentry.Telemetry.SchedulerTest do
       for i <- 1..5, do: Buffer.add(buffers.log, make_log_event("log_#{i}"))
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           Scheduler.signal(pid)
           Process.sleep(50)
         end)
 
       assert log =~ "transport queue full, dropping 5 item(s)"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
+      # Diagnostics use the default :log_level.
+      assert log =~ "[warning]"
 
       state = :sys.get_state(pid)
       assert state.size == 0
+
+      GenServer.stop(pid)
+      stop_buffers(buffers)
+    end
+
+    test "logs the diagnostic at the configured :log_level" do
+      buffers = start_test_buffers(batch_size: 5)
+      uid = System.unique_integer([:positive])
+
+      put_test_config(dsn: "http://public:secret@localhost:9999/1", log_level: :info)
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          buffers: buffers,
+          capacity: 3,
+          name: :"test_scheduler_log_level_#{uid}"
+        )
+
+      for i <- 1..5, do: Buffer.add(buffers.log, make_log_event("log_#{i}"))
+
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          Scheduler.signal(pid)
+          Process.sleep(50)
+        end)
+
+      assert log =~ "[info]"
+      assert log =~ "transport queue full, dropping 5 item(s)"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       GenServer.stop(pid)
       stop_buffers(buffers)
@@ -351,7 +385,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
       end)
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           send(pid, {:DOWN, fake_ref, :process, self(), {:error, :something_broke}})
           # Synchronize: :sys.get_state goes through the mailbox, ensuring :DOWN is processed
           :sys.get_state(pid)
@@ -359,6 +393,7 @@ defmodule Sentry.Telemetry.SchedulerTest do
 
       assert log =~ "Sentry transport send process exited abnormally"
       assert log =~ "something_broke"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       GenServer.stop(pid)
       stop_buffers(buffers)
@@ -424,11 +459,12 @@ defmodule Sentry.Telemetry.SchedulerTest do
 
       # Flush uses the direct send path which logs failures
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           Scheduler.flush(pid)
         end)
 
       assert log =~ "failed to send envelope"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       GenServer.stop(pid)
       stop_buffers(buffers)

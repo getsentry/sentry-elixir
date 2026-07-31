@@ -109,9 +109,30 @@ defmodule Sentry.LoggerUtils do
     other
   end
 
+  # Logs at the configured :log_level, which documents itself as the level to use
+  # when Sentry fails to send data. Diagnostics that are not about a failed send
+  # use debug/2, warning/2, or error/2 below to keep their own level.
   @spec log(iodata() | (-> iodata()), keyword()) :: :ok
   def log(message_or_fun, meta \\ []) when is_list(meta) do
-    meta = Keyword.merge(meta, domain: [:sentry])
-    Logger.log(Config.log_level(), message_or_fun, meta)
+    log_at(Config.log_level(), message_or_fun, meta)
+  end
+
+  @spec debug(iodata() | (-> iodata()), keyword()) :: :ok
+  def debug(message_or_fun, meta \\ []) when is_list(meta) do
+    log_at(:debug, message_or_fun, meta)
+  end
+
+  @spec warning(iodata() | (-> iodata()), keyword()) :: :ok
+  def warning(message_or_fun, meta \\ []) when is_list(meta) do
+    log_at(:warning, message_or_fun, meta)
+  end
+
+  @spec error(iodata() | (-> iodata()), keyword()) :: :ok
+  def error(message_or_fun, meta \\ []) when is_list(meta) do
+    log_at(:error, message_or_fun, meta)
+  end
+
+  defp log_at(level, message_or_fun, meta) do
+    Logger.log(level, message_or_fun, Keyword.merge(meta, domain: [:sentry]))
   end
 end

@@ -246,13 +246,37 @@ defmodule Sentry.MetricsTest do
       import ExUnit.CaptureLog
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           assert :ok = Metrics.count("test.counter", 42)
           TelemetryProcessor.flush()
         end)
 
       assert log =~ "before_send_metric callback failed"
       assert log =~ "callback error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
+    end
+
+    test "returns original metric when a {module, function} callback raises" do
+      defmodule RaisingCallback do
+        def before_send_metric(_metric), do: raise("MFA callback error")
+      end
+
+      put_test_config(
+        enable_metrics: true,
+        before_send_metric: {RaisingCallback, :before_send_metric}
+      )
+
+      import ExUnit.CaptureLog
+
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          assert :ok = Metrics.count("test.counter", 42)
+          TelemetryProcessor.flush()
+        end)
+
+      assert log =~ "before_send_metric callback failed"
+      assert log =~ "MFA callback error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
     test "drops metric when callback returns invalid type" do

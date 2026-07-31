@@ -285,13 +285,14 @@ defmodule Sentry.LiveViewHookTest do
 
   test "logs error and uses empty data when scrubber raises", %{conn: conn} do
     {view, log} =
-      ExUnit.CaptureLog.with_log(fn ->
+      ExUnit.CaptureLog.with_log([metadata: [:domain]], fn ->
         {:ok, view, _html} = live(conn, "/raising_scrubber")
         render_hook(view, :submit, %{"foo" => "bar"})
         view
       end)
 
     assert log =~ "Sentry.LiveViewHook scrubber raised an error"
+    assert log =~ ~r/domain=(\w+\.)*sentry/
 
     [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
     assert event_breadcrumb.category == "web.live_view.event"
@@ -300,13 +301,14 @@ defmodule Sentry.LiveViewHookTest do
 
   test "logs error and uses empty data when scrubber returns a non-map", %{conn: conn} do
     {view, log} =
-      ExUnit.CaptureLog.with_log(fn ->
+      ExUnit.CaptureLog.with_log([metadata: [:domain]], fn ->
         {:ok, view, _html} = live(conn, "/non_map_scrubber")
         render_hook(view, :submit, %{"foo" => "bar"})
         view
       end)
 
     assert log =~ "Sentry.LiveViewHook scrubber returned non-map value"
+    assert log =~ ~r/domain=(\w+\.)*sentry/
 
     [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
     assert event_breadcrumb.category == "web.live_view.event"

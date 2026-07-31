@@ -195,8 +195,6 @@ defmodule Sentry do
     TelemetryProcessor
   }
 
-  require Logger
-
   @typedoc """
   A callback to use with the `:before_send` configuration option.
   configuration options.k
@@ -530,11 +528,11 @@ defmodule Sentry do
       TelemetryProcessor.flush(TelemetryProcessor.default_name(), timeout)
     catch
       :exit, {:noproc, _} ->
-        Logger.warning("Sentry.flush/1 failed: TelemetryProcessor not running")
+        LoggerUtils.warning("Sentry.flush/1 failed: TelemetryProcessor not running")
         :ok
 
       :exit, reason ->
-        Logger.warning("Sentry.flush/1 failed unexpectedly: #{inspect(reason)}")
+        LoggerUtils.warning("Sentry.flush/1 failed unexpectedly: #{inspect(reason)}")
         :ok
     end
   end

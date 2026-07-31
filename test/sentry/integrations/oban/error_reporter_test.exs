@@ -185,9 +185,16 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
     end
 
     test "handles oban_tags_to_sentry_tags errors gracefully" do
-      emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-        oban_tags_to_sentry_tags: fn _job -> raise "tag transform error" end
-      )
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+            oban_tags_to_sentry_tags: fn _job -> raise "tag transform error" end
+          )
+        end)
+
+      assert log =~ "oban_tags_to_sentry_tags function failed"
+      assert log =~ "tag transform error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       assert_sentry_report(:event, [])
     end
@@ -201,11 +208,17 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
         nil
       ]
 
-      Enum.each(test_cases, fn invalid_value ->
-        emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-          oban_tags_to_sentry_tags: fn _job -> invalid_value end
-        )
-      end)
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          Enum.each(test_cases, fn invalid_value ->
+            emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+              oban_tags_to_sentry_tags: fn _job -> invalid_value end
+            )
+          end)
+        end)
+
+      assert log =~ "oban_tags_to_sentry_tags function returned a non-map value"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       events = SentryTest.pop_sentry_reports()
       assert length(events) == length(test_cases)
@@ -302,7 +315,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
     test "should_report_error_callback handles errors gracefully and defaults to reporting" do
       log =
-        capture_log(fn ->
+        capture_log([metadata: [:domain]], fn ->
           emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
             should_report_error_callback: fn _worker, _job -> raise "callback error" end
           )
@@ -311,11 +324,47 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert log =~ "should_report_error_callback failed"
       assert log =~ "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
       assert log =~ "callback error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
 
       event = assert_sentry_report(:event, [])
       assert [exception] = event.exception
       assert exception.type == "RuntimeError"
       assert exception.value == "oops"
+    end
+
+    test "should_report_error_callback receives a nil worker when the job worker doesn't resolve" do
+      test_pid = self()
+
+      job =
+        %{"id" => "123"}
+        |> MyWorker.new()
+        |> Ecto.Changeset.apply_action!(:validate)
+        |> Map.put(:worker, "NotA.Real.Worker")
+
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          assert :ok =
+                   ErrorReporter.handle_event(
+                     [:oban, :job, :exception],
+                     %{},
+                     %{
+                       job: job,
+                       kind: :error,
+                       reason: %RuntimeError{message: "oops"},
+                       stacktrace: []
+                     },
+                     should_report_error_callback: fn worker, _job ->
+                       send(test_pid, {:callback_worker, worker})
+                       true
+                     end
+                   )
+        end)
+
+      assert log =~ ~s(Could not resolve Oban worker module from string: "NotA.Real.Worker")
+      assert log =~ ~r/domain=(\w+\.)*sentry/
+
+      assert_receive {:callback_worker, nil}
+      assert_sentry_report(:event, [])
     end
 
     test "scrubs sensitive values from the job args in the event extra" do

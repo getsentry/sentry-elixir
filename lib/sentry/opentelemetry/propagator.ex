@@ -10,7 +10,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     import Bitwise
 
     require Record
-    require Logger
+    alias Sentry.LoggerUtils
     alias OpenTelemetry.Tracer, as: Tracer
 
     @behaviour :otel_propagator_text_map
@@ -85,7 +85,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
                     "org ID missing (strict mode)"
                   end
 
-                Logger.warning(
+                LoggerUtils.warning(
                   "[Sentry] Not continuing trace: #{reason} (sdk: #{inspect(sdk_org_id)}, incoming: #{inspect(baggage_org_id)})"
                 )
 
