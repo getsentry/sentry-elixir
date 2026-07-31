@@ -1,6 +1,7 @@
 defmodule Sentry.EnvelopeTest do
   use Sentry.Case, async: false
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent, Metric}
@@ -334,6 +335,70 @@ defmodule Sentry.EnvelopeTest do
 
       metric_batch = %Sentry.MetricBatch{metrics: metrics}
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
+    end
+  end
+
+  describe "item_byte_size/1 for log events" do
+    test "approximates the serialized size of a single log event" do
+      log_event = %LogEvent{
+        timestamp: 1_588_601_261.535_386,
+        level: :info,
+        body: "something happened"
+      }
+
+      assert Envelope.item_byte_size(log_event) > 0
+    end
+
+    test "matches the size of the serialized envelope payload for the log event" do
+      log_event = %LogEvent{
+        timestamp: 1_588_601_261.535_386,
+        level: :info,
+        body: "something happened"
+      }
+
+      # Computed independently of the function under test, so that a change in
+      # what gets serialized fails here instead of silently agreeing with itself.
+      expected = byte_size(encode!(LogEvent.to_map(log_event)))
+
+      assert Envelope.item_byte_size(log_event) == expected
+    end
+
+    test "grows with the size of the log body" do
+      base = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: "hi"}
+      large = %LogEvent{base | body: String.duplicate("x", 1_000)}
+
+      assert Envelope.item_byte_size(large) >
+               Envelope.item_byte_size(base) + 900
+    end
+
+    @tag :capture_log
+    test "returns 0 and logs when the log event cannot be encoded" do
+      log_event = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: <<0xFF>>}
+
+      assert capture_log(fn ->
+               assert Envelope.item_byte_size(log_event) == 0
+             end) =~ "Failed to compute the byte size of Sentry.LogEvent"
+    end
+  end
+
+  describe "item_byte_size/1 for metrics" do
+    test "approximates the serialized size of a single metric" do
+      metric = %Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_588_601_261.535_386
+      }
+
+      assert Envelope.item_byte_size(metric) > 0
+    end
+
+    test "grows with the size of the metric name" do
+      base = %Metric{type: :counter, name: "m", value: 1, timestamp: 1_588_601_261.535_386}
+      large = %Metric{base | name: String.duplicate("n", 1_000)}
+
+      assert Envelope.item_byte_size(large) >
+               Envelope.item_byte_size(base) + 900
     end
   end
 end

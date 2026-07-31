@@ -37,8 +37,8 @@ defmodule Sentry.LoggerHandler.LogsBackend do
     log_event_struct = LogEvent.from_logger_event(log_event, attributes, parameters)
 
     case TelemetryProcessor.add(log_event_struct) do
-      {:ok, {:rate_limited, data_category}} ->
-        Sentry.ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+      {:ok, {:rate_limited, _data_category}} ->
+        Sentry.ClientReport.Sender.record_discarded_events(:ratelimit_backoff, [log_event_struct])
 
       :ok ->
         :ok

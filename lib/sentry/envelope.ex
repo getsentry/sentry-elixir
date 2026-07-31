@@ -10,6 +10,7 @@ defmodule Sentry.Envelope do
     Event,
     LogBatch,
     LogEvent,
+    LoggerUtils,
     Metric,
     MetricBatch,
     Transaction,
@@ -137,6 +138,42 @@ defmodule Sentry.Envelope do
   def get_data_category(%Event{}), do: "error"
   def get_data_category(%LogBatch{}), do: "log_item"
   def get_data_category(%MetricBatch{}), do: "trace_metric"
+
+  @doc """
+  Approximates the serialized byte size of a single log event or metric.
+
+  The size is computed by encoding the item with the same serialization used when
+  it is placed in an envelope item (`Sentry.LogEvent.to_map/1` or
+  `Sentry.Metric.to_map/1`), then measuring the byte size of the resulting JSON.
+  Per the client report spec, a serialized-size approximation like this is
+  acceptable for `log_byte` and `trace_metric_byte` outcomes.
+
+  Returns `0` (and logs) if the item cannot be encoded.
+  """
+  @spec item_byte_size(LogEvent.t() | Metric.t()) :: non_neg_integer()
+  def item_byte_size(%LogEvent{} = log_event) do
+    log_event |> LogEvent.to_map() |> encoded_byte_size(log_event)
+  end
+
+  def item_byte_size(%Metric{} = metric) do
+    metric |> Metric.to_map() |> encoded_byte_size(metric)
+  end
+
+  defp encoded_byte_size(map, item) do
+    case Sentry.JSON.encode(map, Config.json_library()) do
+      {:ok, encoded} ->
+        byte_size(encoded)
+
+      {:error, reason} ->
+        # A byte outcome is quota data reported to Sentry, so an unencodable item
+        # means we under-report rather than report nothing — worth surfacing.
+        LoggerUtils.log(fn ->
+          "Failed to compute the byte size of #{inspect(item.__struct__)}: #{inspect(reason)}"
+        end)
+
+        0
+    end
+  end
 
   @doc """
   Returns the total number of payload items in the envelope.

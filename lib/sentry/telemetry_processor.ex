@@ -253,7 +253,7 @@ defmodule Sentry.TelemetryProcessor do
   defp add_to_buffer(processor, category, item) when is_atom(processor) do
     data_category = Category.data_category(category)
 
-    if RateLimiter.rate_limited?(data_category) do
+    if RateLimiter.rate_limited_for_category?(data_category) do
       {:ok, {:rate_limited, data_category}}
     else
       Buffer.add(buffer_name(processor, category), item)
@@ -265,7 +265,7 @@ defmodule Sentry.TelemetryProcessor do
   defp add_to_buffer(processor, category, item) do
     data_category = Category.data_category(category)
 
-    if RateLimiter.rate_limited?(data_category) do
+    if RateLimiter.rate_limited_for_category?(data_category) do
       {:ok, {:rate_limited, data_category}}
     else
       buffer = get_buffer(processor, category)

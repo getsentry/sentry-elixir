@@ -8,7 +8,7 @@ defmodule Sentry.Telemetry.Buffer do
 
   ## Options
 
-    * `:category` - The telemetry category (required), currently only `:log`
+    * `:category` - The telemetry category (required), one of `Sentry.Telemetry.Category.t/0`
     * `:name` - The name to register the GenServer under (optional)
     * `:capacity` - Buffer capacity (defaults to category default)
     * `:batch_size` - Items per batch (defaults to category default)
@@ -24,6 +24,7 @@ defmodule Sentry.Telemetry.Buffer do
 
   alias Sentry.ClientReport
   alias Sentry.Telemetry.Category
+  alias Sentry.{LogEvent, Metric}
 
   @enforce_keys [:category, :capacity, :batch_size]
   defstruct [
@@ -178,18 +179,32 @@ defmodule Sentry.Telemetry.Buffer do
 
   defp offer(%Buffer{size: size, capacity: capacity} = state, item)
        when size >= capacity do
-    {{:value, _dropped}, items} = :queue.out(state.items)
+    {{:value, dropped}, items} = :queue.out(state.items)
 
-    ClientReport.Sender.record_discarded_events(
-      :cache_overflow,
-      Category.data_category(state.category)
-    )
+    record_overflow_discard(state.category, dropped)
 
     %{state | items: :queue.in(item, items)}
   end
 
   defp offer(%Buffer{} = state, item) do
     %{state | items: :queue.in(item, state.items), size: state.size + 1}
+  end
+
+  # Logs and metrics are handed to the recorder as structs so it can pair the
+  # count outcome with the byte one; no other category has a byte companion.
+  defp record_overflow_discard(:log, %LogEvent{} = dropped) do
+    ClientReport.Sender.record_discarded_events(:cache_overflow, [dropped])
+  end
+
+  defp record_overflow_discard(:metric, %Metric{} = dropped) do
+    ClientReport.Sender.record_discarded_events(:cache_overflow, [dropped])
+  end
+
+  defp record_overflow_discard(category, _dropped) do
+    ClientReport.Sender.record_discarded_events(
+      :cache_overflow,
+      Category.data_category(category)
+    )
   end
 
   defp poll_batch(state, count), do: poll_batch(state, count, [])
