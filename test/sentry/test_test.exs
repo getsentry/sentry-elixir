@@ -553,6 +553,134 @@ defmodule Sentry.TestTest do
     end
   end
 
+  describe "setup_sentry/1 with allowance: [Broadway] (synthetic events)" do
+    setup do
+      SentryTest.setup_sentry(allowance: [Broadway])
+    end
+
+    test "processor batch start with a tagged message routes the worker" do
+      test_pid = self()
+      worker_done = make_ref()
+
+      worker =
+        spawn(fn ->
+          messages = [%{metadata: %{sentry_test_owner: test_pid}}]
+
+          :telemetry.execute(
+            [:broadway, :processor, :start],
+            %{},
+            %{messages: messages}
+          )
+
+          captured =
+            case Sentry.capture_message("from broadway processor", result: :sync) do
+              {:ok, _} -> :captured
+              other -> {:unexpected, other}
+            end
+
+          send(test_pid, {worker_done, captured})
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive {^worker_done, :captured}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [%Sentry.Event{message: %{formatted: "from broadway processor"}}] =
+               SentryTest.pop_sentry_reports()
+    end
+
+    test "batch_processor start with a tagged message routes the worker" do
+      test_pid = self()
+      worker_done = make_ref()
+
+      worker =
+        spawn(fn ->
+          messages = [%{metadata: %{sentry_test_owner: test_pid}}]
+
+          :telemetry.execute(
+            [:broadway, :batch_processor, :start],
+            %{},
+            %{messages: messages}
+          )
+
+          captured =
+            case Sentry.capture_message("from broadway batch", result: :sync) do
+              {:ok, _} -> :captured
+              other -> {:unexpected, other}
+            end
+
+          send(test_pid, {worker_done, captured})
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive {^worker_done, :captured}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [%Sentry.Event{message: %{formatted: "from broadway batch"}}] =
+               SentryTest.pop_sentry_reports()
+    end
+
+    test "messages without :sentry_test_owner metadata are not auto-allowed" do
+      test_pid = self()
+      worker_done = make_ref()
+
+      worker =
+        spawn(fn ->
+          messages = [%{metadata: %{some_other_key: :foo}}]
+
+          :telemetry.execute(
+            [:broadway, :processor, :start],
+            %{},
+            %{messages: messages}
+          )
+
+          captured =
+            case Sentry.capture_message("untagged broadway", result: :sync) do
+              {:ok, _} -> :captured
+              other -> {:unexpected, other}
+            end
+
+          send(test_pid, {worker_done, captured})
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive {^worker_done, :captured}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [] == SentryTest.pop_sentry_reports()
+    end
+
+    test "uses the first tagged message in a mixed batch" do
+      test_pid = self()
+      worker_done = make_ref()
+
+      worker =
+        spawn(fn ->
+          messages = [
+            %{metadata: %{some_other_key: :foo}},
+            %{metadata: %{sentry_test_owner: test_pid}},
+            %{metadata: %{}}
+          ]
+
+          :telemetry.execute(
+            [:broadway, :processor, :start],
+            %{},
+            %{messages: messages}
+          )
+
+          Sentry.capture_message("mixed batch", result: :sync)
+          send(test_pid, worker_done)
+        end)
+
+      ref = Process.monitor(worker)
+      assert_receive ^worker_done, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
+
+      assert [%Sentry.Event{message: %{formatted: "mixed batch"}}] =
+               SentryTest.pop_sentry_reports()
+    end
+  end
+
   describe "before_send wrapping" do
     test "wraps existing before_send callback" do
       test_pid = self()
