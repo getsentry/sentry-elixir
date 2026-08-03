@@ -1,3 +1,25 @@
+## 13.4.0
+
+### New Features ✨
+
+- Support for log_byte and trace_metric_byte by @solnic in [#1134](https://github.com/getsentry/sentry-elixir/pull/1134)
+
+### Bug Fixes 🐛
+
+- Use LoggerUtils for diagnostics by @solnic in [#1136](https://github.com/getsentry/sentry-elixir/pull/1136)
+- Handle header casing correctly by @solnic in [#1133](https://github.com/getsentry/sentry-elixir/pull/1133)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump postcss from 8.5.15 to 8.5.25 in /test_integrations/tracing/svelte_mini by @dependabot in [#1137](https://github.com/getsentry/sentry-elixir/pull/1137)
+- Bump lockfiles by @solnic in [#1115](https://github.com/getsentry/sentry-elixir/pull/1115)
+
+#### Other
+
+- (igniter) Use latest igniter and drop jason when it's not needed by @solnic in [#1113](https://github.com/getsentry/sentry-elixir/pull/1113)
+
 ## 13.3.0
 
 ### New Features ✨
