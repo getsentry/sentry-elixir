@@ -343,15 +343,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       Sentry.ClientReport.Sender.flush()
 
-      on_exit(fn ->
-        for category <- ~w(log_item error monitor transaction) do
-          try do
-            :ets.delete(Sentry.Transport.RateLimiter, category)
-          catch
-            :error, :badarg -> :ok
-          end
-        end
-      end)
+      on_exit(fn -> reset_rate_limits(scope: :scheduler) end)
 
       :ok
     end
@@ -391,15 +383,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
-      on_exit(fn ->
-        for category <- ~w(log_item log_byte trace_metric trace_metric_byte) do
-          try do
-            :ets.delete(Sentry.Transport.RateLimiter, category)
-          catch
-            :error, :badarg -> :ok
-          end
-        end
-      end)
+      on_exit(fn -> reset_rate_limits(scope: :scheduler) end)
 
       :ok
     end
@@ -448,23 +432,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
-      rate_limiter_table = Process.get(:rate_limiter_table_name)
-
-      on_exit(fn ->
-        try do
-          :ets.delete(rate_limiter_table, "log_item")
-          :ets.delete(rate_limiter_table, "error")
-          :ets.delete(rate_limiter_table, "monitor")
-          :ets.delete(rate_limiter_table, "transaction")
-          :ets.delete(rate_limiter_table, "trace_metric")
-          :ets.delete(rate_limiter_table, "log_byte")
-          :ets.delete(rate_limiter_table, "trace_metric_byte")
-        catch
-          :error, :badarg -> :ok
-        end
-      end)
-
-      %{rate_limiter_table: rate_limiter_table}
+      :ok
     end
 
     test "drops rate-limited log events before they enter the buffer", ctx do
@@ -474,7 +442,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
 
-      :ets.insert(ctx.rate_limiter_table, {"log_item", System.system_time(:second) + 60})
+      set_rate_limit("log_item")
 
       assert {:ok, {:rate_limited, "log_item"}} =
                TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop"))
@@ -487,7 +455,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
 
-      :ets.insert(ctx.rate_limiter_table, {"error", System.system_time(:second) + 60})
+      set_rate_limit("error")
 
       Sentry.capture_message("pre-buffer-drop", result: :none)
 
@@ -514,7 +482,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       check_in_buffer = TelemetryProcessor.get_buffer(ctx.processor, :check_in)
 
-      :ets.insert(ctx.rate_limiter_table, {"monitor", System.system_time(:second) + 60})
+      set_rate_limit("monitor")
 
       {:ok, _id} = Sentry.capture_check_in(status: :ok, monitor_slug: "dropped-job")
 
@@ -545,7 +513,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
 
-      :ets.insert(ctx.rate_limiter_table, {"transaction", System.system_time(:second) + 60})
+      set_rate_limit("transaction")
 
       assert {:ok, {:rate_limited, "transaction"}} =
                TelemetryProcessor.add(ctx.processor, make_transaction())
@@ -562,7 +530,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
 
-      :ets.insert(ctx.rate_limiter_table, {"trace_metric", System.system_time(:second) + 60})
+      set_rate_limit("trace_metric")
 
       assert {:ok, {:rate_limited, "trace_metric"}} =
                TelemetryProcessor.add(ctx.processor, make_metric("pre-buffer-drop", 1))
@@ -580,7 +548,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
 
-      :ets.insert(ctx.rate_limiter_table, {"log_byte", System.system_time(:second) + 60})
+      set_rate_limit("log_byte")
 
       Logger.info("dropped by a log_byte limit")
 
@@ -598,7 +566,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
 
-      :ets.insert(ctx.rate_limiter_table, {"trace_metric_byte", System.system_time(:second) + 60})
+      set_rate_limit("trace_metric_byte")
 
       Sentry.Metrics.count("dropped.by.byte.limit", 1)
 
@@ -617,21 +585,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
-      # The scheduler runs in its own process (with no `:rate_limiter_table_name`
-      # in its dictionary), so it reads the default rate limiter table rather
-      # than this test's uniquely-named one.
-      on_exit(fn ->
-        try do
-          :ets.delete(Sentry.Transport.RateLimiter, "transaction")
-          :ets.delete(Sentry.Transport.RateLimiter, "log_item")
-          :ets.delete(Sentry.Transport.RateLimiter, "log_byte")
-          :ets.delete(Sentry.Transport.RateLimiter, "trace_metric")
-          :ets.delete(Sentry.Transport.RateLimiter, "trace_metric_byte")
-        catch
-          :error, :badarg -> :ok
-        end
-      end)
-
       :ok
     end
 
@@ -648,10 +601,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       TelemetryProcessor.add(ctx.processor, transaction)
       assert Buffer.size(transaction_buffer) == 1
 
-      :ets.insert(
-        Sentry.Transport.RateLimiter,
-        {"transaction", System.system_time(:second) + 60}
-      )
+      set_rate_limit("transaction", scope: :scheduler)
 
       :sys.resume(scheduler)
       GenServer.cast(scheduler, :signal)
@@ -686,7 +636,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       TelemetryProcessor.add(ctx.processor, dropped_log)
       assert Buffer.size(log_buffer) == 1
 
-      :ets.insert(Sentry.Transport.RateLimiter, {"log_item", System.system_time(:second) + 60})
+      set_rate_limit("log_item", scope: :scheduler)
 
       :sys.resume(scheduler)
       GenServer.cast(scheduler, :signal)
