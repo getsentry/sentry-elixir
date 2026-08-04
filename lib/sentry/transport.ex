@@ -27,13 +27,22 @@ defmodule Sentry.Transport do
   def encode_and_post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
     result =
-      case Envelope.to_binary(envelope) do
-        {:ok, body} ->
-          {endpoint, headers} = get_endpoint_and_headers()
-          post_envelope_with_retries(client, endpoint, headers, body, retries, envelope.items)
+      case filter_rate_limited(envelope) do
+        {:send, envelope, discarded_items} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
 
-        {:error, reason} ->
-          {:error, ClientError.new({:invalid_json, reason})}
+          case Envelope.to_binary(envelope) do
+            {:ok, body} ->
+              {endpoint, headers} = get_endpoint_and_headers()
+              post_envelope_with_retries(client, endpoint, headers, body, retries, envelope.items)
+
+            {:error, reason} ->
+              {:error, ClientError.new({:invalid_json, reason})}
+          end
+
+        {:drop, discarded_items} ->
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
+          {:error, ClientError.new(:rate_limited)}
       end
 
     _ = maybe_log_send_result(result, envelope.items)
@@ -83,20 +92,39 @@ defmodule Sentry.Transport do
     end
   end
 
-  defp check_rate_limited(envelope_items) do
-    rate_limited? =
-      Enum.any?(envelope_items, fn item ->
-        item
-        |> Envelope.get_data_category()
-        |> RateLimiter.rate_limited_for_category?()
-      end)
+  defp filter_rate_limited(%Envelope{items: items} = envelope) do
+    cond do
+      RateLimiter.global_rate_limited?() ->
+        {:drop, items}
 
-    if rate_limited?, do: {:error, :rate_limited}, else: :ok
+      Enum.any?(items, &whole_envelope_rate_limited?/1) ->
+        {:drop, items}
+
+      true ->
+        {discarded_items, retained_items} = Enum.split_with(items, &attachment_rate_limited?/1)
+
+        case retained_items do
+          [] -> {:drop, discarded_items}
+          _items -> {:send, %Envelope{envelope | items: retained_items}, discarded_items}
+        end
+    end
   end
 
-  defp request(client, endpoint, headers, body, envelope_items) do
-    with :ok <- check_rate_limited(envelope_items),
-         {:ok, 200, _headers, body} <-
+  defp whole_envelope_rate_limited?(%Sentry.Attachment{}), do: false
+
+  defp whole_envelope_rate_limited?(item) do
+    item
+    |> Envelope.get_data_category()
+    |> RateLimiter.rate_limited_for_category?()
+  end
+
+  defp attachment_rate_limited?(item) do
+    match?(%Sentry.Attachment{}, item) and
+      RateLimiter.rate_limited_for_category?(Envelope.get_data_category(item))
+  end
+
+  defp request(client, endpoint, headers, body, _envelope_items) do
+    with {:ok, 200, _headers, body} <-
            client_post_and_validate_return_value(client, endpoint, headers, body),
          {:ok, json} <- Sentry.JSON.decode(body, Config.json_library()) do
       {:ok, Map.get(json, "id")}
@@ -109,9 +137,6 @@ defmodule Sentry.Transport do
 
       {:ok, status, headers, body} ->
         {:error, {:http, {status, headers, body}}}
-
-      {:error, :rate_limited} ->
-        {:error, :rate_limited}
 
       {:error, reason} ->
         {:error, {:request_failure, reason}}
