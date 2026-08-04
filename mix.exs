@@ -140,9 +140,9 @@ defmodule Sentry.Mixfile do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
-      {:igniter, dep_version(:igniter, current_elixir_version()), optional: true},
 
       # Dev and test dependencies
+      {:igniter, dep_version(:igniter, current_elixir_version()), only: :test},
       {:plug_cowboy, "~> 2.7", only: [:test]},
       {:bandit, dep_version(:bandit, current_elixir_version()), only: [:test]},
       {:bypass, "~> 2.0", only: [:test]},
@@ -170,7 +170,7 @@ defmodule Sentry.Mixfile do
   # ex_ast >= 0.12.1 (pulled in transitively via igniter >= 0.8) requires
   # Elixir ~> 1.19, which breaks Elixir 1.18 - pin the last compatible release.
   defp ex_ast_dep(%Version{major: 1, minor: 18}),
-    do: [{:ex_ast, ">= 0.12.0 and < 0.12.1", optional: true}]
+    do: [{:ex_ast, ">= 0.12.0 and < 0.12.1", only: :test}]
 
   defp ex_ast_dep(%Version{}), do: []
 
