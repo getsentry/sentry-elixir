@@ -1,6 +1,8 @@
 defmodule Sentry.Transport.RateLimiterTest do
   use Sentry.Case, async: true
 
+  import Sentry.TestHelpers
+
   alias Sentry.Transport.RateLimiter
 
   describe "parse_rate_limits_header/1" do
@@ -72,24 +74,21 @@ defmodule Sentry.Transport.RateLimiterTest do
 
   describe "rate_limited_for_category?/1" do
     test "gates log_item on the log_byte limit as well" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"log_byte", now + 60})
+      set_rate_limit("log_byte")
 
       assert RateLimiter.rate_limited_for_category?("log_item") == true
       assert RateLimiter.rate_limited?("log_item") == false
     end
 
     test "gates trace_metric on the trace_metric_byte limit as well" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"trace_metric_byte", now + 60})
+      set_rate_limit("trace_metric_byte")
 
       assert RateLimiter.rate_limited_for_category?("trace_metric") == true
       assert RateLimiter.rate_limited?("trace_metric") == false
     end
 
     test "gates a category on itself when it has no companion byte category" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"error", now + 60})
+      set_rate_limit("error")
 
       assert RateLimiter.rate_limited_for_category?("error") == true
       assert RateLimiter.rate_limited_for_category?("transaction") == false
@@ -133,8 +132,7 @@ defmodule Sentry.Transport.RateLimiterTest do
 
   describe "rate_limited?/1" do
     test "returns true for rate-limited category" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"error", now + 60})
+      set_rate_limit("error")
 
       assert RateLimiter.rate_limited?("error") == true
     end
@@ -144,15 +142,13 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
 
     test "returns false for expired rate limit" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"error", now - 10})
+      set_rate_limit("error", duration: -10)
 
       assert RateLimiter.rate_limited?("error") == false
     end
 
     test "returns true when global limit is active" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {:global, now + 60})
+      set_rate_limit(:global)
 
       # Any category should be limited
       assert RateLimiter.rate_limited?("error") == true
@@ -160,9 +156,8 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
 
     test "returns true if either category or global limit is active" do
-      now = System.system_time(:second)
-      :ets.insert(table_name(), {"error", now + 30})
-      :ets.insert(table_name(), {:global, now + 60})
+      set_rate_limit("error", duration: 30)
+      set_rate_limit(:global)
 
       assert RateLimiter.rate_limited?("error") == true
     end

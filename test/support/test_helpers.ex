@@ -21,6 +21,22 @@ defmodule Sentry.TestHelpers do
     Sentry.Test.Config.put(config)
   end
 
+  @spec set_rate_limit(String.t() | :global, keyword()) :: :ok
+  def set_rate_limit(category, opts \\ []) when is_binary(category) or category == :global do
+    table = rate_limiter_table(Keyword.get(opts, :scope, :local))
+    duration = Keyword.get(opts, :duration, 60)
+
+    :ets.insert(table, {category, System.system_time(:second) + duration})
+    register_rate_limit_cleanup(table, category)
+    :ok
+  end
+
+  @spec reset_rate_limits(keyword()) :: :ok
+  def reset_rate_limits(opts \\ []) do
+    :ets.delete_all_objects(rate_limiter_table(Keyword.get(opts, :scope, :local)))
+    :ok
+  end
+
   @spec set_mix_shell(module()) :: :ok
   def set_mix_shell(shell) do
     mix_shell = Mix.shell()
@@ -153,6 +169,25 @@ defmodule Sentry.TestHelpers do
       true ->
         Process.sleep(sleep_time)
         wait_until_loop(condition_fn, end_time, min(sleep_time * 2, 50))
+    end
+  end
+
+  defp rate_limiter_table(:local), do: Process.get(:rate_limiter_table_name)
+  defp rate_limiter_table(:scheduler), do: Sentry.Transport.RateLimiter
+
+  defp register_rate_limit_cleanup(table, category) do
+    key = {__MODULE__, :rate_limit_cleanup, table, category}
+
+    unless Process.get(key) do
+      Process.put(key, true)
+
+      ExUnit.Callbacks.on_exit(fn ->
+        try do
+          :ets.delete(table, category)
+        catch
+          :error, :badarg -> :ok
+        end
+      end)
     end
   end
 end
