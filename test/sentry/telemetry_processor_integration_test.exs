@@ -499,6 +499,26 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
              }
     end
 
+    test "sends an error without attachments when attachments are rate limited", ctx do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+
+      set_rate_limit("attachment", scope: :scheduler)
+
+      :ok =
+        Sentry.Context.add_attachment(%Sentry.Attachment{filename: "report.txt", data: "report"})
+
+      on_exit(&Sentry.Context.clear_attachments/0)
+
+      Sentry.capture_message("pre-buffer-attachment-limit", result: :none)
+
+      assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert event["message"]["formatted"] == "pre-buffer-attachment-limit"
+
+      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
+               "attachment" => 1
+             }
+    end
+
     test "drops rate-limited check-in events before they enter the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:check_in, :log])
 
