@@ -1,3 +1,9 @@
+## 13.4.1
+
+### Bug Fixes 🐛
+
+- (deps) Remove rewrite from optional deps by @solnic in [#1140](https://github.com/getsentry/sentry-elixir/pull/1140)
+
 ## 13.4.0
 
 ### New Features ✨
