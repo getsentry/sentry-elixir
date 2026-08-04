@@ -447,6 +447,26 @@ defmodule Sentry.TransportTest do
              }
     end
 
+    test "drops an event and its attachments when error and attachment limits are active" do
+      assert :ok = ClientReport.Sender.flush()
+
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+      envelope = Envelope.from_event(event)
+      set_rate_limit("error")
+      set_rate_limit("attachment")
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "attachment"} => 1,
+               {:ratelimit_backoff, "error"} => 1
+             }
+    end
+
     test "drops an event and its attachments when a global rate limit is active" do
       event = Event.create_event(message: "event with attachment")
       event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
