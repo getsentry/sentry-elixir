@@ -141,7 +141,6 @@ defmodule Sentry.Mixfile do
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
       {:igniter, dep_version(:igniter, current_elixir_version()), optional: true},
-      {:rewrite, dep_version(:rewrite, current_elixir_version()), optional: true},
 
       # Dev and test dependencies
       {:plug_cowboy, "~> 2.7", only: [:test]},
@@ -199,12 +198,6 @@ defmodule Sentry.Mixfile do
     do: "~> 0.7.9 and < 0.8.0"
 
   defp dep_version(:igniter, %Version{}), do: "~> 0.5"
-
-  # Rewrite >= 1.2 requires Elixir ~> 1.15.
-  defp dep_version(:rewrite, %Version{major: 1, minor: minor}) when minor < 15,
-    do: "~> 1.1.0"
-
-  defp dep_version(:rewrite, %Version{}), do: ">= 1.1.1 and < 2.0.0-0"
 
   # Bandit >= 1.12 uses Elixir 1.15-only syntax.
   defp dep_version(:bandit, %Version{major: 1, minor: minor}) when minor < 15,
