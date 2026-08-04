@@ -477,6 +477,28 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert ratelimit_event["quantity"] == 1
     end
 
+    test "records attachments when a global limit drops an error before buffering", ctx do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+
+      set_rate_limit(:global)
+
+      :ok =
+        Sentry.Context.add_attachment(%Sentry.Attachment{filename: "report.txt", data: "report"})
+
+      on_exit(&Sentry.Context.clear_attachments/0)
+
+      Sentry.capture_message("pre-buffer-global-limit", result: :none)
+
+      assert Buffer.size(error_buffer) == 0
+
+      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
+               "attachment" => 1,
+               "error" => 1
+             }
+    end
+
     test "drops rate-limited check-in events before they enter the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:check_in, :log])
 
