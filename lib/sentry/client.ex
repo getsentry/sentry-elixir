@@ -239,8 +239,11 @@ defmodule Sentry.Client do
   defp encode_and_send(%Event{} = event, _result_type = :none, client, _request_retries) do
     if Config.telemetry_processor_category?(:error) do
       case TelemetryProcessor.add(event) do
-        {:ok, {:rate_limited, data_category}} ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+        {:ok, {:rate_limited, _data_category}} ->
+          ClientReport.Sender.record_discarded_events(
+            :ratelimit_backoff,
+            [event | event.attachments]
+          )
 
         :ok ->
           :ok
