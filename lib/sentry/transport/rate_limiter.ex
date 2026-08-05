@@ -137,9 +137,7 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_global_rate_limit(pos_integer()) :: :ok
   def update_global_rate_limit(retry_after_seconds) when is_integer(retry_after_seconds) do
-    expiry = System.system_time(:millisecond) + retry_after_seconds * 1000
-    :ets.insert(name(), {:global, expiry})
-    :ok
+    store_max_expiry(:global, System.system_time(:millisecond) + retry_after_seconds * 1000)
   end
 
   @doc """
@@ -160,13 +158,46 @@ defmodule Sentry.Transport.RateLimiter do
 
     rate_limits_header
     |> parse_rate_limits_header()
-    |> Enum.map(fn {category, retry_after_ms} -> {category, now + retry_after_ms} end)
-    |> then(&:ets.insert(name(), &1))
+    |> Enum.each(fn {category, retry_after_ms} ->
+      store_max_expiry(category, now + retry_after_ms)
+    end)
 
     :ok
   end
 
   ## Private Helpers
+
+  # Rate limits may only ever be extended: a response carrying a shorter delay
+  # than the one already in flight must not let the SDK resume sending early.
+  #
+  # Senders handle responses concurrently, so this compares and swaps rather than
+  # reading and then writing: two responses racing on the same category would
+  # otherwise both read the old expiry and let the shorter one land last.
+  defp store_max_expiry(category, expiry) do
+    table = name()
+
+    if :ets.insert_new(table, {category, expiry}) do
+      :ok
+    else
+      replace_shorter_expiry(table, category, expiry)
+    end
+  end
+
+  defp replace_shorter_expiry(table, category, expiry) do
+    match_spec = [
+      {{category, :"$1"}, [{:<, :"$1", expiry}], [{{{:const, category}, {:const, expiry}}}]}
+    ]
+
+    case :ets.select_replace(table, match_spec) do
+      1 ->
+        :ok
+
+      0 ->
+        # Either the stored expiry is already the longer one, or the sweeper
+        # pruned the entry between the two calls and it has to be re-inserted.
+        if :ets.member(table, category), do: :ok, else: store_max_expiry(category, expiry)
+    end
+  end
 
   defp rate_limited?(category, now) do
     case :ets.lookup(name(), category) do

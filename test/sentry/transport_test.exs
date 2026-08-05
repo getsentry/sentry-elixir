@@ -562,6 +562,43 @@ defmodule Sentry.TransportTest do
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
+    test "keeps the longer error limit when a later response carries a shorter one", %{
+      bypass: bypass
+    } do
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        rate_limits =
+          case decode_envelope!(body) do
+            [{%{"type" => "event"}, _item}] -> "60:error:key"
+            [{%{"type" => "log"}, _item}] -> "0:error:key"
+          end
+
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", rate_limits)
+        |> Plug.Conn.resp(200, ~s<{"id":"accepted"}>)
+      end)
+
+      assert {:ok, "accepted"} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_event(Event.create_event(message: "First")),
+                 FinchClient
+               )
+
+      assert {:ok, "accepted"} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_log_events([make_log_event("keeps flowing")]),
+                 FinchClient
+               )
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_event(Event.create_event(message: "Second")),
+                 FinchClient,
+                 _retries = []
+               )
+    end
+
     test "applies a fractional retry delay from the rate limits header", %{bypass: bypass} do
       Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
         conn
