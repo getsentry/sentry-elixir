@@ -562,6 +562,42 @@ defmodule Sentry.TransportTest do
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
+    test "applies a fractional retry delay from the rate limits header", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "1.5:error:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "first"} = Transport.encode_and_post_envelope(first, FinchClient)
+
+      second = Envelope.from_event(Event.create_event(message: "Second"))
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(second, FinchClient, _retries = [])
+    end
+
+    test "keeps a sub-second limit from the header active until it expires", %{bypass: bypass} do
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "0.2:error:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"accepted"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "accepted"} = Transport.encode_and_post_envelope(first, FinchClient)
+
+      second = Envelope.from_event(Event.create_event(message: "Second"))
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(second, FinchClient, _retries = [])
+
+      Process.sleep(250)
+
+      assert {:ok, "accepted"} = Transport.encode_and_post_envelope(second, FinchClient)
+    end
+
     test "handles multiple categories in single X-Sentry-Rate-Limits header", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
