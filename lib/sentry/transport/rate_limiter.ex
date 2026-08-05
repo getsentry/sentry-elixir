@@ -90,16 +90,22 @@ defmodule Sentry.Transport.RateLimiter do
     rate_limited?(category, now) or rate_limited?(:global, now)
   end
 
+  @spec global_rate_limited?() :: boolean()
+  def global_rate_limited? do
+    rate_limited?(:global, System.system_time(:second))
+  end
+
   @doc """
   Checks whether sending items of the given data category is currently limited.
 
-  Logs and metrics have a companion byte category (`log_byte` /
-  `trace_metric_byte`) that Sentry can limit independently of the count
-  category, so a limit on either one must suppress sending. Every other category
-  gates on itself alone.
+  Logs, metrics, and attachments have companion categories (`log_byte`,
+  `trace_metric_byte`, and `attachment_item`) that Sentry can limit
+  independently of the count category, so a limit on either one must suppress
+  sending. Every other category gates on itself alone.
 
-  So an active `log_byte` limit makes this return `true` for `"log_item"`, even
-  though `rate_limited?("log_item")` on its own is `false`.
+  So an active `log_byte` limit makes this return `true` for `"log_item"`, and
+  an active `attachment_item` limit does the same for `"attachment"`, even
+  though the corresponding `rate_limited?/1` call on its own is `false`.
   """
   @spec rate_limited_for_category?(String.t()) :: boolean()
   def rate_limited_for_category?("log_item"),
@@ -107,6 +113,9 @@ defmodule Sentry.Transport.RateLimiter do
 
   def rate_limited_for_category?("trace_metric"),
     do: rate_limited?("trace_metric") or rate_limited?("trace_metric_byte")
+
+  def rate_limited_for_category?("attachment"),
+    do: rate_limited?("attachment") or rate_limited?("attachment_item")
 
   def rate_limited_for_category?(category) when is_binary(category),
     do: rate_limited?(category)

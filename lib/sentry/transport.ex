@@ -26,77 +26,98 @@ defmodule Sentry.Transport do
           {:ok, envelope_id :: String.t()} | {:error, ClientError.t()}
   def encode_and_post_envelope(%Envelope{} = envelope, client, retries \\ @default_retries)
       when is_atom(client) and is_list(retries) do
-    result =
-      case Envelope.to_binary(envelope) do
-        {:ok, body} ->
-          {endpoint, headers} = get_endpoint_and_headers()
-          post_envelope_with_retries(client, endpoint, headers, body, retries, envelope.items)
-
-        {:error, reason} ->
-          {:error, ClientError.new({:invalid_json, reason})}
-      end
+    result = post_envelope_with_retries(client, envelope, retries)
 
     _ = maybe_log_send_result(result, envelope.items)
     result
   end
 
-  defp post_envelope_with_retries(
-         client,
-         endpoint,
-         headers,
-         payload,
-         retries_left,
-         envelope_items
-       ) do
-    case request(client, endpoint, headers, payload, envelope_items) do
+  # Limits are re-applied before every attempt, because a response handled while
+  # we slept may have introduced one. Retries recurse with the already-filtered
+  # envelope, so each pass only reports the items it newly discards.
+  defp post_envelope_with_retries(client, envelope, retries_left) do
+    case filter_rate_limited(envelope) do
+      {:send, filtered_envelope, discarded_items} ->
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
+
+        case Envelope.to_binary(filtered_envelope) do
+          {:ok, body} ->
+            post_filtered_envelope(client, filtered_envelope, body, retries_left)
+
+          {:error, reason} ->
+            {:error, ClientError.new({:invalid_json, reason})}
+        end
+
+      {:drop, discarded_items} ->
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
+        {:error, ClientError.new(:rate_limited)}
+    end
+  end
+
+  defp post_filtered_envelope(client, %Envelope{items: items} = envelope, body, retries_left) do
+    {endpoint, headers} = get_endpoint_and_headers()
+
+    case request(client, endpoint, headers, body) do
       {:ok, id} ->
         {:ok, id}
 
       {:error, :rate_limited} ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, envelope_items)
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
         {:error, ClientError.new(:rate_limited)}
 
       {:error, {:envelope_too_large, {status, headers, body}}} ->
-        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
+        ClientReport.Sender.record_discarded_events(:send_error, items)
         {:error, ClientError.envelope_too_large(status, headers, body)}
 
       {:error, _reason} when retries_left != [] ->
         [sleep_interval | retries_left] = retries_left
         Process.sleep(sleep_interval)
-
-        post_envelope_with_retries(
-          client,
-          endpoint,
-          headers,
-          payload,
-          retries_left,
-          envelope_items
-        )
+        post_envelope_with_retries(client, envelope, retries_left)
 
       {:error, {:http, {status, headers, body}}} ->
-        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
+        ClientReport.Sender.record_discarded_events(:send_error, items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
-        ClientReport.Sender.record_discarded_events(:send_error, envelope_items)
+        ClientReport.Sender.record_discarded_events(:send_error, items)
         {:error, ClientError.new(reason)}
     end
   end
 
-  defp check_rate_limited(envelope_items) do
-    rate_limited? =
-      Enum.any?(envelope_items, fn item ->
-        item
-        |> Envelope.get_data_category()
-        |> RateLimiter.rate_limited_for_category?()
-      end)
+  defp filter_rate_limited(%Envelope{items: items} = envelope) do
+    if envelope_rate_limited?(items) do
+      {:drop, items}
+    else
+      {discarded_items, retained_items} = Enum.split_with(items, &attachment_rate_limited?/1)
 
-    if rate_limited?, do: {:error, :rate_limited}, else: :ok
+      case retained_items do
+        [] -> {:drop, discarded_items}
+        _items -> {:send, %Envelope{envelope | items: retained_items}, discarded_items}
+      end
+    end
   end
 
-  defp request(client, endpoint, headers, body, envelope_items) do
-    with :ok <- check_rate_limited(envelope_items),
-         {:ok, 200, _headers, body} <-
+  # Attachments are excluded deliberately: a limit on them drops the attachments
+  # alone, never the error they belong to.
+  defp envelope_rate_limited?(items) do
+    RateLimiter.global_rate_limited?() or Enum.any?(items, &whole_envelope_rate_limited?/1)
+  end
+
+  defp whole_envelope_rate_limited?(%Sentry.Attachment{}), do: false
+
+  defp whole_envelope_rate_limited?(item) do
+    item
+    |> Envelope.get_data_category()
+    |> RateLimiter.rate_limited_for_category?()
+  end
+
+  defp attachment_rate_limited?(item) do
+    match?(%Sentry.Attachment{}, item) and
+      RateLimiter.rate_limited_for_category?(Envelope.get_data_category(item))
+  end
+
+  defp request(client, endpoint, headers, body) do
+    with {:ok, 200, _headers, body} <-
            client_post_and_validate_return_value(client, endpoint, headers, body),
          {:ok, json} <- Sentry.JSON.decode(body, Config.json_library()) do
       {:ok, Map.get(json, "id")}
@@ -109,9 +130,6 @@ defmodule Sentry.Transport do
 
       {:ok, status, headers, body} ->
         {:error, {:http, {status, headers, body}}}
-
-      {:error, :rate_limited} ->
-        {:error, :rate_limited}
 
       {:error, reason} ->
         {:error, {:request_failure, reason}}
