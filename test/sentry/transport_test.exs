@@ -508,6 +508,14 @@ defmodule Sentry.TransportTest do
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
+    test "drops an event while a sub-second rate limit is active" do
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+      set_rate_limit("error", duration_ms: 150)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+    end
+
     test "handles multiple categories in single X-Sentry-Rate-Limits header", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 

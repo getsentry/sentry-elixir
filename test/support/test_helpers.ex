@@ -24,9 +24,10 @@ defmodule Sentry.TestHelpers do
   @spec set_rate_limit(String.t() | :global, keyword()) :: :ok
   def set_rate_limit(category, opts \\ []) when is_binary(category) or category == :global do
     table = rate_limiter_table(Keyword.get(opts, :scope, :local))
-    duration = Keyword.get(opts, :duration, 60)
+    duration_ms =
+      Keyword.get_lazy(opts, :duration_ms, fn -> Keyword.get(opts, :duration, 60) * 1000 end)
 
-    :ets.insert(table, {category, System.system_time(:second) + duration})
+    :ets.insert(table, {category, System.system_time(:millisecond) + duration_ms})
     register_rate_limit_cleanup(table, category)
     :ok
   end
