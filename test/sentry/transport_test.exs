@@ -4,7 +4,16 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
+  alias Sentry.{
+    Attachment,
+    ClientError,
+    ClientReport,
+    Envelope,
+    Event,
+    FinchClient,
+    HackneyClient,
+    Transport
+  }
 
   describe "encode_and_post_envelope/2" do
     setup do
@@ -366,6 +375,137 @@ defmodule Sentry.TransportTest do
       # The bypass will NOT receive a request because it's dropped before sending
       assert {:error, %ClientError{reason: :rate_limited}} =
                Transport.encode_and_post_envelope(envelope2, HackneyClient, _retries = [])
+    end
+
+    test "sends an event without attachments when attachments are rate limited", %{bypass: bypass} do
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+
+      envelope = Envelope.from_event(event)
+      set_rate_limit("attachment")
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{%{"type" => "event"}, _event}] = decode_envelope!(body)
+        Plug.Conn.resp(conn, 200, ~s<{"id":"event-id"}>)
+      end)
+
+      assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
+    end
+
+    test "sends an event while dropping all of its rate-limited attachments", %{bypass: bypass} do
+      assert :ok = ClientReport.Sender.flush()
+
+      event = Event.create_event(message: "event with attachments")
+
+      event =
+        %Event{
+          event
+          | attachments: [
+              %Attachment{filename: "first.txt", data: "first"},
+              %Attachment{filename: "second.txt", data: "second"}
+            ]
+        }
+
+      envelope = Envelope.from_event(event)
+      set_rate_limit("attachment")
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{%{"type" => "event"}, _event}] = decode_envelope!(body)
+        Plug.Conn.resp(conn, 200, ~s<{"id":"event-id"}>)
+      end)
+
+      assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
+      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "attachment"} => 2
+             }
+    end
+
+    test "sends an event without attachments when attachment items are rate limited", %{
+      bypass: bypass
+    } do
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+      envelope = Envelope.from_event(event)
+      set_rate_limit("attachment_item")
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        assert {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert [{%{"type" => "event"}, _event}] = decode_envelope!(body)
+        Plug.Conn.resp(conn, 200, ~s<{"id":"event-id"}>)
+      end)
+
+      assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
+    end
+
+    test "records only dropped attachments in the client report" do
+      assert :ok = ClientReport.Sender.flush()
+
+      event = Event.create_event(message: "event with attachment")
+      attachment = %Attachment{filename: "report.txt", data: "report"}
+      envelope = Envelope.from_event(%Event{event | attachments: [attachment]})
+      set_rate_limit("attachment")
+
+      assert {:ok, _event_id} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "attachment"} => 1
+             }
+    end
+
+    test "drops an event and its attachments when the error category is rate limited" do
+      assert :ok = ClientReport.Sender.flush()
+
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+      envelope = Envelope.from_event(event)
+      set_rate_limit("error")
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "attachment"} => 1,
+               {:ratelimit_backoff, "error"} => 1
+             }
+    end
+
+    test "drops an event and its attachments when error and attachment limits are active" do
+      assert :ok = ClientReport.Sender.flush()
+
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+      envelope = Envelope.from_event(event)
+      set_rate_limit("error")
+      set_rate_limit("attachment")
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "attachment"} => 1,
+               {:ratelimit_backoff, "error"} => 1
+             }
+    end
+
+    test "drops an event and its attachments when a global rate limit is active" do
+      event = Event.create_event(message: "event with attachment")
+      event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
+      envelope = Envelope.from_event(event)
+      set_rate_limit(:global)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
     end
 
     test "handles multiple categories in single X-Sentry-Rate-Limits header", %{bypass: bypass} do

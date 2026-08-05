@@ -90,6 +90,11 @@ defmodule Sentry.Transport.RateLimiter do
     rate_limited?(category, now) or rate_limited?(:global, now)
   end
 
+  @spec global_rate_limited?() :: boolean()
+  def global_rate_limited? do
+    rate_limited?(:global, System.system_time(:second))
+  end
+
   @doc """
   Checks whether sending items of the given data category is currently limited.
 
@@ -107,6 +112,9 @@ defmodule Sentry.Transport.RateLimiter do
 
   def rate_limited_for_category?("trace_metric"),
     do: rate_limited?("trace_metric") or rate_limited?("trace_metric_byte")
+
+  def rate_limited_for_category?("attachment"),
+    do: rate_limited?("attachment") or rate_limited?("attachment_item")
 
   def rate_limited_for_category?(category) when is_binary(category),
     do: rate_limited?(category)
