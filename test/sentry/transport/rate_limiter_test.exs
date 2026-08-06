@@ -138,14 +138,41 @@ defmodule Sentry.Transport.RateLimiterTest do
       assert_in_delta expiry, System.system_time(:millisecond) + 60_000, 1000
     end
 
-    test "overwrites existing rate limits" do
+    test "extends an active limit when a longer one arrives" do
       RateLimiter.update_rate_limits("1:error")
-      first_expiry = :ets.lookup(table_name(), "error") |> hd() |> elem(1)
+      first_expiry = stored_expiry("error")
 
       RateLimiter.update_rate_limits("15:error")
-      second_expiry = :ets.lookup(table_name(), "error") |> hd() |> elem(1)
 
-      assert second_expiry > first_expiry
+      assert stored_expiry("error") > first_expiry
+    end
+
+    test "keeps the existing expiry when a shorter limit arrives" do
+      RateLimiter.update_rate_limits("60:error")
+      expiry = stored_expiry("error")
+
+      RateLimiter.update_rate_limits("1:error")
+
+      assert stored_expiry("error") == expiry
+    end
+
+    test "applies a new limit over an expired entry that has not been swept yet" do
+      set_rate_limit("error", duration: -10)
+
+      RateLimiter.update_rate_limits("60:error")
+
+      assert RateLimiter.rate_limited?("error") == true
+    end
+
+    test "keeps the longest delay when a category repeats in one header" do
+      RateLimiter.update_rate_limits("1:error, 60:error")
+      RateLimiter.update_rate_limits("60:transaction, 1:transaction")
+
+      assert_in_delta stored_expiry("error"), System.system_time(:millisecond) + 60_000, 1000
+
+      assert_in_delta stored_expiry("transaction"),
+                      System.system_time(:millisecond) + 60_000,
+                      1000
     end
   end
 
@@ -155,6 +182,24 @@ defmodule Sentry.Transport.RateLimiterTest do
 
       assert [{:global, expiry}] = :ets.lookup(table_name(), :global)
       assert_in_delta expiry, System.system_time(:millisecond) + 60_000, 1000
+    end
+
+    test "keeps the existing expiry when a shorter global limit arrives" do
+      RateLimiter.update_global_rate_limit(60)
+      expiry = stored_expiry(:global)
+
+      RateLimiter.update_global_rate_limit(1)
+
+      assert stored_expiry(:global) == expiry
+    end
+
+    test "keeps the existing expiry when a shorter limit arrives from the header" do
+      RateLimiter.update_rate_limits("60::organization")
+      expiry = stored_expiry(:global)
+
+      RateLimiter.update_global_rate_limit(1)
+
+      assert stored_expiry(:global) == expiry
     end
   end
 
@@ -192,4 +237,9 @@ defmodule Sentry.Transport.RateLimiterTest do
   end
 
   defp table_name, do: Process.get(:rate_limiter_table_name)
+
+  defp stored_expiry(category) do
+    assert [{^category, expiry}] = :ets.lookup(table_name(), category)
+    expiry
+  end
 end
