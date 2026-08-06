@@ -1,3 +1,18 @@
+## 13.4.2
+
+### Bug Fixes 🐛
+
+#### Rate Limiting
+
+- Keep the longest expiry for a rate-limited category by @solnic in [#1150](https://github.com/getsentry/sentry-elixir/pull/1150)
+- Honor fractional retry delays by @solnic in [#1156](https://github.com/getsentry/sentry-elixir/pull/1156)
+- Drop only the rate-limited attachments from an envelope by @solnic in [#1151](https://github.com/getsentry/sentry-elixir/pull/1151)
+
+#### Other
+
+- (client-reports) Report every buffered attachment a rate limit discards by @solnic in [#1152](https://github.com/getsentry/sentry-elixir/pull/1152)
+- (deps) Make igniter test only + locked dependencies cleanup by @lobo-tuerto in [#1146](https://github.com/getsentry/sentry-elixir/pull/1146)
+
 ## 13.4.1
 
 ### Bug Fixes 🐛
