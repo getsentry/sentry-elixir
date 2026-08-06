@@ -26,7 +26,7 @@ defmodule Sentry.TestHelpers do
     table = rate_limiter_table(Keyword.get(opts, :scope, :local))
     duration = Keyword.get(opts, :duration, 60)
 
-    :ets.insert(table, {category, System.system_time(:second) + duration})
+    :ets.insert(table, {category, System.system_time(:millisecond) + duration * 1000})
     register_rate_limit_cleanup(table, category)
     :ok
   end

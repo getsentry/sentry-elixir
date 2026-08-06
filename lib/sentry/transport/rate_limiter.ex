@@ -10,8 +10,9 @@ defmodule Sentry.Transport.RateLimiter do
   # The ETS table stores tuples with these elements:
   #
   #   1. Category (String.t/0 | :global): the category being rate limited.
-  #   2. Expiry timestamp (Unix timestamp in seconds): time at which the rate-limit
-  #      entry expires and can be pruned).
+  #   2. Expiry timestamp (Unix timestamp in milliseconds): time at which the rate-limit
+  #      entry expires and can be pruned). Milliseconds because the protocol allows
+  #      fractional retry delays, which whole seconds cannot represent.
   #
   # See https://develop.sentry.dev/sdk/expected-features/rate-limiting/
   #
@@ -54,7 +55,7 @@ defmodule Sentry.Transport.RateLimiter do
 
   @impl true
   def handle_info(:sweep, %__MODULE__{table_name: table_name} = state) do
-    now = System.system_time(:second)
+    now = System.system_time(:millisecond)
 
     # This match spec elects entries where expiry is in the past.
     # Remember, tuples are {category, expiry_time}.
@@ -79,20 +80,20 @@ defmodule Sentry.Transport.RateLimiter do
       iex> RateLimiter.rate_limited?("error")
       false
 
-      iex> :ets.insert(RateLimiter, {"error", System.system_time(:second) + 60})
+      iex> :ets.insert(RateLimiter, {"error", System.system_time(:millisecond) + 60_000})
       iex> RateLimiter.rate_limited?("error")
       true
 
   """
   @spec rate_limited?(String.t()) :: boolean()
   def rate_limited?(category) when is_binary(category) do
-    now = System.system_time(:second)
+    now = System.system_time(:millisecond)
     rate_limited?(category, now) or rate_limited?(:global, now)
   end
 
   @spec global_rate_limited?() :: boolean()
   def global_rate_limited? do
-    rate_limited?(:global, System.system_time(:second))
+    rate_limited?(:global, System.system_time(:millisecond))
   end
 
   @doc """
@@ -136,7 +137,7 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_global_rate_limit(pos_integer()) :: :ok
   def update_global_rate_limit(retry_after_seconds) when is_integer(retry_after_seconds) do
-    expiry = System.system_time(:second) + retry_after_seconds
+    expiry = System.system_time(:millisecond) + retry_after_seconds * 1000
     :ets.insert(name(), {:global, expiry})
     :ok
   end
@@ -155,11 +156,11 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_rate_limits(String.t()) :: :ok
   def update_rate_limits(rate_limits_header) when is_binary(rate_limits_header) do
-    now = System.system_time(:second)
+    now = System.system_time(:millisecond)
 
     rate_limits_header
     |> parse_rate_limits_header()
-    |> Enum.map(fn {category, retry_after_seconds} -> {category, now + retry_after_seconds} end)
+    |> Enum.map(fn {category, retry_after_ms} -> {category, now + retry_after_ms} end)
     |> then(&:ets.insert(name(), &1))
 
     :ok
@@ -176,7 +177,7 @@ defmodule Sentry.Transport.RateLimiter do
 
   # Parse X-Sentry-Rate-Limits header
   # Format: "60:error;transaction:key, 2700:default:organization"
-  # Returns: [{category, retry_after_seconds}, ...]
+  # Returns: [{category, retry_after_ms}, ...]
   defp parse_rate_limits_header(header_value) do
     header_value
     |> String.split(",")
@@ -186,12 +187,22 @@ defmodule Sentry.Transport.RateLimiter do
   # Parses a single quota limit, like: "60:error;transaction:key"
   defp parse_quota_limit(quota_limit_str) do
     with [retry_after_str | rest] <- String.split(quota_limit_str, ":"),
-         {retry_after, ""} <- Integer.parse(retry_after_str) do
+         {:ok, retry_after_ms} <- parse_retry_after_ms(retry_after_str) do
       rest
       |> parse_categories()
-      |> Enum.map(&{&1, retry_after})
+      |> Enum.map(&{&1, retry_after_ms})
     else
       _other -> []
+    end
+  end
+
+  # The protocol allows the retry delay to be an integer or a floating-point
+  # number of seconds. Fractions round up so that the SDK never resumes sending
+  # before the server said it could.
+  defp parse_retry_after_ms(retry_after_str) do
+    case Float.parse(retry_after_str) do
+      {seconds, ""} when seconds >= 0 -> {:ok, ceil(seconds * 1000)}
+      _other -> :error
     end
   end
 
