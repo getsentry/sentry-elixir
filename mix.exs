@@ -1,7 +1,7 @@
 defmodule Sentry.Mixfile do
   use Mix.Project
 
-  @version "13.4.1"
+  @version "13.4.2"
   @source_url "https://github.com/getsentry/sentry-elixir"
 
   def project do
