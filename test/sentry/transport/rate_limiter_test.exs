@@ -87,6 +87,27 @@ defmodule Sentry.Transport.RateLimiterTest do
       assert RateLimiter.rate_limited?("trace_metric") == false
     end
 
+    test "gates attachments on the attachment limit" do
+      set_rate_limit("attachment")
+
+      assert RateLimiter.rate_limited_for_category?("attachment") == true
+      assert RateLimiter.rate_limited?("attachment") == true
+    end
+
+    test "gates attachments on the attachment_item limit" do
+      set_rate_limit("attachment_item")
+
+      assert RateLimiter.rate_limited_for_category?("attachment") == true
+      assert RateLimiter.rate_limited?("attachment") == false
+    end
+
+    test "does not gate errors on attachment limits" do
+      set_rate_limit("attachment")
+      set_rate_limit("attachment_item")
+
+      assert RateLimiter.rate_limited_for_category?("error") == false
+    end
+
     test "gates a category on itself when it has no companion byte category" do
       set_rate_limit("error")
 
