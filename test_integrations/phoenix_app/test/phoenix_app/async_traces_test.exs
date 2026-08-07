@@ -44,6 +44,39 @@ defmodule PhoenixApp.AsyncTracesTest do
     end
   end
 
+  defmodule BatchWorker do
+    use Oban.Worker
+
+    require OpenTelemetry.Tracer, as: Tracer
+
+    @impl Oban.Worker
+    def perform(%Oban.Job{}) do
+      task =
+        Tracer.with_span "process_batch" do
+          PhoenixApp.Repo.query!("SELECT 1")
+          ctx = :otel_ctx.get_current()
+
+          Task.async(fn ->
+            token = :otel_ctx.attach(ctx)
+
+            try do
+              receive do
+                :finalize -> :ok
+              end
+
+              Tracer.with_span "finalize_batch" do
+                :ok
+              end
+            after
+              :otel_ctx.detach(token)
+            end
+          end)
+        end
+
+      {:ok, task}
+    end
+  end
+
   test "an Oban job transaction excludes spans that are still in flight", %{ref: ref} do
     {:ok, task} = perform_job(ReportWorker, %{})
 
@@ -86,6 +119,37 @@ defmodule PhoenixApp.AsyncTracesTest do
     assert report_trace["trace_id"] == job_trace["trace_id"]
     assert report_trace["parent_span_id"] == job_trace["span_id"]
     assert report_trace["data"]["sentry.parent_span_already_sent"] == true
+  end
+
+  test "late work continuing from a nested span of an Oban job is reported", %{ref: ref} do
+    {:ok, task} = perform_job(BatchWorker, %{})
+
+    job_tx =
+      find_sentry_report!(
+        collect_sentry_transactions(ref, 100, timeout: 500),
+        transaction: "#{inspect(BatchWorker)}"
+      )
+
+    batch_span = Enum.find(job_tx["spans"], &(&1["description"] == "process_batch"))
+    db_span = Enum.find(job_tx["spans"], &(&1["op"] == "db"))
+
+    assert batch_span
+    assert db_span["parent_span_id"] == batch_span["span_id"]
+
+    send(task.pid, :finalize)
+    Task.await(task)
+
+    finalize_tx =
+      find_sentry_report!(
+        collect_sentry_transactions(ref, 100, timeout: 500),
+        transaction: "finalize_batch"
+      )
+
+    finalize_trace = finalize_tx["contexts"]["trace"]
+
+    assert finalize_trace["trace_id"] == job_tx["contexts"]["trace"]["trace_id"]
+    assert finalize_trace["parent_span_id"] == batch_span["span_id"]
+    assert finalize_trace["data"]["sentry.parent_span_already_sent"] == true
   end
 
   test "async work started in a LiveView mount is reported after the mount transaction", %{

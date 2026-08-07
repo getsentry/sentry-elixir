@@ -37,6 +37,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp process_span(span_record) do
       cond do
+        # Already reported as part of its parent's transaction (it finished
+        # while that transaction was being sent) - don't report it twice
+        SpanStorage.span_sent?(span_record.span_id) ->
+          true
+
         # No parent = definitely a root
         span_record.parent_span_id == nil ->
           build_and_send_transaction(span_record)
@@ -99,12 +104,15 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       transaction = build_transaction(span_record, child_span_records, opts)
 
-      # The marker must precede the send: a span ending while the send is in
-      # flight must already see its parent as sent to be promoted. It records
-      # that the transaction was finalized locally - not that delivery
-      # succeeded - since once the records are removed below, later spans can
-      # never be attached to this transaction either way.
-      :ok = SpanStorage.mark_span_sent(span_record.span_id)
+      # Every span of the transaction gets a marker - late spans may continue
+      # the trace from any of them, not just the root. Markers must precede
+      # the send: a span ending while the send is in flight must already see
+      # its parent as sent to be promoted. They record that the transaction
+      # was finalized locally - not that delivery succeeded - since once the
+      # records are removed below, later spans can never be attached to this
+      # transaction either way.
+      sent_span_ids = [span_record.span_id | Enum.map(child_span_records, & &1.span_id)]
+      :ok = SpanStorage.mark_spans_sent(sent_span_ids)
 
       result =
         case Sentry.send_transaction(transaction) do

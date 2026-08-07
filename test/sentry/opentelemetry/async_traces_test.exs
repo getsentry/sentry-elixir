@@ -60,6 +60,52 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
     end
   end
 
+  describe "spans that continue a trace from a nested span of a sent transaction" do
+    test "are reported as a follow-up transaction in the same trace", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      inner_ctx =
+        Tracer.with_span "root" do
+          Tracer.with_span "level_1" do
+            Tracer.with_span "level_2" do
+              :otel_ctx.get_current()
+            end
+          end
+        end
+
+      [root_tx] = collect_sentry_transactions(ref, 1)
+      assert root_tx["transaction"] == "root"
+
+      level_2_span = Enum.find(root_tx["spans"], &(&1["op"] == "level_2"))
+      assert level_2_span
+
+      Task.async(fn ->
+        token = :otel_ctx.attach(inner_ctx)
+
+        try do
+          Tracer.with_span "late_async_span" do
+            Process.sleep(1)
+          end
+        after
+          :otel_ctx.detach(token)
+        end
+      end)
+      |> Task.await()
+
+      assert [late_tx] = collect_sentry_transactions(ref, 1),
+             "no follow-up transaction was reported for the late span"
+
+      assert late_tx["transaction"] == "late_async_span"
+
+      late_trace = late_tx["contexts"]["trace"]
+
+      assert late_trace["trace_id"] == root_tx["contexts"]["trace"]["trace_id"]
+      assert late_trace["parent_span_id"] == level_2_span["span_id"]
+      assert late_trace["data"]["sentry.parent_span_already_sent"] == true
+    end
+  end
+
   describe "a child span that is still running when the transaction root ends" do
     test "is not reported without an end timestamp", %{bypass: bypass} do
       put_test_config(environment_name: "test", traces_sample_rate: 1.0)
@@ -223,6 +269,60 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
 
       assert child_trace["trace_id"] == root_tx["contexts"]["trace"]["trace_id"]
       assert child_trace["parent_span_id"] == root_tx["contexts"]["trace"]["span_id"]
+    end
+  end
+
+  describe "spans reported with the root transaction" do
+    test "are not repeated in follow-up transactions", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      test_pid = self()
+
+      task =
+        Tracer.with_span "sync_root" do
+          ctx = :otel_ctx.get_current()
+
+          task =
+            Task.async(fn ->
+              token = :otel_ctx.attach(ctx)
+
+              try do
+                Tracer.with_span "async_parent" do
+                  Tracer.with_span "finished_grandchild" do
+                    :ok
+                  end
+
+                  send(test_pid, :grandchild_done)
+
+                  receive do
+                    :finish_parent -> :ok
+                  end
+                end
+              after
+                :otel_ctx.detach(token)
+              end
+            end)
+
+          assert_receive :grandchild_done
+          task
+        end
+
+      [root_tx] = collect_sentry_transactions(ref, 1)
+      assert root_tx["transaction"] == "sync_root"
+
+      root_span_descriptions = Enum.map(root_tx["spans"], & &1["description"])
+      assert "finished_grandchild" in root_span_descriptions
+
+      send(task.pid, :finish_parent)
+      Task.await(task)
+
+      [followup_tx] = collect_sentry_transactions(ref, 1)
+      assert followup_tx["transaction"] == "async_parent"
+
+      assert followup_tx["spans"] == [],
+             "spans already reported with the root transaction were repeated: " <>
+               inspect(followup_tx["spans"])
     end
   end
 

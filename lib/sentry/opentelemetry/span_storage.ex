@@ -59,10 +59,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     @spec mark_span_sent(String.t(), keyword()) :: :ok
-    def mark_span_sent(span_id, opts \\ []) do
-      table_name = Keyword.get(opts, :table_name, default_table_name())
+    def mark_span_sent(span_id, opts \\ []), do: mark_spans_sent([span_id], opts)
 
-      :ets.insert(table_name, {{:sent_span, span_id}, System.system_time(:second)})
+    @spec mark_spans_sent([String.t()], keyword()) :: :ok
+    def mark_spans_sent(span_ids, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+      stored_at = System.system_time(:second)
+
+      :ets.insert(table_name, Enum.map(span_ids, &{{:sent_span, &1}, stored_at}))
 
       :ok
     end
@@ -187,11 +191,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     def remove_child_spans(parent_span_id, opts) do
       table_name = Keyword.get(opts, :table_name, default_table_name())
 
+      # Finished descendants at every depth were part of the sent
+      # transaction, so their records are removed. In-progress descendants
+      # are preserved so they can be reported once they finish.
       :ets.match_object(table_name, {{:child_span, parent_span_id, :_}, :_, :_})
       |> Enum.each(fn {key, span_data, _stored_at} ->
         if span_data.end_time != nil do
           :ets.delete(table_name, key)
         end
+
+        remove_child_spans(span_data.span_id, table_name: table_name)
       end)
 
       :ok
