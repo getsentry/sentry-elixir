@@ -87,7 +87,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp build_and_send_transaction(span_record) do
-      child_span_records = SpanStorage.get_child_spans(span_record.span_id)
+      # Children still running when the root ends are excluded from the
+      # payload: a reported span must have an end timestamp. Their records
+      # stay in storage until they finish.
+      child_span_records =
+        span_record.span_id
+        |> SpanStorage.get_child_spans()
+        |> Enum.filter(& &1.end_time)
+
       transaction = build_transaction(span_record, child_span_records)
 
       result =
