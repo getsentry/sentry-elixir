@@ -11,6 +11,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @span_ttl 30 * 60
 
+    # Sent markers let spans that outlive their parent detect that the
+    # parent's transaction is already closed. They only matter for spans
+    # arriving shortly after, so they expire faster than span records.
+    @sent_span_ttl 5 * 60
+
     @spec start_link(keyword()) :: GenServer.on_start()
     def start_link(opts) when is_list(opts) do
       name = Keyword.get(opts, :name, __MODULE__)
@@ -51,6 +56,22 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
             _ -> true
           end
       end
+    end
+
+    @spec mark_span_sent(String.t(), keyword()) :: :ok
+    def mark_span_sent(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      :ets.insert(table_name, {{:sent_span, span_id}, System.system_time(:second)})
+
+      :ok
+    end
+
+    @spec span_sent?(String.t(), keyword()) :: boolean()
+    def span_sent?(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      :ets.member(table_name, {:sent_span, span_id})
     end
 
     @doc """
@@ -209,6 +230,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       ]
 
       :ets.select_delete(table_name, child_match_spec)
+
+      sent_cutoff_time = now - @sent_span_ttl
+
+      sent_match_spec = [
+        {{{:sent_span, :_}, :"$1"}, [{:<, :"$1", sent_cutoff_time}], [true]}
+      ]
+
+      :ets.select_delete(table_name, sent_match_spec)
     end
 
     defp default_table_name do

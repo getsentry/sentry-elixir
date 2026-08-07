@@ -807,8 +807,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       assert retrieved_child != nil
       assert retrieved_child.end_time == "2024-01-01T00:00:03.000Z"
 
-      # When child's on_end runs, it won't find its parent in storage,
-      # so it should become a transaction root itself (tested via has_local_parent_span?)
       refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
     end
 
