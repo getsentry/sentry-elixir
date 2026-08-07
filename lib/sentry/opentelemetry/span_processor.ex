@@ -36,26 +36,28 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp process_span(span_record) do
-      transaction_root? =
-        cond do
-          # No parent = definitely a root
-          span_record.parent_span_id == nil ->
-            true
+      cond do
+        # No parent = definitely a root
+        span_record.parent_span_id == nil ->
+          build_and_send_transaction(span_record)
 
-          # Has a parent - check if it's local or remote
-          has_local_parent_span?(span_record.parent_span_id) ->
-            # Parent exists locally - this is a child span, not a transaction root
-            false
+        # The parent's transaction was already sent, so this span cannot be
+        # attached to it anymore - report it as a follow-up transaction of
+        # the same trace instead
+        SpanStorage.span_sent?(span_record.parent_span_id) ->
+          build_and_send_transaction(span_record, parent_already_sent?: true)
 
-          true ->
-            # Parent is remote (distributed tracing) - treat server spans as transaction roots
-            server_span?(span_record)
-        end
+        # Parent exists locally - this is a child span, not a transaction root
+        has_local_parent_span?(span_record.parent_span_id) ->
+          true
 
-      if transaction_root? do
-        build_and_send_transaction(span_record)
-      else
-        true
+        # Parent is remote (distributed tracing) - treat server spans as
+        # transaction roots
+        server_span?(span_record) ->
+          build_and_send_transaction(span_record)
+
+        true ->
+          true
       end
     end
 
@@ -86,9 +88,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       Map.get(attributes, to_string(MessagingAttributes.messaging_system())) == :oban
     end
 
-    defp build_and_send_transaction(span_record) do
-      child_span_records = SpanStorage.get_child_spans(span_record.span_id)
-      transaction = build_transaction(span_record, child_span_records)
+    defp build_and_send_transaction(span_record, opts \\ []) do
+      # Children still running when the root ends are excluded from the
+      # payload: a reported span must have an end timestamp. Their records
+      # stay in storage until they finish.
+      child_span_records =
+        span_record.span_id
+        |> SpanStorage.get_child_spans()
+        |> Enum.filter(& &1.end_time)
+
+      transaction = build_transaction(span_record, child_span_records, opts)
 
       result =
         case Sentry.send_transaction(transaction) do
@@ -106,6 +115,10 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
             {:error, :invalid_span}
         end
 
+      # The sent marker must be in place before the records are removed, so
+      # a span ending in between still sees that its parent was sent.
+      :ok = SpanStorage.mark_span_sent(span_record.span_id)
+
       :ok =
         SpanStorage.remove_transaction_root_span(
           span_record.span_id,
@@ -115,7 +128,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       result
     end
 
-    defp build_transaction(root_span_record, child_span_records) do
+    defp build_transaction(root_span_record, child_span_records, opts) do
       root_span = build_span(root_span_record)
       child_spans = Enum.map(child_span_records, &build_span(&1))
 
@@ -126,7 +139,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         start_timestamp: root_span_record.start_time,
         timestamp: root_span_record.end_time,
         contexts: %{
-          trace: build_trace_context(root_span_record)
+          trace: build_trace_context(root_span_record, opts)
         },
         spans: child_spans
       })
@@ -141,8 +154,17 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp transaction_name(span_record), do: span_record.name
 
-    defp build_trace_context(span_record) do
+    defp build_trace_context(span_record, opts) do
       {op, description} = get_op_description(span_record)
+
+      data = filter_attributes(span_record.attributes)
+
+      data =
+        if Keyword.get(opts, :parent_already_sent?, false) do
+          Map.put(data, "sentry.parent_span_already_sent", true)
+        else
+          data
+        end
 
       context = %{
         trace_id: span_record.trace_id,
@@ -151,7 +173,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         op: op,
         description: description,
         origin: span_record.origin,
-        data: filter_attributes(span_record.attributes)
+        data: data
       }
 
       # Add links if present (for root spans, links go in trace context)
