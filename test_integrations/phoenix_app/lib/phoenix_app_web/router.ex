@@ -40,6 +40,13 @@ defmodule PhoenixAppWeb.Router do
 
     live "/test-worker", TestWorkerLive
     live "/async-report", AsyncReportLive
+
+    get "/async-traces", AsyncTraceController, :index
+    get "/async-traces/in-flight", AsyncTraceController, :in_flight
+    get "/async-traces/nested", AsyncTraceController, :nested
+
+    get "/distributed-traces", DistributedTraceController, :index
+    get "/distributed-traces/handoff", DistributedTraceController, :handoff
     live "/tracing-test", TracingTestLive
 
     live "/users", UserLive.Index, :index
