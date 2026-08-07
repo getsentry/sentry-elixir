@@ -147,6 +147,8 @@ export interface Span {
   parent_span_id?: string;
   op?: string;
   description?: string;
+  start_timestamp?: string | null;
+  timestamp?: string | null;
   data?: Record<string, any>;
 }
 
