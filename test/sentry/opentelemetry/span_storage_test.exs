@@ -347,6 +347,30 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
   end
 
+  describe "sent span markers" do
+    @tag span_storage: true
+    test "span_sent? reflects mark_span_sent", %{table_name: table_name} do
+      refute SpanStorage.span_sent?("span1", table_name: table_name)
+
+      SpanStorage.mark_span_sent("span1", table_name: table_name)
+
+      assert SpanStorage.span_sent?("span1", table_name: table_name)
+    end
+
+    @tag span_storage: [cleanup_interval: 100]
+    test "markers expire after their TTL", %{table_name: table_name} do
+      old_time = System.system_time(:second) - 6 * 60
+      :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time})
+
+      SpanStorage.mark_span_sent("fresh_marker", table_name: table_name)
+
+      Process.sleep(200)
+
+      refute SpanStorage.span_sent?("old_marker", table_name: table_name)
+      assert SpanStorage.span_sent?("fresh_marker", table_name: table_name)
+    end
+  end
+
   describe "stale span cleanup" do
     @tag span_storage: [cleanup_interval: 100]
     test "cleans up stale spans", %{table_name: table_name} do

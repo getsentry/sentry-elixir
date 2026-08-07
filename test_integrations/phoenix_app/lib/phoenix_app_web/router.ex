@@ -38,6 +38,7 @@ defmodule PhoenixAppWeb.Router do
     get "/logs-with-structs", PageController, :logs_with_structs
 
     live "/test-worker", TestWorkerLive
+    live "/async-report", AsyncReportLive
     live "/tracing-test", TracingTestLive
 
     live "/users", UserLive.Index, :index
