@@ -347,6 +347,30 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
   end
 
+  describe "sent span markers" do
+    @tag span_storage: true
+    test "span_sent? reflects mark_span_sent", %{table_name: table_name} do
+      refute SpanStorage.span_sent?("span1", table_name: table_name)
+
+      SpanStorage.mark_span_sent("span1", table_name: table_name)
+
+      assert SpanStorage.span_sent?("span1", table_name: table_name)
+    end
+
+    @tag span_storage: [cleanup_interval: 100]
+    test "markers expire after their TTL", %{table_name: table_name} do
+      old_time = System.system_time(:second) - 6 * 60
+      :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time})
+
+      SpanStorage.mark_span_sent("fresh_marker", table_name: table_name)
+
+      Process.sleep(200)
+
+      refute SpanStorage.span_sent?("old_marker", table_name: table_name)
+      assert SpanStorage.span_sent?("fresh_marker", table_name: table_name)
+    end
+  end
+
   describe "stale span cleanup" do
     @tag span_storage: [cleanup_interval: 100]
     test "cleans up stale spans", %{table_name: table_name} do
@@ -823,6 +847,118 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       Process.sleep(200)
 
       assert :ets.info(table_name, :size) == 0
+    end
+  end
+
+  describe "recursive cleanup of sent descendants" do
+    @tag span_storage: true
+    test "remove_transaction_root_span removes finished descendants at every depth", %{
+      table_name: table_name
+    } do
+      spans = [
+        %SpanRecord{
+          span_id: "root",
+          parent_span_id: nil,
+          trace_id: "trace123",
+          name: "root_span",
+          start_time: "2024-01-01T00:00:00.000Z",
+          end_time: "2024-01-01T00:00:04.000Z"
+        },
+        %SpanRecord{
+          span_id: "child",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "child_span",
+          start_time: "2024-01-01T00:00:01.000Z",
+          end_time: "2024-01-01T00:00:03.000Z"
+        },
+        %SpanRecord{
+          span_id: "grandchild",
+          parent_span_id: "child",
+          trace_id: "trace123",
+          name: "grandchild_span",
+          start_time: "2024-01-01T00:00:01.500Z",
+          end_time: "2024-01-01T00:00:02.500Z"
+        },
+        %SpanRecord{
+          span_id: "great_grandchild",
+          parent_span_id: "grandchild",
+          trace_id: "trace123",
+          name: "great_grandchild_span",
+          start_time: "2024-01-01T00:00:01.700Z",
+          end_time: "2024-01-01T00:00:02.000Z"
+        }
+      ]
+
+      Enum.each(spans, &SpanStorage.store_span(&1, table_name: table_name))
+
+      SpanStorage.remove_transaction_root_span("root", nil, table_name: table_name)
+
+      refute SpanStorage.span_exists?("root", table_name: table_name)
+      refute SpanStorage.span_exists?("child", table_name: table_name)
+      refute SpanStorage.span_exists?("grandchild", table_name: table_name)
+      refute SpanStorage.span_exists?("great_grandchild", table_name: table_name)
+
+      assert :ets.tab2list(table_name) == []
+    end
+
+    @tag span_storage: true
+    test "remove_transaction_root_span preserves in-progress descendants at every depth", %{
+      table_name: table_name
+    } do
+      spans = [
+        %SpanRecord{
+          span_id: "root",
+          parent_span_id: nil,
+          trace_id: "trace123",
+          name: "root_span",
+          start_time: "2024-01-01T00:00:00.000Z",
+          end_time: "2024-01-01T00:00:04.000Z"
+        },
+        %SpanRecord{
+          span_id: "finished_child",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "finished_child_span",
+          start_time: "2024-01-01T00:00:01.000Z",
+          end_time: "2024-01-01T00:00:03.000Z"
+        },
+        %SpanRecord{
+          span_id: "in_progress_grandchild",
+          parent_span_id: "finished_child",
+          trace_id: "trace123",
+          name: "in_progress_grandchild_span",
+          start_time: "2024-01-01T00:00:01.500Z",
+          end_time: nil
+        },
+        %SpanRecord{
+          span_id: "in_progress_child",
+          parent_span_id: "root",
+          trace_id: "trace123",
+          name: "in_progress_child_span",
+          start_time: "2024-01-01T00:00:02.000Z",
+          end_time: nil
+        },
+        %SpanRecord{
+          span_id: "finished_grandchild",
+          parent_span_id: "in_progress_child",
+          trace_id: "trace123",
+          name: "finished_grandchild_span",
+          start_time: "2024-01-01T00:00:02.200Z",
+          end_time: "2024-01-01T00:00:02.800Z"
+        }
+      ]
+
+      Enum.each(spans, &SpanStorage.store_span(&1, table_name: table_name))
+
+      SpanStorage.remove_transaction_root_span("root", nil, table_name: table_name)
+
+      refute SpanStorage.span_exists?("root", table_name: table_name)
+      refute SpanStorage.span_exists?("finished_child", table_name: table_name)
+      refute SpanStorage.span_exists?("finished_grandchild", table_name: table_name)
+
+      assert SpanStorage.span_exists?("in_progress_child", table_name: table_name)
+      assert SpanStorage.span_exists?("in_progress_grandchild", table_name: table_name)
     end
   end
 
