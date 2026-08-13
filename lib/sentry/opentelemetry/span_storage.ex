@@ -11,6 +11,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @span_ttl 30 * 60
 
+    # Sent markers let spans that outlive their parent detect that the
+    # parent's transaction is already closed. One is written per span of every
+    # sent transaction, so they are far more numerous than the in-progress
+    # records kept under @span_ttl and are retained for a much shorter window.
+    # A span finishing after its parent's marker expired can no longer be
+    # attached to anything and is discarded with a debug log.
+    @sent_span_ttl 5 * 60
+
     @spec start_link(keyword()) :: GenServer.on_start()
     def start_link(opts) when is_list(opts) do
       name = Keyword.get(opts, :name, __MODULE__)
@@ -51,6 +59,26 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
             _ -> true
           end
       end
+    end
+
+    @spec mark_span_sent(String.t(), keyword()) :: :ok
+    def mark_span_sent(span_id, opts \\ []), do: mark_spans_sent([span_id], opts)
+
+    @spec mark_spans_sent([String.t()], keyword()) :: :ok
+    def mark_spans_sent(span_ids, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+      stored_at = System.system_time(:second)
+
+      :ets.insert(table_name, Enum.map(span_ids, &{{:sent_span, &1}, stored_at}))
+
+      :ok
+    end
+
+    @spec span_sent?(String.t(), keyword()) :: boolean()
+    def span_sent?(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      :ets.member(table_name, {:sent_span, span_id})
     end
 
     @doc """
@@ -166,11 +194,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     def remove_child_spans(parent_span_id, opts) do
       table_name = Keyword.get(opts, :table_name, default_table_name())
 
+      # Finished descendants at every depth were part of the sent
+      # transaction, so their records are removed. In-progress descendants
+      # are preserved so they can be reported once they finish.
       :ets.match_object(table_name, {{:child_span, parent_span_id, :_}, :_, :_})
       |> Enum.each(fn {key, span_data, _stored_at} ->
         if span_data.end_time != nil do
           :ets.delete(table_name, key)
         end
+
+        remove_child_spans(span_data.span_id, table_name: table_name)
       end)
 
       :ok
@@ -209,6 +242,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       ]
 
       :ets.select_delete(table_name, child_match_spec)
+
+      sent_cutoff_time = now - @sent_span_ttl
+
+      sent_match_spec = [
+        {{{:sent_span, :_}, :"$1"}, [{:<, :"$1", sent_cutoff_time}], [true]}
+      ]
+
+      :ets.select_delete(table_name, sent_match_spec)
     end
 
     defp default_table_name do

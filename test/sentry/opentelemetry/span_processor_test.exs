@@ -807,8 +807,6 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       assert retrieved_child != nil
       assert retrieved_child.end_time == "2024-01-01T00:00:03.000Z"
 
-      # When child's on_end runs, it won't find its parent in storage,
-      # so it should become a transaction root itself (tested via has_local_parent_span?)
       refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
     end
 
@@ -1046,6 +1044,60 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       # The link with attributes should preserve them
       link_with_attrs = Enum.find(trace_links, &Map.has_key?(&1, "attributes"))
       assert link_with_attrs["attributes"] == %{"order" => "second"}
+    end
+  end
+
+  describe "a span whose parent is gone and no longer marked as sent" do
+    @tag span_storage: true
+    test "is discarded with a diagnostic log", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      test_pid = self()
+
+      task =
+        Tracer.with_span "sync_root" do
+          ctx = :otel_ctx.get_current()
+
+          task =
+            Task.async(fn ->
+              token = :otel_ctx.attach(ctx)
+
+              try do
+                Tracer.with_span "abandoned_child" do
+                  send(test_pid, :child_started)
+
+                  receive do
+                    :finish_child -> :ok
+                  end
+                end
+              after
+                :otel_ctx.detach(token)
+              end
+            end)
+
+          assert_receive :child_started, 1000
+          task
+        end
+
+      [root_tx] = collect_sentry_transactions(ref, 1)
+      root_span_id = root_tx["contexts"]["trace"]["span_id"]
+
+      # Stand in for the sent marker expiring before the child finishes.
+      :ets.delete(
+        Sentry.OpenTelemetry.SpanStorage.ETSTable,
+        {:sent_span, root_span_id}
+      )
+
+      log =
+        capture_log([level: :debug], fn ->
+          send(task.pid, :finish_child)
+          Task.await(task)
+        end)
+
+      assert log =~ "Discarding span abandoned_child"
+      assert log =~ root_span_id
+      assert [] == collect_sentry_transactions(ref, 1, timeout: 300)
     end
   end
 end
