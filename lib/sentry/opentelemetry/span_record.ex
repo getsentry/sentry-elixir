@@ -9,7 +9,24 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @fields Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
     Record.defrecordp(:span, @fields)
 
-    defstruct @fields ++ [:origin]
+    # opentelemetry < 1.6 has no parent_span_is_remote on the span record. The
+    # struct always exposes it so callers stay version-agnostic; on those
+    # versions the span processor supplies the value through
+    # @parent_is_remote_attribute instead.
+    @parent_is_remote_on_record Keyword.has_key?(@fields, :parent_span_is_remote)
+    @parent_is_remote_attribute "sentry.parent_is_remote"
+
+    @extra_fields if @parent_is_remote_on_record,
+                    do: [:origin],
+                    else: [:origin, parent_span_is_remote: false]
+
+    defstruct @fields ++ @extra_fields
+
+    @doc false
+    def parent_is_remote_on_record?, do: @parent_is_remote_on_record
+
+    @doc false
+    def parent_is_remote_attribute, do: @parent_is_remote_attribute
 
     def new(span() = otel_span) do
       otel_attrs = span(otel_span)
@@ -25,6 +42,8 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
             :undefined
         end
 
+      {parent_is_remote, attributes} = pop_parent_is_remote(normalize_attributes(attributes))
+
       attrs =
         otel_attrs
         |> Keyword.delete(:attributes)
@@ -36,12 +55,22 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           origin: origin,
           start_time: cast_timestamp(otel_attrs[:start_time]),
           end_time: cast_timestamp(otel_attrs[:end_time]),
-          attributes: normalize_attributes(attributes),
+          attributes: attributes,
           links: cast_links(otel_attrs[:links])
         )
         |> Map.new()
+        |> Map.merge(parent_is_remote)
 
       struct(__MODULE__, attrs)
+    end
+
+    if @parent_is_remote_on_record do
+      defp pop_parent_is_remote(attributes), do: {%{}, attributes}
+    else
+      defp pop_parent_is_remote(attributes) do
+        {remote?, attributes} = Map.pop(attributes, @parent_is_remote_attribute, false)
+        {%{parent_span_is_remote: remote?}, attributes}
+      end
     end
 
     defp normalize_attributes(attributes) do
