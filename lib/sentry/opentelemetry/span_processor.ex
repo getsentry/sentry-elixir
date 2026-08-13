@@ -56,6 +56,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         has_local_parent_span?(span_record.parent_span_id) ->
           true
 
+        # Parent lives on another node: this span is the local root of a trace
+        # continued from elsewhere, so it starts its own segment. Compared
+        # explicitly because the field is :undefined for spans with no parent,
+        # which is truthy.
+        span_record.parent_span_is_remote == true ->
+          build_and_send_transaction(span_record)
+
         # Parent is remote (distributed tracing) - treat server spans as
         # transaction roots
         server_span?(span_record) ->
