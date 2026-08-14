@@ -109,8 +109,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
         success: "ok",
         failure: "error",
         cancelled: "ok",
-        discard: "ok",
-        snoozed: "ok"
+        discard: "ok"
       ],
       {frequency, expected_unit} <- [
         {"@hourly", "hour"},
@@ -152,6 +151,19 @@ defmodule Sentry.Integrations.Oban.CronTest do
         }
       )
     end
+  end
+
+  test "should not report a check-in when a job is snoozed", %{ref: ref} do
+    :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{
+      state: :snoozed,
+      job: %Oban.Job{
+        worker: "Sentry.MyWorker",
+        id: 942,
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      }
+    })
+
+    refute_sentry_check_in(ref)
   end
 
   test "captures exception events with monitor config", %{ref: ref} do

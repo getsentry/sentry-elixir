@@ -63,6 +63,12 @@ defmodule Sentry.Integrations.Oban.Cron do
     end
   end
 
+  # A snoozed job is rescheduled rather than finished, so its check-in stays open
+  # until the run that actually completes closes it.
+  defp handle_oban_job_event(:stop, _measurements, %{state: :snoozed}, _config) do
+    :ok
+  end
+
   defp handle_oban_job_event(:stop, measurements, metadata, config) do
     status =
       case metadata.state do
@@ -70,7 +76,6 @@ defmodule Sentry.Integrations.Oban.Cron do
         :failure -> :error
         :cancelled -> :ok
         :discard -> :ok
-        :snoozed -> :ok
       end
 
     maybe_capture_check_in(status, measurements, metadata, config)
