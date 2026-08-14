@@ -2,10 +2,18 @@ defmodule Sentry.Integrations.Oban.CronTest do
   alias Sentry.Integrations.CheckInIDMappings
   use Sentry.Case, async: false
 
+  import ExUnit.CaptureLog
   import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
   alias Sentry.Test, as: SentryTest
+
+  defmodule MyCronWorker do
+    use Oban.Worker
+
+    @impl Oban.Worker
+    def perform(_job), do: :ok
+  end
 
   setup context do
     opts = context[:attach_opts] || []
@@ -281,6 +289,114 @@ defmodule Sentry.Integrations.Oban.CronTest do
         "schedule" => %{"type" => "interval"},
         "timezone" => "Europe/Rome"
       }
+    )
+  end
+
+  describe "should_report_error_check_in_callback" do
+    test "should not report a failed check-in when the callback returns false", %{ref: ref} do
+      attach_with_callback(fn _worker, _job -> false end)
+
+      execute_exception_event()
+
+      refute_sentry_check_in(ref)
+    end
+
+    test "should report a failed check-in when the callback returns true", %{ref: ref} do
+      attach_with_callback(fn _worker, _job -> true end)
+
+      execute_exception_event()
+
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      assert_sentry_report(check_in_body, status: "error")
+    end
+
+    test "should pass the worker module and the job to the callback", %{ref: ref} do
+      test_pid = self()
+
+      attach_with_callback(fn worker, job ->
+        send(test_pid, {:callback_args, worker, job})
+        false
+      end)
+
+      execute_exception_event()
+
+      assert_receive {:callback_args, MyCronWorker, %Oban.Job{id: 942}}
+      refute_sentry_check_in(ref)
+    end
+
+    test "should report the failed check-in when the callback raises", %{ref: ref} do
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          attach_with_callback(fn _worker, _job -> raise "callback error" end)
+
+          execute_exception_event()
+
+          [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+          assert_sentry_report(check_in_body, status: "error")
+        end)
+
+      assert log =~ ":should_report_error_check_in_callback failed"
+      assert log =~ "callback error"
+      assert log =~ ~r/domain=(\w+\.)*sentry/
+    end
+
+    test "should pass a nil worker to the callback when the worker cannot be resolved", %{
+      ref: ref
+    } do
+      test_pid = self()
+
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          attach_with_callback(fn worker, _job ->
+            send(test_pid, {:callback_worker, worker})
+            false
+          end)
+
+          execute_exception_event(worker: "NotA.Real.Worker")
+
+          refute_sentry_check_in(ref)
+        end)
+
+      assert_receive {:callback_worker, nil}
+      assert log =~ ~s(Could not resolve Oban worker module from string: "NotA.Real.Worker")
+      assert log =~ ~r/domain=(\w+\.)*sentry/
+    end
+
+    test "should still report the in-progress check-in when the callback returns false", %{
+      ref: ref
+    } do
+      attach_with_callback(fn _worker, _job -> false end)
+
+      :telemetry.execute([:oban, :job, :start], %{}, %{job: cron_job()})
+
+      [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      assert_sentry_report(check_in_body, status: "in_progress")
+    end
+  end
+
+  defp attach_with_callback(callback) do
+    :telemetry.detach(Sentry.Integrations.Oban.Cron)
+
+    Sentry.Integrations.Oban.Cron.attach_telemetry_handler(
+      should_report_error_check_in_callback: callback
+    )
+  end
+
+  defp execute_exception_event(job_overrides \\ []) do
+    :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
+      state: :failure,
+      job: cron_job(job_overrides)
+    })
+  end
+
+  defp cron_job(overrides \\ []) do
+    struct!(
+      %Oban.Job{
+        worker: inspect(MyCronWorker),
+        id: 942,
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      },
+      overrides
     )
   end
 

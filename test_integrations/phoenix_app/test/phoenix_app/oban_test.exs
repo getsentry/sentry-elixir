@@ -8,6 +8,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
 
   require OpenTelemetry.Tracer
 
+  alias Sentry.Integrations.Oban.Cron
   alias Sentry.Integrations.Oban.ErrorReporter
 
   setup do
@@ -32,6 +33,20 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
     end
 
     def perform(_job), do: :ok
+  end
+
+  defmodule FlakyCronWorker do
+    use Oban.Worker, max_attempts: 3
+
+    @impl Oban.Worker
+    def perform(%Oban.Job{attempt: 1}) do
+      raise "intentional failure for testing"
+    end
+
+    def perform(_job), do: :ok
+
+    @impl Oban.Worker
+    def backoff(_job), do: 0
   end
 
   defmodule WorkerWithDatabaseQuery do
@@ -376,6 +391,35 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
         )
 
       assert event.tags[:oban_worker] == "NonExistent.Worker.Module"
+    end
+  end
+
+  describe "should_report_error_check_in_callback config" do
+    setup %{bypass: bypass} do
+      on_exit(fn -> :telemetry.detach(Cron) end)
+
+      %{ref: Sentry.Test.setup_bypass_envelope_collector(bypass, type: "check_in")}
+    end
+
+    test "should not report a failed check-in when a cron job succeeds on retry", %{ref: ref} do
+      Cron.attach_telemetry_handler(
+        should_report_error_check_in_callback: fn _worker, job ->
+          job.attempt >= job.max_attempts
+        end
+      )
+
+      {:ok, _job} =
+        %{}
+        |> FlakyCronWorker.new(meta: %{"cron" => true, "cron_expr" => "@daily"})
+        |> Oban.insert()
+
+      assert %{failure: 1, success: 1} =
+               Oban.drain_queue(queue: :default, with_recursion: true, with_scheduled: true)
+
+      check_ins = Sentry.Test.collect_sentry_check_ins(ref, 4, timeout: 200)
+
+      assert Enum.map(check_ins, & &1["status"]) == ["in_progress", "in_progress", "ok"]
+      assert [_] = check_ins |> Enum.map(& &1["check_in_id"]) |> Enum.uniq()
     end
   end
 

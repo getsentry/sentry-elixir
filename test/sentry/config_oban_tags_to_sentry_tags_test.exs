@@ -94,4 +94,54 @@ defmodule Sentry.ConfigObanTagsToSentryTagsTest do
       end
     end
   end
+
+  describe "should_report_error_check_in_callback configuration validation" do
+    test "accepts nil" do
+      assert :ok =
+               put_test_config(
+                 integrations: [oban: [cron: [should_report_error_check_in_callback: nil]]]
+               )
+
+      assert Sentry.Config.integrations()[:oban][:cron][:should_report_error_check_in_callback] ==
+               nil
+    end
+
+    test "accepts function with arity 2" do
+      fun = fn _worker, _job -> true end
+
+      assert :ok =
+               put_test_config(
+                 integrations: [oban: [cron: [should_report_error_check_in_callback: fun]]]
+               )
+
+      assert Sentry.Config.integrations()[:oban][:cron][:should_report_error_check_in_callback] ==
+               fun
+    end
+
+    test "rejects function with wrong arity" do
+      fun = fn _job -> true end
+
+      assert_raise ArgumentError,
+                   ~r/invalid value for :should_report_error_check_in_callback/,
+                   fn ->
+                     put_test_config(
+                       integrations: [oban: [cron: [should_report_error_check_in_callback: fun]]]
+                     )
+                   end
+    end
+
+    test "rejects invalid types" do
+      for invalid <- ["invalid", 123, []] do
+        assert_raise ArgumentError,
+                     ~r/invalid value for :should_report_error_check_in_callback/,
+                     fn ->
+                       put_test_config(
+                         integrations: [
+                           oban: [cron: [should_report_error_check_in_callback: invalid]]
+                         ]
+                       )
+                     end
+      end
+    end
+  end
 end

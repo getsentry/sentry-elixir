@@ -6,6 +6,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   @moduledoc since: "10.9.0"
 
   alias Sentry.Integrations.CheckInIDMappings
+  alias Sentry.LoggerUtils
 
   @doc """
   The Oban integration calls this callback (if present) to customize
@@ -63,27 +64,68 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp handle_oban_job_event(:stop, measurements, metadata, config) do
-    if opts = job_to_check_in_opts(metadata.job, config) do
-      status =
-        case metadata.state do
-          :success -> :ok
-          :failure -> :error
-          :cancelled -> :ok
-          :discard -> :ok
-          :snoozed -> :ok
-        end
+    status =
+      case metadata.state do
+        :success -> :ok
+        :failure -> :error
+        :cancelled -> :ok
+        :discard -> :ok
+        :snoozed -> :ok
+      end
 
-      opts
-      |> Keyword.merge(status: status, duration: duration_in_seconds(measurements))
-      |> Sentry.capture_check_in()
-    end
+    maybe_capture_check_in(status, measurements, metadata, config)
   end
 
   defp handle_oban_job_event(:exception, measurements, metadata, config) do
-    if opts = job_to_check_in_opts(metadata.job, config) do
-      opts
-      |> Keyword.merge(status: :error, duration: duration_in_seconds(measurements))
-      |> Sentry.capture_check_in()
+    maybe_capture_check_in(:error, measurements, metadata, config)
+  end
+
+  defp maybe_capture_check_in(status, measurements, metadata, config) do
+    if status != :error or should_report_error_check_in?(metadata.job, config) do
+      if opts = job_to_check_in_opts(metadata.job, config) do
+        opts
+        |> Keyword.merge(status: status, duration: duration_in_seconds(measurements))
+        |> Sentry.capture_check_in()
+      end
+    end
+  end
+
+  defp should_report_error_check_in?(job, config) do
+    case Keyword.get(config, :should_report_error_check_in_callback) do
+      callback when is_function(callback, 2) ->
+        call_should_report_error_check_in_callback(callback, job)
+
+      _ ->
+        true
+    end
+  end
+
+  defp call_should_report_error_check_in_callback(callback, job) do
+    worker =
+      case apply(Oban.Worker, :from_string, [job.worker]) do
+        {:ok, mod} ->
+          mod
+
+        {:error, _} ->
+          LoggerUtils.warning(
+            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
+          )
+
+          nil
+      end
+
+    try do
+      callback.(worker, job) == true
+    rescue
+      error ->
+        LoggerUtils.warning("""
+        :should_report_error_check_in_callback failed for worker #{inspect(worker)} \
+        (job ID #{job.id}):
+
+        #{Exception.format(:error, error, __STACKTRACE__)}\
+        """)
+
+        true
     end
   end
 
