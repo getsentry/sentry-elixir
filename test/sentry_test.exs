@@ -1,6 +1,8 @@
 defmodule SentryTest do
   use Sentry.Case
 
+  require OpenTelemetry.Tracer, as: Tracer
+
   import ExUnit.CaptureLog
   import Sentry.Test.Assertions
   import Sentry.TestHelpers
@@ -391,6 +393,56 @@ defmodule SentryTest do
         transaction: "transaction-with-release",
         release: "1.9.123"
       )
+    end
+  end
+
+  describe "trace context on captured errors without tracing" do
+    test "sends the error without a trace context when nothing is being traced", %{bypass: bypass} do
+      ref = SentryTest.setup_bypass_envelope_collector(bypass, type: "event")
+
+      assert {:ok, _} = Sentry.capture_message("standalone failure", result: :sync)
+
+      assert [event] = extract_events(collect_envelopes(ref, 1))
+      refute event["contexts"]["trace"]
+    end
+  end
+
+  describe "trace context on captured errors" do
+    setup %{bypass: bypass} do
+      put_test_config(traces_sample_rate: 1.0)
+      %{ref: SentryTest.setup_bypass_envelope_collector(bypass)}
+    end
+
+    test "sends the error and the transaction of the same operation with the same trace_id", %{
+      ref: ref
+    } do
+      Tracer.with_span "checkout" do
+        assert {:ok, _} = Sentry.capture_message("checkout failed", result: :sync)
+      end
+
+      envelopes = collect_envelopes(ref, 2)
+
+      assert [event] = extract_events(envelopes)
+      assert [transaction] = extract_transactions(envelopes)
+
+      assert event["contexts"]["trace"]["trace_id"] ==
+               transaction["contexts"]["trace"]["trace_id"]
+    end
+
+    test "points the error at the span it was captured in", %{ref: ref} do
+      Tracer.with_span "checkout" do
+        Tracer.with_span "charge_card" do
+          assert {:ok, _} = Sentry.capture_message("charge failed", result: :sync)
+        end
+      end
+
+      envelopes = collect_envelopes(ref, 2)
+
+      assert [event] = extract_events(envelopes)
+      assert [transaction] = extract_transactions(envelopes)
+      assert [child_span] = transaction["spans"]
+
+      assert event["contexts"]["trace"]["span_id"] == child_span["span_id"]
     end
   end
 

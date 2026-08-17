@@ -29,6 +29,18 @@ defmodule PhoenixAppWeb.PageController do
     raise "Test exception"
   end
 
+  def traced_exception(conn, _params) do
+    Tracer.with_span "process_order" do
+      try do
+        raise "Traced exception"
+      rescue
+        exception -> Sentry.capture_exception(exception, stacktrace: __STACKTRACE__)
+      end
+    end
+
+    render(conn, :home, layout: false)
+  end
+
   def function_clause_error(_conn, %{"required" => _value}) do
     :ok
   end
