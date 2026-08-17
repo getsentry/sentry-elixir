@@ -42,7 +42,7 @@ defmodule Sentry.Metrics do
   """
   @moduledoc since: "13.0.0"
 
-  alias Sentry.{ClientReport, Config, LoggerUtils, Metric, TelemetryProcessor}
+  alias Sentry.{ClientReport, Config, Metric, TelemetryProcessor}
 
   @doc """
   Records a counter metric.
@@ -117,8 +117,7 @@ defmodule Sentry.Metrics do
       unit = Keyword.get(opts, :unit)
       attributes = Keyword.get(opts, :attributes, %{})
 
-      {trace_id, span_id} = extract_trace_context()
-      trace_id = trace_id || generate_trace_id()
+      {trace_id, span_id} = current_trace_context() || {generate_trace_id(), nil}
 
       # Build metric struct
       metric = %Metric{
@@ -146,41 +145,10 @@ defmodule Sentry.Metrics do
     :ok
   end
 
-  defp extract_trace_context do
-    case :otel_tracer.current_span_ctx() do
-      :undefined ->
-        {nil, nil}
-
-      span_ctx ->
-        trace_id = :otel_span.trace_id(span_ctx)
-        span_id = :otel_span.span_id(span_ctx)
-
-        if trace_id != 0 and span_id != 0 do
-          {format_trace_id(trace_id), format_span_id(span_id)}
-        else
-          {nil, nil}
-        end
-    end
-  rescue
-    e in [UndefinedFunctionError, ArgumentError] ->
-      LoggerUtils.debug("Failed to extract OpenTelemetry trace context: #{inspect(e)}")
-      {nil, nil}
-  end
-
-  # Format trace_id as 32-character hex string
-  defp format_trace_id(trace_id) when is_integer(trace_id) do
-    trace_id
-    |> Integer.to_string(16)
-    |> String.pad_leading(32, "0")
-    |> String.downcase()
-  end
-
-  # Format span_id as 16-character hex string
-  defp format_span_id(span_id) when is_integer(span_id) do
-    span_id
-    |> Integer.to_string(16)
-    |> String.pad_leading(16, "0")
-    |> String.downcase()
+  if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
+    defp current_trace_context, do: Sentry.OpenTelemetry.TraceContext.current()
+  else
+    defp current_trace_context, do: nil
   end
 
   # Generate a random trace_id as fallback when no active span exists

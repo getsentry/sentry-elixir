@@ -1,6 +1,8 @@
 defmodule Sentry.MetricsIntegrationTest do
   use Sentry.Case, async: false
 
+  require OpenTelemetry.Tracer, as: Tracer
+
   import Sentry.TestHelpers
   import Sentry.Test.Assertions
 
@@ -126,6 +128,24 @@ defmodule Sentry.MetricsIntegrationTest do
       assert_sentry_metric(:counter, name: "counter.metric")
       assert_sentry_metric(:gauge, name: "gauge.metric")
       assert_sentry_metric(:distribution, name: "distribution.metric")
+    end
+  end
+
+  describe "trace context on recorded metrics" do
+    test "records the metric with the trace of the surrounding span", ctx do
+      put_test_config(traces_sample_rate: 1.0)
+
+      Tracer.with_span "checkout" do
+        Metrics.count("orders.placed", 1)
+      end
+
+      envelopes = collect_envelopes(ctx.ref, 2)
+
+      assert [%{"items" => [metric]}] = extract_metric_items(envelopes)
+      assert [transaction] = extract_transactions(envelopes)
+
+      assert metric["trace_id"] == transaction["contexts"]["trace"]["trace_id"]
+      assert metric["span_id"] == transaction["contexts"]["trace"]["span_id"]
     end
   end
 end

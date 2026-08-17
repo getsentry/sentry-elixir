@@ -11,6 +11,7 @@ defmodule Sentry.OpenTelemetry.IntegrationTest do
           assert Code.ensure_loaded?(Sentry.OpenTelemetry.SpanProcessor)
           assert Code.ensure_loaded?(Sentry.OpenTelemetry.Sampler)
           assert Code.ensure_loaded?(Sentry.OpenTelemetry.SpanRecord)
+          assert Code.ensure_loaded?(Sentry.OpenTelemetry.TraceContext)
           assert Code.ensure_loaded?(Sentry.OpenTelemetry.SpanStorage)
 
         false ->
@@ -18,6 +19,7 @@ defmodule Sentry.OpenTelemetry.IntegrationTest do
           refute Code.ensure_loaded?(Sentry.OpenTelemetry.SpanProcessor)
           refute Code.ensure_loaded?(Sentry.OpenTelemetry.Sampler)
           refute Code.ensure_loaded?(Sentry.OpenTelemetry.SpanRecord)
+          refute Code.ensure_loaded?(Sentry.OpenTelemetry.TraceContext)
           # SpanStorage should always be defined as it doesn't depend on OpenTelemetry directly
           assert Code.ensure_loaded?(Sentry.OpenTelemetry.SpanStorage)
       end
