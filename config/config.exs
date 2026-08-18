@@ -16,15 +16,11 @@ if config_env() == :test do
   config :sentry, request_retries: []
 
   if System.version() > "1.16.0" do
-    config :logger, :default_handler, false
-
-    config :sentry, :logger, [
-      {:handler, :file_log, :logger_std_h,
-       %{
-         config: %{file: ~c"log/tests.log"},
-         formatter: Logger.Formatter.new()
-       }}
-    ]
+    config :logger, :default_handler,
+      config: %{
+        type: :file,
+        file: ~c"log/test.log"
+      }
   else
     config :logger, backends: []
   end

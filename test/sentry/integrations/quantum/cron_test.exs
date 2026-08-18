@@ -1,5 +1,5 @@
 defmodule Sentry.Integrations.Quantum.CronTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   alias Sentry.Integrations.CheckInIDMappings
 

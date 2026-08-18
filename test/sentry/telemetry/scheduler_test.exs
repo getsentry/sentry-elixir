@@ -1,5 +1,5 @@
 defmodule Sentry.Telemetry.SchedulerTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   import ExUnit.CaptureLog
   import Sentry.TestHelpers
