@@ -16,10 +16,49 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias Sentry.Interfaces.Span
 
     @impl :otel_span_processor
-    def on_start(_ctx, otel_span, _config) do
+    def on_start(ctx, otel_span, _config) do
+      otel_span = mark_parent_is_remote(ctx, otel_span)
+
       span_record = SpanRecord.new(otel_span)
       SpanStorage.store_span(span_record)
       otel_span
+    end
+
+    if SpanRecord.parent_is_remote_on_record?() do
+      defp mark_parent_is_remote(_ctx, otel_span), do: otel_span
+    else
+      # Older opentelemetry releases don't carry parent_span_is_remote on the
+      # span record, but the parent's span context always knows whether it came
+      # off the wire. Recording it as an attribute here is the only point where
+      # that context is still reachable; SpanRecord strips it again so it never
+      # reaches a reported payload.
+      require Record
+
+      Record.defrecordp(
+        :span_ctx,
+        Record.extract(:span_ctx, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
+      )
+
+      Record.defrecordp(
+        :otel_span_rec,
+        Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl")
+      )
+
+      defp mark_parent_is_remote(ctx, otel_span) do
+        case :otel_tracer.current_span_ctx(ctx) do
+          span_ctx(is_remote: true) ->
+            attributes =
+              :otel_attributes.set(
+                %{SpanRecord.parent_is_remote_attribute() => true},
+                otel_span_rec(otel_span, :attributes)
+              )
+
+            otel_span_rec(otel_span, attributes: attributes)
+
+          _ ->
+            otel_span
+        end
+      end
     end
 
     @impl :otel_span_processor
@@ -55,6 +94,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         # Parent exists locally - this is a child span, not a transaction root
         has_local_parent_span?(span_record.parent_span_id) ->
           true
+
+        # A remote parent never appears in this node's storage, so this span is
+        # the local root of a trace continued from elsewhere. Must stay below
+        # the local-parent check: OTel copies the parent's span_ctx into every
+        # child, so is_remote stays true for the whole local subtree - checked
+        # any earlier, every span in the trace becomes its own transaction.
+        # Compared to true explicitly because the field is :undefined for
+        # parentless spans, which is truthy.
+        span_record.parent_span_is_remote == true ->
+          build_and_send_transaction(span_record)
 
         # Parent is remote (distributed tracing) - treat server spans as
         # transaction roots
