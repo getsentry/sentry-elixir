@@ -1,5 +1,9 @@
 ## 13.5.0
 
+### New Features ✨
+
+- (oban/cron) introduce `should_report_error_check_in_callback` config option by @solnic in [#1173](https://github.com/getsentry/sentry-elixir/pull/1173)
+
 ### Bug Fixes 🐛
 
 #### Tracing
@@ -7,11 +11,6 @@
 - Report spans whose parent lives on another node by @solnic in [#1171](https://github.com/getsentry/sentry-elixir/pull/1171)
 - Report spans that outlive their sent parent by @solnic in [#1163](https://github.com/getsentry/sentry-elixir/pull/1163)
 - Attach trace context to captured events by @solnic in [#1176](https://github.com/getsentry/sentry-elixir/pull/1176)
-
-### Internal Changes 🔧
-
-- (oban/cron) Consider attempts when reporting failed checkins by @solnic in [#1173](https://github.com/getsentry/sentry-elixir/pull/1173)
-- (tracing) Add e2e scenarios for async trace continuation by @solnic in [#1168](https://github.com/getsentry/sentry-elixir/pull/1168)
 
 ## 13.4.2
 
