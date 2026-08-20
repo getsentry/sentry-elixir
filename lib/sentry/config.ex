@@ -120,6 +120,26 @@ defmodule Sentry.Config do
               The function is called with the `Oban.Job` as its arguments and must return a string.
               This can be used to customize monitor slugs. *Available since v10.8.0*.
               """
+            ],
+            should_report_error_check_in_callback: [
+              type: {:or, [nil, {:fun, 2}]},
+              default: nil,
+              type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
+              doc: """
+              A function that determines whether to report a failed check-in for an Oban cron
+              job. The function receives the worker module and the `Oban.Job` struct and should
+              return `true` to report the failed check-in or `false` to skip it.
+
+              ```elixir
+              should_report_error_check_in_callback: fn _worker, job ->
+                job.attempt >= job.max_attempts
+              end
+              ```
+
+              This example only reports a failed check-in once all retries are exhausted. While
+              retries remain the check-in is left open, so the retry that eventually succeeds
+              closes the same check-in. *Available since v13.5.0*.
+              """
             ]
           ]
         ]
