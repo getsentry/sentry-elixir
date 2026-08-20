@@ -161,6 +161,16 @@ defmodule Sentry.Event do
   > See also `Sentry.Context` for information on the Sentry context and `Sentry` for
   > information on configuration.
 
+  > #### Trace Context {: .info}
+  >
+  > When the calling process has an active OpenTelemetry span, the event gets a
+  > `contexts.trace` with the `trace_id` and `span_id` of that span, so that Sentry
+  > links the error to the trace it happened in. The key is omitted when there is no
+  > active span or when OpenTelemetry is not available.
+  >
+  > The span is read from the process that creates the event, so errors reported from
+  > a process that did not inherit the OpenTelemetry context are not linked to a trace.
+
   ## Options
 
   #{NimbleOptions.docs(@create_event_opts_schema)}
@@ -485,10 +495,41 @@ defmodule Sentry.Event do
         version_string -> version_string
       end
 
-    %{
+    contexts = %{
       os: %{name: Atom.to_string(os_name), version: os_version},
       runtime: %{name: "elixir", version: System.build_info().build}
     }
+
+    case current_trace_context() do
+      nil -> contexts
+      trace -> Map.put(contexts, :trace, trace)
+    end
+  end
+
+  if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
+    defp current_trace_context do
+      case :otel_tracer.current_span_ctx() do
+        :undefined ->
+          nil
+
+        span_ctx ->
+          trace_id = :otel_span.trace_id(span_ctx)
+          span_id = :otel_span.span_id(span_ctx)
+
+          if trace_id != 0 and span_id != 0 do
+            %{trace_id: format_id(trace_id, 32), span_id: format_id(span_id, 16)}
+          end
+      end
+    end
+
+    defp format_id(id, length) do
+      id
+      |> Integer.to_string(16)
+      |> String.pad_leading(length, "0")
+      |> String.downcase()
+    end
+  else
+    defp current_trace_context, do: nil
   end
 
   # Used to compare events for deduplication. See "Sentry.Dedupe".
