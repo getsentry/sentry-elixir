@@ -61,8 +61,9 @@ defmodule Sentry.Transport do
       {:ok, id} ->
         {:ok, id}
 
+      # A 429 is counted upstream, so recording a client report here would
+      # double-count the discarded items.
       {:error, :rate_limited} ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
         {:error, ClientError.new(:rate_limited)}
 
       {:error, {:envelope_too_large, {status, headers, body}}} ->

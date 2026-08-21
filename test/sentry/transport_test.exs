@@ -276,6 +276,23 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
 
+    test "does not record a client report when Sentry replies with 429", %{bypass: bypass} do
+      assert :ok = ClientReport.Sender.flush()
+
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("retry-after", "1")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert :sys.get_state(ClientReport.Sender) == %{}
+    end
+
     test "stops retrying when a failed response carried a rate limit", %{bypass: bypass} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
       test_pid = self()
