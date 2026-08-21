@@ -118,6 +118,17 @@ defmodule Sentry.TestHelpers do
     %{bypass: bypass}
   end
 
+  @spec stub_rate_limit(Bypass.t(), String.t()) :: :ok
+  def stub_rate_limit(bypass, rate_limits) when is_binary(rate_limits) do
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", rate_limits)
+      |> Plug.Conn.resp(200, ~s<{"id":"accepted"}>)
+    end)
+
+    :ok
+  end
+
   # Bypass envelope helpers — delegated to Sentry.Test
 
   defdelegate decode_envelope!(binary), to: Sentry.Test

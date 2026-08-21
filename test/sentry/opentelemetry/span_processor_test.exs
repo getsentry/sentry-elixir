@@ -134,6 +134,16 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send transaction to Sentry/
   end
 
+  @tag span_storage: true
+  test "stays quiet when the transaction is dropped by an active rate limit" do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+    set_rate_limit("transaction")
+
+    log = capture_log(fn -> TestEndpoint.child_instrumented_function("one") end)
+
+    refute log =~ "[warning]"
+  end
+
   defp assert_valid_iso8601(timestamp) do
     case DateTime.from_iso8601(timestamp) do
       {:ok, datetime, _offset} ->

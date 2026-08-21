@@ -10,7 +10,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
-    alias Sentry.LoggerUtils
+    alias Sentry.{ClientError, LoggerUtils}
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
@@ -179,6 +179,13 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
           :excluded ->
             true
+
+          {:error, %ClientError{reason: :rate_limited} = error} ->
+            LoggerUtils.debug(fn ->
+              "Failed to send transaction to Sentry: #{inspect(error)}"
+            end)
+
+            {:error, :invalid_span}
 
           {:error, error} ->
             LoggerUtils.log(fn -> "Failed to send transaction to Sentry: #{inspect(error)}" end)
