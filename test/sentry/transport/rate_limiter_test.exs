@@ -2,6 +2,7 @@ defmodule Sentry.Transport.RateLimiterTest do
   use Sentry.Case, async: true
 
   import Sentry.TestHelpers
+  import ExUnit.CaptureLog
 
   alias Sentry.Transport.RateLimiter
 
@@ -234,6 +235,76 @@ defmodule Sentry.Transport.RateLimiterTest do
 
       assert RateLimiter.rate_limited?("error") == true
     end
+  end
+
+  describe "logging of new rate limits" do
+    test "announces every newly limited category in a single message" do
+      log =
+        capture_log(fn ->
+          RateLimiter.update_rate_limits("60:error;transaction:key, 120:attachment:org")
+        end)
+
+      assert length(String.split(log, "Sentry is rate-limiting")) == 2
+      assert log =~ ~s("error")
+      assert log =~ ~s("transaction")
+      assert log =~ ~s("attachment")
+      assert log =~ "60s"
+      assert log =~ "120s"
+    end
+
+    test "stays quiet when a shorter limit arrives for an active category" do
+      RateLimiter.update_rate_limits("60:error:key")
+
+      log = capture_log(fn -> RateLimiter.update_rate_limits("30:error:key") end)
+
+      refute log =~ "Sentry is rate-limiting"
+    end
+
+    test "announces a new limit landing on an expired entry" do
+      set_rate_limit("error", duration: -10)
+
+      log = capture_log(fn -> RateLimiter.update_rate_limits("60:error:key") end)
+
+      assert log =~ "Sentry is rate-limiting"
+      assert log =~ ~s("error")
+    end
+
+    test "announces a limit once when responses race" do
+      rounds = 20
+
+      announcements =
+        for round <- 1..rounds, reduce: 0 do
+          acc ->
+            log = capture_log(fn -> race_update_rate_limits("error-#{round}") end)
+            acc + length(String.split(log, "Sentry is rate-limiting")) - 1
+        end
+
+      assert announcements == rounds
+    end
+  end
+
+  defp race_update_rate_limits(category, senders \\ 40) do
+    table = table_name()
+    release = :atomics.new(1, [])
+    parent = self()
+
+    tasks =
+      for _ <- 1..senders do
+        Task.async(fn ->
+          Process.put(:rate_limiter_table_name, table)
+          send(parent, :ready)
+          await_release(release)
+          RateLimiter.update_rate_limits("60:#{category}:key")
+        end)
+      end
+
+    for _ <- 1..senders, do: assert_receive(:ready)
+    :atomics.put(release, 1, 1)
+    Task.await_many(tasks, 5000)
+  end
+
+  defp await_release(release) do
+    if :atomics.get(release, 1) == 1, do: :ok, else: await_release(release)
   end
 
   defp table_name, do: Process.get(:rate_limiter_table_name)

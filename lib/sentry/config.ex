@@ -369,6 +369,13 @@ defmodule Sentry.Config do
       doc: """
       The level to use when Sentry fails to
       send an event due to an API failure or other reasons.
+
+      Rate limits are the exception: Sentry logs them once per rate-limit window,
+      and logs the individual events dropped while a limit is active at the
+      `:debug` level.
+
+      All messages logged by the SDK itself carry `domain: [:sentry]`, so you can
+      filter them out through `Logger`'s metadata filters.
       """
     ],
     filter: [

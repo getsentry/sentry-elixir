@@ -36,6 +36,7 @@ defmodule Sentry.Telemetry.Scheduler do
 
   alias Sentry.{
     CheckIn,
+    ClientError,
     ClientReport,
     Config,
     Envelope,
@@ -441,6 +442,9 @@ defmodule Sentry.Telemetry.Scheduler do
       case Transport.encode_and_post_envelope(envelope, client, request_retries) do
         {:ok, _id} ->
           :ok
+
+        {:error, %ClientError{reason: :rate_limited} = error} ->
+          {:error, error}
 
         {:error, error} ->
           LoggerUtils.log(fn ->

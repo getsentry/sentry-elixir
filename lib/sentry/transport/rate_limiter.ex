@@ -24,6 +24,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   use GenServer
 
+  alias Sentry.LoggerUtils
+
   @default_sweep_interval_ms 60_000
 
   defstruct [:table_name]
@@ -137,7 +139,10 @@ defmodule Sentry.Transport.RateLimiter do
   """
   @spec update_global_rate_limit(pos_integer()) :: :ok
   def update_global_rate_limit(retry_after_seconds) when is_integer(retry_after_seconds) do
-    store_max_expiry(:global, System.system_time(:millisecond) + retry_after_seconds * 1000)
+    now = System.system_time(:millisecond)
+    expiry = now + retry_after_seconds * 1000
+
+    store_limits([{:global, expiry}], now)
   end
 
   @doc """
@@ -158,14 +163,49 @@ defmodule Sentry.Transport.RateLimiter do
 
     rate_limits_header
     |> parse_rate_limits_header()
-    |> Enum.each(fn {category, retry_after_ms} ->
-      store_max_expiry(category, now + retry_after_ms)
-    end)
-
-    :ok
+    |> Enum.map(fn {category, retry_after_ms} -> {category, now + retry_after_ms} end)
+    |> store_limits(now)
   end
 
-  ## Private Helpers
+  defp store_limits(limits, now) do
+    limits
+    |> Enum.reduce(%{}, fn {category, expiry}, acc ->
+      Map.update(acc, category, expiry, &max(&1, expiry))
+    end)
+    |> Enum.filter(fn {category, expiry} ->
+      store_max_expiry(category, expiry, now) == :started and expiry > now
+    end)
+    |> log_new_limits(now)
+  end
+
+  defp log_new_limits([], _now), do: :ok
+
+  defp log_new_limits(limits, now) do
+    LoggerUtils.log(fn ->
+      [
+        "Sentry is rate-limiting ",
+        Enum.map_join(limits, ", ", &format_limit(&1, now)),
+        ". Data is dropped locally until the limit expires."
+      ]
+    end)
+  end
+
+  defp format_limit({category, expiry}, now) do
+    "#{format_category(category)} for #{format_duration(expiry - now)} (until #{format_expiry(expiry)})"
+  end
+
+  defp format_category(:global), do: "all data categories"
+  defp format_category(category), do: ~s(the "#{category}" data category)
+
+  defp format_duration(duration_ms) when duration_ms >= 1000, do: "#{div(duration_ms, 1000)}s"
+  defp format_duration(duration_ms), do: "#{duration_ms}ms"
+
+  defp format_expiry(expiry) do
+    expiry
+    |> DateTime.from_unix!(:millisecond)
+    |> DateTime.truncate(:second)
+    |> DateTime.to_iso8601()
+  end
 
   # Rate limits may only ever be extended: a response carrying a shorter delay
   # than the one already in flight must not let the SDK resume sending early.
@@ -173,29 +213,46 @@ defmodule Sentry.Transport.RateLimiter do
   # Senders handle responses concurrently, so this compares and swaps rather than
   # reading and then writing: two responses racing on the same category would
   # otherwise both read the old expiry and let the shorter one land last.
-  defp store_max_expiry(category, expiry) do
+  # The write also reports whether it opened a new window (`:started`) or merely
+  # pushed an active one further out (`:extended`), so that callers announcing a
+  # limit do so exactly once even when responses are handled concurrently.
+  defp store_max_expiry(category, expiry, now) do
     table = name()
 
     if :ets.insert_new(table, {category, expiry}) do
-      :ok
+      :started
     else
-      replace_shorter_expiry(table, category, expiry)
+      replace_lapsed_expiry(table, category, expiry, now)
     end
   end
 
-  defp replace_shorter_expiry(table, category, expiry) do
+  defp replace_lapsed_expiry(table, category, expiry, now) do
+    match_spec = [
+      {{category, :"$1"}, [{:<, :"$1", now}, {:<, :"$1", expiry}],
+       [{{{:const, category}, {:const, expiry}}}]}
+    ]
+
+    case :ets.select_replace(table, match_spec) do
+      1 -> :started
+      0 -> replace_shorter_expiry(table, category, expiry, now)
+    end
+  end
+
+  defp replace_shorter_expiry(table, category, expiry, now) do
     match_spec = [
       {{category, :"$1"}, [{:<, :"$1", expiry}], [{{{:const, category}, {:const, expiry}}}]}
     ]
 
     case :ets.select_replace(table, match_spec) do
       1 ->
-        :ok
+        :extended
 
       0 ->
         # Either the stored expiry is already the longer one, or the sweeper
         # pruned the entry between the two calls and it has to be re-inserted.
-        if :ets.member(table, category), do: :ok, else: store_max_expiry(category, expiry)
+        if :ets.member(table, category),
+          do: :extended,
+          else: store_max_expiry(category, expiry, now)
     end
   end
 

@@ -262,17 +262,16 @@ defmodule Sentry.TransportTest do
         |> Plug.Conn.resp(429, ~s<{}>)
       end)
 
-      assert :rate_limited =
-               error(fn ->
-                 Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
-               end)
-
       log =
         capture_log(fn ->
-          Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+          assert :rate_limited =
+                   error(fn ->
+                     Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+                   end)
         end)
 
       assert log =~ "[warning]"
+      assert log =~ "all data categories"
       assert_received {:request, ^ref}
     end
 
@@ -633,11 +632,7 @@ defmodule Sentry.TransportTest do
     end
 
     test "keeps a sub-second limit from the header active until it expires", %{bypass: bypass} do
-      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
-        conn
-        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "0.2:error:key")
-        |> Plug.Conn.resp(200, ~s<{"id":"accepted"}>)
-      end)
+      stub_rate_limit(bypass, "0.2:error:key")
 
       first = Envelope.from_event(Event.create_event(message: "First"))
       assert {:ok, "accepted"} = Transport.encode_and_post_envelope(first, FinchClient)
@@ -650,6 +645,124 @@ defmodule Sentry.TransportTest do
       Process.sleep(250)
 
       assert {:ok, "accepted"} = Transport.encode_and_post_envelope(second, FinchClient)
+    end
+
+    test "warns once when a rate limit starts", %{bypass: bypass} do
+      stub_rate_limit(bypass, "60:error:key")
+
+      log =
+        capture_log(fn ->
+          assert {:ok, "accepted"} =
+                   Transport.encode_and_post_envelope(
+                     Envelope.from_event(Event.create_event(message: "First")),
+                     FinchClient
+                   )
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ ~s("error")
+      assert log =~ "60s"
+    end
+
+    test "warns once about a category limited by several quotas", %{bypass: bypass} do
+      stub_rate_limit(bypass, "60:error:key, 120:error:organization")
+
+      log =
+        capture_log(fn ->
+          assert {:ok, "accepted"} =
+                   Transport.encode_and_post_envelope(
+                     Envelope.from_event(Event.create_event(message: "First")),
+                     FinchClient
+                   )
+        end)
+
+      assert length(String.split(log, ~s("error"))) == 2
+      assert log =~ "120s"
+      refute log =~ "60s"
+    end
+
+    test "stays quiet while an active rate limit drops events", %{bypass: bypass} do
+      stub_rate_limit(bypass, "60:error:key")
+
+      assert {:ok, "accepted"} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_event(Event.create_event(message: "First")),
+                 FinchClient
+               )
+
+      log =
+        capture_log(fn ->
+          for index <- 1..5 do
+            assert {:error, %ClientError{reason: :rate_limited}} =
+                     Transport.encode_and_post_envelope(
+                       Envelope.from_event(Event.create_event(message: "Dropped #{index}")),
+                       FinchClient,
+                       _retries = []
+                     )
+          end
+        end)
+
+      refute log =~ ~r/\[warning\]\s+Failed to send Sentry event/
+      assert log =~ ~r/\[debug\]\s+Failed to send Sentry event/
+    end
+
+    test "stays quiet when an active rate limit is extended", %{bypass: bypass} do
+      stub_rate_limit(bypass, "60:error:key")
+
+      assert {:ok, "accepted"} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_event(Event.create_event(message: "First")),
+                 FinchClient
+               )
+
+      log =
+        capture_log(fn ->
+          assert {:ok, "accepted"} =
+                   Transport.encode_and_post_envelope(
+                     Envelope.from_log_events([make_log_event("keeps flowing")]),
+                     FinchClient
+                   )
+        end)
+
+      refute log =~ "Sentry is rate-limiting"
+    end
+
+    test "warns again when a rate limit starts after the previous one expired", %{bypass: bypass} do
+      stub_rate_limit(bypass, "0.2:error:key")
+
+      assert {:ok, "accepted"} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_event(Event.create_event(message: "First")),
+                 FinchClient
+               )
+
+      Process.sleep(250)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, "accepted"} =
+                   Transport.encode_and_post_envelope(
+                     Envelope.from_event(Event.create_event(message: "Second")),
+                     FinchClient
+                   )
+        end)
+
+      assert log =~ "[warning]"
+    end
+
+    test "stays quiet about a rate limit that is already over", %{bypass: bypass} do
+      stub_rate_limit(bypass, "0:error:key")
+
+      log =
+        capture_log(fn ->
+          assert {:ok, "accepted"} =
+                   Transport.encode_and_post_envelope(
+                     Envelope.from_event(Event.create_event(message: "First")),
+                     FinchClient
+                   )
+        end)
+
+      refute log =~ "Sentry is rate-limiting"
     end
 
     test "handles multiple categories in single X-Sentry-Rate-Limits header", %{bypass: bypass} do
