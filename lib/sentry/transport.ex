@@ -220,16 +220,19 @@ defmodule Sentry.Transport do
     if Enum.any?(events, &(Map.has_key?(&1, :source) && &1.source == :logger)) do
       :ok
     else
-      message =
-        case send_result do
-          {:error, %ClientError{} = error} ->
-            "Failed to send Sentry event. #{Exception.message(error)}"
-
-          {:ok, _} ->
-            nil
-        end
-
-      if message, do: LoggerUtils.log(fn -> [message] end)
+      log_send_result(send_result)
     end
+  end
+
+  defp log_send_result({:error, %ClientError{reason: :rate_limited} = error}) do
+    LoggerUtils.debug(fn -> ["Failed to send Sentry event. ", Exception.message(error)] end)
+  end
+
+  defp log_send_result({:error, %ClientError{} = error}) do
+    LoggerUtils.log(fn -> ["Failed to send Sentry event. ", Exception.message(error)] end)
+  end
+
+  defp log_send_result({:ok, _envelope_id}) do
+    :ok
   end
 end
