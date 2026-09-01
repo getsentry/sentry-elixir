@@ -470,6 +470,45 @@ defmodule Sentry.Telemetry.SchedulerTest do
       stop_buffers(buffers)
       Bypass.down(bypass)
     end
+
+    test "stays quiet when a direct transport send is rate limited during flush" do
+      %{bypass: bypass} = setup_bypass()
+      prev_retries = Application.get_env(:sentry, :request_retries)
+      Application.put_env(:sentry, :request_retries, [])
+
+      on_exit(fn ->
+        if prev_retries do
+          Application.put_env(:sentry, :request_retries, prev_retries)
+        else
+          Application.delete_env(:sentry, :request_retries)
+        end
+      end)
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "0:error:key")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      buffers = start_test_buffers(batch_size: 1)
+      uid = System.unique_integer([:positive])
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          buffers: buffers,
+          name: :"test_scheduler_rate_limited_#{uid}"
+        )
+
+      Buffer.add(buffers.log, make_log_event("rate-limited-send"))
+
+      log = capture_log(fn -> Scheduler.flush(pid) end)
+
+      refute log =~ "failed to send envelope"
+
+      GenServer.stop(pid)
+      stop_buffers(buffers)
+      Bypass.down(bypass)
+    end
   end
 
   # Helper functions
