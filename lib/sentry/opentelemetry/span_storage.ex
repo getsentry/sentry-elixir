@@ -61,9 +61,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
-    @spec mark_span_sent(String.t(), keyword()) :: :ok
-    def mark_span_sent(span_id, opts \\ []), do: mark_spans_sent([span_id], opts)
-
     @spec mark_spans_sent([String.t()], keyword()) :: :ok
     def mark_spans_sent(span_ids, opts \\ []) do
       table_name = Keyword.get(opts, :table_name, default_table_name())

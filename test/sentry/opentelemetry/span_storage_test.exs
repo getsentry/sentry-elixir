@@ -349,10 +349,10 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
   describe "sent span markers" do
     @tag span_storage: true
-    test "span_sent? reflects mark_span_sent", %{table_name: table_name} do
+    test "span_sent? reflects mark_spans_sent", %{table_name: table_name} do
       refute SpanStorage.span_sent?("span1", table_name: table_name)
 
-      SpanStorage.mark_span_sent("span1", table_name: table_name)
+      SpanStorage.mark_spans_sent(["span1"], table_name: table_name)
 
       assert SpanStorage.span_sent?("span1", table_name: table_name)
     end
@@ -362,7 +362,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       old_time = System.system_time(:second) - 6 * 60
       :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time})
 
-      SpanStorage.mark_span_sent("fresh_marker", table_name: table_name)
+      SpanStorage.mark_spans_sent(["fresh_marker"], table_name: table_name)
 
       Process.sleep(200)
 
