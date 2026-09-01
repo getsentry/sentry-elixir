@@ -357,14 +357,14 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert SpanStorage.span_sent?("span1", table_name: table_name)
     end
 
-    @tag span_storage: [cleanup_interval: 100]
-    test "markers expire after their TTL", %{table_name: table_name} do
+    @tag span_storage: true
+    test "markers expire after their TTL", %{table_name: table_name, server_name: server_name} do
       old_time = System.system_time(:second) - 6 * 60
       :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time})
 
       SpanStorage.mark_spans_sent(["fresh_marker"], table_name: table_name)
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       refute SpanStorage.span_sent?("old_marker", table_name: table_name)
       assert SpanStorage.span_sent?("fresh_marker", table_name: table_name)
@@ -372,8 +372,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
   end
 
   describe "stale span cleanup" do
-    @tag span_storage: [cleanup_interval: 100]
-    test "cleans up stale spans", %{table_name: table_name} do
+    @tag span_storage: true
+    test "cleans up stale spans", %{table_name: table_name, server_name: server_name} do
       root_span = %SpanRecord{
         span_id: "stale_root",
         parent_span_id: nil,
@@ -402,7 +402,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       SpanStorage.store_span(fresh_root_span, table_name: table_name)
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert SpanStorage.get_root_span("stale_root", table_name: table_name) == nil
       assert SpanStorage.get_child_spans("stale_root", table_name: table_name) == []
@@ -410,8 +410,8 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert SpanStorage.get_root_span("fresh_root", table_name: table_name)
     end
 
-    @tag span_storage: [cleanup_interval: 100]
-    test "cleans up orphaned child spans", %{table_name: table_name} do
+    @tag span_storage: true
+    test "cleans up orphaned child spans", %{table_name: table_name, server_name: server_name} do
       child_span = %SpanRecord{
         span_id: "stale_child",
         parent_span_id: "non_existent_parent",
@@ -423,14 +423,15 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       old_time = DateTime.utc_now() |> DateTime.add(-1860, :second) |> DateTime.to_unix()
       :ets.insert(table_name, {"non_existent_parent", {child_span, old_time}})
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert [] == SpanStorage.get_child_spans("non_existent_parent", table_name: table_name)
     end
 
-    @tag span_storage: [cleanup_interval: 100]
+    @tag span_storage: true
     test "cleans up expired root spans with all their children regardless of child timestamps", %{
-      table_name: table_name
+      table_name: table_name,
+      server_name: server_name
     } do
       root_span = %SpanRecord{
         span_id: "root123",
@@ -459,14 +460,17 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       :ets.insert(table_name, {"root123", {old_child, old_time}})
       SpanStorage.store_span(fresh_child, table_name: table_name)
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert SpanStorage.get_root_span("root123", table_name: table_name) == nil
       assert SpanStorage.get_child_spans("root123", table_name: table_name) == []
     end
 
-    @tag span_storage: [cleanup_interval: 100]
-    test "handles mixed expiration times in child spans", %{table_name: table_name} do
+    @tag span_storage: true
+    test "handles mixed expiration times in child spans", %{
+      table_name: table_name,
+      server_name: server_name
+    } do
       root_span = %SpanRecord{
         span_id: "root123",
         parent_span_id: nil,
@@ -503,7 +507,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
 
       SpanStorage.store_span(fresh_child, table_name: table_name)
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert root_span == SpanStorage.get_root_span("root123", table_name: table_name)
       children = SpanStorage.get_child_spans("root123", table_name: table_name)
@@ -798,8 +802,11 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
   end
 
   describe "cleanup" do
-    @tag span_storage: [cleanup_interval: 100]
-    test "cleanup respects span TTL precisely", %{table_name: table_name} do
+    @tag span_storage: true
+    test "cleanup respects span TTL precisely", %{
+      table_name: table_name,
+      server_name: server_name
+    } do
       now = System.system_time(:second)
       ttl = 1800
 
@@ -821,7 +828,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
         :ets.insert(table_name, {{:root_span, name}, span, timestamp})
       end)
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert SpanStorage.get_root_span("too_old", table_name: table_name) == nil
       assert not is_nil(SpanStorage.get_root_span("just_fresh", table_name: table_name))
@@ -829,9 +836,12 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert not is_nil(SpanStorage.get_root_span("fresh", table_name: table_name))
     end
 
-    @tag span_storage: [cleanup_interval: 100]
-    test "cleanup handles large number of expired spans efficiently", %{table_name: table_name} do
-      old_time = System.system_time(:second) - :timer.minutes(31)
+    @tag span_storage: true
+    test "cleanup handles large number of expired spans efficiently", %{
+      table_name: table_name,
+      server_name: server_name
+    } do
+      old_time = System.system_time(:second) - 31 * 60
 
       for i <- 1..10000 do
         root_span = %SpanRecord{
@@ -844,7 +854,7 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
         :ets.insert(table_name, {{:root_span, "span_#{i}"}, root_span, old_time})
       end
 
-      Process.sleep(200)
+      run_cleanup(server_name)
 
       assert :ets.info(table_name, :size) == 0
     end
@@ -1052,5 +1062,11 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
       assert remaining_span.span_id == "liveview_mount"
       assert remaining_span.end_time == nil
     end
+  end
+
+  defp run_cleanup(server_name) do
+    send(server_name, :cleanup_stale_spans)
+    _ = :sys.get_state(server_name)
+    :ok
   end
 end
