@@ -1,3 +1,9 @@
+## 13.5.1
+
+### Bug Fixes 🐛
+
+- (rate-limits) Align the SDK with Sentry logging specs by @solnic in [#1180](https://github.com/getsentry/sentry-elixir/pull/1180)
+
 ## 13.5.0
 
 ### New Features ✨
