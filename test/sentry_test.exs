@@ -420,7 +420,7 @@ defmodule SentryTest do
         assert {:ok, _} = Sentry.capture_message("checkout failed", result: :sync)
       end
 
-      envelopes = collect_envelopes(ref, 2)
+      envelopes = collect_envelopes(ref, 2, timeout: 2000)
 
       assert [event] = extract_events(envelopes)
       assert [transaction] = extract_transactions(envelopes)
@@ -436,7 +436,7 @@ defmodule SentryTest do
         end
       end
 
-      envelopes = collect_envelopes(ref, 2)
+      envelopes = collect_envelopes(ref, 2, timeout: 2000)
 
       assert [event] = extract_events(envelopes)
       assert [transaction] = extract_transactions(envelopes)

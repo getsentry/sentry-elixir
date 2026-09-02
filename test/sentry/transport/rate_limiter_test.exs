@@ -119,24 +119,33 @@ defmodule Sentry.Transport.RateLimiterTest do
 
   describe "update_rate_limits/1" do
     test "stores category-specific rate limits in ETS" do
+      before_call = System.system_time(:millisecond)
       RateLimiter.update_rate_limits("60:error")
+      after_call = System.system_time(:millisecond)
 
       assert [{_, expiry}] = :ets.lookup(table_name(), "error")
-      assert_in_delta expiry, System.system_time(:millisecond) + 60_000, 1000
+      assert expiry >= before_call + 60_000
+      assert expiry <= after_call + 60_000
     end
 
     test "stores a fractional retry delay at millisecond precision" do
+      before_call = System.system_time(:millisecond)
       RateLimiter.update_rate_limits("1.5:error")
+      after_call = System.system_time(:millisecond)
 
       assert [{_, expiry}] = :ets.lookup(table_name(), "error")
-      assert_in_delta expiry, System.system_time(:millisecond) + 1500, 100
+      assert expiry >= before_call + 1500
+      assert expiry <= after_call + 1500
     end
 
     test "stores global rate limit with :global key" do
+      before_call = System.system_time(:millisecond)
       RateLimiter.update_rate_limits("60::")
+      after_call = System.system_time(:millisecond)
 
       assert [{:global, expiry}] = :ets.lookup(table_name(), :global)
-      assert_in_delta expiry, System.system_time(:millisecond) + 60_000, 1000
+      assert expiry >= before_call + 60_000
+      assert expiry <= after_call + 60_000
     end
 
     test "extends an active limit when a longer one arrives" do
