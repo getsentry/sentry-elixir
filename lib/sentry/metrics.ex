@@ -44,6 +44,9 @@ defmodule Sentry.Metrics do
     * `elixir.runtime.mem.total`, `elixir.runtime.mem.processes`,
       `elixir.runtime.mem.binary`, `elixir.runtime.mem.ets`,
       `elixir.runtime.mem.atom` — in bytes
+    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and
+      `elixir.runtime.port.*` — a `count`, the hard VM `limit`, and the
+      `utilization` ratio between them
 
   Setting `version_attributes: true` adds `elixir_version` and `otp_release`
   attributes to every reported measurement, so metrics can be grouped by runtime
