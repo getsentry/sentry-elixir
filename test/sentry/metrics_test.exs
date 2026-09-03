@@ -12,42 +12,19 @@ defmodule Sentry.MetricsTest do
 
   describe "count/2" do
     test "creates a counter metric with default options" do
-      put_test_config(enable_metrics: true)
-
       assert :ok = Metrics.count("button.clicks", 1)
     end
 
     test "creates a counter metric with unit" do
-      put_test_config(enable_metrics: true)
-
       assert :ok = Metrics.count("http.requests", 5, unit: "request")
     end
 
     test "creates a counter metric with attributes" do
-      put_test_config(enable_metrics: true)
-
       assert :ok =
                Metrics.count("button.clicks", 1,
                  unit: "click",
                  attributes: %{button_id: "submit"}
                )
-    end
-
-    test "respects enable_metrics kill switch when false" do
-      test_pid = self()
-
-      callback = fn metric ->
-        send(test_pid, {:metric_sent, metric})
-        metric
-      end
-
-      put_test_config(enable_metrics: false, before_send_metric: callback)
-
-      # Should not raise error, just silently return :ok
-      assert :ok = Metrics.count("button.clicks", 1)
-
-      # Verify the metric was NOT sent and callback was NOT called
-      refute_receive {:metric_sent, _}, 100
     end
 
     test "applies before_send_metric callback" do
@@ -58,7 +35,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       Metrics.count("test.counter", 42, unit: "item")
       TelemetryProcessor.flush()
@@ -79,7 +56,6 @@ defmodule Sentry.MetricsTest do
       end
 
       put_test_config(
-        enable_metrics: true,
         before_send_metric: callback,
         environment_name: "test",
         release: "1.0.0"
@@ -98,7 +74,7 @@ defmodule Sentry.MetricsTest do
 
     test "filters metric when before_send_metric returns nil" do
       callback = fn _metric -> nil end
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       # Should not crash, just skip sending
       assert :ok = Metrics.count("test.counter", 1)
@@ -106,7 +82,7 @@ defmodule Sentry.MetricsTest do
 
     test "filters metric when before_send_metric returns false" do
       callback = fn _metric -> false end
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       # Should not crash, just skip sending
       assert :ok = Metrics.count("test.counter", 1)
@@ -120,7 +96,7 @@ defmodule Sentry.MetricsTest do
         %{metric | value: metric.value * 2}
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       Metrics.count("test.counter", 5)
       TelemetryProcessor.flush()
@@ -135,7 +111,7 @@ defmodule Sentry.MetricsTest do
         end
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: {TestCallback, :filter_metric})
+      put_test_config(before_send_metric: {TestCallback, :filter_metric})
 
       # Should be filtered out
       assert :ok = Metrics.count("test.counter", 5)
@@ -152,7 +128,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       Metrics.count("test.counter", 1)
       TelemetryProcessor.flush()
@@ -166,49 +142,29 @@ defmodule Sentry.MetricsTest do
 
   describe "gauge/2" do
     test "creates a gauge metric with default options" do
-      put_test_config(enable_metrics: true)
-
       assert :ok = Metrics.gauge("memory.usage", 1024)
     end
 
     test "creates a gauge metric with unit and attributes" do
-      put_test_config(enable_metrics: true)
-
       assert :ok =
                Metrics.gauge("active.connections", 42,
                  unit: "connection",
                  attributes: %{pool: "main"}
                )
     end
-
-    test "respects enable_metrics kill switch" do
-      put_test_config(enable_metrics: false)
-
-      assert :ok = Metrics.gauge("memory.usage", 1024)
-    end
   end
 
   describe "distribution/2" do
     test "creates a distribution metric with default options" do
-      put_test_config(enable_metrics: true)
-
       assert :ok = Metrics.distribution("response.time", 42.5)
     end
 
     test "creates a distribution metric with unit and attributes" do
-      put_test_config(enable_metrics: true)
-
       assert :ok =
                Metrics.distribution("response.time", 42.5,
                  unit: "millisecond",
                  attributes: %{endpoint: "/api"}
                )
-    end
-
-    test "respects enable_metrics kill switch" do
-      put_test_config(enable_metrics: false)
-
-      assert :ok = Metrics.distribution("response.time", 42.5)
     end
   end
 
@@ -221,7 +177,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       Metrics.count("test.counter", 1)
       TelemetryProcessor.flush()
@@ -241,7 +197,7 @@ defmodule Sentry.MetricsTest do
         raise "callback error"
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       import ExUnit.CaptureLog
 
@@ -261,10 +217,7 @@ defmodule Sentry.MetricsTest do
         def before_send_metric(_metric), do: raise("MFA callback error")
       end
 
-      put_test_config(
-        enable_metrics: true,
-        before_send_metric: {RaisingCallback, :before_send_metric}
-      )
+      put_test_config(before_send_metric: {RaisingCallback, :before_send_metric})
 
       import ExUnit.CaptureLog
 
@@ -287,7 +240,7 @@ defmodule Sentry.MetricsTest do
         :invalid_return
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       assert :ok = Metrics.count("test.counter", 1)
       TelemetryProcessor.flush()
@@ -304,7 +257,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       assert :ok = Metrics.count("test.zero", 0)
       TelemetryProcessor.flush()
@@ -319,7 +272,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       assert :ok = Metrics.gauge("test.negative", -42)
       TelemetryProcessor.flush()
@@ -334,7 +287,7 @@ defmodule Sentry.MetricsTest do
         metric
       end
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      put_test_config(before_send_metric: callback)
 
       assert :ok = Metrics.distribution("test.float", 0.001)
       TelemetryProcessor.flush()
