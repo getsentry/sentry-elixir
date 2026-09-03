@@ -1,11 +1,11 @@
 defmodule Sentry.Integrations.Oban.CronTest do
-  alias Sentry.Integrations.CheckInIDMappings
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   import ExUnit.CaptureLog
   import Sentry.Test.Assertions
   import Sentry.TestHelpers
 
+  alias Sentry.Integrations.CheckInIDMappings
   alias Sentry.Test, as: SentryTest
 
   defmodule MyCronWorker do
