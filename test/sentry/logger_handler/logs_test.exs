@@ -13,7 +13,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
   @moduletag :capture_log
 
   setup do
-    SentryTest.setup_sentry(enable_logs: true, logs: [level: :info])
+    SentryTest.setup_sentry(logs: [level: :info])
   end
 
   setup :add_logs_handler
@@ -155,135 +155,61 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert_sentry_log(:warn, "Warning message should be captured")
     end
 
-    test "does not send logs when enable_logs is false at handler setup time", %{
+    test "a manually-added handler sends structured logs", %{handler_name: handler_name} do
+      :ok = :logger.remove_handler(handler_name)
+
+      manual_handler_name = :"sentry_logs_handler_manual_#{System.unique_integer([:positive])}"
+
+      assert :ok =
+               :logger.add_handler(manual_handler_name, Sentry.LoggerHandler, %{config: %{}})
+
+      on_exit(fn -> _ = :logger.remove_handler(manual_handler_name) end)
+
+      Logger.info("Manually-added handler message")
+
+      assert_sentry_log(:info, "Manually-added handler message")
+    end
+
+    test "does not send structured logs when logs.level is not set", %{
       handler_name: handler_name
     } do
-      # Remove the main handler first so we can test with enable_logs: false
       :ok = :logger.remove_handler(handler_name)
+
+      put_test_config(logs: [capture_log_messages: true])
 
       disabled_handler_name =
         :"sentry_logs_handler_disabled_#{System.unique_integer([:positive])}"
 
-      # Set enable_logs to false BEFORE adding a new handler
-      put_test_config(enable_logs: false)
-
-      handler_config = %{config: %{}}
-
-      # Add handler with enable_logs: false - LogsBackend should NOT be included
       assert :ok =
-               :logger.add_handler(disabled_handler_name, Sentry.LoggerHandler, handler_config)
+               :logger.add_handler(disabled_handler_name, Sentry.LoggerHandler, %{config: %{}})
 
-      on_exit(fn ->
-        _ = :logger.remove_handler(disabled_handler_name)
-      end)
+      on_exit(fn -> _ = :logger.remove_handler(disabled_handler_name) end)
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
-      Logger.info("Test message")
-
-      # Give some time for the log to be processed
-      Process.sleep(100)
-
-      # Buffer should still be at initial size because LogsBackend was not enabled
-      assert TelemetryProcessor.buffer_size(:log) == initial_size
-    end
-
-    test "handler-level enable_logs: false overrides global enable_logs: true", %{
-      handler_name: handler_name
-    } do
-      :ok = :logger.remove_handler(handler_name)
-
-      override_handler_name =
-        :"sentry_logs_handler_override_#{System.unique_integer([:positive])}"
-
-      # Global config says logs are on; handler-level override forces them off.
-      put_test_config(enable_logs: true)
-
-      assert :ok =
-               :logger.add_handler(override_handler_name, Sentry.LoggerHandler, %{
-                 config: %{enable_logs: false}
-               })
-
-      on_exit(fn -> _ = :logger.remove_handler(override_handler_name) end)
-
-      initial_size = TelemetryProcessor.buffer_size(:log)
-
-      Logger.info("Test message — should be ignored by overridden handler")
-
-      Process.sleep(100)
-
-      assert TelemetryProcessor.buffer_size(:log) == initial_size
-    end
-
-    test "manually-added handler with no enable_logs inherits global enable_logs: true", %{
-      handler_name: handler_name
-    } do
-      :ok = :logger.remove_handler(handler_name)
-
-      inherit_handler_name =
-        :"sentry_logs_handler_inherit_#{System.unique_integer([:positive])}"
-
-      put_test_config(enable_logs: true)
-
-      assert :ok =
-               :logger.add_handler(inherit_handler_name, Sentry.LoggerHandler, %{config: %{}})
-
-      on_exit(fn -> _ = :logger.remove_handler(inherit_handler_name) end)
-
-      Logger.info("Inherited enable_logs message")
-
-      assert_sentry_log(:info, "Inherited enable_logs message")
-    end
-
-    test "runtime handler config update disables structured logs", %{handler_name: handler_name} do
-      assert :ok =
-               :logger.update_handler_config(handler_name, :config, %{enable_logs: false})
-
-      initial_size = TelemetryProcessor.buffer_size(:log)
-
-      Logger.info("Runtime disabled message")
+      Logger.info("Message with logs disabled")
 
       wait_for_buffer_stable(nil, initial_size)
       assert TelemetryProcessor.buffer_size(:log) == initial_size
     end
 
-    test "runtime handler config update enables structured logs", %{handler_name: handler_name} do
+    test "a manually-added handler sets its own logs level", %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
-      disabled_handler_name =
-        :"sentry_logs_handler_runtime_enable_#{System.unique_integer([:positive])}"
+      put_test_config(logs: [capture_log_messages: true])
 
-      put_test_config(enable_logs: false)
-
-      assert :ok =
-               :logger.add_handler(disabled_handler_name, Sentry.LoggerHandler, %{
-                 config: %{enable_logs: false}
-               })
-
-      on_exit(fn -> _ = :logger.remove_handler(disabled_handler_name) end)
+      own_level_handler_name = :"sentry_logs_handler_own_#{System.unique_integer([:positive])}"
 
       assert :ok =
-               :logger.update_handler_config(disabled_handler_name, :config, %{
-                 enable_logs: true
+               :logger.add_handler(own_level_handler_name, Sentry.LoggerHandler, %{
+                 config: %{logs_level: :info}
                })
 
-      Logger.info("Runtime enabled message")
+      on_exit(fn -> _ = :logger.remove_handler(own_level_handler_name) end)
 
-      assert_sentry_log(:info, "Runtime enabled message")
-    end
+      Logger.info("Handler-level logs level message")
 
-    test "rejects non-boolean :enable_logs in handler config", %{handler_name: handler_name} do
-      :ok = :logger.remove_handler(handler_name)
-
-      invalid_handler_name =
-        :"sentry_logs_handler_invalid_#{System.unique_integer([:positive])}"
-
-      assert {:error, {:handler_not_added, {:callback_crashed, {:error, error, _stack}}}} =
-               :logger.add_handler(invalid_handler_name, Sentry.LoggerHandler, %{
-                 config: %{enable_logs: "true"}
-               })
-
-      assert %NimbleOptions.ValidationError{key: :enable_logs} = error
+      assert_sentry_log(:info, "Handler-level logs level message")
     end
 
     test "generates trace_id when no trace context is available" do
@@ -604,7 +530,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
   defp reconfigure_logs_handler(handler_name, logs_config) do
     :ok = :logger.remove_handler(handler_name)
 
-    put_test_config(logs: logs_config)
+    put_test_config(logs: Keyword.put_new(logs_config, :level, :info))
 
     new_handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
 
@@ -622,7 +548,6 @@ defmodule Sentry.LoggerHandler.LogsTest do
     logs = Sentry.Config.logs()
 
     [
-      enable_logs: true,
       capture_log_messages: Keyword.fetch!(logs, :capture_log_messages),
       capture_level: Keyword.fetch!(logs, :capture_level),
       capture_metadata: Keyword.fetch!(logs, :capture_metadata),

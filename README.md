@@ -68,17 +68,18 @@ things: it reports crashes (and, optionally, `Logger` messages) to Sentry as **e
 and it forwards log entries to [Sentry's Logs UI](https://develop.sentry.dev/sdk/telemetry/logs/)
 as **structured logs**.
 
-The recommended way to enable it is to set `enable_logs: true` in your Sentry config. The SDK
-then **attaches the handler automatically** — you don't need to touch your `:logger`
-configuration or your `application.ex`:
+Set the `:logs` option in your Sentry config and the SDK **attaches the handler
+automatically** — you don't need to touch your `:logger` configuration or your
+`application.ex`. Without `:logs`, the handler is not attached at all. The two features
+have separate opt-ins: `:level` turns on structured logs, and `:capture_log_messages`
+turns on reporting standalone `Logger` messages as error events:
 
 ```elixir
 # config/prod.exs
 config :sentry,
   # ...your other Sentry config...
-  enable_logs: true,
   logs: [
-    # Structured logs sent to Sentry's Logs UI:
+    # Structured logs sent to Sentry's Logs UI.
     level: :info,
     metadata: [:request_id],
     # Also turn standalone Logger messages into Sentry error events.
@@ -95,8 +96,8 @@ With the configuration above, `Logger.info/1` and higher are sent to the Logs UI
 #### Advanced: configuring the handler manually
 
 If you want full control over the handler's options (such as `:rate_limiting` or
-`:tags_from_metadata`), or you want error reporting *without* structured logs, you can add the
-handler yourself instead of using `enable_logs`:
+`:tags_from_metadata`), you can add the handler yourself. Doing so replaces the
+auto-attached one:
 
 ```elixir
 # config/prod.exs

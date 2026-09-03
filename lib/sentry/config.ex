@@ -194,11 +194,14 @@ defmodule Sentry.Config do
   logs_schema = [
     level: [
       type:
-        {:in, [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
-      default: :info,
-      type_doc: "`t:Logger.level/0`",
+        {:in,
+         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
+      default: nil,
+      type_doc: "`t:Logger.level/0` or `nil`",
       doc: """
-      The minimum Logger level for log events sent to Sentry's Logs Protocol.
+      The minimum Logger level for log events sent to Sentry's Logs Protocol. Setting this
+      is what **enables structured logs**: when it is `nil` (the default), no logs are sent
+      to the Logs Protocol, regardless of the other keys here.
       """
     ],
     excluded_domains: [
@@ -224,11 +227,11 @@ defmodule Sentry.Config do
       type: :boolean,
       default: false,
       doc: """
-      When `true`, the auto-attached handler also reports standalone log messages
-      (such as `Logger.error("oops")`) to Sentry as captured events, in addition to
-      crash reports. Crash reports are sent whether or not this option is enabled, so
-      you do not need to turn it on to capture crashes. Both crashes and messages are
-      gated by `:capture_level`. This mirrors the `:capture_log_messages` option of
+      Setting this to `true` is what **enables reporting standalone log messages** (such as
+      `Logger.error("oops")`) to Sentry as captured events, in addition to crash reports.
+      Crash reports are sent whether or not this option is enabled, so you do not need to
+      turn it on to capture crashes. Both crashes and messages are gated by
+      `:capture_level`. This mirrors the `:capture_log_messages` option of
       `Sentry.LoggerHandler`. *Available since v13.3.0*.
       """
     ],
@@ -501,22 +504,6 @@ defmodule Sentry.Config do
       default: [],
       keys: integrations_schema
     ],
-    enable_logs: [
-      type: :boolean,
-      default: false,
-      doc: """
-      Whether to enable sending log events to Sentry. When enabled, the SDK will
-      automatically attach a `Sentry.LoggerHandler` to capture and send structured
-      log events according to the [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
-      The auto-attached handler also reports **crashes** to Sentry as captured events, and
-      can be configured (via the `:capture_log_messages` and `:capture_level` keys of the
-      `:logs` option) to report standalone `Logger` messages as captured events too, so you
-      do not need to add `Sentry.LoggerHandler` manually.
-      The handler is not added if a `Sentry.LoggerHandler` is already registered.
-      Use the `:logs` option to configure the auto-attached handler.
-      *Available since 12.0.0*.
-      """
-    ],
     enable_metrics: [
       type: :boolean,
       default: true,
@@ -529,17 +516,27 @@ defmodule Sentry.Config do
       """
     ],
     logs: [
-      type: :keyword_list,
-      default: [],
+      type: {:or, [{:in, [nil]}, {:keyword_list, logs_schema}]},
+      type_doc: "`t:keyword/0` or `nil`",
+      default: nil,
       doc: """
-      Configuration for the auto-attached logger handler. Only used when `:enable_logs`
-      is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
-      **structured logs** sent to Sentry's Logs Protocol, while the `:capture_*` keys
-      (`:capture_log_messages`, `:capture_level`, `:capture_metadata`, and
-      `:capture_excluded_domains`) configure whether (and how) `Logger` messages are also
-      reported as captured Sentry events. *Available since 12.0.0*.
-      """,
-      keys: logs_schema
+      Configuration for the logger handler that the SDK attaches automatically at startup.
+      When this is `nil` (the default), the handler is not attached at all. Set it to a
+      keyword list to attach it.
+
+      The keys configure **two independent features**, each with its own opt-in:
+
+        * **Structured logs** sent to Sentry's Logs Protocol, enabled by setting `:level`
+          and further configured by `:excluded_domains` and `:metadata`.
+
+        * **`Logger` messages reported as captured Sentry events**, enabled by setting
+          `:capture_log_messages` to `true` and further configured by `:capture_level`,
+          `:capture_metadata`, and `:capture_excluded_domains`.
+
+      Crashes are reported as captured Sentry events whenever the handler is attached,
+      independently of both opt-ins. The keys are documented under **Logs Options** below.
+      *Available since 12.0.0*.
+      """
     ],
     org_id: [
       type: {:custom, __MODULE__, :__validate_org_id__, []},
@@ -899,6 +896,7 @@ defmodule Sentry.Config do
   ]
 
   @basic_opts_schema NimbleOptions.new!(basic_opts_schema)
+  @logs_opts_schema NimbleOptions.new!(logs_schema)
   @transport_opts_schema NimbleOptions.new!(transport_opts_schema)
   @source_code_context_opts_schema NimbleOptions.new!(source_code_context_opts_schema)
   @hook_opts_schema NimbleOptions.new!(hook_opts_schema)
@@ -964,6 +962,12 @@ defmodule Sentry.Config do
     #### Basic Options
 
     #{NimbleOptions.docs(@basic_opts_schema)}
+
+    #### Logs Options
+
+    These are the keys of the `:logs` option above.
+
+    #{NimbleOptions.docs(@logs_opts_schema)}
 
     #### Hook Options
 
@@ -1103,35 +1107,11 @@ defmodule Sentry.Config do
   @spec test_mode?() :: boolean()
   def test_mode?, do: fetch!(:test_mode)
 
-  @spec enable_logs?() :: boolean()
-  def enable_logs?, do: fetch!(:enable_logs)
-
   @spec enable_metrics?() :: boolean()
   def enable_metrics?, do: fetch!(:enable_metrics)
 
-  @spec logs() :: keyword()
+  @spec logs() :: keyword() | nil
   def logs, do: fetch!(:logs)
-
-  @spec logs_level() :: Logger.level()
-  def logs_level, do: Keyword.fetch!(logs(), :level)
-
-  @spec logs_excluded_domains() :: [atom()]
-  def logs_excluded_domains, do: Keyword.fetch!(logs(), :excluded_domains)
-
-  @spec logs_metadata() :: [atom()] | :all
-  def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
-
-  @spec logs_capture_log_messages?() :: boolean()
-  def logs_capture_log_messages?, do: Keyword.fetch!(logs(), :capture_log_messages)
-
-  @spec logs_capture_level() :: Logger.level()
-  def logs_capture_level, do: Keyword.fetch!(logs(), :capture_level)
-
-  @spec logs_capture_metadata() :: [atom()] | :all
-  def logs_capture_metadata, do: Keyword.fetch!(logs(), :capture_metadata)
-
-  @spec logs_capture_excluded_domains() :: [atom()]
-  def logs_capture_excluded_domains, do: Keyword.fetch!(logs(), :capture_excluded_domains)
 
   @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
   def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
