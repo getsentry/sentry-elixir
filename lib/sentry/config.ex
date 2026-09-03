@@ -504,17 +504,6 @@ defmodule Sentry.Config do
       default: [],
       keys: integrations_schema
     ],
-    enable_metrics: [
-      type: :boolean,
-      default: true,
-      doc: """
-      Whether to enable sending metric events to Sentry. When enabled, the SDK will
-      capture and send metrics (counters, gauges, distributions) according to the
-      [Sentry Metrics Protocol](https://develop.sentry.dev/sdk/telemetry/metrics/).
-      Use `Sentry.Metrics` functions to record metrics.
-      *Available since 13.0.0*.
-      """
-    ],
     logs: [
       type: {:or, [{:in, [nil]}, {:keyword_list, logs_schema}]},
       type_doc: "`t:keyword/0` or `nil`",
@@ -1129,9 +1118,6 @@ defmodule Sentry.Config do
 
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
-
-  @spec enable_metrics?() :: boolean()
-  def enable_metrics?, do: fetch!(:enable_metrics)
 
   @spec logs() :: keyword() | nil
   def logs, do: fetch!(:logs)

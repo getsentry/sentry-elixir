@@ -13,7 +13,6 @@ defmodule Sentry.MetricsIntegrationTest do
     %{bypass: bypass, telemetry_processor: processor_name, ref: ref} =
       Sentry.Test.setup_sentry(
         collect_envelopes: true,
-        enable_metrics: true,
         telemetry_processor: [buffer_configs: %{metric: %{batch_size: 1}}]
       )
 

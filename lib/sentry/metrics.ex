@@ -27,11 +27,7 @@ defmodule Sentry.Metrics do
 
   ## Configuration
 
-  Metrics can be disabled globally via configuration:
-
-      config :sentry, enable_metrics: false
-
-  You can also filter metrics using the `:before_send_metric` callback:
+  Metrics can be filtered using the `:before_send_metric` callback:
 
       config :sentry,
         before_send_metric: fn metric ->
@@ -42,7 +38,7 @@ defmodule Sentry.Metrics do
   """
   @moduledoc since: "13.0.0"
 
-  alias Sentry.{ClientReport, Config, Metric, TelemetryProcessor}
+  alias Sentry.{ClientReport, Metric, TelemetryProcessor}
 
   @doc """
   Records a counter metric.
@@ -113,33 +109,30 @@ defmodule Sentry.Metrics do
   ## Private Functions
 
   defp record_metric(type, name, value, opts) do
-    if Config.enable_metrics?() do
-      unit = Keyword.get(opts, :unit)
-      attributes = Keyword.get(opts, :attributes, %{})
+    unit = Keyword.get(opts, :unit)
+    attributes = Keyword.get(opts, :attributes, %{})
 
-      {trace_id, span_id} = current_trace_context() || {generate_trace_id(), nil}
+    {trace_id, span_id} = current_trace_context() || {generate_trace_id(), nil}
 
-      # Build metric struct
-      metric = %Metric{
-        type: type,
-        name: name,
-        value: value,
-        timestamp: System.system_time(:nanosecond) / 1_000_000_000,
-        trace_id: trace_id,
-        span_id: span_id,
-        unit: unit,
-        attributes: attributes
-      }
+    metric = %Metric{
+      type: type,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      trace_id: trace_id,
+      span_id: span_id,
+      unit: unit,
+      attributes: attributes
+    }
 
-      metric = Metric.attach_default_attributes(metric)
+    metric = Metric.attach_default_attributes(metric)
 
-      case TelemetryProcessor.add(metric) do
-        {:ok, {:rate_limited, _data_category}} ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, [metric])
+    case TelemetryProcessor.add(metric) do
+      {:ok, {:rate_limited, _data_category}} ->
+        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, [metric])
 
-        :ok ->
-          :ok
-      end
+      :ok ->
+        :ok
     end
 
     :ok

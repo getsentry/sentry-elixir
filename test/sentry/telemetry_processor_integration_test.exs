@@ -385,8 +385,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     end
 
     test "a trace_metric_byte limit stops further metrics and reports paired outcomes", ctx do
-      put_test_config(enable_metrics: true)
-
       ref = install_rate_limit_response(ctx.bypass, "trace_metric_byte")
 
       Sentry.Metrics.count("first.metric", 1)
@@ -649,8 +647,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
     test "a trace_metric_byte rate limit drops metrics emitted via Sentry.Metrics with paired outcomes",
          ctx do
-      put_test_config(enable_metrics: true)
-
       metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
 
       set_rate_limit("trace_metric_byte")
