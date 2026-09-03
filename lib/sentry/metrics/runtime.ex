@@ -15,7 +15,20 @@ defmodule Sentry.Metrics.Runtime do
   # collectors behave consistently across Sentry SDKs.
   @min_interval 1_000
 
-  defstruct [:interval, :attributes, :memory_available?, :normal_schedulers, :scheduler_sample]
+  @system_limits [
+    {"process", :process_count, :process_limit},
+    {"atom", :atom_count, :atom_limit},
+    {"port", :port_count, :port_limit}
+  ]
+
+  defstruct [
+    :interval,
+    :attributes,
+    :memory_available?,
+    :normal_schedulers,
+    :scheduler_sample,
+    :system_limits
+  ]
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) when is_list(opts) do
@@ -44,7 +57,8 @@ defmodule Sentry.Metrics.Runtime do
        attributes: attributes,
        memory_available?: memory_available?(),
        normal_schedulers: normal_schedulers,
-       scheduler_sample: scheduler_sample(normal_schedulers)
+       scheduler_sample: scheduler_sample(normal_schedulers),
+       system_limits: system_limits()
      }}
   end
 
@@ -80,6 +94,17 @@ defmodule Sentry.Metrics.Runtime do
         gauge(state, "elixir.runtime.mem.#{key}", Keyword.fetch!(memory, key), unit: "byte")
       end)
     end
+
+    Enum.each(state.system_limits, fn {name, count_key, limit} ->
+      count = :erlang.system_info(count_key)
+
+      gauge(state, "elixir.runtime.#{name}.count", count)
+      gauge(state, "elixir.runtime.#{name}.limit", limit)
+
+      gauge(state, "elixir.runtime.#{name}.utilization", utilization_of(count, limit),
+        unit: "ratio"
+      )
+    end)
 
     %{state | scheduler_sample: sample}
   end
@@ -125,10 +150,21 @@ defmodule Sentry.Metrics.Runtime do
       false
   end
 
+  # `+P`, `+t` and `+Q` fix these ceilings at VM boot, so they are read once.
+  defp system_limits do
+    Enum.map(@system_limits, fn {name, count_key, limit_key} ->
+      {name, count_key, :erlang.system_info(limit_key)}
+    end)
+  end
+
+  defp utilization_of(_count, 0), do: 0.0
+  defp utilization_of(count, limit), do: count / limit
+
   defp gauge(state, name, value, opts \\ [])
 
   defp gauge(%__MODULE__{} = state, name, value, opts) do
-    Metrics.gauge(name, value, Keyword.put(opts, :attributes, state.attributes))
+    attributes = Map.merge(state.attributes, Keyword.get(opts, :attributes, %{}))
+    Metrics.gauge(name, value, Keyword.put(opts, :attributes, attributes))
   end
 
   defp normalize_interval(interval) when is_integer(interval) and interval >= @min_interval do
