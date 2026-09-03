@@ -27,7 +27,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "reports memory in bytes", %{ref: ref} do
       collect_once()
 
-      assert metric = find_metric(ref, "elixir.runtime.mem.total")
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.mem.total")
       assert metric["unit"] == "byte"
       assert metric["type"] == "gauge"
       assert metric["value"] > 0
@@ -60,7 +60,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "reports scheduler utilization as a ratio", %{ref: ref} do
       collect_once()
 
-      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.scheduler.utilization")
       assert metric["type"] == "gauge"
       assert metric["unit"] == "ratio"
       assert metric["value"] >= 0.0
@@ -68,11 +68,27 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "run queue metrics" do
+    test "reports total and CPU-bound run queue depth", %{ref: ref} do
+      collect_once()
+
+      metrics = snapshot(ref)
+
+      assert total = find_metric(metrics, "elixir.runtime.run_queue.total")
+      assert cpu = find_metric(metrics, "elixir.runtime.run_queue.cpu")
+
+      assert total["type"] == "gauge"
+      assert cpu["type"] == "gauge"
+      assert total["value"] >= 0
+      assert cpu["value"] >= 0
+    end
+  end
+
   describe "delivery" do
     test "delivers a whole snapshot from a single collection", %{ref: ref} do
       collect_once()
 
-      assert length(snapshot(ref)) == 6
+      assert length(snapshot(ref)) == 8
     end
   end
 
@@ -107,7 +123,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     items
   end
 
-  defp find_metric(ref, name) do
-    Enum.find(snapshot(ref), &(&1["name"] == name))
+  defp find_metric(metrics, name) when is_list(metrics) do
+    Enum.find(metrics, &(&1["name"] == name))
   end
 end
