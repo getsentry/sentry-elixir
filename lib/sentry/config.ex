@@ -448,6 +448,55 @@ defmodule Sentry.Config do
       *Available since 13.0.0*.
       """
     ],
+    metrics: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for metrics the SDK collects on its own, without you calling
+      `Sentry.Metrics` yourself. Every collector is opt-in, as required by the
+      [Sentry Metrics Protocol](https://develop.sentry.dev/sdk/telemetry/metrics/).
+      *Available since 14.0.0*.
+      """,
+      keys: [
+        runtime: [
+          type: :keyword_list,
+          default: [],
+          doc: """
+          Configuration for the BEAM runtime metrics collector, which periodically
+          reports scheduler, memory, run queue and system limit measurements.
+          *Available since 14.0.0*.
+          """,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to start the runtime metrics collector.
+              *Available since 14.0.0*.
+              """
+            ],
+            interval: [
+              type: :pos_integer,
+              default: 30_000,
+              doc: """
+              How often, in milliseconds, to collect and report runtime measurements.
+              Values below `1000` are raised to `1000`.
+              *Available since 14.0.0*.
+              """
+            ],
+            version_attributes: [
+              type: :boolean,
+              default: true,
+              doc: """
+              Whether to attach `elixir_version` and `otp_release` attributes to every
+              reported measurement, so metrics can be grouped by runtime version.
+              *Available since 14.0.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ],
     logs: [
       type: :keyword_list,
       default: [],
@@ -1128,6 +1177,9 @@ defmodule Sentry.Config do
 
   @spec enable_metrics?() :: boolean()
   def enable_metrics?, do: fetch!(:enable_metrics)
+
+  @spec metrics() :: keyword()
+  def metrics, do: fetch!(:metrics)
 
   @spec logs() :: keyword()
   def logs, do: fetch!(:logs)

@@ -243,6 +243,20 @@ defmodule Sentry.ApplicationTest do
     end
   end
 
+  describe "runtime metrics collector" do
+    test "is not started by default" do
+      restart_sentry_with([])
+
+      refute Process.whereis(Sentry.Metrics.Runtime)
+    end
+
+    test "is started when runtime metrics are enabled" do
+      restart_sentry_with(metrics: [runtime: [enabled: true]])
+
+      assert is_pid(Process.whereis(Sentry.Metrics.Runtime))
+    end
+  end
+
   defp restart_sentry_with(config) do
     Application.stop(:sentry)
 

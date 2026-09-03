@@ -25,6 +25,26 @@ defmodule Sentry.Metrics do
       # Record a distribution
       Sentry.Metrics.distribution("response.time", 42.5, unit: "millisecond")
 
+  ## Automatically Collected Metrics
+
+  The SDK can also collect BEAM runtime health metrics on its own, without any
+  calls to the functions above. This is opt-in:
+
+      config :sentry,
+        metrics: [
+          runtime: [enabled: true]
+        ]
+
+  Once enabled, a supervised collector reports these gauges every 30 seconds:
+
+    * `elixir.runtime.mem.total`, `elixir.runtime.mem.processes`,
+      `elixir.runtime.mem.binary`, `elixir.runtime.mem.ets`,
+      `elixir.runtime.mem.atom` — in bytes
+
+  Every reported metric carries `elixir_version` and `otp_release` attributes so
+  measurements can be grouped by runtime version. See the `:metrics` option in
+  the `Sentry` module documentation for the full configuration.
+
   ## Configuration
 
   Metrics can be disabled globally via configuration:
