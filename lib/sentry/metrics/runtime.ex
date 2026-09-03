@@ -10,6 +10,12 @@ defmodule Sentry.Metrics.Runtime do
   @memory_gauges [:total, :processes, :binary, :ets, :atom]
   @min_interval 1_000
 
+  @system_limits [
+    {"process", :process_count, :process_limit},
+    {"atom", :atom_count, :atom_limit},
+    {"port", :port_count, :port_limit}
+  ]
+
   defstruct [:interval, :attributes, :scheduler_sample]
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -65,6 +71,15 @@ defmodule Sentry.Metrics.Runtime do
       gauge(state, "elixir.runtime.mem.#{key}", Keyword.fetch!(memory, key), unit: "byte")
     end)
 
+    Enum.each(@system_limits, fn {name, count_key, limit_key} ->
+      count = :erlang.system_info(count_key)
+      limit = :erlang.system_info(limit_key)
+
+      gauge(state, "elixir.runtime.#{name}.count", count,
+        attributes: %{limit: limit, ratio: ratio(count, limit)}
+      )
+    end)
+
     # A snapshot is a burst of a dozen metrics every interval, far below the
     # metric buffer's batch size, so without an explicit flush it would sit
     # buffered until unrelated telemetry happened to signal the scheduler.
@@ -90,10 +105,14 @@ defmodule Sentry.Metrics.Runtime do
     if total > 0, do: active / total, else: 0.0
   end
 
+  defp ratio(_count, 0), do: 0.0
+  defp ratio(count, limit), do: Float.round(count / limit, 4)
+
   defp gauge(state, name, value, opts \\ [])
 
   defp gauge(%__MODULE__{} = state, name, value, opts) do
-    Metrics.gauge(name, value, Keyword.put(opts, :attributes, state.attributes))
+    attributes = Map.merge(state.attributes, Keyword.get(opts, :attributes, %{}))
+    Metrics.gauge(name, value, Keyword.put(opts, :attributes, attributes))
   end
 
   defp normalize_interval(interval) when is_integer(interval) and interval >= @min_interval do

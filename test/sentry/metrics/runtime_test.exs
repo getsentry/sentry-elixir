@@ -84,11 +84,35 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "system limit metrics" do
+    test "reports process, atom and port counts", %{ref: ref} do
+      collect_once()
+
+      names = Enum.map(snapshot(ref), & &1["name"])
+
+      assert "elixir.runtime.process.count" in names
+      assert "elixir.runtime.atom.count" in names
+      assert "elixir.runtime.port.count" in names
+    end
+
+    test "reports each count against its VM limit", %{ref: ref} do
+      collect_once()
+
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.process.count")
+
+      limit = metric["attributes"]["limit"]["value"]
+      ratio = metric["attributes"]["ratio"]["value"]
+
+      assert limit >= metric["value"]
+      assert_in_delta ratio, metric["value"] / limit, 0.0001
+    end
+  end
+
   describe "delivery" do
     test "delivers a whole snapshot from a single collection", %{ref: ref} do
       collect_once()
 
-      assert length(snapshot(ref)) == 8
+      assert length(snapshot(ref)) == 11
     end
   end
 
