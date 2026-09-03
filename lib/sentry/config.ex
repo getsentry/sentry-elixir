@@ -519,7 +519,7 @@ defmodule Sentry.Config do
           default: [],
           doc: """
           Configuration for the BEAM runtime metrics collector, which periodically
-          reports memory usage in bytes and scheduler utilization.
+          reports memory usage, scheduler utilization and run queue depth.
           *Available since 14.0.0*.
           """,
           keys: [
