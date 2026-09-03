@@ -504,6 +504,57 @@ defmodule Sentry.Config do
       default: [],
       keys: integrations_schema
     ],
+    metrics: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for metrics the SDK collects on its own, without you calling
+      `Sentry.Metrics` yourself. Every collector is opt-in, as required by the
+      [Sentry Metrics Protocol](https://develop.sentry.dev/sdk/telemetry/metrics/).
+      *Available since 14.0.0*.
+      """,
+      keys: [
+        runtime: [
+          type: :keyword_list,
+          default: [],
+          doc: """
+          Configuration for the BEAM runtime metrics collector, which periodically
+          reports total, process, binary, ETS and atom memory usage in bytes.
+          *Available since 14.0.0*.
+          """,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to start the runtime metrics collector.
+              *Available since 14.0.0*.
+              """
+            ],
+            interval: [
+              type: :pos_integer,
+              default: 30_000,
+              doc: """
+              How often, in milliseconds, to collect and report runtime measurements.
+              Values below `1000` are raised to `1000`.
+              *Available since 14.0.0*.
+              """
+            ],
+            version_attributes: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to attach `elixir_version` and `otp_release` attributes to every
+              reported measurement, so metrics can be grouped by runtime version. Off by
+              default: the versions change only on upgrade, and attaching them to every
+              point starts a fresh series for each metric on every rolling deploy.
+              *Available since 14.0.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ],
     logs: [
       type: {:or, [{:in, [nil]}, {:keyword_list, logs_schema}]},
       type_doc: "`t:keyword/0` or `nil`",
@@ -1144,6 +1195,9 @@ defmodule Sentry.Config do
 
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)
+
+  @spec metrics() :: keyword()
+  def metrics, do: fetch!(:metrics)
 
   @spec logs() :: keyword() | nil
   def logs, do: fetch!(:logs)
