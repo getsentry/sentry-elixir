@@ -408,7 +408,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
     @tag :capture_log
     test "a log_byte limit stops further logs and reports paired outcomes", ctx do
-      put_test_config(enable_logs: true, logs: [level: :info])
+      put_test_config(logs: [level: :info])
       attach_sentry_logs_handler()
 
       ref = install_rate_limit_response(ctx.bypass, "log_byte")
@@ -628,7 +628,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     # emitting process and so reads this test's isolated rate limiter table.
     @tag :capture_log
     test "a log_byte rate limit drops logs emitted via Logger with paired outcomes", ctx do
-      put_test_config(enable_logs: true, logs: [level: :info])
+      put_test_config(logs: [level: :info])
       attach_sentry_logs_handler()
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
@@ -850,7 +850,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
     logs = Sentry.Config.logs()
 
     config = [
-      enable_logs: true,
       capture_log_messages: Keyword.fetch!(logs, :capture_log_messages),
       capture_level: Keyword.fetch!(logs, :capture_level),
       capture_metadata: Keyword.fetch!(logs, :capture_metadata),
