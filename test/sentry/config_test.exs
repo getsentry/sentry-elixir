@@ -459,6 +459,18 @@ defmodule Sentry.ConfigTest do
     end
   end
 
+  describe ":client_report_sender" do
+    test "defaults to the globally-supervised sender" do
+      config = Config.validate!([])
+      assert config[:client_report_sender] == Sentry.ClientReport.Sender
+    end
+
+    test "resolves to the sender configured for the current scope" do
+      put_test_config(client_report_sender: :some_other_sender)
+      assert Config.client_report_sender() == :some_other_sender
+    end
+  end
+
   describe ":before_send_metric" do
     test "accepts a function callback" do
       callback = fn metric -> metric end

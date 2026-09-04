@@ -55,7 +55,7 @@ The SDK starts as an OTP application with a `:one_for_one` supervisor. Key child
 1. **Registry** — `Sentry.Transport.SenderRegistry` for sender worker lookup
 2. **Sentry.Sources** — Source code context for error reports
 3. **Sentry.Dedupe** — Event deduplication
-4. **Sentry.ClientReport.Sender** — Reports discarded events to Sentry
+4. **Sentry.ClientReport.Sender** — Reports discarded events to Sentry (not started in test mode; `Sentry.Test` starts one per test)
 5. **HTTP Client** — Pluggable (Finch or Hackney), started if it has `child_spec/0`
 6. **Sentry.OpenTelemetry.SpanStorage** — ETS-backed span storage (when tracing is enabled)
 7. **Sentry.TelemetryProcessor** — Buffered event processing pipeline
