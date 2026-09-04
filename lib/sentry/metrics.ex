@@ -37,6 +37,8 @@ defmodule Sentry.Metrics do
 
   Once enabled, a supervised collector reports these gauges every 30 seconds:
 
+    * `elixir.runtime.scheduler.utilization` — busy fraction of scheduler time,
+      as a ratio between `0.0` and `1.0`
     * `elixir.runtime.mem.total`, `elixir.runtime.mem.processes`,
       `elixir.runtime.mem.binary`, `elixir.runtime.mem.ets`,
       `elixir.runtime.mem.atom` — in bytes

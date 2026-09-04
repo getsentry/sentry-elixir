@@ -56,11 +56,23 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "scheduler utilization" do
+    test "reports scheduler utilization as a ratio", %{ref: ref} do
+      collect_once()
+
+      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric["type"] == "gauge"
+      assert metric["unit"] == "ratio"
+      assert metric["value"] >= 0.0
+      assert metric["value"] <= 1.0
+    end
+  end
+
   describe "delivery" do
     test "delivers a whole snapshot from a single collection", %{ref: ref} do
       collect_once()
 
-      assert length(snapshot(ref)) == 5
+      assert length(snapshot(ref)) == 6
     end
   end
 
