@@ -254,7 +254,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
         }
       )
 
-      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       :ok
@@ -341,8 +340,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
       end)
 
-      Sentry.ClientReport.Sender.flush()
-
       on_exit(fn -> reset_rate_limits(scope: :scheduler) end)
 
       :ok
@@ -364,7 +361,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       Sentry.capture_message("rate-limited-error", result: :none)
 
-      outcomes = collect_discarded_outcomes(ref, "ratelimit_backoff")
+      outcomes = collect_discarded_outcomes(ctx.client_report_sender, ref, "ratelimit_backoff")
 
       assert outcomes["error"] == 1
     end
@@ -380,7 +377,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       )
 
       put_test_config(client: Sentry.FinchClient)
-      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       on_exit(fn -> reset_rate_limits(scope: :scheduler) end)
@@ -400,7 +396,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       Sentry.Metrics.count("rate.limited.metric", 1)
 
-      outcomes = collect_discarded_outcomes(ref, "ratelimit_backoff")
+      outcomes = collect_discarded_outcomes(ctx.client_report_sender, ref, "ratelimit_backoff")
 
       assert outcomes["trace_metric"] == 1
       assert is_integer(outcomes["trace_metric_byte"]) and outcomes["trace_metric_byte"] > 0
@@ -420,7 +416,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       Logger.info("rate limited log")
 
-      outcomes = collect_discarded_outcomes(ref, "ratelimit_backoff")
+      outcomes = collect_discarded_outcomes(ctx.client_report_sender, ref, "ratelimit_backoff")
 
       assert outcomes["log_item"] == 1
       assert is_integer(outcomes["log_byte"]) and outcomes["log_byte"] > 0
@@ -429,7 +425,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   describe "pre-buffer rate limit checks" do
     setup ctx do
-      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       :ok
@@ -493,10 +488,13 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(error_buffer) == 0
 
-      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
-               "attachment" => 1,
-               "error" => 1
-             }
+      reset_rate_limits()
+
+      assert collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff") ==
+               %{
+                 "attachment" => 1,
+                 "error" => 1
+               }
     end
 
     test "sends an error without attachments when attachments are rate limited", ctx do
@@ -514,9 +512,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
       assert event["message"]["formatted"] == "pre-buffer-attachment-limit"
 
-      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
-               "attachment" => 1
-             }
+      assert collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff") ==
+               %{
+                 "attachment" => 1
+               }
     end
 
     test "sends an error without attachments when attachment items are rate limited", ctx do
@@ -534,9 +533,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
       assert event["message"]["formatted"] == "pre-buffer-attachment-item-limit"
 
-      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
-               "attachment" => 1
-             }
+      assert collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff") ==
+               %{
+                 "attachment" => 1
+               }
     end
 
     test "sends an error while dropping all of its rate-limited attachments", ctx do
@@ -557,9 +557,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
       assert event["message"]["formatted"] == "pre-buffer-multiple-attachment-limit"
 
-      assert collect_discarded_outcomes(ctx.ref, "ratelimit_backoff") == %{
-               "attachment" => 2
-             }
+      assert collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff") ==
+               %{
+                 "attachment" => 2
+               }
     end
 
     test "drops rate-limited check-in events before they enter the buffer", ctx do
@@ -639,7 +640,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(log_buffer) == 0
 
-      outcomes = collect_discarded_outcomes(ctx.ref, "ratelimit_backoff")
+      outcomes =
+        collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff")
 
       assert outcomes["log_item"] == 1
       assert is_integer(outcomes["log_byte"]) and outcomes["log_byte"] > 0
@@ -657,7 +659,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(metric_buffer) == 0
 
-      outcomes = collect_discarded_outcomes(ctx.ref, "ratelimit_backoff")
+      outcomes =
+        collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff")
 
       assert outcomes["trace_metric"] == 1
       assert is_integer(outcomes["trace_metric_byte"]) and outcomes["trace_metric_byte"] > 0
@@ -667,7 +670,6 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   describe "scheduler draining a rate-limited buffer" do
     setup ctx do
       put_test_config(telemetry_processor_categories: [:transaction, :log])
-      Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
 
       :ok
@@ -792,10 +794,10 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
   # Outcomes are recorded with a cast from whichever process dropped the item, so
   # wait for the Sender to have something to report before flushing — an empty
   # buffer is not enough, since items are drained before the outcome is recorded.
-  defp collect_discarded_outcomes(ref, reason) do
-    poll_until(fn -> :sys.get_state(Sentry.ClientReport.Sender) != %{} end)
+  defp collect_discarded_outcomes(sender, ref, reason) do
+    poll_until(fn -> :sys.get_state(sender) != %{} end)
 
-    Sentry.ClientReport.Sender.flush()
+    Sentry.ClientReport.Sender.flush(sender)
 
     for event <- await_client_report(ref)["discarded_events"],
         event["reason"] == reason,

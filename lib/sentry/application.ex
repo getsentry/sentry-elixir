@@ -68,13 +68,13 @@ defmodule Sentry.Application do
           {Registry, keys: :unique, name: Sentry.Transport.SenderRegistry},
           Sentry.Sources,
           Sentry.Dedupe,
-          Sentry.ClientReport.Sender,
           {Sentry.Integrations.CheckInIDMappings,
            [
              max_expected_check_in_time:
                Keyword.fetch!(integrations_config, :max_expected_check_in_time)
            ]}
         ] ++
+        maybe_client_report_sender() ++
         maybe_http_client_spec ++
         maybe_span_storage ++
         telemetry_processor ++
@@ -195,6 +195,13 @@ defmodule Sentry.Application do
     defp maybe_rate_limiter, do: []
   else
     defp maybe_rate_limiter, do: [Sentry.Transport.RateLimiter]
+  end
+
+  # In tests, we do not run a global client report sender; its periodic flush would
+  # deliver unowned outcomes to whichever DSN is bound when it fires. Tests get one
+  # per test from `Sentry.Test.setup_client_report_sender/0`.
+  defp maybe_client_report_sender do
+    if Config.test_mode?(), do: [], else: [Sentry.ClientReport.Sender]
   end
 
   defp maybe_put_test_processor_resolver(opts) do

@@ -585,6 +585,21 @@ defmodule Sentry.Config do
       *Available since 12.0.0*.
       """
     ],
+    client_report_sender: [
+      type: :atom,
+      default: Sentry.ClientReport.Sender,
+      doc: """
+      The registered name of the process that accumulates discarded-event outcomes
+      and flushes them to Sentry as client reports.
+
+      Defaults to the globally-supervised `Sentry.ClientReport.Sender`. When
+      `test_mode: true` is enabled, `Sentry.Test` starts one sender per test and
+      points this at it, so outcomes are attributed to the test that produced
+      them and never outlive it.
+
+      *Available since 14.0.0*.
+      """
+    ],
     namespace: [
       type: {:custom, __MODULE__, :__validate_namespace__, []},
       type_doc: "`{module(), atom()}`",
@@ -1102,6 +1117,11 @@ defmodule Sentry.Config do
   @doc deprecated: "Use Sentry.Test instead. This option will be removed in v13.0.0."
   @spec test_mode?() :: boolean()
   def test_mode?, do: fetch!(:test_mode)
+
+  # Read per call rather than cached, so that the caller's process lineage
+  # decides which sender receives the outcome.
+  @spec client_report_sender() :: atom()
+  def client_report_sender, do: fetch!(:client_report_sender)
 
   @spec enable_logs?() :: boolean()
   def enable_logs?, do: fetch!(:enable_logs)

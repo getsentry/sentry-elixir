@@ -2,7 +2,6 @@ defmodule Sentry.Opentelemetry.SamplerTest do
   use Sentry.Case, async: false
 
   alias Sentry.OpenTelemetry.Sampler
-  alias Sentry.ClientReport
   alias SamplingContext
 
   import ExUnit.CaptureLog
@@ -28,9 +27,8 @@ defmodule Sentry.Opentelemetry.SamplerTest do
   end
 
   describe "span name dropping" do
-    test "drops spans with the given name and records discarded event" do
-      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
-
+    test "drops spans with the given name and records discarded event",
+         %{client_report_sender: sender} do
       test_ctx = create_test_span_context()
 
       assert {:drop, [], []} =
@@ -38,7 +36,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                  drop: ["Elixir.Oban.Stager process"]
                )
 
-      state = :sys.get_state(ClientReport.Sender)
+      state = :sys.get_state(sender)
       assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
 
@@ -79,9 +77,8 @@ defmodule Sentry.Opentelemetry.SamplerTest do
   end
 
   describe "sampling based on traces_sample_rate" do
-    test "always drops when sample rate is 0.0 and records discarded event" do
-      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
-
+    test "always drops when sample rate is 0.0 and records discarded event",
+         %{client_report_sender: sender} do
       put_test_config(traces_sample_rate: 0.0)
 
       test_ctx = create_test_span_context()
@@ -92,7 +89,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       assert {"sentry-sample_rate", "0.0"} in tracestate
       assert {"sentry-sampled", "false"} in tracestate
 
-      state = :sys.get_state(ClientReport.Sender)
+      state = :sys.get_state(sender)
       assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
 
@@ -128,9 +125,8 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       assert sampled_count > 30 and sampled_count < 70
     end
 
-    test "records discarded events when randomly dropped by sample rate" do
-      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
-
+    test "records discarded events when randomly dropped by sample rate",
+         %{client_report_sender: sender} do
       put_test_config(traces_sample_rate: 0.001)
 
       Enum.each(1..50, fn trace_id ->
@@ -138,14 +134,13 @@ defmodule Sentry.Opentelemetry.SamplerTest do
         Sampler.should_sample(test_ctx, trace_id, nil, "test span", nil, nil, drop: [])
       end)
 
-      state = :sys.get_state(ClientReport.Sender)
+      state = :sys.get_state(sender)
       discarded_count = Map.get(state, {:sample_rate, "transaction"}, 0)
       assert discarded_count > 0, "Expected some spans to be dropped and recorded"
     end
 
-    test "always drops when sample rate is nil (tracing disabled) and records discarded event" do
-      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
-
+    test "always drops when sample rate is nil (tracing disabled) and records discarded event",
+         %{client_report_sender: sender} do
       put_test_config(traces_sample_rate: nil)
 
       test_ctx = create_test_span_context()
@@ -153,7 +148,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       assert {:drop, [], []} =
                Sampler.should_sample(test_ctx, 123, nil, "test span", nil, nil, drop: [])
 
-      state = :sys.get_state(ClientReport.Sender)
+      state = :sys.get_state(sender)
       assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
     end
   end
@@ -171,9 +166,8 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       )
     end
 
-    test "all spans in trace inherit sampling decision to drop when trace was not sampled" do
-      :sys.replace_state(ClientReport.Sender, fn _ -> %{} end)
-
+    test "all spans in trace inherit sampling decision to drop when trace was not sampled",
+         %{client_report_sender: sender} do
       trace_id = 12_345_678_901_234_567_890_123_456_789_012
 
       trace_tracestate = [
@@ -197,7 +191,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
         assert {:drop, [], returned_tracestate} = result
         assert returned_tracestate == trace_tracestate
 
-        state = :sys.get_state(ClientReport.Sender)
+        state = :sys.get_state(sender)
         assert state == %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
       after
         :otel_ctx.detach(token)

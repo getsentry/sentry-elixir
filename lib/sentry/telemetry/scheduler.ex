@@ -545,9 +545,10 @@ defmodule Sentry.Telemetry.Scheduler do
 
       true ->
         data_category = Category.data_category(category)
+        sender = Config.client_report_sender()
 
         Enum.each(items, fn _item ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
+          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category, sender)
         end)
     end
 
