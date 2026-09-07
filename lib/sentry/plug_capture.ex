@@ -83,7 +83,7 @@ defmodule Sentry.PlugCapture do
       * scrubs *all* cookies (`cookies` and `req_cookies`)
       * drops sensitive request headers (`authorization`, `authentication`, `cookie`)
       * scrubs `params` and `body_params` through the configured `body_scrubber`
-        (defaulting to the sensitive params `password`, `passwd`, `secret`; a
+        (defaulting to the sensitive params in `Sentry.Scrubber.default_param_keys/0`; a
         `nil` `body_scrubber` empties both), and scrubs the same sensitive params
         in `query_params` and `path_params`
       * derives `request_path`, `path_info` and `query_string` from the URL the

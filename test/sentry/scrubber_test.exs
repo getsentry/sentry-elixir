@@ -42,6 +42,19 @@ defmodule Sentry.ScrubberTest do
                %{"password" => "*********", "ok" => 1}
     end
 
+    test "leaves a key that is not valid UTF-8 alone rather than failing on it" do
+      assert Scrubber.scrub(%{<<0xC3, 0x28>> => "value", "password" => "x"}) ==
+               %{<<0xC3, 0x28>> => "value", "password" => Scrubber.scrubbed_value()}
+    end
+
+    test "redacts a key that contains a sensitive term in any casing" do
+      assert Scrubber.scrub(%{"X-Auth-Token" => "x"}) == %{"X-Auth-Token" => "*********"}
+    end
+
+    test "leaves a key containing no sensitive term untouched" do
+      assert Scrubber.scrub(%{"page" => "2"}) == %{"page" => "2"}
+    end
+
     test "redacts sensitive keys given as atoms (e.g. struct fields)" do
       assert Scrubber.scrub(%{password: "x", ok: 1}) ==
                %{password: "*********", ok: 1}
@@ -152,6 +165,16 @@ defmodule Sentry.ScrubberTest do
       refute scrubbed =~ "hunter2"
       assert scrubbed =~ "visible=ok"
     end
+
+    test "matches keys that are not valid UTF-8" do
+      # A query string is arbitrary bytes, so a percent-encoded key can decode to
+      # something that is not valid UTF-8 at all. Case-insensitive matching must
+      # cope with that: scrubbing runs while an error is already being reported.
+      scrubbed = Scrubber.scrub_query_string("%FF%FEtoken=hunter2&keep=ok")
+
+      refute scrubbed =~ "hunter2"
+      assert scrubbed =~ "keep=ok"
+    end
   end
 
   describe "scrub/1 with no registered scrubber" do
@@ -230,7 +253,7 @@ defmodule Sentry.ScrubberTest do
     test "scrubs params with default sensitive keys", %{scrubbed: scrubbed} do
       assert scrubbed.params == %{
                "user" => %{"email" => "alice@example.com", "password" => "*********"},
-               "_csrf_token" => "csrf-leaky-token"
+               "_csrf_token" => "*********"
              }
     end
 
@@ -315,7 +338,7 @@ defmodule Sentry.ScrubberTest do
 
       refute scrubbed =~ "secret"
       refute scrubbed =~ "4242424242424242"
-      assert scrubbed =~ "token=abc"
+      refute scrubbed =~ "abc"
       assert scrubbed =~ "keep=ok"
     end
 

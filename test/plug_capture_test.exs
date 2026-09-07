@@ -3,6 +3,7 @@ defmodule Sentry.PlugCaptureTest do
   import Plug.Test
 
   import Sentry.Test.Assertions
+  import Sentry.TestHelpers
 
   alias Sentry.Test, as: SentryTest
 
@@ -430,6 +431,28 @@ defmodule Sentry.PlugCaptureTest do
       assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
 
       assert value =~ ~s(path_params: %{"secret" => "#{@redacted}"})
+    end
+
+    test "redacts a query parameter whose name contains a sensitive term", %{ref: ref} do
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?Reset-Token=#{@token}") |> call_phoenix_endpoint()
+      end
+
+      assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
+
+      refute value =~ @token
+    end
+
+    test "redacts a query parameter listed in the configured param keys", %{ref: ref} do
+      put_test_config(scrubber: [param_keys: ["internal_ref"]])
+
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error?internal_ref=#{@token}") |> call_phoenix_endpoint()
+      end
+
+      assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
+
+      refute value =~ @token
     end
   end
 

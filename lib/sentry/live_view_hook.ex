@@ -106,7 +106,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     @doc """
     The default scrubber applied to LiveView breadcrumb data.
 
-    Delegates to `Sentry.Scrubber.scrub/2` with the default sensitive
+    Delegates to `Sentry.Scrubber.scrub/2` with the configured sensitive
     parameter keys.
     """
     @doc since: "13.1.0"

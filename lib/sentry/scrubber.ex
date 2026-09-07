@@ -1,4 +1,32 @@
 defmodule Sentry.Scrubber do
+  # Bound above the @moduledoc, which interpolates them.
+  #
+  # The denylist required by the Sentry Data Collection spec, matched as a
+  # case-insensitive substring of the key name rather than for equality, so that
+  # "auth" covers "Authorization" and "X-Auth-Token".
+  # https://develop.sentry.dev/sdk/foundations/client/data-collection/
+  @default_scrubbed_param_keys [
+    "auth",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "pwd",
+    "key",
+    "jwt",
+    "bearer",
+    "sso",
+    "saml",
+    "csrf",
+    "xsrf",
+    "credentials",
+    "session",
+    "sid",
+    "identity"
+  ]
+
+  @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
+
   @moduledoc """
   Shared, framework-agnostic helpers for scrubbing sensitive data before it is
   sent to Sentry.
@@ -15,22 +43,33 @@ defmodule Sentry.Scrubber do
   ## Defaults
 
   The default sensitive *parameter* keys (used for body params, query strings,
-  and arbitrary maps) are:
+  and arbitrary maps) are the denylist required by the
+  [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/):
 
-  #{Enum.map_join(["password", "passwd", "secret"], "\n", &"  * `\"#{&1}\"`")}
+  #{Enum.map_join(@default_scrubbed_param_keys, "\n", &"  * `\"#{&1}\"`")}
+
+  A key counts as sensitive when any of those terms appears anywhere in its
+  name, compared case-insensitively — so `"auth"` covers both `"Authorization"`
+  and `"X-Auth-Token"`.
 
   The default sensitive *header* keys are:
 
-  #{Enum.map_join(["authorization", "authentication", "cookie"], "\n", &"  * `\"#{&1}\"`")}
+  #{Enum.map_join(@default_scrubbed_header_keys, "\n", &"  * `\"#{&1}\"`")}
 
   Values matching a credit-card-like pattern (13–16 digits, optionally
   separated by spaces or dashes) are also replaced with the placeholder.
 
   ## Custom scrubbing
 
-  The map/query/header functions accept an optional `:keys` option that
-  overrides the default list of sensitive keys. This makes it possible to
-  compose custom scrubbers on top of the defaults:
+  Add your own terms to the parameter denylist with the `:scrubber`
+  configuration, which extends the list above:
+
+      config :sentry, scrubber: [param_keys: ["internal_ref"]]
+
+  The map/query/header functions also accept an optional `:keys` option that
+  replaces the list outright for that call. Precedence is `:keys` > the
+  `scrubber: [param_keys: ...]` configuration > `default_param_keys/0`. This
+  makes it possible to compose custom scrubbers on top of the defaults:
 
       def scrub(map) do
         map
@@ -83,8 +122,6 @@ defmodule Sentry.Scrubber do
 
   @moduledoc since: "13.1.0"
 
-  @default_scrubbed_param_keys ["password", "passwd", "secret"]
-  @default_scrubbed_header_keys ["authorization", "authentication", "cookie"]
   @scrubbed_value "*********"
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
@@ -152,11 +189,16 @@ defmodule Sentry.Scrubber do
           header_scrubber: (Plug.Conn.t() -> term()),
           cookie_scrubber: (Plug.Conn.t() -> term()),
           url_scrubber: (Plug.Conn.t() -> String.t()),
+          param_keys: [String.t()],
           private_allow_list: [atom()]
         }
 
   @enforce_keys @scrubber_names
-  defstruct @scrubber_names ++ [private_allow_list: @default_private_allow_list]
+  defstruct @scrubber_names ++
+              [
+                param_keys: @default_scrubbed_param_keys,
+                private_allow_list: @default_private_allow_list
+              ]
 
   @doc false
   @spec scrubber_names() :: [atom()]
@@ -184,13 +226,15 @@ defmodule Sentry.Scrubber do
 
   Each `*_scrubber` key, when omitted, falls back to the field's default
   scrubber — the matching `scrub(conn, field)` clause of `scrub/2`.
-  `:private_allow_list` defaults to `default_private_allow_list/0`.
+  `:param_keys` and `:private_allow_list` default to the corresponding
+  `:scrubber` configuration values.
   """
   @type conn_scrubber_opts :: [
           body_scrubber: field_scrubber(),
           header_scrubber: field_scrubber(),
           cookie_scrubber: field_scrubber(),
           url_scrubber: field_scrubber(),
+          param_keys: [String.t()],
           private_allow_list: [atom()]
         ]
 
@@ -202,7 +246,12 @@ defmodule Sentry.Scrubber do
   def scrubbed_value, do: @scrubbed_value
 
   @doc """
-  Returns the default list of sensitive parameter keys.
+  Returns the SDK default list of sensitive parameter keys.
+
+  This is the denylist required by the
+  [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/),
+  matched as a case-insensitive substring of the key name. The
+  `scrubber: [param_keys: ...]` configuration option extends it.
   """
   @doc since: "13.1.0"
   @spec default_param_keys() :: [String.t()]
@@ -280,13 +329,13 @@ defmodule Sentry.Scrubber do
   @doc since: "13.1.0"
   @spec scrub_query_string(String.t(), [option()]) :: String.t()
   def scrub_query_string(query, opts \\ []) when is_binary(query) do
-    keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
+    keys = param_keys(opts)
 
     query
     |> URI.query_decoder()
     |> Enum.map(fn {key, value} ->
       cond do
-        key in keys -> {key, @scrubbed_value}
+        sensitive_key?(key, keys) -> {key, @scrubbed_value}
         is_binary(value) and value =~ credit_card_regex() -> {key, @scrubbed_value}
         true -> {key, value}
       end
@@ -337,9 +386,19 @@ defmodule Sentry.Scrubber do
       header_scrubber: resolve_scrubber(opts, :header_scrubber, :headers),
       cookie_scrubber: resolve_scrubber(opts, :cookie_scrubber, :cookies),
       url_scrubber: resolve_scrubber(opts, :url_scrubber, :url),
-      private_allow_list: Keyword.get(opts, :private_allow_list, @default_private_allow_list)
+      param_keys: Keyword.get_lazy(opts, :param_keys, &configured_param_keys/0),
+      private_allow_list:
+        Keyword.get_lazy(opts, :private_allow_list, &configured_private_allow_list/0)
     }
   end
+
+  # The user-configured key lists. Read at most once per scrubber construction,
+  # and `scrubber/0` memoizes the struct per process, so the recursive scrubbing
+  # functions never reach the config store per map node.
+  defp configured_param_keys,
+    do: @default_scrubbed_param_keys ++ Sentry.Config.scrubber()[:param_keys]
+
+  defp configured_private_allow_list, do: Sentry.Config.scrubber()[:conn_private_allow_list]
 
   # Resolves a per-field scrubber option into a `(conn -> term)` function. A
   # missing option falls back to the field's default scrubber, expressed as an
@@ -523,7 +582,8 @@ defmodule Sentry.Scrubber do
   @spec scrub(Plug.Conn.t(), :body | :headers | :cookies | :url) :: term()
 
   def scrub(map, opts) when is_map(map) and not is_struct(map) and is_list(opts) do
-    keys = Keyword.get(opts, :keys, @default_scrubbed_param_keys)
+    keys = param_keys(opts)
+    opts = Keyword.put_new(opts, :keys, keys)
 
     Map.new(map, fn {key, value} ->
       {key, if(sensitive_key?(key, keys), do: @scrubbed_value, else: scrub(value, opts))}
@@ -673,11 +733,25 @@ defmodule Sentry.Scrubber do
 
   defp normalize(_field, value), do: value
 
-  # Matches a map key against the configured sensitive-key list. The list is
-  # string-based (HTTP params), but maps built from structs via `Map.from_struct/1`
-  # have atom keys, so atoms are also compared by their string form.
-  defp sensitive_key?(key, keys),
-    do: key in keys or (is_atom(key) and Atom.to_string(key) in keys)
+  # Resolves the sensitive parameter keys for a scrubbing call. An explicit
+  # `:keys` option wins; otherwise they come from the current process's scrubber,
+  # which is config-backed and memoized by `scrubber/0`.
+  defp param_keys(opts), do: Keyword.get_lazy(opts, :keys, fn -> scrubber().param_keys end)
+
+  # Matches a key against the sensitive-key list the way the Sentry Data
+  # Collection spec requires: a partial, case-insensitive match, so a key counts
+  # as sensitive when any listed term appears anywhere in its name. Maps built
+  # from structs via `Map.from_struct/1` have atom keys, so atoms are compared by
+  # their string form.
+  defp sensitive_key?(key, keys) when is_atom(key) and not is_nil(key),
+    do: key |> Atom.to_string() |> sensitive_key?(keys)
+
+  defp sensitive_key?(key, keys) when is_binary(key) do
+    downcased = String.downcase(key)
+    Enum.any?(keys, &String.contains?(downcased, String.downcase(&1)))
+  end
+
+  defp sensitive_key?(_key, _keys), do: false
 
   defp credit_card_regex, do: ~r/^(?:\d[ -]*?){13,16}$/
 end
