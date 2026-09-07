@@ -25,6 +25,7 @@ defmodule Sentry.PlugCaptureTest do
     get "/action_clause_error", PhoenixController, :action_clause_error
     get "/assigns_route", PhoenixController, :assigns
     get "/reset_password/:token", PhoenixController, :action_clause_error
+    get "/verify/:secret", PhoenixController, :action_clause_error
   end
 
   defmodule PhoenixEndpoint do
@@ -387,8 +388,13 @@ defmodule Sentry.PlugCaptureTest do
         render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
       )
 
-      pid = start_supervised!(PhoenixEndpointWithUrlScrubber)
-      Process.link(pid)
+      Application.put_env(:sentry, PhoenixEndpoint,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      for endpoint <- [PhoenixEndpointWithUrlScrubber, PhoenixEndpoint] do
+        endpoint |> start_supervised!() |> Process.link()
+      end
 
       %{ref: SentryTest.setup_bypass_envelope_collector(bypass, type: "event")}
     end
@@ -414,6 +420,16 @@ defmodule Sentry.PlugCaptureTest do
       assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
 
       assert value =~ ~s(query_string: "token=#{@encoded_redacted}")
+    end
+
+    test "redacts a route parameter named like a credential", %{ref: ref} do
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/verify/#{@token}") |> call_phoenix_endpoint()
+      end
+
+      assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
+
+      assert value =~ ~s(path_params: %{"secret" => "#{@redacted}"})
     end
   end
 

@@ -85,7 +85,7 @@ defmodule Sentry.PlugCapture do
       * scrubs `params` and `body_params` through the configured `body_scrubber`
         (defaulting to the sensitive params `password`, `passwd`, `secret`; a
         `nil` `body_scrubber` empties both), and scrubs the same sensitive params
-        in `query_params`
+        in `query_params` and `path_params`
       * derives `request_path`, `path_info` and `query_string` from the URL the
         configured `url_scrubber` returns, so a scrubber that redacts a path
         segment redacts it here too; `query_string` is scrubbed against the

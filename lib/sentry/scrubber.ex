@@ -60,7 +60,7 @@ defmodule Sentry.Scrubber do
   `body_params` (the configurable fields — `body_params` shares the
   `:body_scrubber` with `params`, so it honors the same registered scrubber and
   is emptied when `body_scrubber` is `nil`), clears `req_cookies` and `assigns`
-  to `%{}`, scrubs `query_params` as a params-shaped map, derives `request_path`,
+  to `%{}`, scrubs `query_params` and `path_params` as params-shaped maps, derives `request_path`,
   `path_info` and `query_string` from the scrubbed URL, and reduces `private` to
   its allow-listed keys (`default_private_allow_list/0`). `assigns` is cleared
   wholesale because auth libraries (Guardian, Pow, Coherence) routinely store
@@ -130,6 +130,7 @@ defmodule Sentry.Scrubber do
     params: :body_scrubber,
     body_params: :body_scrubber,
     query_params: :params,
+    path_params: :params,
     query_string: :url_scrubbed,
     request_path: :url_scrubbed,
     path_info: :url_scrubbed,
