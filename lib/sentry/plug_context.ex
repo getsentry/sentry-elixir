@@ -117,6 +117,14 @@ defmodule Sentry.PlugContext do
 
       plug Sentry.PlugContext, url_scrubber: {MySentryScrubber, :scrub_url}
 
+  The `:url_scrubber` governs more than the reported request URL: wherever the
+  connection itself is reported — a `%Plug.Conn{}` inspected into a stacktrace
+  frame variable, or a `Phoenix.ActionClauseError` captured by
+  `Sentry.PlugCapture` — its `request_path`, `path_info` and `query_string` are
+  derived from the scrubbed URL, so the example above redacts the token in all
+  of them. Setting `:url_scrubber` to `nil` opts out; `query_string` is still
+  scrubbed against the sensitive parameter keys.
+
   ## Including Request Identifiers
 
   If you're using Phoenix, `Plug.RequestId`, or any other method to set a *request ID*

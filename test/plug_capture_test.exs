@@ -24,6 +24,7 @@ defmodule Sentry.PlugCaptureTest do
     get "/throw_route", PhoenixController, :throw
     get "/action_clause_error", PhoenixController, :action_clause_error
     get "/assigns_route", PhoenixController, :assigns
+    get "/reset_password/:token", PhoenixController, :action_clause_error
   end
 
   defmodule PhoenixEndpoint do
@@ -69,6 +70,30 @@ defmodule Sentry.PlugCaptureTest do
 
     plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
     plug Sentry.PlugContext, body_scrubber: {CustomBodyScrubber, :scrub}
+    plug PhoenixRouter
+  end
+
+  defmodule PathUrlScrubber do
+    def scrub_url(conn) do
+      conn
+      |> Plug.Conn.request_url()
+      |> Sentry.Scrubber.scrub_url(keys: ["token"])
+      |> String.replace(
+        ~r{/reset_password/[^/?]+},
+        "/reset_password/#{Sentry.Scrubber.scrubbed_value()}"
+      )
+    end
+  end
+
+  defmodule PhoenixEndpointWithUrlScrubber do
+    use Sentry.PlugCapture
+    use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
+
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
+    plug Sentry.PlugContext, url_scrubber: {PathUrlScrubber, :scrub_url}
     plug PhoenixRouter
   end
 
@@ -199,16 +224,9 @@ defmodule Sentry.PlugCaptureTest do
       assert exception.type == "Phoenix.ActionClauseError"
       assert exception.value =~ ~s(params: %{"password" => "*********"})
 
-      # conn.query_string must be scrubbed too. The "query_string:" prefix isolates
-      # this from the conn's query_params map, which is not broadened into the
-      # scrubbed fields on this branch.
       refute exception.value =~ ~s(query_string: "password=secret"),
              "query_string leaked into exception value: #{exception.value}"
 
-      # The action's second argument is the raw params map, a separate arg from
-      # the conn. It must be scrubbed too. Isolate the "# 2" argument block so
-      # this assertion is not confounded by the conn's query_params, which is not
-      # broadened into the scrubbed fields on this branch.
       assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
       refute arg2 =~ "secret", "non-conn params arg leaked into exception value: #{arg2}"
     end
@@ -297,9 +315,6 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [exception] = event.exception
 
-      # Isolate the action's second argument (the raw params map). The conn's own
-      # query_params is not broadened into the scrubbed fields on this branch, so
-      # a global assertion would be confounded by it.
       assert [_arg1, arg2] = String.split(exception.value, ~r/#\s*2\s*\n/, parts: 2)
 
       assert arg2 =~ ~s("scrubbed_by" => "custom_body_scrubber"),
@@ -357,6 +372,48 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
       assert exception.type == "RuntimeError"
       assert exception.value == "PhoenixError"
+    end
+  end
+
+  describe "credentials in a conn captured into stacktrace frame vars" do
+    @describetag :capture_log
+
+    @token "SEKRIT-TOKEN-VALUE"
+    @redacted Sentry.Scrubber.scrubbed_value()
+    @encoded_redacted URI.encode_www_form(Sentry.Scrubber.scrubbed_value())
+
+    setup %{bypass: bypass} do
+      Application.put_env(:sentry, PhoenixEndpointWithUrlScrubber,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithUrlScrubber)
+      Process.link(pid)
+
+      %{ref: SentryTest.setup_bypass_envelope_collector(bypass, type: "event")}
+    end
+
+    test "redacts a path segment the url scrubber redacts", %{ref: ref} do
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/reset_password/#{@token}")
+        |> Plug.run([{PhoenixEndpointWithUrlScrubber, []}])
+      end
+
+      assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
+
+      assert value =~ ~s(request_path: "/reset_password/#{@redacted}")
+      assert value =~ ~s(path_info: ["reset_password", "#{@redacted}"])
+    end
+
+    test "redacts a query parameter the url scrubber redacts", %{ref: ref} do
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/reset_password/whatever?token=#{@token}")
+        |> Plug.run([{PhoenixEndpointWithUrlScrubber, []}])
+      end
+
+      assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
+
+      assert value =~ ~s(query_string: "token=#{@encoded_redacted}")
     end
   end
 

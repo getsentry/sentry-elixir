@@ -161,6 +161,28 @@ defmodule Sentry.EventTest do
     assert vars["arg1"] =~ "fine"
   end
 
+  test "scrubs a credential in the request path from stacktrace frame vars" do
+    put_test_config(enable_source_code_context: false)
+
+    :ok =
+      Sentry.Scrubber.put_conn_scrubber(
+        url_scrubber: fn conn ->
+          conn |> Plug.Conn.request_url() |> String.replace("leaky-token", "redacted")
+        end
+      )
+
+    conn = %Plug.Conn{request_path: "/reset/leaky-token", path_info: ["reset", "leaky-token"]}
+    stack = [{SomeMod, :some_fun, [conn], [file: ~c"x.ex", line: 1]}]
+
+    exception = %FunctionClauseError{module: SomeMod, function: :some_fun, arity: 1}
+    event = Event.transform_exception(exception, stacktrace: stack)
+
+    %{vars: vars} = hd(hd(event.exception).stacktrace.frames)
+
+    refute vars["arg0"] =~ "leaky-token"
+    assert vars["arg0"] =~ "redacted"
+  end
+
   describe "create_event/1" do
     test "uses all the right defaults when called without options" do
       assert %Event{} = event = Event.create_event([])
