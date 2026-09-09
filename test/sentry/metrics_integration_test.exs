@@ -1,5 +1,5 @@
 defmodule Sentry.MetricsIntegrationTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   require OpenTelemetry.Tracer, as: Tracer
 
