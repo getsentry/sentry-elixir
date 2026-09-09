@@ -19,6 +19,14 @@ const SVELTE_URL = requireEnv("SENTRY_E2E_SVELTE_APP_URL");
 
 // When servers are started externally (e.g., in CI workflow steps), skip webServer config
 const serversRunningExternally = process.env.SENTRY_E2E_SERVERS_RUNNING === "true";
+const realDsn = process.env.SENTRY_E2E_REAL_DSN === "true";
+
+const phoenixEnv: Record<string, string> = realDsn
+  ? {
+      SENTRY_DSN: requireEnv("SENTRY_DSN"),
+      SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT ?? "e2e-scrubbing",
+    }
+  : { SENTRY_E2E_TEST_MODE: "true", SENTRY_ORG_ID: "123" };
 
 export default defineConfig({
   testDir: "./tests",
@@ -51,9 +59,10 @@ export default defineConfig({
         webServer: [
           {
             command:
-              'cd ../phoenix_app && rm -f tmp/sentry_debug_events.log && SENTRY_E2E_TEST_MODE=true SENTRY_ORG_ID=123 mix phx.server',
+              'cd ../phoenix_app && rm -f tmp/sentry_debug_events.log && mix phx.server',
             url: `${PHOENIX_URL}/health`,
-            reuseExistingServer: true
+            env: phoenixEnv,
+            reuseExistingServer: !realDsn
           },
           {
             command:

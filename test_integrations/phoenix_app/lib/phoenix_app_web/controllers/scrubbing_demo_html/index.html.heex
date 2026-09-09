@@ -1,0 +1,37 @@
+<div id="scrubbing-demo" class="mx-auto max-w-xl p-8">
+  <h1 class="text-2xl font-semibold">Reset your password</h1>
+
+  <form id="reset-form" method="get" action={@form_action} class="mt-6 space-y-3">
+    <input type="hidden" name="keep" value={@keep} />
+    <input type="hidden" name="e2e_run" value={@run} />
+
+    <label class="block">
+      Reset token <input type="text" id="token" name="token" class="border" />
+    </label>
+    <label class="block">
+      API key <input type="text" id="api_key" name="api_key" class="border" />
+    </label>
+    <label class="block">
+      PASSWORD <input type="text" id="upper_password" name="PASSWORD" class="border" />
+    </label>
+    <label class="block">
+      User password <input type="text" id="user_password" name="user_password" class="border" />
+    </label>
+    <label class="block">
+      Internal reference
+      <input type="text" id="internal_ref" name="internal_ref" class="border" />
+    </label>
+    <label class="block">
+      Password <input type="text" id="password" name="password" class="border" />
+    </label>
+
+    <button type="submit" id="submit-reset" class="rounded bg-zinc-900 px-4 py-2 text-white">
+      Reset password
+    </button>
+  </form>
+
+  <ul class="mt-8 space-y-2">
+    <li><a id="probe-link" href={@probe_href}>Open the reset link we emailed you</a></li>
+    <li><a id="forwarded-link" href={@forwarded_href}>Open it through the forwarded mount</a></li>
+  </ul>
+</div>
