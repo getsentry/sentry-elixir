@@ -132,6 +132,38 @@ defmodule Sentry.ScrubberTest do
   end
 
   describe "scrub/2 with a Plug.Conn field" do
+    test ":headers redacts sensitive query params carried by the referer" do
+      conn = %Plug.Conn{
+        req_headers: [
+          {"referer", "http://example.com/reset?token=hunter2&page=2"},
+          {"user-agent", "a browser"}
+        ]
+      }
+
+      assert [{"referer", referer}, {"user-agent", "a browser"}] =
+               Scrubber.scrub(conn, :headers)
+
+      refute referer =~ "hunter2"
+      assert referer == "http://example.com/reset?token=#{Scrubber.scrubbed_value()}&page=2"
+    end
+
+    test ":headers leaves a referer without a query string alone" do
+      conn = %Plug.Conn{req_headers: [{"referer", "http://example.com/reset"}]}
+
+      assert [{"referer", "http://example.com/reset"}] = Scrubber.scrub(conn, :headers)
+    end
+
+    test ":headers still drops the sensitive header list" do
+      conn = %Plug.Conn{
+        req_headers: [
+          {"authorization", "Bearer hunter2"},
+          {"referer", "http://example.com/ok"}
+        ]
+      }
+
+      assert [{"referer", "http://example.com/ok"}] = Scrubber.scrub(conn, :headers)
+    end
+
     test ":url scrubs sensitive query parameters" do
       conn = %Plug.Conn{
         scheme: :http,
