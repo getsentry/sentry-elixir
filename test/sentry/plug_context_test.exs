@@ -120,7 +120,7 @@ defmodule Sentry.PlugContextTest do
     conn = conn(:get, "/test?password=hunter2")
     call(conn, [])
 
-    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}" ==
+    assert "http://www.example.com/test?password=#{Sentry.Scrubber.scrubbed_value()}" ==
              Sentry.Context.get_all().request.url
   end
 
@@ -128,7 +128,7 @@ defmodule Sentry.PlugContextTest do
     conn = conn(:get, "/test?password=hunter2&hello=world")
     call(conn, [])
 
-    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+    assert "password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.query_string
   end
 
@@ -143,10 +143,10 @@ defmodule Sentry.PlugContextTest do
     conn = conn(:get, "/test?password=hunter2&hello=world")
     call(conn, url_scrubber: fn _conn -> raise "custom scrubber bug" end)
 
-    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}&hello=world" ==
+    assert "http://www.example.com/test?password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.url
 
-    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+    assert "password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.query_string
   end
 
@@ -154,10 +154,10 @@ defmodule Sentry.PlugContextTest do
     conn = conn(:get, "/test?password=hunter2&hello=world")
     call(conn, url_scrubber: fn _conn -> %{unexpected: "value"} end)
 
-    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}&hello=world" ==
+    assert "http://www.example.com/test?password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.url
 
-    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+    assert "password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.query_string
   end
 
@@ -295,9 +295,5 @@ defmodule Sentry.PlugContextTest do
 
   defp call(conn, opts) do
     Plug.run(conn, [{Sentry.PlugContext, opts}])
-  end
-
-  defp encoded_scrubbed_value do
-    URI.encode_www_form(Sentry.Scrubber.scrubbed_value())
   end
 end
