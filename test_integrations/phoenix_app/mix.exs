@@ -11,7 +11,7 @@ defmodule PhoenixApp.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
-    ]
+    ] ++ listeners(current_elixir_version())
   end
 
   # Configuration for the OTP application.
@@ -99,6 +99,11 @@ defmodule PhoenixApp.MixProject do
   end
 
   defp current_elixir_version, do: Version.parse!(System.version())
+
+  # Phoenix.CodeReloader warns on every recompile when it is not registered as a
+  # Mix listener. The `:listeners` option only exists from Elixir 1.18 on.
+  defp listeners(%Version{major: 1, minor: minor}) when minor < 18, do: []
+  defp listeners(%Version{}), do: [listeners: [Phoenix.CodeReloader]]
 
   defp lockfile(%Version{major: 1, minor: minor}) when minor < 18,
     do: "mix-1.15-1.17.lock"
