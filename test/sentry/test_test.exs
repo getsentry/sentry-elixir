@@ -78,6 +78,47 @@ defmodule Sentry.TestTest do
       assert [[{%{"type" => "event"}, _}]] = SentryTest.collect_envelopes(ref, 1)
     end
 
+    test "collector type filter accepts multiple envelope types" do
+      %{ref: ref} =
+        SentryTest.setup_sentry(collect_envelopes: [type: ["event", "check_in"]])
+
+      assert {:ok, _} = Sentry.capture_message("typed event", result: :sync)
+
+      assert {:ok, _} =
+               Sentry.capture_check_in(status: :ok, monitor_slug: "typed-check-in")
+
+      envelopes = SentryTest.collect_envelopes(ref, 2)
+
+      assert [%{"message" => %{"formatted" => "typed event"}}] =
+               SentryTest.extract_events(envelopes)
+
+      assert [%{"monitor_slug" => "typed-check-in"}] = SentryTest.extract_check_ins(envelopes)
+    end
+
+    test "collects envelopes even when the configured response is an HTTP error" do
+      test_pid = self()
+
+      %{ref: ref} =
+        SentryTest.setup_sentry(
+          collect_envelopes: [
+            response: fn conn, body ->
+              send(test_pid, {:response_body, body})
+              Plug.Conn.resp(conn, 503, "unavailable")
+            end
+          ]
+        )
+
+      assert {:error, %Sentry.ClientError{http_response: {503, _, "unavailable"}}} =
+               Sentry.capture_message("failed delivery", result: :sync)
+
+      assert_receive {:response_body, body}
+      assert body =~ "failed delivery"
+
+      assert_sentry_report(SentryTest.collect_sentry_events(ref, 1),
+        message: %{formatted: "failed delivery"}
+      )
+    end
+
     test "collect_envelopes coexists with :telemetry_processor and config options" do
       %{ref: ref, telemetry_processor: name} =
         SentryTest.setup_sentry(
