@@ -14,6 +14,11 @@ defmodule Sentry.Case do
     # Start a fresh RateLimiter for each test with unique names for isolation.
     setup_rate_limiter()
 
+    # Start a fresh ClientReport.Sender for each test, after the rate limiter it
+    # reads and before the TelemetryProcessor that feeds it: ExUnit tears children
+    # down in reverse, so the sender outlives the buffers still draining into it.
+    client_report_sender = setup_client_report_sender()
+
     # Start a fresh TelemetryProcessor for each test with unique name for isolation.
     # Returns the processor name so tests can pass it to handlers for isolation.
     telemetry_processor = setup_telemetry_processor()
@@ -29,7 +34,10 @@ defmodule Sentry.Case do
         opts when is_list(opts) -> setup_span_storage(opts)
       end
 
-    Map.merge(%{telemetry_processor: telemetry_processor}, span_storage_result)
+    Map.merge(
+      %{telemetry_processor: telemetry_processor, client_report_sender: client_report_sender},
+      span_storage_result
+    )
   end
 
   defp setup_rate_limiter do
@@ -44,6 +52,8 @@ defmodule Sentry.Case do
   end
 
   defp setup_telemetry_processor, do: Sentry.Test.setup_telemetry_processor()
+
+  defp setup_client_report_sender, do: Sentry.Test.setup_client_report_sender()
 
   defp setup_sender_pool_counters do
     uid = System.unique_integer([:positive])

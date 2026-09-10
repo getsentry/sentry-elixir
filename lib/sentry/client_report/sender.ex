@@ -33,11 +33,11 @@ defmodule Sentry.ClientReport.Sender do
   Synchronously sends any pending client reports and clears the accumulated state.
   """
   @spec flush(GenServer.server()) :: :ok
-  def flush(server \\ __MODULE__) do
+  def flush(server \\ Config.client_report_sender()) do
     GenServer.call(server, :flush)
   end
 
-  def record_discarded_events(reason, info, genserver \\ __MODULE__)
+  def record_discarded_events(reason, info, genserver \\ Config.client_report_sender())
 
   @spec record_discarded_events(atom(), String.t(), GenServer.server()) :: :ok
   def record_discarded_events(reason, data_category, genserver)

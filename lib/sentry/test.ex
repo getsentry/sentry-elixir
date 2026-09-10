@@ -68,10 +68,12 @@ defmodule Sentry.Test do
   that travel through the TelemetryProcessor pipeline (logs, metrics, or
   `send_result: :none`).
 
-  Returns a map with `:bypass` and `:telemetry_processor` for use in test
-  context. The `:telemetry_processor` value is the atom name of the
-  per-test processor and can be used to `stop_supervised!/1` and start
-  a custom-configured one when needed.
+  Returns a map with `:bypass`, `:telemetry_processor` and
+  `:client_report_sender` for use in test context. The
+  `:telemetry_processor` value is the atom name of the per-test processor
+  and can be used to `stop_supervised!/1` and start a custom-configured one
+  when needed. The `:client_report_sender` value names this test's
+  `Sentry.ClientReport.Sender` (see `setup_client_report_sender/0`).
 
   ## Options
 
@@ -128,6 +130,7 @@ defmodule Sentry.Test do
   @spec setup_sentry(keyword()) :: %{
           :bypass => term(),
           :telemetry_processor => atom(),
+          :client_report_sender => atom(),
           optional(:ref) => reference()
         }
   def setup_sentry(extra_config \\ []) do
@@ -143,6 +146,8 @@ defmodule Sentry.Test do
       Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
     end)
 
+    sender_name = setup_client_report_sender()
+
     # Start a per-test TelemetryProcessor before setup_collector/1 so that
     # the collector wires this test's scheduler into its registry.
     processor_name = setup_telemetry_processor(tp_opts)
@@ -153,7 +158,11 @@ defmodule Sentry.Test do
 
     case collect_envelopes do
       false ->
-        %{bypass: bypass, telemetry_processor: processor_name}
+        %{
+          bypass: bypass,
+          telemetry_processor: processor_name,
+          client_report_sender: sender_name
+        }
 
       collect ->
         collector_opts = if is_list(collect), do: collect, else: []
@@ -161,6 +170,7 @@ defmodule Sentry.Test do
         %{
           bypass: bypass,
           telemetry_processor: processor_name,
+          client_report_sender: sender_name,
           ref: setup_bypass_envelope_collector(bypass, collector_opts)
         }
     end
@@ -210,7 +220,7 @@ defmodule Sentry.Test do
     case Process.get(:sentry_telemetry_processor) do
       name when is_atom(name) and not is_nil(name) ->
         cond do
-          not processor_alive?(name) -> start_telemetry_processor(tp_opts)
+          not registered_alive?(name) -> start_telemetry_processor(tp_opts)
           tp_opts == [] -> name
           true -> restart_telemetry_processor(name, tp_opts)
         end
@@ -264,11 +274,54 @@ defmodule Sentry.Test do
     :ok
   end
 
-  defp processor_alive?(name) do
+  defp registered_alive?(name) do
     case Process.whereis(name) do
       pid when is_pid(pid) -> Process.alive?(pid)
       _ -> false
     end
+  end
+
+  @doc """
+  Starts a `Sentry.ClientReport.Sender` owned by the current test and points
+  the `:client_report_sender` configuration at it.
+
+  Discarded-event outcomes recorded by this test — or by any process whose
+  lineage resolves to it, the way `Sentry.Config.dsn/0` resolves — accumulate
+  in that sender and die with the test, instead of collecting in a VM-global
+  process that outlives it. Returns the sender's registered name.
+
+  Called for you by `Sentry.Case` and `setup_sentry/1`; calling it again
+  reuses the sender this test already owns.
+  """
+  @doc since: "14.0.0"
+  @spec setup_client_report_sender() :: atom()
+  def setup_client_report_sender do
+    case Process.get(:sentry_client_report_sender) do
+      name when is_atom(name) and not is_nil(name) ->
+        if registered_alive?(name), do: name, else: start_client_report_sender()
+
+      _ ->
+        start_client_report_sender()
+    end
+  end
+
+  defp start_client_report_sender do
+    uid = System.unique_integer([:positive])
+    name = :"test_client_report_sender_#{uid}"
+
+    # The sender posts from its own process, where `Sentry.Transport.RateLimiter`
+    # resolves its table out of the process dictionary, so it needs this test's
+    # table to be subject to the limits the test sets.
+    ExUnit.Callbacks.start_supervised!(
+      {Sentry.ClientReport.Sender,
+       name: name, rate_limiter_table_name: Process.get(:rate_limiter_table_name)},
+      id: name
+    )
+
+    Process.put(:sentry_client_report_sender, name)
+    Sentry.Test.Config.put(client_report_sender: name)
+
+    name
   end
 
   @doc """

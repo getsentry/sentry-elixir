@@ -7,7 +7,6 @@ defmodule Sentry.TransportTest do
   alias Sentry.{
     Attachment,
     ClientError,
-    ClientReport,
     Envelope,
     Event,
     FinchClient,
@@ -275,9 +274,8 @@ defmodule Sentry.TransportTest do
       assert_received {:request, ^ref}
     end
 
-    test "does not record a client report when Sentry replies with 429", %{bypass: bypass} do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "does not record a client report when Sentry replies with 429",
+         %{bypass: bypass, client_report_sender: sender} do
       envelope = Envelope.from_event(Event.create_event(message: "Hello"))
 
       Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
@@ -289,7 +287,7 @@ defmodule Sentry.TransportTest do
       assert {:error, %ClientError{reason: :rate_limited}} =
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
 
-      assert :sys.get_state(ClientReport.Sender) == %{}
+      assert :sys.get_state(sender) == %{}
     end
 
     test "stops retrying when a failed response carried a rate limit", %{bypass: bypass} do
@@ -329,9 +327,8 @@ defmodule Sentry.TransportTest do
       assert_received {:sent_attachment?, ^ref, false}
     end
 
-    test "records a retry-stripped attachment once", %{bypass: bypass} do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "records a retry-stripped attachment once",
+         %{bypass: bypass, client_report_sender: sender} do
       stub_attachment_limit_on_first_attempt(bypass, self(), make_ref())
 
       assert {:ok, "retried"} =
@@ -341,9 +338,7 @@ defmodule Sentry.TransportTest do
                  _retries = [0]
                )
 
-      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
-
-      assert :sys.get_state(ClientReport.Sender) == %{{:ratelimit_backoff, "attachment"} => 1}
+      assert :sys.get_state(sender) == %{{:ratelimit_backoff, "attachment"} => 1}
     end
 
     test "fails immediately when Sentry replies with 413 (envelope too large)", %{bypass: bypass} do
@@ -463,9 +458,8 @@ defmodule Sentry.TransportTest do
       assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
     end
 
-    test "sends an event while dropping all of its rate-limited attachments", %{bypass: bypass} do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "sends an event while dropping all of its rate-limited attachments",
+         %{bypass: bypass, client_report_sender: sender} do
       event = Event.create_event(message: "event with attachments")
 
       event =
@@ -487,9 +481,8 @@ defmodule Sentry.TransportTest do
       end)
 
       assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
-      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
 
-      assert :sys.get_state(ClientReport.Sender) == %{
+      assert :sys.get_state(sender) == %{
                {:ratelimit_backoff, "attachment"} => 2
              }
     end
@@ -511,9 +504,7 @@ defmodule Sentry.TransportTest do
       assert {:ok, "event-id"} = Transport.encode_and_post_envelope(envelope, FinchClient)
     end
 
-    test "records only dropped attachments in the client report" do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "records only dropped attachments in the client report", %{client_report_sender: sender} do
       event = Event.create_event(message: "event with attachment")
       attachment = %Attachment{filename: "report.txt", data: "report"}
       envelope = Envelope.from_event(%Event{event | attachments: [attachment]})
@@ -522,16 +513,13 @@ defmodule Sentry.TransportTest do
       assert {:ok, _event_id} =
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
 
-      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
-
-      assert :sys.get_state(ClientReport.Sender) == %{
+      assert :sys.get_state(sender) == %{
                {:ratelimit_backoff, "attachment"} => 1
              }
     end
 
-    test "drops an event and its attachments when the error category is rate limited" do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "drops an event and its attachments when the error category is rate limited",
+         %{client_report_sender: sender} do
       event = Event.create_event(message: "event with attachment")
       event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
       envelope = Envelope.from_event(event)
@@ -540,17 +528,14 @@ defmodule Sentry.TransportTest do
       assert {:error, %ClientError{reason: :rate_limited}} =
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
 
-      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
-
-      assert :sys.get_state(ClientReport.Sender) == %{
+      assert :sys.get_state(sender) == %{
                {:ratelimit_backoff, "attachment"} => 1,
                {:ratelimit_backoff, "error"} => 1
              }
     end
 
-    test "drops an event and its attachments when error and attachment limits are active" do
-      assert :ok = ClientReport.Sender.flush()
-
+    test "drops an event and its attachments when error and attachment limits are active",
+         %{client_report_sender: sender} do
       event = Event.create_event(message: "event with attachment")
       event = %Event{event | attachments: [%Attachment{filename: "report.txt", data: "report"}]}
       envelope = Envelope.from_event(event)
@@ -560,9 +545,7 @@ defmodule Sentry.TransportTest do
       assert {:error, %ClientError{reason: :rate_limited}} =
                Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
 
-      assert wait_until(fn -> :sys.get_state(ClientReport.Sender) != %{} end)
-
-      assert :sys.get_state(ClientReport.Sender) == %{
+      assert :sys.get_state(sender) == %{
                {:ratelimit_backoff, "attachment"} => 1,
                {:ratelimit_backoff, "error"} => 1
              }
