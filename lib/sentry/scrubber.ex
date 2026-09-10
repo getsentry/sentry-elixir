@@ -354,13 +354,46 @@ defmodule Sentry.Scrubber do
         pass_through(field)
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
-        mfa_to_fun({m, f, args})
+        {m, f, args} |> mfa_to_fun() |> wrap_custom_scrubber(field)
 
       {:ok, {m, f}} when is_atom(m) and is_atom(f) ->
-        mfa_to_fun({m, f, []})
+        {m, f, []} |> mfa_to_fun() |> wrap_custom_scrubber(field)
 
       {:ok, fun} when is_function(fun, 1) ->
-        fun
+        wrap_custom_scrubber(fun, field)
+    end
+  end
+
+  defp wrap_custom_scrubber(scrubber, :url) do
+    fn conn ->
+      case call_url_scrubber(scrubber, conn) do
+        {:ok, url} when is_binary(url) ->
+          url
+
+        {:ok, _other} ->
+          Sentry.LoggerUtils.warning(
+            "url_scrubber function returned a non-binary value; falling back to the default URL scrubber"
+          )
+
+          scrub(conn, :url)
+
+        {:error, error} ->
+          Sentry.LoggerUtils.warning(
+            "url_scrubber function failed: #{inspect(error)}; falling back to the default URL scrubber"
+          )
+
+          scrub(conn, :url)
+      end
+    end
+  end
+
+  defp wrap_custom_scrubber(scrubber, _field), do: scrubber
+
+  defp call_url_scrubber(scrubber, conn) do
+    try do
+      {:ok, scrubber.(conn)}
+    rescue
+      error -> {:error, error}
     end
   end
 
@@ -574,13 +607,12 @@ defmodule Sentry.Scrubber do
 
   defp url_scrubbed?(fields), do: Enum.any?(fields, &match?({_field, :url_scrubbed}, &1))
 
-  # Applies the registered `:url_scrubber` and parses the result. Returns `nil`
-  # when the scrubber hands back a non-binary, in which case every
-  # `:url_scrubbed` field keeps the conn's own value: scrubbing runs while an
-  # error is already being reported, so a broken user scrubber must not take the
-  # report down with it. `URI.parse/1` needs no such guard — it returns a `%URI{}`
-  # for any binary, and unparseable input lands in `:path`, which over-redacts
-  # rather than under-redacts.
+  # Applies the resolved `:url_scrubber` and parses the result. Custom URL
+  # scrubbers are wrapped by `resolve_scrubber/3`, so exceptions and non-binary
+  # results have already fallen back to the default URL scrubber. The non-binary
+  # branch remains defensive; `URI.parse/1` returns a `%URI{}` for any binary,
+  # and unparseable input lands in `:path`, which over-redacts rather than
+  # under-redacts.
   defp scrubbed_uri(conn) do
     case get(:url_scrubber).(conn) do
       url when is_binary(url) -> URI.parse(url)

@@ -139,6 +139,28 @@ defmodule Sentry.PlugContextTest do
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
+  test "falls back to the default URL scrubber when a custom scrubber raises" do
+    conn = conn(:get, "/test?password=hunter2&hello=world")
+    call(conn, url_scrubber: fn _conn -> raise "custom scrubber bug" end)
+
+    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.url
+
+    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.query_string
+  end
+
+  test "falls back to the default URL scrubber when a custom scrubber returns a non-binary" do
+    conn = conn(:get, "/test?password=hunter2&hello=world")
+    call(conn, url_scrubber: fn _conn -> %{unexpected: "value"} end)
+
+    assert "http://www.example.com/test?password=#{encoded_scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.url
+
+    assert "password=#{encoded_scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.query_string
+  end
+
   test "uses the configured URL scrubber for query string" do
     conn = conn(:get, "/test?api_key=sk_live_secret123&hello=world")
     call(conn, url_scrubber: {__MODULE__, :query_url_scrubber})
