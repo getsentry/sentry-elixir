@@ -39,7 +39,6 @@ config :sentry,
   test_mode: true,
   send_result: :sync,
   traces_sample_rate: 1.0,
-  enable_metrics: true,
   logs: [
     level: :info,
     excluded_domains: [:cowboy, :ranch],
