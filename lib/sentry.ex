@@ -503,8 +503,10 @@ defmodule Sentry do
   Flushes all pending events to Sentry.
 
   This is a blocking call that drains all the buffers and waits for the scheduler
-  to process all pending items. Useful before application shutdown to ensure
-  all telemetry events are sent.
+  to process all pending items. The SDK automatically calls this with the default
+  timeout before stopping its supervision tree during graceful application shutdown.
+
+  Call it explicitly when you need to flush earlier or use a different timeout.
 
   ## Options
 
