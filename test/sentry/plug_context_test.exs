@@ -139,6 +139,22 @@ defmodule Sentry.PlugContextTest do
     assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
   end
 
+  test "invokes the configured URL scrubber once while building the request context" do
+    test_pid = self()
+    conn = conn(:get, "/secret-token/secret")
+
+    call(conn,
+      url_scrubber: fn conn ->
+        send(test_pid, :url_scrubber_called)
+        url_scrubber(conn)
+      end
+    )
+
+    assert_received :url_scrubber_called
+    refute_received :url_scrubber_called
+    assert "http://www.example.com/secret-token/****" == Sentry.Context.get_all().request.url
+  end
+
   test "falls back to the default URL scrubber when a custom scrubber raises" do
     conn = conn(:get, "/test?password=hunter2&hello=world")
     call(conn, url_scrubber: fn _conn -> raise "custom scrubber bug" end)

@@ -544,6 +544,17 @@ defmodule Sentry.Scrubber do
 
   def scrub(other), do: other
 
+  @doc false
+  @spec scrub_with_url(Plug.Conn.t(), keyword()) :: {Plug.Conn.t(), String.t()}
+  def scrub_with_url(conn, overrides \\ [])
+      when is_struct(conn, Plug.Conn) and is_list(overrides) do
+    fields = Keyword.merge(@scrubbable_conn_fields, overrides)
+    url = get(:url_scrubber).(conn)
+    uri = if url_scrubbed?(fields), do: parse_scrubbed_uri(url)
+
+    {scrub_conn(conn, fields, uri), url}
+  end
+
   @doc """
   Scrubs a value with the given options, dispatching on the value's type.
 
@@ -618,12 +629,9 @@ defmodule Sentry.Scrubber do
 
   def scrub(conn, overrides) when is_struct(conn, Plug.Conn) and is_list(overrides) do
     fields = Keyword.merge(@scrubbable_conn_fields, overrides)
-
     uri = if url_scrubbed?(fields), do: scrubbed_uri(conn)
 
-    Enum.reduce(fields, conn, fn {field, strategy}, acc ->
-      Map.replace(acc, field, normalize(field, scrub_conn_field(conn, field, strategy, uri)))
-    end)
+    scrub_conn(conn, fields, uri)
   end
 
   def scrub(struct, opts)
@@ -660,6 +668,12 @@ defmodule Sentry.Scrubber do
 
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
     do: scrub_url(Plug.Conn.request_url(conn))
+
+  defp scrub_conn(conn, fields, uri) do
+    Enum.reduce(fields, conn, fn {field, strategy}, acc ->
+      Map.replace(acc, field, normalize(field, scrub_conn_field(conn, field, strategy, uri)))
+    end)
+  end
 
   # A referer is the full URL of the page the request came from, so a secret in
   # that page's query string rides along with every request made from it — next
@@ -711,12 +725,10 @@ defmodule Sentry.Scrubber do
   # branch remains defensive; `URI.parse/1` returns a `%URI{}` for any binary,
   # and unparseable input lands in `:path`, which over-redacts rather than
   # under-redacts.
-  defp scrubbed_uri(conn) do
-    case get(:url_scrubber).(conn) do
-      url when is_binary(url) -> URI.parse(url)
-      _other -> nil
-    end
-  end
+  defp scrubbed_uri(conn), do: parse_scrubbed_uri(get(:url_scrubber).(conn))
+
+  defp parse_scrubbed_uri(url) when is_binary(url), do: URI.parse(url)
+  defp parse_scrubbed_uri(_other), do: nil
 
   defp url_scrubbed(conn, :request_path, uri), do: scrubbed_path(conn, uri)
 
