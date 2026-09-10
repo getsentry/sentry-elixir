@@ -50,15 +50,11 @@ defmodule Sentry.TestAutoProcessorTest do
     @describetag :capture_log
 
     setup do
-      ctx = SentryTest.setup_sentry(enable_logs: true, logs: [level: :info])
+      ctx = SentryTest.setup_sentry(logs: [level: :info])
 
       handler_name = :"sentry_auto_processor_logs_#{System.unique_integer([:positive])}"
 
-      handler_config = %{
-        config: %{
-          enable_logs: true
-        }
-      }
+      handler_config = %{config: %{}}
 
       :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, handler_config)
 

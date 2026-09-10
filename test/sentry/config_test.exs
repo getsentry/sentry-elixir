@@ -83,8 +83,18 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":logs is nil by default" do
+      assert Config.validate!([])[:logs] == nil
+      assert Config.validate!(logs: nil)[:logs] == nil
+    end
+
+    test ":logs level is nil by default" do
+      assert Config.validate!(logs: [])[:logs][:level] == nil
+      assert Config.validate!(logs: [level: :info])[:logs][:level] == :info
+    end
+
     test ":logs capture options" do
-      defaults = Config.validate!([])[:logs]
+      defaults = Config.validate!(logs: [])[:logs]
       assert defaults[:capture_log_messages] == false
       assert defaults[:capture_level] == :error
       assert defaults[:capture_metadata] == []

@@ -90,7 +90,6 @@ config :sentry,
   enable_source_code_context: true,
   send_result: :sync,
   traces_sample_rate: 1.0,
-  enable_logs: true,
   logs: [
     level: :info,
     metadata: :all

@@ -40,7 +40,6 @@ config :sentry,
   send_result: :sync,
   traces_sample_rate: 1.0,
   enable_metrics: true,
-  enable_logs: true,
   logs: [
     level: :info,
     excluded_domains: [:cowboy, :ranch],

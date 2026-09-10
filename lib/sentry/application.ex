@@ -132,37 +132,40 @@ defmodule Sentry.Application do
   end
 
   defp maybe_add_logger_handler do
-    if Config.enable_logs?() do
-      handler_config = logger_handler_config(Config.logs())
+    case Config.logs() do
+      nil -> _ = :logger.remove_handler(:sentry_log_handler)
+      logs -> add_logger_handler(logger_handler_config(logs))
+    end
 
-      cond do
-        # The auto handler is still registered, which happens when the :sentry application
-        # is stopped and restarted within the same VM: the handler lives in :logger, not in
-        # our supervision tree, so it survives the stop. Re-sync its config so updated :logs
-        # settings reach the handler, whose options are frozen at attach time and would
-        # otherwise stay stale across the restart.
-        auto_logger_handler_registered?() ->
-          _ = :logger.update_handler_config(:sentry_log_handler, :config, handler_config)
-          :ok
+    :ok
+  end
 
-        # A user registered their own Sentry.LoggerHandler; don't attach the auto one to
-        # avoid duplicate capture.
-        sentry_logger_handler_registered?() ->
-          :ok
+  defp add_logger_handler(handler_config) do
+    cond do
+      # The auto handler is still registered, which happens when the :sentry application
+      # is stopped and restarted within the same VM: the handler lives in :logger, not in
+      # our supervision tree, so it survives the stop. Re-sync its config so updated :logs
+      # settings reach the handler, whose options are frozen at attach time and would
+      # otherwise stay stale across the restart.
+      auto_logger_handler_registered?() ->
+        _ = :logger.update_handler_config(:sentry_log_handler, :config, handler_config)
+        :ok
 
-        true ->
-          case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
-                 config: handler_config
-               }) do
-            :ok ->
-              :ok
+      # A user registered their own Sentry.LoggerHandler; don't attach the auto one to
+      # avoid duplicate capture.
+      sentry_logger_handler_registered?() ->
+        :ok
 
-            {:error, reason} ->
-              LoggerUtils.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
-          end
-      end
-    else
-      _ = :logger.remove_handler(:sentry_log_handler)
+      true ->
+        case :logger.add_handler(:sentry_log_handler, Sentry.LoggerHandler, %{
+               config: handler_config
+             }) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            LoggerUtils.warning("[Sentry] Failed to add logger handler: #{inspect(reason)}")
+        end
     end
 
     :ok

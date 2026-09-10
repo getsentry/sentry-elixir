@@ -3,8 +3,8 @@ defmodule Sentry.LoggerHandler.LogsBackend do
 
   # Backend that sends log events to Sentry's Logs Protocol.
   #
-  # This backend is enabled at handler setup time when `enable_logs: true` is set
-  # in Sentry configuration. Its configuration (level, excluded_domains, metadata) is
+  # This backend is enabled at handler setup time when a logs level is set. Its
+  # configuration (level, excluded_domains, metadata) is
   # frozen into the `%Sentry.LoggerHandler{}` config struct when the handler is set up,
   # so this backend reads those settings from the config it is given for each event
   # rather than reading `Sentry.Config` on the logging hot path.

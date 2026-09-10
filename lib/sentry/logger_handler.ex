@@ -120,15 +120,11 @@ defmodule Sentry.LoggerHandler do
       set `:sync_threshold` to `nil`.
       """
     ],
-    enable_logs: [
-      type: {:or, [:boolean, nil]},
-      default: nil,
-      doc: false
-    ],
     logs_level: [
       type:
-        {:in, [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
-      default: :info,
+        {:in,
+         [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug, nil]},
+      default: nil,
       doc: false
     ],
     logs_excluded_domains: [
@@ -155,26 +151,27 @@ defmodule Sentry.LoggerHandler do
 
     * **Captured Sentry events** — report crashes and (optionally) `Logger` messages such as
       `Logger.error("oops")` to Sentry as events, the same way
-      `Sentry.capture_exception/2` and `Sentry.capture_message/2` do. This is always
-      active when the handler is attached.
+      `Sentry.capture_exception/2` and `Sentry.capture_message/2` do. Crashes are always
+      reported when the handler is attached; standalone messages are reported once
+      `:capture_log_messages` is `true`.
 
     * **Structured logs** — forward log entries to [Sentry's Logs
-      UI](https://develop.sentry.dev/sdk/telemetry/logs/) as structured log events. This
-      is active when `:enable_logs` is `true` in your Sentry configuration.
+      UI](https://develop.sentry.dev/sdk/telemetry/logs/) as structured log events. This is
+      active once a logs level is set — `:level` under the `:logs` option of your Sentry
+      configuration, which a hand-attached handler can override with `:logs_level`.
 
   The two are independent: a single log can become a captured Sentry event, a structured
   log, both, or neither, depending on configuration.
 
   > #### You usually don't add this handler manually {: .tip}
   >
-  > Setting `config :sentry, enable_logs: true` makes the SDK **automatically attach**
-  > this handler at startup — you do **not** need to call `:logger.add_handler/3` or
-  > `Logger.add_handlers/1` yourself. Configure it through the `:logs` option of your
-  > Sentry config (see the [Sentry configuration](Sentry.html#module-configuration) and the
+  > Setting the `:logs` option makes the SDK **automatically attach** this handler at
+  > startup — you do **not** need to call `:logger.add_handler/3` or
+  > `Logger.add_handlers/1` yourself. Configure it through that same `:logs` option (see the
+  > [Sentry configuration](Sentry.html#module-configuration) and the
   > ["Sending logs to Sentry"](#module-sending-logs-to-sentry) section below). Add the
   > handler manually only when you want full control over the options documented under
-  > ["Configuration"](#module-configuration), or when you want error reporting **without**
-  > structured logs.
+  > ["Configuration"](#module-configuration).
 
   > #### When to Use the Handler vs the Backend? {: .info}
   >
@@ -264,13 +261,13 @@ defmodule Sentry.LoggerHandler do
 
   ## Sending logs to Sentry
 
-  To send structured logs to [Sentry's logs feature](https://develop.sentry.dev/sdk/telemetry/logs/),
-  enable logs in your Sentry configuration. This auto-attaches the handler — there is
-  **no need** to configure `:logger` or call `:logger.add_handler/3`:
+  To send structured logs to [Sentry's logs
+  feature](https://develop.sentry.dev/sdk/telemetry/logs/), set `:level` under the `:logs`
+  option in your Sentry configuration. That auto-attaches the handler — there is **no need**
+  to configure `:logger` or call `:logger.add_handler/3`:
 
       config :sentry,
         # ...
-        enable_logs: true,
         logs: [level: :info, metadata: [:request_id]]
 
   With this configuration, every `Logger` call at `:info` or above becomes a structured log
@@ -281,13 +278,12 @@ defmodule Sentry.LoggerHandler do
   ### Also capturing `Logger` messages as Sentry events
 
   By default the auto-attached handler reports **crashes** as Sentry events but leaves
-  standalone messages (such as `Logger.error("oops")`) as structured logs only. To also
-  report those messages as Sentry events — for example, to turn `Logger.error/1` calls into
-  Sentry issues while keeping `Logger.info/1` out of your issues stream — use the `:capture_*`
-  keys under `:logs`:
+  standalone messages (such as `Logger.error("oops")`) alone. To also report those messages
+  as Sentry events — for example, to turn `Logger.error/1` calls into Sentry issues while
+  keeping `Logger.info/1` out of your issues stream — set `:capture_log_messages` to `true`
+  and tune the other `:capture_*` keys under `:logs`:
 
       config :sentry,
-        enable_logs: true,
         logs: [
           level: :info,                          # structured logs at :info and above
           capture_log_messages: true,            # also report messages as Sentry events...
@@ -371,7 +367,6 @@ defmodule Sentry.LoggerHandler do
     :rate_limiting,
     :sync_threshold,
     :discard_threshold,
-    :enable_logs,
     :logs_level,
     :logs_excluded_domains,
     :logs_metadata,
@@ -387,9 +382,7 @@ defmodule Sentry.LoggerHandler do
     # The :config key may not be here.
     sentry_config = Map.get(config, :config, %{})
 
-    handler_config = cast_config(%__MODULE__{}, sentry_config)
-
-    handler_config = put_backends(handler_config)
+    handler_config = %__MODULE__{} |> cast_config(sentry_config) |> put_backends()
 
     config = Map.put(config, :config, handler_config)
 
@@ -432,12 +425,7 @@ defmodule Sentry.LoggerHandler do
       end
 
     updated_config =
-      old_config
-      |> update_in([:config], fn config ->
-        config
-        |> cast_config(new_sentry_config)
-        |> put_backends()
-      end)
+      update_in(old_config, [:config], &(&1 |> cast_config(new_sentry_config) |> put_backends()))
 
     _ignored =
       cond do
@@ -540,12 +528,22 @@ defmodule Sentry.LoggerHandler do
     |> Keyword.drop([:level, :excluded_domains, :metadata])
   end
 
+  # Structured logs are enabled by the presence of a logs level, which a handler attached
+  # by hand inherits from the global config when it doesn't set one of its own. The
+  # effective level is resolved here, at setup time, so the backend never reads the config
+  # on the logging hot path. ErrorBackend is always present: it reports crashes, and
+  # standalone messages once :capture_log_messages is on.
   defp put_backends(%__MODULE__{} = config) do
-    backends = [ErrorBackend] ++ if enable_logs?(config), do: [LogsBackend], else: []
-
-    %{config | backends: backends}
+    case config.logs_level || global_logs_level() do
+      nil -> %{config | backends: [ErrorBackend]}
+      level -> %{config | logs_level: level, backends: [ErrorBackend, LogsBackend]}
+    end
   end
 
-  defp enable_logs?(%__MODULE__{enable_logs: nil}), do: Config.enable_logs?()
-  defp enable_logs?(%__MODULE__{enable_logs: enable_logs?}), do: enable_logs?
+  defp global_logs_level do
+    case Config.logs() do
+      nil -> nil
+      logs -> Keyword.get(logs, :level)
+    end
+  end
 end
