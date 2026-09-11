@@ -613,6 +613,32 @@ defmodule Sentry.Config do
       *Available since v13.2.0*.
       """,
       keys: [
+        param_keys: [
+          type: {:list, :string},
+          default: [],
+          type_doc: "list of `t:String.t/0`",
+          doc: """
+          Additional sensitive parameter keys, redacted wherever the SDK scrubs a
+          map or a query string: request and query params, the request URL,
+          `Sentry.LiveViewHook` breadcrumb data, Oban job args, and maps captured
+          into stacktrace frame variables.
+
+          These *extend* the SDK default (see `Sentry.Scrubber.default_param_keys/0`),
+          which is the denylist required by the
+          [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/).
+          The spec defines custom deny-mode terms as additive, so there is no way
+          to shrink the default list — that is deliberate.
+
+          Terms are matched as case-insensitive substrings of the key name, so
+          `"ref"` redacts `"internal_ref"` and `"REF_ID"` alike.
+
+          This does not affect header scrubbing, which uses its own list — see
+          `Sentry.Scrubber.default_header_keys/0` and the `:header_scrubber`
+          option of `Sentry.PlugContext`.
+
+          *Available since 14.0.0*.
+          """
+        ],
         conn_private_allow_list: [
           type: {:list, :atom},
           default: Sentry.Scrubber.default_private_allow_list(),

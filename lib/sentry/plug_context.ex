@@ -46,6 +46,20 @@ defmodule Sentry.PlugContext do
 
       plug Sentry.PlugContext, body_scrubber: {MySentryScrubber, :scrub_params}
 
+  ### Configuring Sensitive Parameter Keys
+
+  *Available since 14.0.0.*
+
+  If you only need to add key names to the SDK's denylist, you do not need a
+  custom scrubber at all. The `:scrubber` configuration extends it globally, and
+  applies to body params, query params, the query string, the request URL, and
+  any map captured into a stacktrace frame variable:
+
+      config :sentry, scrubber: [param_keys: ["internal_ref"]]
+
+  Terms are matched as case-insensitive substrings of the key name. See
+  `Sentry.Scrubber.default_param_keys/0` for the built-in list.
+
   > #### Large Files {: .tip}
   >
   > If you are sending large files in `POST` requests, we recommend you
@@ -166,7 +180,6 @@ defmodule Sentry.PlugContext do
         opts
         |> Keyword.take(Sentry.Scrubber.scrubber_names())
         |> Keyword.put_new(:url_scrubber, {__MODULE__, :default_url_scrubber, []})
-        |> Keyword.put(:private_allow_list, Sentry.Config.scrubber()[:conn_private_allow_list])
 
       Sentry.Scrubber.put_conn_scrubber(conn_scrubber_opts)
 
