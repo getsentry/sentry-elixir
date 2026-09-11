@@ -55,6 +55,9 @@ defmodule PhoenixAppWeb.Router do
 
     live "/users/:id", UserLive.Show, :show
     live "/users/:id/show/edit", UserLive.Show, :edit
+
+    get "/scrubbing-demo", ScrubbingDemoController, :index
+    get "/scrubbing-demo/reset-password/:token", ScrubbingDemoController, :reset_password
   end
 
   # For e2e DT tests with a front-end app
@@ -73,6 +76,8 @@ defmodule PhoenixAppWeb.Router do
     post "/api/oban-job", PageController, :api_oban_job
     put "/sentry-test-config", TestConfigController, :update
   end
+
+  forward "/scrubbing-demo/forwarded", PhoenixAppWeb.ScrubbingDemoForwardedRouter
 
   # Other scopes may use custom stacks.
   # scope "/api", PhoenixAppWeb do

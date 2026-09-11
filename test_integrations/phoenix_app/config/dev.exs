@@ -93,7 +93,8 @@ config :sentry,
   logs: [
     level: :info,
     metadata: :all
-  ]
+  ],
+  scrubber: [param_keys: ["internal_ref"]]
 
 config :phoenix_app, Oban,
   repo: PhoenixApp.Repo,
