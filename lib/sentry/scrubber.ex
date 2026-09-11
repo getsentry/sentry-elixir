@@ -56,6 +56,10 @@ defmodule Sentry.Scrubber do
 
   #{Enum.map_join(@default_scrubbed_header_keys, "\n", &"  * `\"#{&1}\"`")}
 
+  The `"referer"` header is kept, but its value is scrubbed as a URL: it names
+  the page a request came from, so a secret in that page's query string would
+  otherwise be reported next to a request URL that was already redacted.
+
   Values matching a credit-card-like pattern (13–16 digits, optionally
   separated by spaces or dashes) are also replaced with the placeholder.
 
@@ -641,19 +645,30 @@ defmodule Sentry.Scrubber do
     do: scrub_params_value(conn.params)
 
   def scrub(conn, :headers) when is_struct(conn, Plug.Conn) do
-    Enum.reject(conn.req_headers, fn
+    conn.req_headers
+    |> Enum.reject(fn
       {name, _value} when is_binary(name) ->
         String.downcase(name) in @default_scrubbed_header_keys
 
       _ ->
         false
     end)
+    |> Enum.map(&scrub_header/1)
   end
 
   def scrub(conn, :cookies) when is_struct(conn, Plug.Conn), do: %{}
 
   def scrub(conn, :url) when is_struct(conn, Plug.Conn),
     do: scrub_url(Plug.Conn.request_url(conn))
+
+  # A referer is the full URL of the page the request came from, so a secret in
+  # that page's query string rides along with every request made from it — next
+  # to a request URL this same scrubbing has already redacted.
+  defp scrub_header({name, value}) when is_binary(name) and is_binary(value) do
+    if String.downcase(name) == "referer", do: {name, scrub_url(value)}, else: {name, value}
+  end
+
+  defp scrub_header(header), do: header
 
   # Resolves a single conn field's strategy (from `@scrubbable_conn_fields` or a
   # `scrub(conn, overrides)` override) to its scrubbed value:
