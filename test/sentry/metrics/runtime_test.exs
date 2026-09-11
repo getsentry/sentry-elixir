@@ -6,7 +6,7 @@ defmodule Sentry.Metrics.RuntimeTest do
 
   alias Sentry.Metrics.Runtime
 
-  @gauge_count 8
+  @gauge_count 17
   @memory_gauge_count 5
 
   setup do
@@ -129,6 +129,52 @@ defmodule Sentry.Metrics.RuntimeTest do
       assert cpu["type"] == "gauge"
       assert total["value"] >= 0
       assert cpu["value"] >= 0
+    end
+  end
+
+  describe "system limit metrics" do
+    test "reports process, atom and port counts", %{ref: ref} do
+      collect_once()
+
+      names = Enum.map(snapshot(ref), & &1["name"])
+
+      assert "elixir.runtime.process.count" in names
+      assert "elixir.runtime.atom.count" in names
+      assert "elixir.runtime.port.count" in names
+    end
+
+    test "reports each VM limit as its own gauge", %{ref: ref} do
+      collect_once()
+
+      metrics = snapshot(ref)
+
+      assert count = find_metric(metrics, "elixir.runtime.process.count")
+      assert limit = find_metric(metrics, "elixir.runtime.process.limit")
+
+      assert limit["type"] == "gauge"
+      assert limit["value"] >= count["value"]
+    end
+
+    test "reports utilization as the count over its limit", %{ref: ref} do
+      collect_once()
+
+      metrics = snapshot(ref)
+
+      assert count = find_metric(metrics, "elixir.runtime.process.count")
+      assert limit = find_metric(metrics, "elixir.runtime.process.limit")
+      assert utilization = find_metric(metrics, "elixir.runtime.process.utilization")
+
+      assert utilization["unit"] == "ratio"
+      assert_in_delta utilization["value"], count["value"] / limit["value"], 0.0001
+    end
+
+    test "keeps varying values out of attributes so each metric stays one series", %{ref: ref} do
+      collect_once()
+
+      for metric <- snapshot(ref) do
+        refute Map.has_key?(metric["attributes"], "limit")
+        refute Map.has_key?(metric["attributes"], "ratio")
+      end
     end
   end
 
