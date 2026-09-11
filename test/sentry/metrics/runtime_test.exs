@@ -6,7 +6,8 @@ defmodule Sentry.Metrics.RuntimeTest do
 
   alias Sentry.Metrics.Runtime
 
-  @gauge_count 5
+  @gauge_count 6
+  @memory_gauge_count 5
 
   setup do
     Sentry.Test.setup_sentry(
@@ -71,7 +72,7 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "unsupported memory measurement" do
-    test "stays alive and reports nothing when memory cannot be measured", %{ref: ref} do
+    test "skips only the memory gauges when memory cannot be measured", %{ref: ref} do
       pid = start_collector([])
 
       # `:erlang.memory/0` raises `notsup` on a VM booted with a disabled allocator, which
@@ -81,8 +82,37 @@ defmodule Sentry.Metrics.RuntimeTest do
       send(pid, :tick)
       :sys.get_state(pid)
 
+      names =
+        ref
+        |> collect_sentry_metric_items(@gauge_count - @memory_gauge_count, timeout: 2_000)
+        |> Enum.flat_map(& &1["items"])
+        |> Enum.map(& &1["name"])
+
       assert Process.alive?(pid)
-      refute_receive {:bypass_envelope, ^ref, _body}, 200
+      refute Enum.any?(names, &String.starts_with?(&1, "elixir.runtime.mem."))
+      assert "elixir.runtime.scheduler.utilization" in names
+    end
+  end
+
+  describe "scheduler utilization" do
+    test "reports scheduler utilization as a ratio", %{ref: ref} do
+      collect_once()
+
+      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric["type"] == "gauge"
+      assert metric["unit"] == "ratio"
+      assert metric["value"] >= 0.0
+      assert metric["value"] <= 1.0
+    end
+
+    test "reports near-full utilization when every scheduler is busy", %{ref: ref} do
+      pid = start_collector([])
+
+      saturate_schedulers(400)
+      send(pid, :tick)
+
+      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric["value"] > 0.8
     end
   end
 
@@ -212,6 +242,26 @@ defmodule Sentry.Metrics.RuntimeTest do
     ref
     |> collect_sentry_metric_items(@gauge_count, timeout: 2_000)
     |> Enum.flat_map(& &1["items"])
+  end
+
+  defp saturate_schedulers(duration_ms) do
+    parent = self()
+
+    pids =
+      for _ <- 1..:erlang.system_info(:schedulers_online) do
+        spawn(fn ->
+          deadline = System.monotonic_time(:millisecond) + duration_ms
+
+          spin = fn f ->
+            if System.monotonic_time(:millisecond) < deadline, do: f.(f), else: :ok
+          end
+
+          spin.(spin)
+          send(parent, {:spun, self()})
+        end)
+      end
+
+    for pid <- pids, do: assert_receive({:spun, ^pid}, duration_ms * 10)
   end
 
   defp find_metric(ref, name) do

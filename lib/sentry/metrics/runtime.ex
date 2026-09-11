@@ -15,7 +15,7 @@ defmodule Sentry.Metrics.Runtime do
   # collectors behave consistently across Sentry SDKs.
   @min_interval 1_000
 
-  defstruct [:interval, :attributes, :memory_available?]
+  defstruct [:interval, :attributes, :memory_available?, :normal_schedulers, :scheduler_sample]
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) when is_list(opts) do
@@ -32,24 +32,39 @@ defmodule Sentry.Metrics.Runtime do
         version_attributes(Keyword.get(opts, :version_attributes, false))
       )
 
+    _ = :erlang.system_flag(:scheduler_wall_time, true)
+
     schedule_tick(interval)
+
+    normal_schedulers = :erlang.system_info(:schedulers)
 
     {:ok,
      %__MODULE__{
        interval: interval,
        attributes: attributes,
-       memory_available?: memory_available?()
+       memory_available?: memory_available?(),
+       normal_schedulers: normal_schedulers,
+       scheduler_sample: scheduler_sample(normal_schedulers)
      }}
   end
 
   @impl true
   def handle_info(:tick, %__MODULE__{} = state) do
-    collect_and_emit(state)
+    state = collect_and_emit(state)
     schedule_tick(state.interval)
     {:noreply, state}
   end
 
   defp collect_and_emit(%__MODULE__{} = state) do
+    sample = scheduler_sample(state.normal_schedulers)
+
+    gauge(
+      state,
+      "elixir.runtime.scheduler.utilization",
+      utilization(state.scheduler_sample, sample),
+      unit: "ratio"
+    )
+
     if state.memory_available? do
       memory = :erlang.memory()
 
@@ -58,7 +73,32 @@ defmodule Sentry.Metrics.Runtime do
       end)
     end
 
-    :ok
+    %{state | scheduler_sample: sample}
+  end
+
+  # `:scheduler_wall_time` also reports dirty CPU schedulers, whose ids run above the normal
+  # ones. They stay idle unless the application runs dirty NIFs, yet their wall time still
+  # advances, so counting them roughly halves the reported utilization.
+  defp scheduler_sample(normal_schedulers) do
+    case :erlang.statistics(:scheduler_wall_time) do
+      :undefined ->
+        []
+
+      sample ->
+        sample
+        |> Enum.filter(fn {id, _active, _total} -> id <= normal_schedulers end)
+        |> Enum.sort()
+    end
+  end
+
+  defp utilization(previous, current) do
+    {active, total} =
+      Enum.zip(previous, current)
+      |> Enum.reduce({0, 0}, fn {{_, active0, total0}, {_, active1, total1}}, {active, total} ->
+        {active + (active1 - active0), total + (total1 - total0)}
+      end)
+
+    if total > 0, do: active / total, else: 0.0
   end
 
   # `:erlang.memory/0` raises `notsup` when an `erts_alloc` allocator was disabled at boot.

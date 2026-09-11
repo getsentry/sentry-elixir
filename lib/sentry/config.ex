@@ -519,7 +519,7 @@ defmodule Sentry.Config do
           default: [],
           doc: """
           Configuration for the BEAM runtime metrics collector, which periodically
-          reports total, process, binary, ETS and atom memory usage in bytes.
+          reports memory usage in bytes and scheduler utilization.
           *Available since 14.0.0*.
           """,
           keys: [
