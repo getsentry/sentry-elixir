@@ -205,8 +205,7 @@ defmodule Sentry.PlugContext do
       Plug.Conn.fetch_cookies(conn)
       |> Plug.Conn.fetch_query_params()
 
-    scrubbed = Sentry.Scrubber.scrub(conn)
-    url = Sentry.Scrubber.get(:url_scrubber).(conn)
+    {scrubbed, url} = Sentry.Scrubber.scrub_with_url(conn)
 
     %{
       url: url,
