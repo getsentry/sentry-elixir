@@ -50,17 +50,19 @@ defmodule Sentry.Scrubber do
       default `scrub(conn, field)` clause when none is registered, or
     * a fixed tag — `:clear` replaces the field with `%{}`, `:params` scrubs the
       field as a params-shaped map, `:query_string` redacts sensitive params from
-      a raw query string, and `:private_allow_list` keeps only the registered
-      allow-listed keys of the field (see `default_private_allow_list/0` and the
-      `:private_allow_list` option of `put_conn_scrubber/1`), dropping everything
-      else.
+      a raw query string, `:url_scrubbed` derives the field from the URL the
+      registered `:url_scrubber` returns, and `:private_allow_list` keeps only
+      the registered allow-listed keys of the field (see
+      `default_private_allow_list/0` and the `:private_allow_list` option of
+      `put_conn_scrubber/1`), dropping everything else.
 
   By default `scrub/1` redacts `cookies`, `req_headers`, `params`, and
   `body_params` (the configurable fields — `body_params` shares the
   `:body_scrubber` with `params`, so it honors the same registered scrubber and
   is emptied when `body_scrubber` is `nil`), clears `req_cookies` and `assigns`
-  to `%{}`, scrubs `query_params` as a params-shaped map, and reduces `private`
-  to its allow-listed keys (`default_private_allow_list/0`). `assigns` is cleared
+  to `%{}`, scrubs `query_params` as a params-shaped map, derives `request_path`,
+  `path_info` and `query_string` from the scrubbed URL, and reduces `private` to
+  its allow-listed keys (`default_private_allow_list/0`). `assigns` is cleared
   wholesale because auth libraries (Guardian, Pow, Coherence) routinely store
   decoded tokens, full user structs, and session data there, where no key-based
   heuristic redacts safely. `private` keeps only the allow-listed framework
@@ -68,9 +70,15 @@ defmodule Sentry.Scrubber do
 
   The defaults can be overridden per call with `scrub(conn, overrides)`, where
   `overrides` is a `field: strategy` keyword list merged over the attribute —
-  for example `scrub(conn, assigns: :clear)`. The request URL is not a conn
-  field, so callers fetch the registered `:url_scrubber` with `get/1` and apply
-  it to the conn.
+  for example `scrub(conn, assigns: :clear)`.
+
+  The request URL itself is not a conn field, so callers that report it (such as
+  `Sentry.PlugContext`) fetch the registered `:url_scrubber` with `get/1` and
+  apply it to the conn. The conn's own URL-derived fields are covered here: a
+  custom `:url_scrubber` that redacts a path segment redacts it in
+  `request_path` and `path_info` too, wherever the conn itself is reported.
+  Registering `url_scrubber: nil` opts out of that, though `query_string` is
+  still scrubbed against the sensitive key list.
   """
 
   @moduledoc since: "13.1.0"
@@ -105,6 +113,7 @@ defmodule Sentry.Scrubber do
   # scrubber struct-key (resolved per process via `get/1`) or a fixed tag:
   # `:clear` -> `%{}`, `:params` -> params-shaped scrub (Unfetched-safe),
   # `:query_string` -> redact sensitive params from the raw query string,
+  # `:url_scrubbed` -> derive from the URL the registered `:url_scrubber` returns,
   # `:private_allow_list` -> keep only the registered allow-listed keys.
   # Add an entry to make a new conn field scrubbed by default.
   #
@@ -121,7 +130,9 @@ defmodule Sentry.Scrubber do
     params: :body_scrubber,
     body_params: :body_scrubber,
     query_params: :params,
-    query_string: :query_string,
+    query_string: :url_scrubbed,
+    request_path: :url_scrubbed,
+    path_info: :url_scrubbed,
     assigns: :clear,
     private: :private_allow_list
   ]
@@ -343,13 +354,46 @@ defmodule Sentry.Scrubber do
         pass_through(field)
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
-        mfa_to_fun({m, f, args})
+        {m, f, args} |> mfa_to_fun() |> wrap_custom_scrubber(field)
 
       {:ok, {m, f}} when is_atom(m) and is_atom(f) ->
-        mfa_to_fun({m, f, []})
+        {m, f, []} |> mfa_to_fun() |> wrap_custom_scrubber(field)
 
       {:ok, fun} when is_function(fun, 1) ->
-        fun
+        wrap_custom_scrubber(fun, field)
+    end
+  end
+
+  defp wrap_custom_scrubber(scrubber, :url) do
+    fn conn ->
+      case call_url_scrubber(scrubber, conn) do
+        {:ok, url} when is_binary(url) ->
+          url
+
+        {:ok, _other} ->
+          Sentry.LoggerUtils.warning(
+            "url_scrubber function returned a non-binary value; falling back to the default URL scrubber"
+          )
+
+          scrub(conn, :url)
+
+        {:error, error} ->
+          Sentry.LoggerUtils.warning(
+            "url_scrubber function failed: #{inspect(error)}; falling back to the default URL scrubber"
+          )
+
+          scrub(conn, :url)
+      end
+    end
+  end
+
+  defp wrap_custom_scrubber(scrubber, _field), do: scrubber
+
+  defp call_url_scrubber(scrubber, conn) do
+    try do
+      {:ok, scrubber.(conn)}
+    rescue
+      error -> {:error, error}
     end
   end
 
@@ -389,8 +433,10 @@ defmodule Sentry.Scrubber do
   Given a `%Plug.Conn{}`, scrubs each field listed in `@scrubbable_conn_fields`
   according to its strategy — see the "Scrubbing a `%Plug.Conn{}`" section in
   the module docs and `scrub/2` for the per-field defaults and how to override
-  them per call. The request URL is not a conn field; callers scrub it
-  separately by applying the `:url_scrubber` from `get/1` (whose default is
+  them per call. This includes `request_path`, `path_info` and `query_string`,
+  which are derived from the URL the registered `:url_scrubber` returns. The
+  reported request URL is not a conn field; callers scrub that separately by
+  applying the `:url_scrubber` from `get/1` (whose default is
   `scrub(conn, :url)`).
 
   Given a plain map, recursively scrubs it with the default sensitive keys —
@@ -461,8 +507,10 @@ defmodule Sentry.Scrubber do
   Behaves like `scrub/1` but merges the `field: strategy` keyword `overrides`
   over the `@scrubbable_conn_fields` defaults, so a caller can scrub additional
   fields or change a field's strategy for that call. Strategies are a
-  configurable scrubber struct-key, `:clear` (replace with `%{}`), or `:params`
-  (params-shaped scrub of that field):
+  configurable scrubber struct-key, `:clear` (replace with `%{}`), `:params`
+  (params-shaped scrub of that field), `:query_string` (redact sensitive params
+  from that raw query string), `:url_scrubbed` (derive that field from the
+  scrubbed URL), or `:private_allow_list` (keep only the allow-listed keys):
 
       Sentry.Scrubber.scrub(conn, assigns: :clear, query_params: :params)
   """
@@ -482,10 +530,12 @@ defmodule Sentry.Scrubber do
   end
 
   def scrub(conn, overrides) when is_struct(conn, Plug.Conn) and is_list(overrides) do
-    @scrubbable_conn_fields
-    |> Keyword.merge(overrides)
-    |> Enum.reduce(conn, fn {field, strategy}, acc ->
-      Map.replace(acc, field, normalize(field, scrub_conn_field(conn, field, strategy)))
+    fields = Keyword.merge(@scrubbable_conn_fields, overrides)
+
+    uri = if url_scrubbed?(fields), do: scrubbed_uri(conn)
+
+    Enum.reduce(fields, conn, fn {field, strategy}, acc ->
+      Map.replace(acc, field, normalize(field, scrub_conn_field(conn, field, strategy, uri)))
     end)
   end
 
@@ -534,6 +584,13 @@ defmodule Sentry.Scrubber do
   #     string) via `scrub_query_string/1`
   #   * `:private_allow_list` — keeps only the registered allow-listed keys of
   #     THIS field (a map), dropping everything else
+  #   * `:url_scrubbed` — derives THIS field from the URL produced by the
+  #     registered `:url_scrubber`, so a custom scrubber governs the conn's own
+  #     path as well as the reported request URL
+  defp scrub_conn_field(conn, field, :url_scrubbed, uri), do: url_scrubbed(conn, field, uri)
+
+  defp scrub_conn_field(conn, field, strategy, _uri), do: scrub_conn_field(conn, field, strategy)
+
   defp scrub_conn_field(conn, _field, scrubber_key) when scrubber_key in @scrubber_names,
     do: get(scrubber_key).(conn)
 
@@ -547,6 +604,56 @@ defmodule Sentry.Scrubber do
 
   defp scrub_conn_field(conn, field, :private_allow_list),
     do: Map.take(Map.fetch!(conn, field), scrubber().private_allow_list)
+
+  defp url_scrubbed?(fields), do: Enum.any?(fields, &match?({_field, :url_scrubbed}, &1))
+
+  # Applies the resolved `:url_scrubber` and parses the result. Custom URL
+  # scrubbers are wrapped by `resolve_scrubber/3`, so exceptions and non-binary
+  # results have already fallen back to the default URL scrubber. The non-binary
+  # branch remains defensive; `URI.parse/1` returns a `%URI{}` for any binary,
+  # and unparseable input lands in `:path`, which over-redacts rather than
+  # under-redacts.
+  defp scrubbed_uri(conn) do
+    case get(:url_scrubber).(conn) do
+      url when is_binary(url) -> URI.parse(url)
+      _other -> nil
+    end
+  end
+
+  defp url_scrubbed(conn, :request_path, uri), do: scrubbed_path(conn, uri)
+
+  defp url_scrubbed(conn, :path_info, uri) do
+    case scrubbed_path(conn, uri) do
+      path when path == conn.request_path ->
+        conn.path_info
+
+      path ->
+        path |> split_path() |> Enum.drop(length(conn.script_name))
+    end
+  end
+
+  defp url_scrubbed(conn, :query_string, uri) do
+    conn |> scrubbed_query(uri) |> scrub_query_string()
+  end
+
+  defp url_scrubbed(conn, field, _uri), do: Map.fetch!(conn, field)
+
+  # `URI.parse/1` yields `path: nil` for a URL without one, and `nil` is not a
+  # valid `:request_path` — it makes `Plug.Conn.request_url/1` raise on the
+  # scrubbed conn. A scrubber that collapsed the URL to a bare host meant to
+  # redact the path, so that becomes "" rather than the original path.
+  defp scrubbed_path(conn, nil), do: conn.request_path
+  defp scrubbed_path(_conn, %URI{path: path}) when is_binary(path), do: path
+  defp scrubbed_path(_conn, %URI{}), do: ""
+
+  defp scrubbed_query(conn, nil), do: conn.query_string
+  defp scrubbed_query(_conn, %URI{query: query}) when is_binary(query), do: query
+  defp scrubbed_query(_conn, %URI{}), do: ""
+
+  # Splits a request path into `:path_info` segments the way Plug adapters do.
+  # Deliberately does not percent-decode: adapters store `path_info` encoded and
+  # `Plug.Router.Utils.decode_path_info!/1` decodes at match time.
+  defp split_path(path), do: for(segment <- String.split(path, "/"), segment != "", do: segment)
 
   # Scrubs a params-shaped value with the default sensitive keys, leaving
   # `%Plug.Conn.Unfetched{}` (and any non-plain-map) untouched. Shared by the

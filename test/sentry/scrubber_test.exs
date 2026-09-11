@@ -203,7 +203,12 @@ defmodule Sentry.ScrubberTest do
           phoenix_endpoint: SomeApp.Endpoint,
           phoenix_controller: SomeApp.PageController
         },
+        scheme: :https,
+        host: "example.com",
+        port: 443,
         request_path: "/users",
+        path_info: ["users"],
+        query_string: "page=2&secret=leak",
         method: "POST"
       }
 
@@ -261,8 +266,17 @@ defmodule Sentry.ScrubberTest do
       refute Map.has_key?(scrubbed.private, :guardian_default_claims)
     end
 
-    test "preserves non-sensitive fields", %{scrubbed: scrubbed} do
+    test "leaves a request_path the url scrubber does not touch unchanged", %{scrubbed: scrubbed} do
       assert scrubbed.request_path == "/users"
+      assert scrubbed.path_info == ["users"]
+    end
+
+    test "scrubs sensitive params out of query_string", %{scrubbed: scrubbed} do
+      refute scrubbed.query_string =~ "leak"
+      assert scrubbed.query_string =~ "page=2"
+    end
+
+    test "preserves the request method", %{scrubbed: scrubbed} do
       assert scrubbed.method == "POST"
     end
 
@@ -297,6 +311,28 @@ defmodule Sentry.ScrubberTest do
       refute scrubbed =~ "secret"
       refute scrubbed =~ "4242424242424242"
       assert scrubbed =~ "token=abc"
+      assert scrubbed =~ "keep=ok"
+    end
+
+    test "keeps the conn's own path when the url scrubber returns a non-binary" do
+      :ok = Scrubber.put_conn_scrubber(url_scrubber: fn _conn -> :not_a_url end)
+
+      conn = %Plug.Conn{request_path: "/users", path_info: ["users"]}
+
+      scrubbed = Scrubber.scrub(conn)
+
+      assert scrubbed.request_path == "/users"
+      assert scrubbed.path_info == ["users"]
+    end
+
+    test "still scrubs sensitive query params when the url scrubber is disabled" do
+      :ok = Scrubber.put_conn_scrubber(url_scrubber: nil)
+
+      conn = %Plug.Conn{query_string: "password=secret&keep=ok"}
+
+      scrubbed = Scrubber.scrub(conn).query_string
+
+      refute scrubbed =~ "secret"
       assert scrubbed =~ "keep=ok"
     end
   end

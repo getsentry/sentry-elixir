@@ -86,6 +86,10 @@ defmodule Sentry.PlugCapture do
         (defaulting to the sensitive params `password`, `passwd`, `secret`; a
         `nil` `body_scrubber` empties both), and scrubs the same sensitive params
         in `query_params`
+      * derives `request_path`, `path_info` and `query_string` from the URL the
+        configured `url_scrubber` returns, so a scrubber that redacts a path
+        segment redacts it here too; `query_string` is scrubbed against the
+        sensitive params either way
       * clears `assigns` (where auth libraries store user structs and tokens)
       * reduces `private` to an allow-list of framework metadata, dropping
         everything else (notably the decoded session under `:plug_session`);
