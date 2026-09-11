@@ -15,6 +15,12 @@ defmodule Sentry.Telemetry.SchedulerTest do
     }
   end
 
+  defp make_item(:log), do: make_log_event()
+
+  defp make_item(:metric) do
+    %Sentry.Metric{name: "test.metric", type: :gauge, value: 42, timestamp: 1.0}
+  end
+
   describe "build_priority_cycle/0" do
     test "builds cycle with correct weights for all categories" do
       cycle = Scheduler.build_priority_cycle()
@@ -84,6 +90,101 @@ defmodule Sentry.Telemetry.SchedulerTest do
   end
 
   describe "signal/1" do
+    for category <- [:log, :metric] do
+      @category category
+      test "delivers a partial #{@category} batch after its timeout without another signal" do
+        category = @category
+        owner = self()
+
+        buffer =
+          start_supervised!({Buffer, category: category, batch_size: 100, timeout: 200})
+
+        scheduler =
+          start_supervised!(
+            {Scheduler,
+             buffers: %{category => buffer},
+             on_envelope: fn envelope -> send(owner, {:envelope, envelope}) end}
+          )
+
+        item = make_item(category)
+
+        Buffer.add(buffer, item)
+        assert Buffer.size(buffer) == 1
+        Scheduler.signal(scheduler)
+
+        refute_receive {:envelope, _}, 50
+        assert_receive {:envelope, _}, 1_000
+        assert Buffer.size(buffer) == 0
+      end
+    end
+
+    test "continues processing ready batches after a full priority cycle" do
+      owner = self()
+      buffer = start_supervised!({Buffer, category: :log, batch_size: 1})
+
+      scheduler =
+        start_supervised!(
+          {Scheduler,
+           buffers: %{log: buffer},
+           on_envelope: fn envelope -> send(owner, {:envelope, envelope}) end}
+        )
+
+      for i <- 1..5, do: Buffer.add(buffer, make_log_event("log_#{i}"))
+      assert Buffer.size(buffer) == 5
+      Scheduler.signal(scheduler)
+
+      for i <- 1..5 do
+        assert_receive {:envelope, envelope}, 1_000
+        assert [%Sentry.LogBatch{log_events: [%LogEvent{body: body}]}] = envelope.items
+        assert body == "log_#{i}"
+      end
+
+      assert Buffer.size(buffer) == 0
+    end
+
+    test "resumes buffered items when transport capacity becomes available" do
+      %{bypass: bypass, telemetry_processor: processor} =
+        Sentry.Test.setup_sentry(
+          collect_envelopes: true,
+          telemetry_processor: [
+            transport_capacity: 1,
+            buffer_configs: %{metric: %{batch_size: 1}}
+          ]
+        )
+
+      owner = self()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(owner, {:request_started, self(), body})
+
+        receive do
+          :release -> Plug.Conn.resp(conn, 200, "{}")
+        after
+          5_000 -> Plug.Conn.resp(conn, 500, "response was not released")
+        end
+      end)
+
+      Sentry.Metrics.gauge("first", 1)
+      assert_receive {:request_started, handler, _}, 1_000
+
+      try do
+        Sentry.Metrics.gauge("second", 2)
+        scheduler = Sentry.TelemetryProcessor.get_scheduler(processor)
+        assert :sys.get_state(scheduler).size == 1
+        assert Sentry.TelemetryProcessor.buffer_size(processor, :metric) == 1
+        refute_receive {:request_started, _, _}, 50
+      after
+        send(handler, :release)
+      end
+
+      assert_receive {:request_started, handler, body}, 1_000
+      send(handler, :release)
+
+      assert [%{"items" => [%{"name" => "second"}]}] =
+               extract_metric_items([decode_envelope!(body)])
+    end
+
     test "wakes scheduler to process log items" do
       buffers = start_test_buffers(batch_size: 1)
       test_pid = self()

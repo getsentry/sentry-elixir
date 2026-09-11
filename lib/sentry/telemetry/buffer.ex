@@ -120,6 +120,15 @@ defmodule Sentry.Telemetry.Buffer do
     GenServer.call(server, :category)
   end
 
+  @doc """
+  Returns milliseconds until a pending batch is ready, or `:infinity` when
+  the buffer is empty or a partial batch has no timeout.
+  """
+  @spec next_timeout(GenServer.server()) :: timeout()
+  def next_timeout(server) do
+    GenServer.call(server, :next_timeout)
+  end
+
   ## GenServer Callbacks
 
   @impl true
@@ -173,6 +182,10 @@ defmodule Sentry.Telemetry.Buffer do
     {:reply, ready_to_flush?(state), state}
   end
 
+  def handle_call(:next_timeout, _from, %Buffer{} = state) do
+    {:reply, time_until_ready(state), state}
+  end
+
   def handle_call(:category, _from, %Buffer{} = state) do
     {:reply, state.category, state}
   end
@@ -217,15 +230,13 @@ defmodule Sentry.Telemetry.Buffer do
     poll_batch(state, count - 1, [item | acc])
   end
 
-  defp ready_to_flush?(%{size: 0}), do: false
+  defp ready_to_flush?(state), do: time_until_ready(state) == 0
 
-  defp ready_to_flush?(%{size: size, batch_size: batch_size} = state) do
-    size >= batch_size or timeout_elapsed?(state)
-  end
+  defp time_until_ready(%{size: 0}), do: :infinity
+  defp time_until_ready(%{size: size, batch_size: batch_size}) when size >= batch_size, do: 0
+  defp time_until_ready(%{timeout: nil}), do: :infinity
 
-  defp timeout_elapsed?(%{timeout: nil}), do: false
-
-  defp timeout_elapsed?(%{timeout: timeout, last_flush_time: last_flush_time}) do
-    System.monotonic_time(:millisecond) - last_flush_time >= timeout
+  defp time_until_ready(%{timeout: timeout, last_flush_time: last_flush_time}) do
+    max(0, timeout - (System.monotonic_time(:millisecond) - last_flush_time))
   end
 end
