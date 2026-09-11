@@ -65,6 +65,14 @@ defmodule Sentry.Metrics.Runtime do
       unit: "ratio"
     )
 
+    gauge(
+      state,
+      "elixir.runtime.run_queue.total",
+      :erlang.statistics(:total_run_queue_lengths_all)
+    )
+
+    gauge(state, "elixir.runtime.run_queue.cpu", :erlang.statistics(:total_run_queue_lengths))
+
     if state.memory_available? do
       memory = :erlang.memory()
 
@@ -116,6 +124,8 @@ defmodule Sentry.Metrics.Runtime do
 
       false
   end
+
+  defp gauge(state, name, value, opts \\ [])
 
   defp gauge(%__MODULE__{} = state, name, value, opts) do
     Metrics.gauge(name, value, Keyword.put(opts, :attributes, state.attributes))

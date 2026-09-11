@@ -6,7 +6,7 @@ defmodule Sentry.Metrics.RuntimeTest do
 
   alias Sentry.Metrics.Runtime
 
-  @gauge_count 6
+  @gauge_count 8
   @memory_gauge_count 5
 
   setup do
@@ -32,7 +32,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "reports memory in bytes", %{ref: ref} do
       collect_once()
 
-      assert metric = find_metric(ref, "elixir.runtime.mem.total")
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.mem.total")
       assert metric["unit"] == "byte"
       assert metric["type"] == "gauge"
       assert metric["value"] > 0
@@ -98,7 +98,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "reports scheduler utilization as a ratio", %{ref: ref} do
       collect_once()
 
-      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.scheduler.utilization")
       assert metric["type"] == "gauge"
       assert metric["unit"] == "ratio"
       assert metric["value"] >= 0.0
@@ -111,8 +111,24 @@ defmodule Sentry.Metrics.RuntimeTest do
       saturate_schedulers(400)
       send(pid, :tick)
 
-      assert metric = find_metric(ref, "elixir.runtime.scheduler.utilization")
+      assert metric = find_metric(snapshot(ref), "elixir.runtime.scheduler.utilization")
       assert metric["value"] > 0.8
+    end
+  end
+
+  describe "run queue metrics" do
+    test "reports total and CPU-bound run queue depth", %{ref: ref} do
+      collect_once()
+
+      metrics = snapshot(ref)
+
+      assert total = find_metric(metrics, "elixir.runtime.run_queue.total")
+      assert cpu = find_metric(metrics, "elixir.runtime.run_queue.cpu")
+
+      assert total["type"] == "gauge"
+      assert cpu["type"] == "gauge"
+      assert total["value"] >= 0
+      assert cpu["value"] >= 0
     end
   end
 
@@ -264,7 +280,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     for pid <- pids, do: assert_receive({:spun, ^pid}, duration_ms * 10)
   end
 
-  defp find_metric(ref, name) do
-    Enum.find(snapshot(ref), &(&1["name"] == name))
+  defp find_metric(metrics, name) when is_list(metrics) do
+    Enum.find(metrics, &(&1["name"] == name))
   end
 end
