@@ -117,6 +117,13 @@ defmodule Sentry.ScrubberTest do
       assert Scrubber.scrub_url("http://example.com/foo") == "http://example.com/foo"
     end
 
+    test "leaves everything it does not redact exactly as it arrived" do
+      url = "http://example.com/reset%20me?password=x&keep=hello%20there&flag"
+
+      assert Scrubber.scrub_url(url) ==
+               "http://example.com/reset%20me?password=#{Scrubber.scrubbed_value()}&keep=hello%20there&flag"
+    end
+
     test "preserves scheme, host, port, and path" do
       scrubbed = Scrubber.scrub_url("https://example.com:8443/p?secret=x")
       assert scrubbed =~ "https://example.com:8443/p?"
@@ -174,6 +181,34 @@ defmodule Sentry.ScrubberTest do
 
       refute scrubbed =~ "hunter2"
       assert scrubbed =~ "keep=ok"
+    end
+
+    test "leaves the placeholder readable rather than percent-encoding it" do
+      scrubbed = Scrubber.scrub_query_string("password=hunter2")
+
+      assert scrubbed == "password=#{Scrubber.scrubbed_value()}"
+      refute scrubbed =~ "%2A"
+    end
+
+    test "passes through params it keeps byte for byte" do
+      assert Scrubber.scrub_query_string("greeting=hello%20there") == "greeting=hello%20there"
+      assert Scrubber.scrub_query_string("greeting=hello+there") == "greeting=hello+there"
+      assert Scrubber.scrub_query_string("a=1&&b=2") == "a=1&&b=2"
+      assert Scrubber.scrub_query_string("flag&visible=ok") == "flag&visible=ok"
+    end
+
+    test "keeps the key as it was sent when redacting its value" do
+      assert Scrubber.scrub_query_string("Reset%2DToken=abc") ==
+               "Reset%2DToken=#{Scrubber.scrubbed_value()}"
+    end
+
+    test "does not raise on malformed percent-encoding" do
+      assert Scrubber.scrub_query_string("a=%ZZ") == "a=%ZZ"
+    end
+
+    test "still redacts credit-card-shaped values" do
+      assert Scrubber.scrub_query_string("card=4111+1111+1111+1111&keep=a+b") ==
+               "card=#{Scrubber.scrubbed_value()}&keep=a+b"
     end
   end
 

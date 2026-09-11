@@ -332,15 +332,37 @@ defmodule Sentry.Scrubber do
     keys = param_keys(opts)
 
     query
-    |> URI.query_decoder()
-    |> Enum.map(fn {key, value} ->
-      cond do
-        sensitive_key?(key, keys) -> {key, @scrubbed_value}
-        is_binary(value) and value =~ credit_card_regex() -> {key, @scrubbed_value}
-        true -> {key, value}
-      end
-    end)
-    |> URI.encode_query()
+    |> String.split("&")
+    |> Enum.map_join("&", &scrub_query_pair(&1, keys))
+  end
+
+  # Only a redacted pair is rewritten. Everything the SDK keeps is passed
+  # through exactly as it arrived, so the reported query string still matches
+  # what the client sent rather than a re-encoding of it.
+  defp scrub_query_pair(pair, keys) do
+    case String.split(pair, "=", parts: 2) do
+      [raw_key, raw_value] ->
+        if redact_param?(decode_www_form(raw_key), decode_www_form(raw_value), keys) do
+          raw_key <> "=" <> @scrubbed_value
+        else
+          pair
+        end
+
+      [_without_value] ->
+        pair
+    end
+  end
+
+  defp redact_param?(key, value, keys) do
+    sensitive_key?(key, keys) or value =~ credit_card_regex()
+  end
+
+  # Scrubbing runs while an error is already being reported, so malformed
+  # percent-encoding must not raise. The raw form is still fine to match on.
+  defp decode_www_form(value) do
+    URI.decode_www_form(value)
+  rescue
+    ArgumentError -> value
   end
 
   @doc """

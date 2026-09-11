@@ -260,11 +260,11 @@ defmodule Sentry.LiveViewHookTest do
     params_breadcrumb = Enum.find(context.breadcrumbs, &(&1.category == "web.live_view.params"))
 
     refute params_breadcrumb.data.uri =~ "supersecret"
-    assert params_breadcrumb.data.uri =~ "password=%2A%2A%2A%2A%2A%2A%2A%2A%2A"
+    assert params_breadcrumb.data.uri =~ "password=#{Sentry.Scrubber.scrubbed_value()}"
     assert params_breadcrumb.data.uri =~ "visible=ok"
 
     refute context.request.url =~ "supersecret"
-    assert context.request.url =~ "password=%2A%2A%2A%2A%2A%2A%2A%2A%2A"
+    assert context.request.url =~ "password=#{Sentry.Scrubber.scrubbed_value()}"
   end
 
   test "raises ArgumentError when :scrubber is not an MFA tuple" do

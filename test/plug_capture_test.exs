@@ -382,7 +382,6 @@ defmodule Sentry.PlugCaptureTest do
 
     @token "SEKRIT-TOKEN-VALUE"
     @redacted Sentry.Scrubber.scrubbed_value()
-    @encoded_redacted URI.encode_www_form(Sentry.Scrubber.scrubbed_value())
 
     setup %{bypass: bypass} do
       Application.put_env(:sentry, PhoenixEndpointWithUrlScrubber,
@@ -420,7 +419,7 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [%{"exception" => [%{"value" => value}]}] = SentryTest.collect_sentry_events(ref, 1)
 
-      assert value =~ ~s(query_string: "token=#{@encoded_redacted}")
+      assert value =~ ~s(query_string: "token=#{@redacted}")
     end
 
     test "redacts a route parameter named like a credential", %{ref: ref} do
