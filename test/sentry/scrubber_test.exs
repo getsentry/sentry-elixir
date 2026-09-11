@@ -208,6 +208,7 @@ defmodule Sentry.ScrubberTest do
         port: 443,
         request_path: "/users",
         path_info: ["users"],
+        path_params: %{"id" => "42", "secret" => "leak"},
         query_string: "page=2&secret=leak",
         method: "POST"
       }
@@ -269,6 +270,10 @@ defmodule Sentry.ScrubberTest do
     test "leaves a request_path the url scrubber does not touch unchanged", %{scrubbed: scrubbed} do
       assert scrubbed.request_path == "/users"
       assert scrubbed.path_info == ["users"]
+    end
+
+    test "scrubs path_params with default sensitive keys", %{scrubbed: scrubbed} do
+      assert scrubbed.path_params == %{"id" => "42", "secret" => "*********"}
     end
 
     test "scrubs sensitive params out of query_string", %{scrubbed: scrubbed} do
