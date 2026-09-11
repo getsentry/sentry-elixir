@@ -615,9 +615,14 @@ defmodule Sentry.Test do
 
   ## Options
 
-    * `:type` - when set, only envelopes containing an item of this type
-      (e.g., `"event"`, `"transaction"`, `"log"`) are forwarded to the test
-      process. Envelopes not matching the type are silently dropped.
+    * `:type` - when set to a type or list of types, only envelopes containing a matching
+      item (e.g., `"event"`, `"transaction"`, `"log"`) are forwarded to the test
+      process. Envelopes not matching the type are silently dropped. Passing a list
+      of types is *available since 14.0.0*.
+    * `:response` - two-argument function receiving the `Plug.Conn` and the raw envelope
+      body after collection. It must return the response connection. Use it to simulate
+      delayed or failed HTTP responses. Defaults to a successful response.
+      *Available since 14.0.0*.
 
   """
   @doc since: "13.0.0"
@@ -627,17 +632,33 @@ defmodule Sentry.Test do
     ref = make_ref()
     type_filter = Keyword.get(opts, :type)
 
+    response = Keyword.get(opts, :response, &default_collector_response/2)
+
     Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      if is_nil(type_filter) or body =~ ~s("type":"#{type_filter}") do
+      if matches_type_filter?(body, type_filter) do
         send(test_pid, {:bypass_envelope, ref, body})
       end
 
-      Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+      response.(conn, body)
     end)
 
     ref
+  end
+
+  defp default_collector_response(conn, _body) do
+    Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
+  end
+
+  defp matches_type_filter?(_body, nil), do: true
+
+  defp matches_type_filter?(body, type_filters) when is_list(type_filters) do
+    Enum.any?(type_filters, &matches_type_filter?(body, &1))
+  end
+
+  defp matches_type_filter?(body, type_filter) when is_binary(type_filter) do
+    body =~ ~s("type":"#{type_filter}")
   end
 
   @doc """
