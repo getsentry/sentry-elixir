@@ -136,6 +136,12 @@ defmodule Sentry.Telemetry.Buffer do
       last_flush_time: System.monotonic_time(:millisecond)
     }
 
+    if state.batch_size > state.capacity do
+      raise ArgumentError,
+            ":batch_size (#{state.batch_size}) cannot be greater than :capacity " <>
+              "(#{state.capacity}) for the #{inspect(category)} buffer"
+    end
+
     {:ok, state}
   end
 
