@@ -19,5 +19,7 @@ test_integrations/*/_build
 test_integrations/*/deps
 test_integrations/*/test-results/
 
+/log/*.log
+
 # Local Claude Code settings that should not be committed
 .claude/settings.local.json

@@ -1,5 +1,5 @@
 defmodule Sentry.TelemetryProcessorTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
 
   alias Sentry.TelemetryProcessor
   alias Sentry.Telemetry.Buffer

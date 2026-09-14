@@ -1,5 +1,5 @@
 defmodule Sentry.PlugContextTest do
-  use Sentry.Case, async: false
+  use Sentry.Case, async: true
   import Plug.Conn
   import Plug.Test
 
