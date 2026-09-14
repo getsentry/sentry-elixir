@@ -14,9 +14,10 @@ defmodule Sentry.Telemetry.Scheduler do
 
   ## Signal-Based Wake
 
-  The scheduler sleeps until signaled via `signal/1`. When signaled, it wakes
-  and attempts to process items from the current buffer in the cycle. If the
-  buffer is not ready or the transport queue is full, it advances to the next position.
+  The scheduler wakes when signaled via `signal/1` or when a pending buffer's
+  timeout expires. It processes ready batches in priority order, sleeping until
+  the next buffer deadline when no batches are ready. When the transport queue
+  is full, it waits for a send to finish before checking buffers again.
 
   ## Transport Queue
 
@@ -186,7 +187,7 @@ defmodule Sentry.Telemetry.Scheduler do
   @impl true
   def handle_cast(:signal, %Scheduler{} = state) do
     state = process_cycle(state)
-    {:noreply, state}
+    {:noreply, state, next_timeout(state)}
   end
 
   @impl true
@@ -194,10 +195,15 @@ defmodule Sentry.Telemetry.Scheduler do
     state = flush_all_buffers(state)
     state = wait_for_active(state)
     state = flush_queue(state)
-    {:reply, :ok, state}
+    {:reply, :ok, state, next_timeout(state)}
   end
 
   @impl true
+  def handle_info(:timeout, %Scheduler{} = state) do
+    state = process_cycle(state)
+    {:noreply, state, next_timeout(state)}
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{active_ref: ref} = state) do
     if reason != :normal do
       LoggerUtils.log(fn ->
@@ -214,11 +220,22 @@ defmodule Sentry.Telemetry.Scheduler do
 
     state = maybe_process_next(state)
 
-    {:noreply, state}
+    {:noreply, state, next_timeout(state)}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
-    {:noreply, state}
+    {:noreply, state, next_timeout(state)}
+  end
+
+  defp next_timeout(%Scheduler{} = state) do
+    if transport_has_space?(state) do
+      Enum.reduce(state.buffers, :infinity, fn {_category, buffer}, timeout ->
+        min(timeout, Buffer.next_timeout(buffer))
+      end)
+    else
+      # A transport completion will wake us when capacity becomes available.
+      :infinity
+    end
   end
 
   defp process_cycle(%Scheduler{} = state) do
