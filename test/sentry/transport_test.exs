@@ -685,8 +685,8 @@ defmodule Sentry.TransportTest do
           end
         end)
 
-      refute log =~ ~r/\[warning\]\s+Failed to send Sentry event/
-      assert log =~ ~r/\[debug\]\s+Failed to send Sentry event/
+      refute log =~ ~r/\[warning\]\s+Failed to send event to Sentry/
+      assert log =~ ~r/\[debug\]\s+Failed to send event to Sentry/
     end
 
     test "stays quiet when an active rate limit is extended", %{bypass: bypass} do
@@ -807,6 +807,30 @@ defmodule Sentry.TransportTest do
       assert {:error, %ClientError{reason: :rate_limited}} =
                Transport.encode_and_post_envelope(metric_envelope, HackneyClient, _retries = [])
     end
+
+    test "names the failing item type when an envelope cannot be sent", %{bypass: bypass} do
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 500, ~s<{"error": "internal"}>)
+      end)
+
+      envelopes = [
+        {"event", Envelope.from_event(Event.create_event(message: "Boom"))},
+        {"transaction", Envelope.from_transaction(make_transaction())},
+        {"check-in",
+         Envelope.from_check_in(Sentry.CheckIn.new(status: :ok, monitor_slug: "job"))},
+        {"metric", Envelope.from_metric_events([make_metric("failing", 1)])}
+      ]
+
+      for {expected_type, envelope} <- envelopes do
+        log =
+          capture_log(fn ->
+            assert {:error, %ClientError{}} =
+                     Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+          end)
+
+        assert log =~ "Failed to send #{expected_type} to Sentry"
+      end
+    end
   end
 
   defp make_log_event(body) do
@@ -814,6 +838,18 @@ defmodule Sentry.TransportTest do
       timestamp: System.system_time(:nanosecond) / 1_000_000_000,
       level: :info,
       body: body
+    }
+  end
+
+  defp make_transaction do
+    now = System.system_time(:microsecond)
+
+    %Sentry.Transaction{
+      event_id: Sentry.UUID.uuid4_hex(),
+      span_id: Sentry.UUID.uuid4_hex() |> binary_part(0, 16),
+      start_timestamp: (now - 1_000_000) / 1_000_000,
+      timestamp: now / 1_000_000,
+      spans: []
     }
   end
 

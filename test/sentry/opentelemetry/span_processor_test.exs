@@ -134,7 +134,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       end)
 
     # Elixir < 1.15 pads the level, so the gap before the message is not always one space.
-    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send Sentry event/
+    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send transaction to Sentry/
   end
 
   @tag span_storage: true

@@ -3,7 +3,20 @@ defmodule Sentry.Transport do
 
   # This module is exclusively responsible for encoding and POSTing envelopes to Sentry.
 
-  alias Sentry.{ClientError, ClientReport, Config, Envelope, LoggerUtils}
+  alias Sentry.{
+    Attachment,
+    CheckIn,
+    ClientError,
+    ClientReport,
+    Config,
+    Envelope,
+    Event,
+    LogBatch,
+    LoggerUtils,
+    MetricBatch,
+    Transaction
+  }
+
   alias Sentry.Transport.RateLimiter
 
   @default_retries [1000, 2000, 4000, 8000]
@@ -216,23 +229,42 @@ defmodule Sentry.Transport do
     {dsn.endpoint_uri, auth_headers}
   end
 
-  defp maybe_log_send_result(send_result, events) do
-    if Enum.any?(events, &(Map.has_key?(&1, :source) && &1.source == :logger)) do
+  defp maybe_log_send_result(send_result, items) do
+    if Enum.any?(items, &(Map.has_key?(&1, :source) && &1.source == :logger)) do
       :ok
     else
-      log_send_result(send_result)
+      log_send_result(send_result, item_type(items))
     end
   end
 
-  defp log_send_result({:error, %ClientError{reason: :rate_limited} = error}) do
-    LoggerUtils.debug(fn -> ["Failed to send Sentry event. ", Exception.message(error)] end)
+  defp log_send_result({:error, %ClientError{reason: :rate_limited} = error}, type) do
+    LoggerUtils.debug(fn -> failure_message(type, error) end)
   end
 
-  defp log_send_result({:error, %ClientError{} = error}) do
-    LoggerUtils.log(fn -> ["Failed to send Sentry event. ", Exception.message(error)] end)
+  defp log_send_result({:error, %ClientError{} = error}, type) do
+    LoggerUtils.log(fn -> failure_message(type, error) end)
   end
 
-  defp log_send_result({:ok, _envelope_id}) do
+  defp log_send_result({:ok, _envelope_id}, _type) do
     :ok
   end
+
+  defp failure_message(type, error) do
+    ["Failed to send ", type, " to Sentry. ", Exception.message(error)]
+  end
+
+  defp item_type(items) do
+    items
+    |> Enum.reject(&is_struct(&1, Attachment))
+    |> List.first()
+    |> type_name()
+  end
+
+  defp type_name(%Event{}), do: "event"
+  defp type_name(%Transaction{}), do: "transaction"
+  defp type_name(%CheckIn{}), do: "check-in"
+  defp type_name(%LogBatch{}), do: "log"
+  defp type_name(%MetricBatch{}), do: "metric"
+  defp type_name(%ClientReport{}), do: "client report"
+  defp type_name(_other), do: "event"
 end

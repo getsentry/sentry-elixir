@@ -457,7 +457,7 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
           flush_telemetry_processor()
         end)
 
-      assert log =~ "Failed to send Sentry event"
+      assert log =~ "Failed to send transaction to Sentry"
 
       transactions = drain_transactions()
 
