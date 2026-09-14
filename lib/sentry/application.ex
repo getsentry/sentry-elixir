@@ -91,6 +91,13 @@ defmodule Sentry.Application do
     end
   end
 
+  @impl true
+  def prep_stop(state) do
+    # Flush while the telemetry processor and its HTTP client are still alive.
+    Sentry.flush()
+    state
+  end
+
   defp cache_loaded_applications do
     apps_with_vsns =
       if Config.report_deps?() do

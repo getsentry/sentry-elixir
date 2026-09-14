@@ -1,7 +1,10 @@
 defmodule Sentry.ApplicationTest do
   use ExUnit.Case, async: false
 
-  import Sentry.TestHelpers, only: [wait_until: 1]
+  import Sentry.TestHelpers
+
+  import Sentry.Test.Assertions,
+    only: [assert_sentry_report: 2, find_sentry_report!: 2]
 
   require Logger
 
@@ -211,21 +214,175 @@ defmodule Sentry.ApplicationTest do
       assert {:error, {:not_found, ^user_handler}} = :logger.get_handler_config(user_handler)
     end
 
-    test "auto-handler captures logs to the buffer" do
-      restart_sentry_with(dsn: "https://public@sentry.example.com/1", logs: [level: :info])
+    test "auto-handler sends logs to Sentry" do
+      bypass = Bypass.open()
+      ref = setup_bypass_envelope_collector(bypass, type: "log")
 
-      assert {:ok, _} = :logger.get_handler_config(:sentry_log_handler)
+      restart_sentry_with(
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        test_mode: false,
+        traces_sample_rate: 0.0,
+        logs: [level: :warning],
+        finch_request_opts: [receive_timeout: 2_000]
+      )
 
-      initial_size = Sentry.TelemetryProcessor.buffer_size(:log)
+      Logger.warning("Auto-handler integration test message")
+      assert :ok = Application.stop(:sentry)
 
-      Logger.info("Auto-handler integration test message")
-
-      wait_until(fn ->
-        Sentry.TelemetryProcessor.buffer_size(:log) > initial_size
-      end)
-
-      assert Sentry.TelemetryProcessor.buffer_size(:log) > initial_size
+      assert [%{"items" => logs}] = collect_sentry_logs(ref, 1)
+      find_sentry_report!(logs, level: "warn", body: "Auto-handler integration test message")
     end
+  end
+
+  describe "graceful shutdown" do
+    setup context do
+      bypass = Bypass.open()
+
+      restart_sentry_with(
+        dsn: "http://public:secret@localhost:#{bypass.port}/1",
+        test_mode: false,
+        traces_sample_rate: 0.0,
+        logs: if(context[:capture_logs], do: [level: :warning]),
+        telemetry_processor_categories: [:error, :log],
+        finch_request_opts: [receive_timeout: 2_000]
+      )
+
+      collector_opts =
+        if context[:capture_logs], do: [type: ["log", "trace_metric"]], else: []
+
+      %{bypass: bypass, ref: setup_bypass_envelope_collector(bypass, collector_opts)}
+    end
+
+    @tag capture_logs: true
+    test "delivers pending logs and metrics on application stop", %{ref: ref} do
+      Logger.warning("pending at shutdown")
+      Sentry.Metrics.gauge("shutdown.metric", 42)
+      assert collect_envelopes(ref, 1, timeout: 0) == []
+
+      assert :ok = Application.stop(:sentry)
+
+      envelopes = collect_envelopes(ref, 2)
+      assert [%{"items" => logs}] = extract_log_items(envelopes)
+      assert [%{"items" => metrics}] = extract_metric_items(envelopes)
+      find_sentry_report!(logs, level: "warn", body: "pending at shutdown")
+      assert_sentry_report(metrics, type: "gauge", name: "shutdown.metric", value: 42)
+    end
+
+    test "waits for pending requests before completing shutdown", %{bypass: bypass} do
+      owner = self()
+
+      setup_bypass_envelope_collector(bypass,
+        response: fn conn, body ->
+          if body =~ "active at shutdown" or body =~ "queued at shutdown" do
+            hold_response(conn, owner, body)
+          else
+            successful_response(conn)
+          end
+        end
+      )
+
+      Sentry.capture_message("active at shutdown", result: :none)
+      assert_receive {:request_started, first_handler, first_body}
+
+      Sentry.capture_message("queued at shutdown", result: :none)
+      task = Task.async(fn -> Application.stop(:sentry) end)
+
+      try do
+        assert Task.yield(task, 50) == nil
+        send(first_handler, :release)
+
+        assert_receive {:request_started, second_handler, second_body}
+
+        try do
+          assert Task.yield(task, 50) == nil
+        after
+          send(second_handler, :release)
+        end
+
+        assert :ok = Task.await(task)
+        assert [first] = extract_events([decode_envelope!(first_body)])
+        assert [second] = extract_events([decode_envelope!(second_body)])
+        assert_sentry_report(first, message: %{formatted: "active at shutdown"})
+        assert_sentry_report(second, message: %{formatted: "queued at shutdown"})
+      after
+        send(first_handler, :release)
+      end
+    end
+
+    test "allows shutdown to finish after five seconds without an HTTP response", %{
+      bypass: bypass
+    } do
+      owner = self()
+      Sentry.put_config(:finch_request_opts, receive_timeout: 10_000)
+
+      setup_bypass_envelope_collector(bypass,
+        response: fn conn, body ->
+          if body =~ ~s("type":"trace_metric") do
+            # Shutdown is expected to close this connection before a response arrives.
+            Bypass.pass(bypass)
+            hold_response(conn, owner)
+          else
+            successful_response(conn)
+          end
+        end
+      )
+
+      Sentry.Metrics.gauge("shutdown.metric", 42)
+      started_at = System.monotonic_time(:millisecond)
+      task = Task.async(fn -> Application.stop(:sentry) end)
+      assert_receive {:request_started, handler}
+
+      try do
+        assert :ok = Task.await(task, 7_000)
+        assert System.monotonic_time(:millisecond) - started_at >= 5_000
+      after
+        send(handler, :release)
+      end
+    end
+
+    test "still stops when Sentry responds with an HTTP error", %{bypass: bypass} do
+      ref =
+        setup_bypass_envelope_collector(bypass,
+          type: "trace_metric",
+          response: fn conn, body ->
+            if body =~ ~s("type":"trace_metric") do
+              Plug.Conn.resp(conn, 500, "unavailable")
+            else
+              successful_response(conn)
+            end
+          end
+        )
+
+      Sentry.Metrics.gauge("shutdown.metric", 42)
+      assert :ok = Application.stop(:sentry)
+
+      assert [%{"items" => metrics}] = collect_sentry_metric_items(ref, 1)
+      assert_sentry_report(metrics, name: "shutdown.metric", value: 42)
+    end
+  end
+
+  defp hold_response(conn, owner) do
+    send(owner, {:request_started, self()})
+
+    receive do
+      :release -> Plug.Conn.resp(conn, 200, "{}")
+    after
+      10_000 -> Plug.Conn.resp(conn, 500, "response was not released")
+    end
+  end
+
+  defp hold_response(conn, owner, body) do
+    send(owner, {:request_started, self(), body})
+
+    receive do
+      :release -> successful_response(conn)
+    after
+      10_000 -> Plug.Conn.resp(conn, 500, "response was not released")
+    end
+  end
+
+  defp successful_response(conn) do
+    Plug.Conn.resp(conn, 200, ~s({"id":"#{Sentry.UUID.uuid4_hex()}"}))
   end
 
   defp restart_sentry_with(config) do
