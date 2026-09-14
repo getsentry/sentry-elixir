@@ -1,6 +1,8 @@
 defmodule Sentry.Opentelemetry.SpanProcessorTest do
   use Sentry.Case, async: false
 
+  @moduletag send_result: :none
+
   require OpenTelemetry.Tracer, as: Tracer
   alias OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
   alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
@@ -128,10 +130,11 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     log =
       capture_log([metadata: [:domain]], fn ->
         TestEndpoint.child_instrumented_function("one")
+        flush_telemetry_processor()
       end)
 
     # Elixir < 1.15 pads the level, so the gap before the message is not always one space.
-    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send transaction to Sentry/
+    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send Sentry event/
   end
 
   @tag span_storage: true

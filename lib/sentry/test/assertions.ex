@@ -343,7 +343,7 @@ defmodule Sentry.Test.Assertions do
   @doc since: "13.1.0"
   @spec refute_sentry_check_in(reference(), timeout()) :: :ok
   def refute_sentry_check_in(ref, timeout \\ @refute_timeout) when is_reference(ref) do
-    maybe_flush(timeout)
+    maybe_flush(@default_timeout)
 
     receive do
       {:bypass_envelope, ^ref, body} ->

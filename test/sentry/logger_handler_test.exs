@@ -758,6 +758,7 @@ defmodule Sentry.LoggerHandlerTest do
          },
          send_request: true
     test "discards logged messages", %{sender_ref: ref} do
+      put_test_config(telemetry_processor_categories: [:check_in, :transaction, :log])
       register_delay()
 
       Logger.error("First")

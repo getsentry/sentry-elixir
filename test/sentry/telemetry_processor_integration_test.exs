@@ -7,7 +7,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   alias Sentry.TelemetryProcessor
   alias Sentry.Telemetry.Buffer
-  alias Sentry.{LogEvent, Metric, Transaction}
+  alias Sentry.{Event, LogEvent, Metric, Transaction}
 
   setup _context do
     %{bypass: bypass, telemetry_processor: name, ref: ref} =
@@ -41,6 +41,48 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       [[{%{"type" => "event"}, event}]] = envelopes
       assert event["message"]["formatted"] == "integration test error"
+    end
+
+    test "buffers exceptions captured via Sentry.capture_exception/2", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      try do
+        raise "integration test exception"
+      rescue
+        exception ->
+          Sentry.capture_exception(exception, stacktrace: __STACKTRACE__, result: :none)
+      end
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+
+      assert [exception] = event["exception"]
+      assert exception["type"] == "RuntimeError"
+      assert exception["value"] == "integration test exception"
+      assert [_ | _] = exception["stacktrace"]["frames"]
+    end
+
+    test "buffers events sent via Sentry.send_event/2", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      event = Event.create_event(message: "sent via send_event", extra: %{"source" => "manual"})
+
+      assert {:ok, ""} = Sentry.send_event(event, result: :none)
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      assert [[{%{"type" => "event"}, sent_event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert sent_event["message"]["formatted"] == "sent via send_event"
+      assert sent_event["extra"] == %{"source" => "manual"}
     end
 
     test "critical errors are not starved by high-volume log events", ctx do
@@ -91,6 +133,31 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       envelopes = collect_envelopes(ctx.ref, 5, timeout: 2000)
       assert length(envelopes) == 5
       assert Enum.all?(envelopes, fn [{%{"type" => type}, _}] -> type == "event" end)
+    end
+  end
+
+  describe "errors reported through Sentry.LoggerHandler" do
+    setup do
+      put_test_config(telemetry_processor_categories: [:error, :log])
+      :ok
+    end
+
+    @tag :capture_log
+    test "buffers logger-reported errors through TelemetryProcessor", ctx do
+      attach_sentry_error_handler()
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      Logger.error("logger handler integration error")
+
+      error_buffer = TelemetryProcessor.get_buffer(ctx.processor, :error)
+      assert Buffer.size(error_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      assert [[{%{"type" => "event"}, event}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert event["message"]["formatted"] == "logger handler integration error"
     end
   end
 
@@ -166,6 +233,51 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert is_binary(transaction_data["event_id"])
       assert is_number(transaction_data["start_timestamp"])
       assert is_number(transaction_data["timestamp"])
+    end
+
+    test "buffers transactions sent via Sentry.send_transaction/2", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      transaction = %{make_transaction() | spans: [create_span()]}
+
+      assert {:ok, ""} = Sentry.send_transaction(transaction, result: :none)
+
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+      assert Buffer.size(transaction_buffer) == 1
+
+      :sys.resume(scheduler)
+
+      assert [[{%{"type" => "transaction"}, sent}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert sent["event_id"] == transaction.event_id
+      assert [_span] = sent["spans"]
+    end
+
+    test "applies before_send to transactions sent via Sentry.send_transaction/2", ctx do
+      put_test_config(
+        before_send: fn %Transaction{} = transaction ->
+          %{transaction | transaction: "renamed-by-before-send"}
+        end
+      )
+
+      assert {:ok, ""} = Sentry.send_transaction(make_transaction(), result: :none)
+
+      assert [[{%{"type" => "transaction"}, sent}]] = collect_envelopes(ctx.ref, 1, timeout: 2000)
+      assert sent["transaction"] == "renamed-by-before-send"
+    end
+
+    test "drops transactions discarded by before_send before they reach the buffer", ctx do
+      put_test_config(before_send: fn %Transaction{} -> false end)
+
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
+
+      assert :excluded = Sentry.send_transaction(make_transaction(), result: :none)
+
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+      assert Buffer.size(transaction_buffer) == 0
+
+      :sys.resume(scheduler)
     end
 
     test "flush drains transaction buffer completely", ctx do
@@ -605,6 +717,30 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert Buffer.size(transaction_buffer) == 0
     end
 
+    test "records span outcomes when Sentry.send_transaction/2 is dropped before buffering",
+         ctx do
+      put_test_config(telemetry_processor_categories: [:transaction, :log])
+
+      transaction_buffer = TelemetryProcessor.get_buffer(ctx.processor, :transaction)
+
+      set_rate_limit("transaction")
+
+      transaction = %{make_transaction() | spans: [create_span(), create_span()]}
+      spans_including_root = length(transaction.spans) + 1
+
+      assert {:ok, ""} = Sentry.send_transaction(transaction, result: :none)
+
+      assert Buffer.size(transaction_buffer) == 0
+
+      reset_rate_limits()
+
+      assert collect_discarded_outcomes(ctx.client_report_sender, ctx.ref, "ratelimit_backoff") ==
+               %{
+                 "transaction" => 1,
+                 "span" => spans_including_root
+               }
+    end
+
     test "drops rate-limited metric events before they enter the buffer", ctx do
       Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
         Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
@@ -859,6 +995,19 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
     handler_name = :"sentry_logs_handler_#{System.unique_integer([:positive])}"
     :ok = :logger.add_handler(handler_name, Sentry.LoggerHandler, %{config: config})
+    on_exit(fn -> _ = :logger.remove_handler(handler_name) end)
+
+    handler_name
+  end
+
+  defp attach_sentry_error_handler do
+    handler_name = :"sentry_error_handler_#{System.unique_integer([:positive])}"
+
+    :ok =
+      :logger.add_handler(handler_name, Sentry.LoggerHandler, %{
+        config: %{capture_log_messages: true, capture_level: :error}
+      })
+
     on_exit(fn -> _ = :logger.remove_handler(handler_name) end)
 
     handler_name

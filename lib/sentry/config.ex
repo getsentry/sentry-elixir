@@ -552,7 +552,7 @@ defmodule Sentry.Config do
     ],
     telemetry_processor_categories: [
       type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
-      default: [],
+      default: [:error, :check_in, :transaction],
       doc: """
       List of event categories that should be processed through the TelemetryProcessor.
       Categories in this list use the TelemetryProcessor's ring buffer and weighted

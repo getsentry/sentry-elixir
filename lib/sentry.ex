@@ -407,11 +407,14 @@ defmodule Sentry do
   low level, and mostly useful when you want to report the status of a cron
   but you are not using any common library to manage your cron jobs.
 
-  This function performs a *synchronous* HTTP request to Sentry. If the request
-  performs successfully, it returns `{:ok, check_in_id}` where `check_in_id` is
-  the ID of the check-in that was sent to Sentry. You can use this ID to send
-  updates about the same check-in. If the request fails, it returns
-  `{:error, reason}`.
+  This function buffers the check-in through the telemetry processor and returns
+  right away with `{:ok, check_in_id}`, where `check_in_id` is the ID of the
+  check-in. You can use this ID to send updates about the same check-in. Use
+  `flush/1` if you need to block until buffered telemetry has been sent.
+
+  This requires `:check_in` to be listed in the `:telemetry_processor_categories`
+  configuration, which is the default. Without it, the check-in is sent with a
+  *synchronous* HTTP request instead, which returns `{:error, reason}` if it fails.
 
   > #### Setting the DSN {: .warning}
   >
