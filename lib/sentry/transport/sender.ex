@@ -3,7 +3,7 @@ defmodule Sentry.Transport.Sender do
 
   use GenServer
 
-  alias Sentry.{Envelope, Event, Metric, Transport, Transaction}
+  alias Sentry.{Envelope, Event, Transport, Transaction}
 
   @registry Sentry.Transport.SenderRegistry
 
@@ -34,16 +34,6 @@ defmodule Sentry.Transport.Sender do
     GenServer.cast(
       {:via, Registry, {@registry, random_index}},
       {:send, client, transaction, counter_key}
-    )
-  end
-
-  @spec send_async(module(), Metric.t()) :: :ok
-  def send_async(client, %Metric{} = metric) when is_atom(client) do
-    random_index = Enum.random(1..Transport.SenderPool.pool_size())
-
-    GenServer.cast(
-      {:via, Registry, {@registry, random_index}},
-      {:send, client, metric}
     )
   end
 
@@ -95,19 +85,6 @@ defmodule Sentry.Transport.Sender do
 
     # We sent a transaction, so we can decrease the number of queued transactions.
     Transport.SenderPool.decrease_queued_transactions_counter(counter_key)
-
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def handle_cast({:send, client, %Metric{} = metric}, %__MODULE__{} = state) do
-    retries = Application.get_env(:sentry, :request_retries, Transport.default_retries())
-
-    _ =
-      metric
-      |> List.wrap()
-      |> Envelope.from_metric_events()
-      |> Transport.encode_and_post_envelope(client, retries)
 
     {:noreply, state}
   end

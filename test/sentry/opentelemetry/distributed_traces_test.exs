@@ -4,6 +4,8 @@ defmodule Sentry.Opentelemetry.DistributedTracesTest do
 
   use Sentry.Case, async: false
 
+  @moduletag send_result: :none
+
   require OpenTelemetry.Tracer, as: Tracer
 
   import Sentry.TestHelpers

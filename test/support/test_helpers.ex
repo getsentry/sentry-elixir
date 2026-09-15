@@ -155,6 +155,31 @@ defmodule Sentry.TestHelpers do
     do: Sentry.Test.collect_envelopes(ref, expected_count, opts)
 
   @doc """
+  Drains this test's isolated `Sentry.TelemetryProcessor`, if there is one.
+
+  `Sentry.flush/1` targets the globally-named processor, which is not the one
+  `Sentry.Case` starts per test, so use this instead. The assertion helpers in
+  `Sentry.Test.Assertions` already flush before they check; this is for tests
+  that assert on something the pipeline's own processes emit — a log line, a
+  client report — rather than on a collected envelope.
+
+  A no-op when the events went out synchronously, so it is safe in tests that
+  run under both send modes.
+  """
+  @spec flush_telemetry_processor(timeout()) :: :ok
+  def flush_telemetry_processor(timeout \\ 1000) do
+    with processor when not is_nil(processor) <- Process.get(:sentry_telemetry_processor),
+         scheduler = Sentry.TelemetryProcessor.scheduler_name(processor),
+         pid when not is_nil(pid) <- Process.whereis(scheduler) do
+      Sentry.TelemetryProcessor.flush(processor, timeout)
+    end
+
+    :ok
+  catch
+    :exit, _ -> :ok
+  end
+
+  @doc """
   Polls `condition_fn` until it returns a truthy value or `timeout`
   (default 1000ms) elapses, using exponential backoff (1ms, doubling,
   capped at 50ms).

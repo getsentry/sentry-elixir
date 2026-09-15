@@ -11,6 +11,10 @@ defmodule Sentry.Case do
     # that won't flake under async load.
     Sentry.Test.Config.put(finch_request_opts: [receive_timeout: 2000])
 
+    if send_result = context[:send_result] do
+      Sentry.Test.Config.put(send_result: send_result)
+    end
+
     # Start a fresh RateLimiter for each test with unique names for isolation.
     setup_rate_limiter()
 

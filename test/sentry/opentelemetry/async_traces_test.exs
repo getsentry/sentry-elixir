@@ -4,6 +4,8 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
 
   use Sentry.Case, async: false
 
+  @moduletag send_result: :none
+
   require OpenTelemetry.Tracer, as: Tracer
 
   import ExUnit.CaptureLog
@@ -452,6 +454,7 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
 
           send(task.pid, :finish_child)
           Task.await(task)
+          flush_telemetry_processor()
         end)
 
       assert log =~ "Failed to send transaction to Sentry"

@@ -1,5 +1,8 @@
 defmodule Sentry.PlugCaptureTest do
   use Sentry.Case
+
+  @moduletag send_result: :none
+
   import Plug.Test
 
   import Sentry.Test.Assertions
