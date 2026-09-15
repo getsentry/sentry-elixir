@@ -45,6 +45,13 @@ defmodule Sentry.Application do
         []
       end
 
+    maybe_runtime_metrics =
+      if Config.metrics()[:runtime][:enabled] do
+        [{Sentry.Metrics.Runtime, Config.metrics()[:runtime]}]
+      else
+        []
+      end
+
     maybe_span_storage =
       if Config.tracing?() do
         [Sentry.OpenTelemetry.SpanStorage]
@@ -79,7 +86,8 @@ defmodule Sentry.Application do
         maybe_span_storage ++
         telemetry_processor ++
         maybe_rate_limiter() ++
-        [Sentry.Transport.SenderPool]
+        [Sentry.Transport.SenderPool] ++
+        maybe_runtime_metrics
 
     cache_loaded_applications()
 
