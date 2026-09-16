@@ -42,6 +42,8 @@ defmodule Sentry.Metric do
 
   @sdk_version Mix.Project.config()[:version]
 
+  @sequence_key {:sentry, :metric_sequence}
+
   @doc """
   Attaches default attributes to a metric.
 
@@ -64,7 +66,22 @@ defmodule Sentry.Metric do
       |> maybe_put_attr("server.address", Config.server_name())
 
     # Merge with user attributes (user attributes take precedence)
-    %{metric | attributes: Map.merge(default_attrs, metric.attributes)}
+    attributes =
+      default_attrs
+      |> Map.merge(metric.attributes)
+      |> Map.put("sentry.timestamp.sequence", next_sequence())
+
+    %{metric | attributes: attributes}
+  end
+
+  @doc false
+  @spec init_sequence() :: :ok
+  def init_sequence do
+    :persistent_term.put(@sequence_key, :atomics.new(1, signed: true))
+  end
+
+  defp next_sequence do
+    :atomics.add_get(:persistent_term.get(@sequence_key), 1, 1) - 1
   end
 
   defp maybe_put_attr(attrs, _key, nil), do: attrs
