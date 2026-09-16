@@ -83,6 +83,41 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
     end
   end
 
+  describe "system count metrics from a real telemetry_poller" do
+    setup do
+      SentryTest.setup_sentry()
+      :ok
+    end
+
+    test "reports the real counts against the limits the VM enforces" do
+      metrics = collect_runtime_metrics([:system_counts])
+
+      for name <- ["process", "atom", "port"] do
+        count = find_metric!(metrics, "elixir.runtime.#{name}.count").value
+        limit = find_metric!(metrics, "elixir.runtime.#{name}.limit").value
+        utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
+
+        assert count > 0
+        assert count < limit
+        assert utilization.value == count / limit
+        assert utilization.unit == "ratio"
+      end
+    end
+
+    test "forwards the hard limits telemetry_poller measures" do
+      metrics = collect_runtime_metrics([:system_counts])
+
+      for {name, key} <- [
+            {"process", :process_limit},
+            {"atom", :atom_limit},
+            {"port", :port_limit}
+          ] do
+        assert find_metric!(metrics, "elixir.runtime.#{name}.limit").value ==
+                 :erlang.system_info(key)
+      end
+    end
+  end
+
   describe "the application wiring" do
     test "attaches the runtime metrics handler at boot" do
       handler_ids = [:vm, :memory] |> :telemetry.list_handlers() |> Enum.map(& &1.id)

@@ -55,6 +55,36 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "system count metrics" do
+    @system_counts %{
+      process_count: 100,
+      process_limit: 1_000,
+      atom_count: 50,
+      atom_limit: 500,
+      port_count: 4,
+      port_limit: 200
+    }
+
+    test "reports the count, the limit and the ratio between them" do
+      metrics = emit([:vm, :system_counts], @system_counts)
+
+      for {name, count, limit} <- [{"process", 100, 1_000}, {"atom", 50, 500}, {"port", 4, 200}] do
+        assert find_metric!(metrics, "elixir.runtime.#{name}.count").value == count
+        assert find_metric!(metrics, "elixir.runtime.#{name}.limit").value == limit
+
+        utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
+        assert utilization.value == count / limit
+        assert utilization.unit == "ratio"
+      end
+    end
+
+    test "omits the limit and the ratio when the poller does not report limits" do
+      metrics = emit([:vm, :system_counts], %{process_count: 100})
+
+      assert [%{name: "elixir.runtime.process.count", value: 100}] = metrics
+    end
+  end
+
   describe "metric attributes" do
     test "tags every metric with the runtime metrics origin" do
       for metric <- emit_memory() do
@@ -88,7 +118,7 @@ defmodule Sentry.Metrics.RuntimeTest do
   describe "wiring against a real telemetry_poller" do
     test "maps the builtin measurements onto Sentry gauges" do
       attach()
-      poller = start_idle_poller([:memory, :total_run_queue_lengths])
+      poller = start_idle_poller([:memory, :total_run_queue_lengths, :system_counts])
 
       :ok = SentryTest.allow_sentry_reports(self(), poller)
       collect_once(poller)
@@ -97,6 +127,8 @@ defmodule Sentry.Metrics.RuntimeTest do
       assert metric.value > 0
 
       assert_sentry_metric(:gauge, name: "elixir.runtime.run_queue.total")
+      assert_sentry_metric(:gauge, name: "elixir.runtime.process.count")
+      assert_sentry_metric(:gauge, name: "elixir.runtime.process.limit")
     end
   end
 
