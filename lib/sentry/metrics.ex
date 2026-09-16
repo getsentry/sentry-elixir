@@ -41,6 +41,8 @@ defmodule Sentry.Metrics do
       `atom`, `atom_used`, `binary`, `code` and `ets`, in bytes
     * `elixir.runtime.run_queue.*` — `total`, `cpu` and `io`, how many processes are
       waiting to run
+    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` —
+      a `count`, the hard VM `limit`, and the `utilization` ratio between them
 
   ### Collection Frequency
 
