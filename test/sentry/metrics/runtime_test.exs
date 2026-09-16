@@ -42,6 +42,19 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "run queue metrics" do
+    test "reports the run queue lengths as unitless gauges" do
+      metrics = emit([:vm, :total_run_queue_lengths], %{total: 7, cpu: 5, io: 2})
+
+      for {key, value} <- [total: 7, cpu: 5, io: 2] do
+        metric = find_metric!(metrics, "elixir.runtime.run_queue.#{key}")
+
+        assert metric.value == value
+        assert metric.unit == nil
+      end
+    end
+  end
+
   describe "metric attributes" do
     test "tags every metric with the runtime metrics origin" do
       for metric <- emit_memory() do
@@ -73,15 +86,17 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "wiring against a real telemetry_poller" do
-    test "maps the builtin memory measurement onto Sentry gauges" do
+    test "maps the builtin measurements onto Sentry gauges" do
       attach()
-      poller = start_idle_poller([:memory])
+      poller = start_idle_poller([:memory, :total_run_queue_lengths])
 
       :ok = SentryTest.allow_sentry_reports(self(), poller)
       collect_once(poller)
 
       metric = assert_sentry_metric(:gauge, name: "elixir.runtime.mem.total")
       assert metric.value > 0
+
+      assert_sentry_metric(:gauge, name: "elixir.runtime.run_queue.total")
     end
   end
 
