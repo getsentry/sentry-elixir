@@ -374,6 +374,18 @@ defmodule Sentry.ApplicationTest do
       assert runtime_metrics_attached?()
     end
 
+    test "the scheduler poller is not started by default" do
+      restart_sentry_with([])
+
+      refute Process.whereis(Sentry.Metrics.Runtime)
+    end
+
+    test "the scheduler poller is started when runtime metrics are enabled" do
+      restart_sentry_with(metrics: [runtime: [enabled: true]])
+
+      assert is_pid(Process.whereis(Sentry.Metrics.Runtime))
+    end
+
     test "the handler is detached when the application stops" do
       restart_sentry_with(metrics: [runtime: [enabled: true]])
       assert runtime_metrics_attached?()

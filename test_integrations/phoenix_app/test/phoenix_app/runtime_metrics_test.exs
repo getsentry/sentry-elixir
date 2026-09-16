@@ -3,6 +3,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
 
   import Sentry.TestHelpers
 
+  alias Sentry.Metrics.Runtime
   alias Sentry.Test, as: SentryTest
 
   @memory_keys [
@@ -118,6 +119,32 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
     end
   end
 
+  describe "scheduler utilization from the SDK poller" do
+    setup do
+      SentryTest.setup_sentry()
+      :ok
+    end
+
+    test "reports utilization once the poller has a baseline" do
+      %{start: {:telemetry_poller, :start_link, [opts]}} = Runtime.child_spec([])
+
+      poller = start_vm_poller(opts[:measurements])
+      :ok = SentryTest.allow_sentry_reports(self(), poller)
+
+      collect_once(poller)
+      collect_once(poller)
+      Sentry.TelemetryProcessor.flush()
+
+      metric =
+        SentryTest.pop_sentry_metrics()
+        |> find_metric!("elixir.runtime.scheduler.utilization")
+
+      assert metric.unit == "ratio"
+      assert metric.value >= 0.0
+      assert metric.value <= 1.0
+    end
+  end
+
   describe "the application wiring" do
     test "attaches the runtime metrics handler at boot" do
       handler_ids = [:vm, :memory] |> :telemetry.list_handlers() |> Enum.map(& &1.id)
@@ -127,6 +154,10 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
 
     test "runs the default telemetry_poller the SDK relies on for its events" do
       assert is_pid(Process.whereis(:telemetry_poller_default))
+    end
+
+    test "starts the SDK scheduler poller at boot" do
+      assert is_pid(Process.whereis(Sentry.Metrics.Runtime))
     end
   end
 
