@@ -15,8 +15,11 @@ defmodule Sentry.Metrics.Runtime do
   @origin "auto.elixir.runtime_metrics"
 
   @memory_event [:vm, :memory]
+  @run_queue_event [:vm, :total_run_queue_lengths]
 
-  @events [@memory_event]
+  @events [@memory_event, @run_queue_event]
+
+  @run_queue_keys [:total, :cpu, :io]
 
   # Every key `:erlang.memory/0` reports, which is exactly what the poller measures.
   @memory_keys [
@@ -57,6 +60,10 @@ defmodule Sentry.Metrics.Runtime do
         ) :: :ok
   def handle_event(@memory_event, measurements, _metadata, config) do
     report(config, measurements, @memory_keys, "elixir.runtime.mem", "byte")
+  end
+
+  def handle_event(@run_queue_event, measurements, _metadata, config) do
+    report(config, measurements, @run_queue_keys, "elixir.runtime.run_queue", nil)
   end
 
   # Map.take/2 quietly skips keys the poller version at hand does not measure.
