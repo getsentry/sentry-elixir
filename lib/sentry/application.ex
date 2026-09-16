@@ -86,6 +86,7 @@ defmodule Sentry.Application do
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
       start_integrations(integrations_config)
+      maybe_attach_runtime_metrics()
       maybe_add_logger_handler()
       {:ok, pid}
     end
@@ -93,9 +94,20 @@ defmodule Sentry.Application do
 
   @impl true
   def prep_stop(state) do
+    Sentry.Metrics.Runtime.detach()
     # Flush while the telemetry processor and its HTTP client are still alive.
     Sentry.flush()
     state
+  end
+
+  # Attached after the supervisor is up, so the telemetry processor is running
+  # before the handler can record its first gauge.
+  defp maybe_attach_runtime_metrics do
+    runtime_config = Config.metrics()[:runtime]
+
+    if runtime_config[:enabled] do
+      Sentry.Metrics.Runtime.attach(runtime_config)
+    end
   end
 
   defp cache_loaded_applications do

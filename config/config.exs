@@ -15,6 +15,10 @@ if config_env() == :test do
 
   config :sentry, request_retries: []
 
+  # The default poller would otherwise emit [:vm, *] events every 5s for the whole
+  # suite, from a process no test owns. Tests that want them start their own poller.
+  config :telemetry_poller, default: false
+
   if System.version() > "1.16.0" do
     config :logger, :default_handler, false
 

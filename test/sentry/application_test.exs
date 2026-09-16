@@ -361,6 +361,26 @@ defmodule Sentry.ApplicationTest do
     end
   end
 
+  describe "runtime metrics" do
+    test "the handler is not attached by default" do
+      restart_sentry_with([])
+
+      refute runtime_metrics_attached?()
+    end
+
+    test "the handler is attached when runtime metrics are enabled" do
+      restart_sentry_with(metrics: [runtime: [enabled: true]])
+
+      assert runtime_metrics_attached?()
+    end
+  end
+
+  defp runtime_metrics_attached? do
+    [:vm, :memory]
+    |> :telemetry.list_handlers()
+    |> Enum.any?(&(&1.id == "sentry-runtime-metrics"))
+  end
+
   defp hold_response(conn, owner) do
     send(owner, {:request_started, self()})
 
