@@ -25,6 +25,43 @@ defmodule Sentry.Metrics do
       # Record a distribution
       Sentry.Metrics.distribution("response.time", 42.5, unit: "millisecond")
 
+  ## Automatically Collected Metrics
+
+  The SDK can also report BEAM runtime health on its own, without any calls to the
+  functions above. This is opt-in:
+
+      config :sentry,
+        metrics: [
+          runtime: [enabled: true]
+        ]
+
+  Once enabled, these gauges are reported:
+
+    * `elixir.runtime.mem.*` — `total`, `processes`, `processes_used`, `system`,
+      `atom`, `atom_used`, `binary`, `code` and `ets`, in bytes
+
+  ### Collection Frequency
+
+  The SDK does not collect these itself. It listens to the events that
+  [telemetry_poller](https://hexdocs.pm/telemetry_poller) already emits, so how often
+  they are reported is how often that library polls. Its default poller runs every
+  5 seconds, which is more often than most applications need for runtime health and
+  costs metric volume, so consider slowing it down:
+
+      config :telemetry_poller, default: [period: 30_000]
+
+  Add the dependency if you do not have it already:
+
+      {:telemetry_poller, "~> 1.0"}
+
+  ### Runtime Version Attributes
+
+  Setting `version_attributes: true` adds `elixir_version` and `otp_release`
+  attributes to every reported measurement, so metrics can be grouped by runtime
+  version. It is off by default, because those values change only on upgrade and
+  attaching them to every point starts a fresh series for each metric on every
+  rolling deploy.
+
   ## Configuration
 
   Metrics can be filtered using the `:before_send_metric` callback:

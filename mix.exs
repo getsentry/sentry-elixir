@@ -140,6 +140,7 @@ defmodule Sentry.Mixfile do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
+      {:telemetry_poller, "~> 1.0", optional: true},
 
       # Dev and test dependencies
       {:igniter, dep_version(:igniter, current_elixir_version()), only: :test},
