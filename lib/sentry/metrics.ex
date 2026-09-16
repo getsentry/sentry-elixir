@@ -45,6 +45,11 @@ defmodule Sentry.Metrics do
       a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
       `limit` and `utilization` gauges need telemetry_poller 1.3.0 or later, which is
       when it started measuring the limits; on older versions only `count` is reported.
+    * `elixir.runtime.scheduler.utilization` — the busy fraction of scheduler time, as a
+      ratio between `0.0` and `1.0`. Unlike the others this is a delta between two
+      samples, so the first collection only takes a baseline and the first value arrives
+      one collection later. The SDK polls for it itself, at the period configured for
+      `telemetry_poller`.
 
   ### Collection Frequency
 

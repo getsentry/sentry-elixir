@@ -85,6 +85,69 @@ defmodule Sentry.Metrics.RuntimeTest do
     end
   end
 
+  describe "scheduler utilization" do
+    test "is not reported by the memory event" do
+      metrics = emit_memory()
+
+      refute "elixir.runtime.scheduler.utilization" in Enum.map(metrics, & &1.name)
+    end
+
+    test "reports nothing on the first measurement, which only takes a baseline" do
+      attach()
+
+      assert :ok = Runtime.dispatch_scheduler_utilization()
+      flush_telemetry_processor()
+
+      assert SentryTest.pop_sentry_metrics() == []
+    end
+
+    test "reports the busy fraction of scheduler time once a baseline exists" do
+      attach()
+
+      assert :ok = Runtime.dispatch_scheduler_utilization()
+      assert :ok = Runtime.dispatch_scheduler_utilization()
+
+      metric = assert_sentry_metric(:gauge, name: "elixir.runtime.scheduler.utilization")
+
+      assert metric.unit == "ratio"
+      assert metric.value >= 0.0 and metric.value <= 1.0
+    end
+  end
+
+  describe "the scheduler poller" do
+    test "follows the period configured for telemetry_poller" do
+      put_telemetry_poller_default(period: 30_000)
+
+      assert %{start: {:telemetry_poller, :start_link, [opts]}} = Runtime.child_spec([])
+      assert opts[:period] == 30_000
+    end
+
+    test "leaves the period to telemetry_poller when none is configured" do
+      put_telemetry_poller_default([])
+
+      assert %{start: {:telemetry_poller, :start_link, [opts]}} = Runtime.child_spec([])
+      refute Keyword.has_key?(opts, :period)
+    end
+
+    test "leaves the period to telemetry_poller when the default poller is disabled" do
+      put_telemetry_poller_default(false)
+
+      assert %{start: {:telemetry_poller, :start_link, [opts]}} = Runtime.child_spec([])
+      refute Keyword.has_key?(opts, :period)
+    end
+
+    test "reports utilization when driven by a real poller" do
+      attach()
+      poller = start_supervised!(Runtime.child_spec([]))
+      :ok = SentryTest.allow_sentry_reports(self(), poller)
+
+      collect_once(poller)
+      collect_once(poller)
+
+      assert_sentry_metric(:gauge, name: "elixir.runtime.scheduler.utilization")
+    end
+  end
+
   describe "metric attributes" do
     test "tags every metric with the runtime metrics origin" do
       for metric <- emit_memory() do
@@ -118,6 +181,7 @@ defmodule Sentry.Metrics.RuntimeTest do
   describe "wiring against a real telemetry_poller" do
     test "maps the builtin measurements onto Sentry gauges" do
       attach()
+
       poller = start_idle_poller([:memory, :total_run_queue_lengths, :system_counts])
 
       :ok = SentryTest.allow_sentry_reports(self(), poller)
@@ -165,6 +229,12 @@ defmodule Sentry.Metrics.RuntimeTest do
     send(poller, :collect)
     _ = :telemetry_poller.list_measurements(poller)
     :ok
+  end
+
+  defp put_telemetry_poller_default(value) do
+    original = Application.get_env(:telemetry_poller, :default)
+    Application.put_env(:telemetry_poller, :default, value)
+    on_exit(fn -> Application.put_env(:telemetry_poller, :default, original) end)
   end
 
   defp find_metric!(metrics, name) do

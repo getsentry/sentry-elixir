@@ -45,6 +45,8 @@ defmodule Sentry.Application do
         []
       end
 
+    maybe_runtime_metrics_poller = maybe_runtime_metrics_poller()
+
     maybe_span_storage =
       if Config.tracing?() do
         [Sentry.OpenTelemetry.SpanStorage]
@@ -77,6 +79,7 @@ defmodule Sentry.Application do
         maybe_client_report_sender() ++
         maybe_http_client_spec ++
         maybe_span_storage ++
+        maybe_runtime_metrics_poller ++
         telemetry_processor ++
         maybe_rate_limiter() ++
         [Sentry.Transport.SenderPool]
@@ -105,6 +108,25 @@ defmodule Sentry.Application do
 
     if runtime_config[:enabled] do
       Sentry.Metrics.Runtime.attach(runtime_config)
+    end
+  end
+
+  defp maybe_runtime_metrics_poller do
+    cond do
+      not Config.metrics()[:runtime][:enabled] ->
+        []
+
+      Code.ensure_loaded?(:telemetry_poller) ->
+        [Sentry.Metrics.Runtime]
+
+      true ->
+        LoggerUtils.warning(
+          "[Sentry] runtime metrics are enabled but the :telemetry_poller application is " <>
+            "not available, so elixir.runtime.scheduler.utilization will not be reported. " <>
+            ~s[Add {:telemetry_poller, "~> 1.0"} to your dependencies.]
+        )
+
+        []
     end
   end
 
