@@ -342,12 +342,15 @@ defmodule Sentry.Config do
     ],
     traces_ignore_http_status_codes: [
       type: {:custom, __MODULE__, :__validate_traces_ignore_http_status_codes__, []},
-      default: [],
+      default: [404],
       type_doc: "list of `t:integer/0` or `t:Range.t/0`",
       doc: """
       HTTP statuses to keep out of tracing. An incoming request answered with one of these
       is not reported as a transaction, and neither is any work that outlives it. Takes
       status codes and ranges, like `[404, 500..599]`.
+
+      Defaults to `[404]`, so *404 Not Found* requests are not traced. Set it to `[]` to
+      trace them again.
 
       Outgoing requests are not affected, and the trace is still propagated to the services
       this one calls.
