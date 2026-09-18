@@ -10,7 +10,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
-    alias Sentry.{ClientError, LoggerUtils}
+    alias Sentry.{ClientError, Config, LoggerUtils}
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
@@ -83,13 +83,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
         # No parent = definitely a root
         span_record.parent_span_id == nil ->
-          build_and_send_transaction(span_record)
+          finalize_transaction(span_record)
+
+        # The parent's transaction was excluded, so the follow-up transaction
+        # this span would otherwise be promoted to is excluded too - otherwise
+        # excluding a transaction would resurface its late children
+        SpanStorage.span_excluded?(span_record.parent_span_id) ->
+          finalize_transaction(span_record, parent_already_sent?: true, excluded?: true)
 
         # The parent's transaction was already sent, so this span cannot be
         # attached to it anymore - report it as a follow-up transaction of
         # the same trace instead
         SpanStorage.span_sent?(span_record.parent_span_id) ->
-          build_and_send_transaction(span_record, parent_already_sent?: true)
+          finalize_transaction(span_record, parent_already_sent?: true)
 
         # Parent exists locally - this is a child span, not a transaction root
         has_local_parent_span?(span_record.parent_span_id) ->
@@ -103,12 +109,12 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         # Compared to true explicitly because the field is :undefined for
         # parentless spans, which is truthy.
         span_record.parent_span_is_remote == true ->
-          build_and_send_transaction(span_record)
+          finalize_transaction(span_record)
 
         # Parent is remote (distributed tracing) - treat server spans as
         # transaction roots
         server_span?(span_record) ->
-          build_and_send_transaction(span_record)
+          finalize_transaction(span_record)
 
         true ->
           LoggerUtils.debug(fn ->
@@ -148,7 +154,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       Map.get(attributes, to_string(MessagingAttributes.messaging_system())) == :oban
     end
 
-    defp build_and_send_transaction(span_record, opts \\ []) do
+    defp finalize_transaction(span_record, opts \\ []) do
       # Children still running when the root ends are excluded from the
       # payload: a reported span must have an end timestamp. Their records
       # stay in storage until they finish.
@@ -157,8 +163,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         |> SpanStorage.get_child_spans()
         |> Enum.filter(& &1.end_time)
 
-      transaction = build_transaction(span_record, child_span_records, opts)
-
       # Every span of the transaction gets a marker - late spans may continue
       # the trace from any of them, not just the root. Markers must precede
       # the send: a span ending while the send is in flight must already see
@@ -166,30 +170,15 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       # was finalized locally - not that delivery succeeded - since once the
       # records are removed below, later spans can never be attached to this
       # transaction either way.
-      sent_span_ids = [span_record.span_id | Enum.map(child_span_records, & &1.span_id)]
-      :ok = SpanStorage.mark_spans_sent(sent_span_ids)
+      finalized_span_ids = [span_record.span_id | Enum.map(child_span_records, & &1.span_id)]
 
       result =
-        case Sentry.send_transaction(transaction) do
-          {:ok, _id} ->
-            true
-
-          :ignored ->
-            true
-
-          :excluded ->
-            true
-
-          {:error, %ClientError{reason: :rate_limited} = error} ->
-            LoggerUtils.debug(fn ->
-              "Failed to send transaction to Sentry: #{inspect(error)}"
-            end)
-
-            {:error, :invalid_span}
-
-          {:error, error} ->
-            LoggerUtils.log(fn -> "Failed to send transaction to Sentry: #{inspect(error)}" end)
-            {:error, :invalid_span}
+        if Keyword.get(opts, :excluded?, false) or ignored_response_status?(span_record) do
+          :ok = SpanStorage.mark_spans_excluded(finalized_span_ids)
+          true
+        else
+          :ok = SpanStorage.mark_spans_sent(finalized_span_ids)
+          send_transaction(build_transaction(span_record, child_span_records, opts))
         end
 
       :ok =
@@ -199,6 +188,48 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         )
 
       result
+    end
+
+    # Only incoming requests are matched. An outgoing call can become a
+    # transaction root of its own when it outlives the request that made it,
+    # and the option is not meant to drop those.
+    defp ignored_response_status?(%{kind: :server, attributes: attributes}) do
+      case Map.get(attributes, to_string(HTTPAttributes.http_response_status_code())) do
+        status when is_integer(status) ->
+          Enum.any?(Config.traces_ignore_http_status_codes(), &status_matches?(&1, status))
+
+        _other ->
+          false
+      end
+    end
+
+    defp ignored_response_status?(_span_record), do: false
+
+    defp status_matches?(%Range{} = range, status), do: status in range
+    defp status_matches?(code, status), do: code == status
+
+    defp send_transaction(transaction) do
+      case Sentry.send_transaction(transaction) do
+        {:ok, _id} ->
+          true
+
+        :ignored ->
+          true
+
+        :excluded ->
+          true
+
+        {:error, %ClientError{reason: :rate_limited} = error} ->
+          LoggerUtils.debug(fn ->
+            "Failed to send transaction to Sentry: #{inspect(error)}"
+          end)
+
+          {:error, :invalid_span}
+
+        {:error, error} ->
+          LoggerUtils.log(fn -> "Failed to send transaction to Sentry: #{inspect(error)}" end)
+          {:error, :invalid_span}
+      end
     end
 
     defp build_transaction(root_span_record, child_span_records, opts) do
