@@ -56,6 +56,18 @@ defmodule PhoenixApp.IgnoredStatusTracesTest do
     assert upstream_tx["transaction"] == "GET /upstream"
   end
 
+  test "a request answered with an ignored status is reported as discarded telemetry", %{
+    ref: ref,
+    client_report_sender: sender
+  } do
+    put_test_config(traces_ignore_http_status_codes: [410])
+
+    assert request("/responses/410") == 410
+    assert reported_transactions(ref) == []
+
+    assert discarded_outcomes(sender, ref, "ignored") == %{"transaction" => 1, "span" => 1}
+  end
+
   defp request(path) do
     {:ok, {{_version, status, _reason}, _headers, _body}} =
       :httpc.request(:get, {String.to_charlist(@base_url <> path), []}, [], [])
@@ -81,5 +93,26 @@ defmodule PhoenixApp.IgnoredStatusTracesTest do
 
   defp traced_paths(ref) do
     Enum.map(reported_transactions(ref), & &1["contexts"]["trace"]["data"]["url.path"])
+  end
+
+  defp discarded_outcomes(sender, ref, reason) do
+    :ok = Sentry.ClientReport.Sender.flush(sender)
+
+    for outcome <- await_client_report(ref)["discarded_events"],
+        outcome["reason"] == reason,
+        into: %{},
+        do: {outcome["category"], outcome["quantity"]}
+  end
+
+  defp await_client_report(ref) do
+    receive do
+      {:bypass_envelope, ^ref, body} ->
+        case decode_envelope!(body) do
+          [{%{"type" => "client_report"}, client_report}] -> client_report
+          _other -> await_client_report(ref)
+        end
+    after
+      2000 -> flunk("no client report envelope received")
+    end
   end
 end
