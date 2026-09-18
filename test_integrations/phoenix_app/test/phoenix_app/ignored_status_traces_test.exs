@@ -20,6 +20,21 @@ defmodule PhoenixApp.IgnoredStatusTracesTest do
     assert traced_paths(ref) == ["/responses/200"]
   end
 
+  test "a request answered with 404 is not traced by default", %{ref: ref} do
+    assert request("/responses/404") == 404
+    assert request("/responses/200") == 200
+
+    assert traced_paths(ref) == ["/responses/200"]
+  end
+
+  test "a request answered with 404 is traced when no status is ignored", %{ref: ref} do
+    put_test_config(traces_ignore_http_status_codes: [])
+
+    assert request("/responses/404") == 404
+
+    assert traced_paths(ref) == ["/responses/404"]
+  end
+
   test "a request answered with a status inside an ignored range is not traced", %{ref: ref} do
     put_test_config(traces_ignore_http_status_codes: [500..599])
 
