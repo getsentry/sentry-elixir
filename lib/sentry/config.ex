@@ -340,6 +340,21 @@ defmodule Sentry.Config do
       This value is also used to determine if tracing is enabled: if it's not `nil`, tracing is enabled.
       """
     ],
+    traces_ignore_http_status_codes: [
+      type: {:custom, __MODULE__, :__validate_traces_ignore_http_status_codes__, []},
+      default: [],
+      type_doc: "list of `t:integer/0` or `t:Range.t/0`",
+      doc: """
+      HTTP statuses to keep out of tracing. An incoming request answered with one of these
+      is not reported as a transaction, and neither is any work that outlives it. Takes
+      status codes and ranges, like `[404, 500..599]`.
+
+      Outgoing requests are not affected, and the trace is still propagated to the services
+      this one calls.
+
+      *Available since 14.0.0*.
+      """
+    ],
     included_environments: [
       type: {:or, [{:in, [:all]}, {:list, {:or, [:atom, :string]}}]},
       deprecated: "Use :dsn to control whether to send events to Sentry.",
@@ -1084,6 +1099,9 @@ defmodule Sentry.Config do
   @spec traces_sampler() :: traces_sampler_function() | nil
   def traces_sampler, do: get(:traces_sampler)
 
+  @spec traces_ignore_http_status_codes() :: [integer() | Range.t()]
+  def traces_ignore_http_status_codes, do: fetch!(:traces_ignore_http_status_codes)
+
   @spec finch_pool_opts() :: keyword()
   def finch_pool_opts, do: fetch!(:finch_pool_opts)
 
@@ -1434,6 +1452,26 @@ defmodule Sentry.Config do
   def __validate_traces_sampler__(other) do
     {:error,
      "expected :traces_sampler to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_traces_ignore_http_status_codes__(codes) when is_list(codes) do
+    case Enum.reject(codes, &valid_trace_status_code?/1) do
+      [] -> {:ok, codes}
+      [invalid | _rest] -> invalid_trace_status_code_error(invalid)
+    end
+  end
+
+  def __validate_traces_ignore_http_status_codes__(other) do
+    invalid_trace_status_code_error(other)
+  end
+
+  defp valid_trace_status_code?(%Range{}), do: true
+  defp valid_trace_status_code?(code) when is_integer(code), do: true
+  defp valid_trace_status_code?(_other), do: false
+
+  defp invalid_trace_status_code_error(value) do
+    {:error,
+     "expected :traces_ignore_http_status_codes to be a list of status codes and ranges, got: #{inspect(value)}"}
   end
 
   def __validate_json_library__(nil) do
