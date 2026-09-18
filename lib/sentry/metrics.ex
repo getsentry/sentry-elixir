@@ -41,6 +41,10 @@ defmodule Sentry.Metrics do
       `atom`, `atom_used`, `binary`, `code` and `ets`, in bytes
     * `elixir.runtime.run_queue.*` — `total`, `cpu` and `io`, how many processes are
       waiting to run
+    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` —
+      a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
+      `limit` and `utilization` gauges need telemetry_poller 1.3.0 or later, which is
+      when it started measuring the limits; on older versions only `count` is reported.
 
   ### Collection Frequency
 
