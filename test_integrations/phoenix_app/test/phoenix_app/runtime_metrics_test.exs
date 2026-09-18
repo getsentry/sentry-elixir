@@ -47,6 +47,42 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
     end
   end
 
+  describe "run queue metrics from a real telemetry_poller" do
+    setup do
+      SentryTest.setup_sentry()
+      :ok
+    end
+
+    test "reports the real run queue lengths as unitless gauges" do
+      metrics = collect_runtime_metrics([:total_run_queue_lengths])
+
+      for key <- [:total, :cpu, :io] do
+        metric = find_metric!(metrics, "elixir.runtime.run_queue.#{key}")
+
+        assert is_integer(metric.value)
+        assert metric.unit == nil
+      end
+    end
+
+    test "reports the scheduler queue lengths the VM counts as non-negative" do
+      metrics = collect_runtime_metrics([:total_run_queue_lengths])
+
+      for key <- [:total, :cpu] do
+        assert find_metric!(metrics, "elixir.runtime.run_queue.#{key}").value >= 0
+      end
+    end
+
+    test "forwards the split the poller computes rather than recomputing it" do
+      metrics = collect_runtime_metrics([:total_run_queue_lengths])
+
+      total = find_metric!(metrics, "elixir.runtime.run_queue.total").value
+      cpu = find_metric!(metrics, "elixir.runtime.run_queue.cpu").value
+      io = find_metric!(metrics, "elixir.runtime.run_queue.io").value
+
+      assert total == cpu + io
+    end
+  end
+
   describe "the application wiring" do
     test "attaches the runtime metrics handler at boot" do
       handler_ids = [:vm, :memory] |> :telemetry.list_handlers() |> Enum.map(& &1.id)
