@@ -10,7 +10,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
     require OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
 
-    alias Sentry.{ClientError, Config, LoggerUtils}
+    alias Sentry.{ClientError, ClientReport, Config, LoggerUtils}
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
@@ -175,7 +175,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       result =
         if Keyword.get(opts, :excluded?, false) or ignored_response_status?(span_record) do
           :ok = SpanStorage.mark_spans_excluded(finalized_span_ids)
-          true
+          discard_transaction(build_transaction(span_record, child_span_records, opts))
         else
           :ok = SpanStorage.mark_spans_sent(finalized_span_ids)
           send_transaction(build_transaction(span_record, child_span_records, opts))
@@ -207,6 +207,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp status_matches?(%Range{} = range, status), do: status in range
     defp status_matches?(code, status), do: code == status
+
+    defp discard_transaction(transaction) do
+      ClientReport.Sender.record_discarded_events(:ignored, [transaction])
+      true
+    end
 
     defp send_transaction(transaction) do
       case Sentry.send_transaction(transaction) do
