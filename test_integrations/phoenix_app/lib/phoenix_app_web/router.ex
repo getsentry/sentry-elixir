@@ -72,6 +72,7 @@ defmodule PhoenixAppWeb.Router do
     post "/function-clause-error-cleared", PageController, :function_clause_error_cleared
     post "/generic-clause-error", PageController, :generic_clause_error
     post "/checkout", PageController, :checkout
+    get "/responses/:status", ResponseStatusController, :show
     get "/api/data", PageController, :api_data
     post "/api/oban-job", PageController, :api_oban_job
     put "/sentry-test-config", TestConfigController, :update

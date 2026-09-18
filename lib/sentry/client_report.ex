@@ -27,7 +27,8 @@ defmodule Sentry.ClientReport do
     :insufficient_data,
     :backpressure,
     :send_error,
-    :internal_sdk_error
+    :internal_sdk_error,
+    :ignored
   ]
 
   @typedoc """
