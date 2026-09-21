@@ -973,6 +973,9 @@ defmodule Sentry.Config do
       well as filtering out the log event altogether.
       If the callback returns `nil` or `false`, the log event is not reported. If it returns a
       (potentially-updated) `Sentry.LogEvent`, then the updated log event is used instead.
+      If the callback crashes, the failure is logged at the `:error` level and the log event is
+      not reported. See the [*Crashing Callbacks*](#module-crashing-callbacks) section below for
+      more information.
       *Available since v12.0.0*.
       """
     ],
@@ -984,6 +987,9 @@ defmodule Sentry.Config do
       well as filtering out the metric altogether.
       If the callback returns `nil` or `false`, the metric is not reported. If it returns a
       (potentially-updated) `Sentry.Metric`, then the updated metric is used instead.
+      If the callback crashes, the failure is logged at the `:error` level and the metric is not
+      reported. See the [*Crashing Callbacks*](#module-crashing-callbacks) section below for more
+      information.
       *Available since v13.0.0*.
       """
     ]
