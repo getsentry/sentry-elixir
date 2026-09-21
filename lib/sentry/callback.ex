@@ -9,7 +9,7 @@ defmodule Sentry.Callback do
   catch
     kind, reason ->
       LoggerUtils.error(
-        "#{inspect(name)} callback failed, falling back to #{inspect(fallback)}: " <>
+        "#{inspect(name)} callback failed: " <>
           Exception.format(kind, reason, __STACKTRACE__)
       )
 
