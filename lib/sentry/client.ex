@@ -6,6 +6,7 @@ defmodule Sentry.Client do
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
   alias Sentry.{
+    Callback,
     CheckIn,
     ClientError,
     ClientReport,
@@ -197,15 +198,19 @@ defmodule Sentry.Client do
     end
   end
 
-  defp call_before_send(event, function) when is_function(function, 1) do
-    function.(event) || false
+  defp call_before_send(event, callback) do
+    Callback.run(:before_send, before_send_invocation(event, callback), false)
   end
 
-  defp call_before_send(event, {mod, fun}) do
-    apply(mod, fun, [event]) || false
+  defp before_send_invocation(event, function) when is_function(function, 1) do
+    fn -> function.(event) || false end
   end
 
-  defp call_before_send(_event, other) do
+  defp before_send_invocation(event, {mod, fun}) do
+    fn -> apply(mod, fun, [event]) || false end
+  end
+
+  defp before_send_invocation(_event, other) do
     raise ArgumentError, """
     :before_send must be an anonymous function or a {module, function} tuple, got: \
     #{inspect(other)}\
