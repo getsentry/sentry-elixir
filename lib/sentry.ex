@@ -114,6 +114,10 @@ defmodule Sentry do
   that is, a module implementing the `Sentry.EventFilter` behaviour. This is still supported,
   but is now deprecated. See `Sentry.EventFilter` for more information.
 
+  If the configured filter cannot be called, or its `c:Sentry.EventFilter.exclude_exception?/2`
+  callback crashes, the exception is excluded and the failure is logged. See the
+  [*Crashing Callbacks* section](#module-crashing-callbacks) below.
+
   ## Event Callbacks
 
   You can configure the `:before_send` and `:after_send_event` options to
@@ -148,6 +152,26 @@ defmodule Sentry do
       end
 
   If the `before_send` callback returns `nil` or `false`, the event is not reported.
+
+  ## Crashing Callbacks
+
+  If a callback you configure raises, throws, or exits, Sentry catches the failure and
+  logs it at the `:error` level instead of letting it reach the code that was reporting
+  the event. The log carries the `:sentry` logger domain, so the SDK never reports its
+  own callback failure as an event.
+
+  The item being handled is then dropped:
+
+    * A `:before_send` callback that crashes is treated like one that returned `false`.
+      The event or transaction is not sent, and the capture function returns `:excluded`.
+
+    * A `:filter` module that cannot be called, or whose
+      `c:Sentry.EventFilter.exclude_exception?/2` crashes, is treated like one that
+      excluded the exception. `capture_exception/2` returns `:excluded`.
+
+  An `:after_send_event` callback runs once the event has already been sent and its
+  return value is ignored, so a crash there changes nothing the caller sees: the send
+  result is still the one the transport produced.
 
   ## Reporting Source Code
 

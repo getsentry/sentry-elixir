@@ -109,6 +109,11 @@ defmodule Sentry.EventFilter do
   will have `:plug` as a source and events from `Sentry.LoggerBackend`
   will have `:logger` as the source. A custom source can also be specified
   by passing the `:event_source` option to `Sentry.capture_exception/2`.
+
+  If this callback raises, throws, or exits, or if the configured module does not
+  export it, the failure is logged at the `:error` level and never reaches the code
+  that was reporting the exception. The exception is excluded, so
+  `Sentry.capture_exception/2` returns `:excluded`.
   """
   @callback exclude_exception?(exception :: Exception.t(), source :: atom) :: boolean
 end

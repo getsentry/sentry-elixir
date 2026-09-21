@@ -485,7 +485,9 @@ defmodule Sentry.Config do
       default: Sentry.DefaultEventFilter,
       doc: """
       A module that implements the `Sentry.EventFilter`
-      behaviour. Defaults to `Sentry.DefaultEventFilter`. See the
+      behaviour. Defaults to `Sentry.DefaultEventFilter`. If the module cannot be called,
+      or its callback crashes, the failure is logged at the `:error` level and the
+      exception is excluded. See the
       [*Filtering Exceptions* section](#module-filtering-exceptions) below.
       """
     ],
@@ -934,8 +936,10 @@ defmodule Sentry.Config do
       Allows performing operations on the event *before* it is sent as
       well as filtering out the event altogether.
       If the callback returns `nil` or `false`, the event is not reported. If it returns an
-      updated `Sentry.Event`, then the updated event is used instead. See the [*Event Callbacks*
-      section](#module-event-callbacks) below for more information.
+      updated `Sentry.Event`, then the updated event is used instead. If the callback crashes,
+      the failure is logged at the `:error` level and the event is not reported. See the
+      [*Event Callbacks*](#module-event-callbacks) and [*Crashing
+      Callbacks*](#module-crashing-callbacks) sections below for more information.
 
       `:before_send` is available *since v10.0.0*. Before, it was called `:before_send_event`.
       """
@@ -954,8 +958,11 @@ defmodule Sentry.Config do
       doc: """
       Callback that is called *after*
       attempting to send an event. The result of the HTTP call as well as the event will
-      be passed as arguments. The return value of the callback is not returned. See the
-      [*Event Callbacks* section](#module-event-callbacks) below for more information.
+      be passed as arguments. The return value of the callback is not returned. If the
+      callback crashes, the failure is logged at the `:error` level and the caller still
+      receives the result of the send. See the [*Event Callbacks*](#module-event-callbacks)
+      and [*Crashing Callbacks*](#module-crashing-callbacks) sections below for more
+      information.
       """
     ],
     before_send_log: [
