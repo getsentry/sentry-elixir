@@ -76,6 +76,12 @@ defmodule Sentry.Config do
 
           This example transforms all Oban job tags into Sentry tags prefixed
           with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
+
+          If the function crashes, the failure is logged at the `:error` level and the event is
+          still reported, carrying only the tags the integration adds itself (`oban_worker`,
+          `oban_queue`, and `oban_state`). A return value that is not a map is logged at the
+          `:warning` level and falls back to those same tags. See the
+          [*Crashing Callbacks*](#module-crashing-callbacks) section below for more information.
           """
         ],
         should_report_error_callback: [
@@ -95,6 +101,10 @@ defmodule Sentry.Config do
 
           This example only reports errors on final retry attempts.
           *Available since 12.0.0*.
+
+          If the function crashes, the failure is logged at the `:error` level and the error is
+          reported, as if the function had returned `true`. See the
+          [*Crashing Callbacks*](#module-crashing-callbacks) section below for more information.
           """
         ],
         cron: [
@@ -119,6 +129,12 @@ defmodule Sentry.Config do
               A `{module, function}` tuple that generates a monitor name based on the `Oban.Job` struct.
               The function is called with the `Oban.Job` as its arguments and must return a string.
               This can be used to customize monitor slugs. *Available since v10.8.0*.
+
+              If the function crashes, the failure is logged at the `:error` level and the
+              check-in is still sent, under the slug the integration derives from the worker
+              name. Until the function is fixed, the monitor you configured it for receives no
+              check-ins at all. See the [*Crashing Callbacks*](#module-crashing-callbacks)
+              section below for more information.
               """
             ],
             should_report_error_check_in_callback: [
@@ -139,6 +155,11 @@ defmodule Sentry.Config do
               This example only reports a failed check-in once all retries are exhausted. While
               retries remain the check-in is left open, so the retry that eventually succeeds
               closes the same check-in. *Available since v13.5.0*.
+
+              If the function crashes, the failure is logged at the `:error` level and the failed
+              check-in is reported, as if the function had returned `true`. See the
+              [*Crashing Callbacks*](#module-crashing-callbacks) section below for more
+              information.
               """
             ]
           ]

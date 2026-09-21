@@ -18,6 +18,13 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   Options returned by this function overwrite any option inferred by the specific
   integration for the check in. We perform *deep merging* of nested keyword options.
+
+  If this callback raises, throws, or exits, the failure is logged at the `:error` level with
+  the `:sentry` logger domain, and the check-in is still sent with the options the integration
+  inferred and nothing merged into them. Since those options include the monitor slug, a
+  check-in that this callback was meant to redirect goes to the monitor named after the worker
+  instead. See the [*Crashing Callbacks*](`m:Sentry#module-crashing-callbacks`) section of the
+  `Sentry` documentation for more information.
   """
   @doc since: "10.9.0"
   @callback sentry_check_in_configuration(oban_job :: struct()) :: options_to_merge :: keyword()

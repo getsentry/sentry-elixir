@@ -214,6 +214,37 @@ defmodule Sentry do
   > SDK's default scrubber means that data only your custom scrubber was dropping is sent to
   > Sentry for as long as that scrubber keeps failing. The error-level log is the only signal.
 
+  ### Oban Callbacks
+
+  The callbacks the Oban integration accepts run inside `:telemetry` handlers, and
+  `:telemetry` permanently detaches a handler that fails. Sentry's two Oban handlers
+  therefore catch every failure in their own body, so a callback of yours that keeps failing
+  never stops later jobs from being reported or checked in.
+
+  No Oban item is dropped because one of these callbacks failed. The two that only return a
+  decision fail open, and the three that customize an item fall back to what the SDK derived
+  on its own:
+
+  | Callback | Behavior after a crash |
+  | --- | --- |
+  | `:should_report_error_callback` | the job error is reported |
+  | `:should_report_error_check_in_callback` | the failed check-in is reported |
+  | `:oban_tags_to_sentry_tags` | the event carries the SDK's own Oban tags (`oban_worker`, `oban_queue`, and `oban_state`) and none of yours |
+  | `:monitor_slug_generator` | the check-in uses the slug derived from the worker name |
+  | `c:Sentry.Integrations.Oban.Cron.sentry_check_in_configuration/1` | the check-in uses the slug and monitor config the integration inferred, with nothing merged in |
+
+  > #### A crashing check-in customization sends the check-in elsewhere {: .warning}
+  >
+  > A check-in whose `:monitor_slug_generator` or `sentry_check_in_configuration/1` failed is
+  > still sent, but under the SDK's default slug rather than the one you configured. For as
+  > long as the callback keeps failing, the monitor you meant to check in to receives nothing
+  > and looks idle, while a monitor under the default slug receives the check-ins instead. The
+  > error-level log is the only signal.
+
+  If a failure happens elsewhere in one of the handlers, the check-in or error event it was
+  about to send is lost. That loss is counted in client reports under `internal_sdk_error`
+  rather than passing silently.
+
   ## Reporting Source Code
 
   Sentry supports reporting the source code of (and around) the line that
