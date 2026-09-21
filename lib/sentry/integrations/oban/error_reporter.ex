@@ -4,6 +4,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
+  alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
   @spec attach(keyword()) :: :ok
@@ -19,18 +20,41 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
     :ok
   end
 
-  @spec handle_event(
-          [atom(), ...],
-          term(),
-          %{required(:job) => struct(), optional(term()) => term()},
-          keyword()
-        ) :: :ok
-  def handle_event(
-        [:oban, :job, :exception],
-        _measurements,
-        %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
-        config
-      ) do
+  @spec handle_event([atom(), ...], term(), map(), keyword()) :: :ok
+  def handle_event([:oban, :job, :exception], measurements, metadata, config) do
+    case guard(metadata, fn -> capture_job_exception(measurements, metadata, config) end) do
+      :ok -> :ok
+      :failed -> ClientReport.Sender.record_discarded_events(:internal_sdk_error, "error")
+    end
+
+    :ok
+  end
+
+  defp guard(metadata, fun) do
+    _ = fun.()
+    :ok
+  catch
+    kind, reason ->
+      LoggerUtils.error(
+        describe_failure(metadata) <> ": " <> Exception.format(kind, reason, __STACKTRACE__)
+      )
+
+      :failed
+  end
+
+  defp describe_failure(%{job: %{id: id, worker: worker}}) do
+    "Sentry failed to report an Oban job exception for job #{inspect(id)} (#{inspect(worker)})"
+  end
+
+  defp describe_failure(_metadata) do
+    "Sentry failed to report an Oban job exception"
+  end
+
+  defp capture_job_exception(
+         _measurements,
+         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
+         config
+       ) do
     if report?(reason) and should_report?(job, config) do
       report(job, kind, reason, stacktrace, config)
     else

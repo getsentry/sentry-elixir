@@ -386,6 +386,61 @@ defmodule Sentry.Integrations.Oban.CronTest do
     end
   end
 
+  describe "when handling a job event fails" do
+    for {kind, failure} <- [
+          raise: quote(do: raise("the callback is broken")),
+          throw: quote(do: throw(:the_callback_is_broken)),
+          exit: quote(do: exit(:the_callback_is_broken))
+        ] do
+      test "keeps reporting check-ins after a callback #{kind}s", %{ref: ref} do
+        attach_with_callback(fn _worker, _job -> unquote(failure) end)
+
+        capture_log(fn ->
+          execute_exception_event()
+
+          :telemetry.execute([:oban, :job, :start], %{}, %{
+            job: cron_job(worker: "Sentry.LaterWorker", id: 7)
+          })
+        end)
+
+        assert handler_attached?()
+
+        slugs =
+          ref
+          |> SentryTest.collect_sentry_check_ins(2)
+          |> Enum.map(& &1["monitor_slug"])
+
+        assert "sentry-later-worker" in slugs
+      end
+    end
+
+    test "records a discarded check-in when the job carries an unknown state", %{
+      ref: ref,
+      client_report_sender: sender
+    } do
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{
+            state: :unrecognized,
+            job: cron_job()
+          })
+        end)
+
+      assert log =~
+               ~r/domain=(\w+\.)*sentry \[error\]\s+Sentry failed to report an Oban check-in for job 942/
+
+      assert handler_attached?()
+      refute_sentry_check_in(ref)
+      assert %{{:internal_sdk_error, "monitor"} => 1} = :sys.get_state(sender)
+    end
+  end
+
+  defp handler_attached? do
+    [:oban, :job, :exception]
+    |> :telemetry.list_handlers()
+    |> Enum.any?(&(&1.id == Sentry.Integrations.Oban.Cron))
+  end
+
   defp attach_with_callback(callback) do
     :telemetry.detach(Sentry.Integrations.Oban.Cron)
 
