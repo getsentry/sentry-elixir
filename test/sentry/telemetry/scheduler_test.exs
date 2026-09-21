@@ -272,50 +272,21 @@ defmodule Sentry.Telemetry.SchedulerTest do
   end
 
   describe "before_send_log callback error protection" do
-    test "callback that raises still allows events to be processed" do
-      buffers = start_test_buffers(batch_size: 1)
-      test_pid = self()
-
-      # A broken callback is not a failed send, so :log_level must not demote it.
-      put_test_config(
-        log_level: :debug,
-        before_send_log: fn _log_event ->
-          raise "boom"
-        end
-      )
-
-      {:ok, pid} =
-        Scheduler.start_link(
-          buffers: buffers,
-          on_envelope: fn envelope -> send(test_pid, {:envelope, envelope}) end,
-          name: :"test_scheduler_raise_#{System.unique_integer([:positive])}"
-        )
-
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          Buffer.add(buffers.log, make_log_event("test"))
-          Scheduler.signal(pid)
-
-          assert_receive {:envelope, envelope}, 500
-          # Event passes through unmodified when callback raises
-          assert [%Sentry.LogBatch{log_events: [%LogEvent{body: "test"}]}] = envelope.items
-        end)
-
-      assert log =~ ~r/domain=(\w+\.)*sentry \[warning\]\s+before_send_log callback failed/
-
-      GenServer.stop(pid)
-      stop_buffers(buffers)
+    test "drops the log event when the callback raises" do
+      assert_log_event_dropped(fn _log_event -> raise "boom" end)
     end
 
-    test "callback that raises does not crash the Scheduler" do
+    test "drops the log event when the callback throws" do
+      assert_log_event_dropped(fn _log_event -> throw(:boom) end)
+    end
+
+    test "drops the log event when the callback exits" do
+      assert_log_event_dropped(fn _log_event -> exit(:boom) end)
+    end
+
+    test "keeps processing log events after callbacks of every crash kind" do
       buffers = start_test_buffers(batch_size: 1)
       test_pid = self()
-
-      put_test_config(
-        before_send_log: fn _log_event ->
-          raise "boom"
-        end
-      )
 
       {:ok, pid} =
         Scheduler.start_link(
@@ -325,15 +296,20 @@ defmodule Sentry.Telemetry.SchedulerTest do
         )
 
       capture_log(fn ->
-        Buffer.add(buffers.log, make_log_event("first"))
-        Scheduler.signal(pid)
-        assert_receive {:envelope, _}, 500
+        for crashing_callback <- [
+              fn _log_event -> raise "boom" end,
+              fn _log_event -> throw(:boom) end,
+              fn _log_event -> exit(:boom) end
+            ] do
+          put_test_config(before_send_log: crashing_callback)
+          Buffer.add(buffers.log, make_log_event("crashing"))
+          Scheduler.signal(pid)
+          refute_receive {:envelope, _}, 200
+        end
       end)
 
-      # Scheduler is still alive and functional
       assert Process.alive?(pid)
 
-      # Can still process new events
       put_test_config(before_send_log: fn log_event -> log_event end)
 
       Buffer.add(buffers.log, make_log_event("second"))
@@ -631,6 +607,35 @@ defmodule Sentry.Telemetry.SchedulerTest do
     for {_category, pid} <- buffers, Process.alive?(pid) do
       GenServer.stop(pid)
     end
+  end
+
+  defp assert_log_event_dropped(crashing_callback) do
+    buffers = start_test_buffers(batch_size: 1)
+    test_pid = self()
+
+    put_test_config(log_level: :debug, before_send_log: crashing_callback)
+
+    {:ok, pid} =
+      Scheduler.start_link(
+        buffers: buffers,
+        on_envelope: fn envelope -> send(test_pid, {:envelope, envelope}) end,
+        name: :"test_scheduler_crash_#{System.unique_integer([:positive])}"
+      )
+
+    log =
+      capture_log([metadata: [:domain]], fn ->
+        Buffer.add(buffers.log, make_log_event("test"))
+        Scheduler.signal(pid)
+
+        refute_receive {:envelope, _envelope}, 500
+      end)
+
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:before_send_log callback failed/
+
+    assert Process.alive?(pid)
+
+    GenServer.stop(pid)
+    stop_buffers(buffers)
   end
 
   defp receive_envelopes_until_empty(acc \\ []) do

@@ -3,6 +3,7 @@ defmodule Sentry.MetricsIntegrationTest do
 
   require OpenTelemetry.Tracer, as: Tracer
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
   import Sentry.Test.Assertions
 
@@ -84,6 +85,20 @@ defmodule Sentry.MetricsIntegrationTest do
     end
   end
 
+  describe "before_send_metric callback that crashes" do
+    test "drops the metric when the callback raises", ctx do
+      assert_metric_dropped(ctx, fn _metric -> raise "boom" end)
+    end
+
+    test "drops the metric when the callback throws", ctx do
+      assert_metric_dropped(ctx, fn _metric -> throw(:boom) end)
+    end
+
+    test "drops the metric when the callback exits", ctx do
+      assert_metric_dropped(ctx, fn _metric -> exit(:boom) end)
+    end
+  end
+
   describe "metric envelope format" do
     test "metrics include all required fields", ctx do
       Metrics.count("test.counter", 42, unit: "request", attributes: %{method: "GET"})
@@ -146,5 +161,17 @@ defmodule Sentry.MetricsIntegrationTest do
       assert metric["trace_id"] == transaction["contexts"]["trace"]["trace_id"]
       assert metric["span_id"] == transaction["contexts"]["trace"]["span_id"]
     end
+  end
+
+  defp assert_metric_dropped(ctx, crashing_callback) do
+    put_test_config(before_send_metric: crashing_callback)
+
+    capture_log(fn ->
+      Metrics.count("crash.me", 1)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+    end)
+
+    assert [] == collect_sentry_metric_items(ctx.ref, 1, timeout: 200)
+    assert [] == Sentry.Test.pop_sentry_metrics()
   end
 end

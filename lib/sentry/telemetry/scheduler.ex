@@ -36,6 +36,7 @@ defmodule Sentry.Telemetry.Scheduler do
   alias Sentry.Telemetry.{Buffer, Category}
 
   alias Sentry.{
+    Callback,
     CheckIn,
     ClientError,
     ClientReport,
@@ -380,22 +381,8 @@ defmodule Sentry.Telemetry.Scheduler do
     end
   end
 
-  defp call_before_send_log(log_event, function) when is_function(function, 1) do
-    function.(log_event)
-  rescue
-    error ->
-      LoggerUtils.warning("before_send_log callback failed: #{inspect(error)}")
-
-      log_event
-  end
-
-  defp call_before_send_log(log_event, {mod, fun}) do
-    apply(mod, fun, [log_event])
-  rescue
-    error ->
-      LoggerUtils.warning("before_send_log callback failed: #{inspect(error)}")
-
-      log_event
+  defp call_before_send_log(log_event, callback) do
+    Callback.run(:before_send_log, invocation(log_event, callback), nil)
   end
 
   defp apply_before_send_metric_callbacks(metrics) do
@@ -403,12 +390,24 @@ defmodule Sentry.Telemetry.Scheduler do
 
     if callback do
       for metric <- metrics,
-          %Metric{} = modified_metric <- [Metric.call_before_send_callback(metric, callback)] do
+          %Metric{} = modified_metric <- [call_before_send_metric(metric, callback)] do
         modified_metric
       end
     else
       metrics
     end
+  end
+
+  defp call_before_send_metric(metric, callback) do
+    Callback.run(:before_send_metric, invocation(metric, callback), nil)
+  end
+
+  defp invocation(item, function) when is_function(function, 1) do
+    fn -> function.(item) end
+  end
+
+  defp invocation(item, {mod, fun}) do
+    fn -> apply(mod, fun, [item]) end
   end
 
   defp advance_cycle(%Scheduler{} = state) do

@@ -1,6 +1,7 @@
 defmodule Sentry.MetricsTest do
   use Sentry.Case, async: true
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   alias Sentry.{Metric, Metrics, TelemetryProcessor}
@@ -192,44 +193,32 @@ defmodule Sentry.MetricsTest do
   end
 
   describe "before_send_metric error handling" do
-    test "returns original metric when callback raises" do
-      callback = fn _metric ->
-        raise "callback error"
-      end
+    test "logs the failure when the callback raises" do
+      log = capture_callback_failure(fn _metric -> raise "callback error" end)
 
-      put_test_config(before_send_metric: callback)
-
-      import ExUnit.CaptureLog
-
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          assert :ok = Metrics.count("test.counter", 42)
-          TelemetryProcessor.flush()
-        end)
-
-      assert log =~ "before_send_metric callback failed"
       assert log =~ "callback error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
-    test "returns original metric when a {module, function} callback raises" do
+    test "logs the failure when the callback throws" do
+      log = capture_callback_failure(fn _metric -> throw(:callback_thrown) end)
+
+      assert log =~ ":callback_thrown"
+    end
+
+    test "logs the failure when the callback exits" do
+      log = capture_callback_failure(fn _metric -> exit(:callback_exited) end)
+
+      assert log =~ ":callback_exited"
+    end
+
+    test "logs the failure when a {module, function} callback raises" do
       defmodule RaisingCallback do
         def before_send_metric(_metric), do: raise("MFA callback error")
       end
 
-      put_test_config(before_send_metric: {RaisingCallback, :before_send_metric})
+      log = capture_callback_failure({RaisingCallback, :before_send_metric})
 
-      import ExUnit.CaptureLog
-
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          assert :ok = Metrics.count("test.counter", 42)
-          TelemetryProcessor.flush()
-        end)
-
-      assert log =~ "before_send_metric callback failed"
       assert log =~ "MFA callback error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
     test "drops metric when callback returns invalid type" do
@@ -245,6 +234,20 @@ defmodule Sentry.MetricsTest do
       assert :ok = Metrics.count("test.counter", 1)
       TelemetryProcessor.flush()
       assert_receive :callback_called
+    end
+
+    defp capture_callback_failure(callback) do
+      put_test_config(before_send_metric: callback)
+
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          assert :ok = Metrics.count("test.counter", 42)
+          TelemetryProcessor.flush()
+        end)
+
+      assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:before_send_metric callback failed/
+
+      log
     end
   end
 
