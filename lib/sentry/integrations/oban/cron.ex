@@ -151,8 +151,12 @@ defmodule Sentry.Integrations.Oban.Cron do
       :should_report_error_check_in_callback,
       fn -> callback.(worker, job) == true end,
       true,
-      context: "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
+      context: describe_callback_target(worker, job)
     )
+  end
+
+  defp describe_callback_target(worker, job) do
+    "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
@@ -202,7 +206,8 @@ defmodule Sentry.Integrations.Oban.Cron do
         Callback.run(
           :sentry_check_in_configuration,
           fn -> mod.sentry_check_in_configuration(per_integration_term) end,
-          []
+          [],
+          context: describe_callback_target(mod, per_integration_term)
         )
       else
         []
@@ -219,7 +224,8 @@ defmodule Sentry.Integrations.Oban.Cron do
     Callback.run(
       :monitor_slug_generator,
       fn -> mod |> apply(fun, [job]) |> slugify() end,
-      slugify(job.worker)
+      slugify(job.worker),
+      context: describe_callback_target(job.worker, job)
     )
   end
 

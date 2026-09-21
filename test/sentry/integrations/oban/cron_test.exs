@@ -346,7 +346,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
             )
           end)
 
-        assert log =~ ":monitor_slug_generator callback failed"
+        assert log =~
+                 ~s(:monitor_slug_generator callback failed for worker "Sentry.MyWorker" ) <>
+                   "(job ID 942)"
+
         assert log =~ ~r/domain=(\w+\.)*sentry/
       end
     end
@@ -376,7 +379,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
             )
           end)
 
-        assert log =~ ":sentry_check_in_configuration callback failed"
+        assert log =~
+                 ":sentry_check_in_configuration callback failed " <>
+                   "for worker #{inspect(unquote(worker))} (job ID 942)"
+
         assert log =~ ~r/domain=(\w+\.)*sentry/
       end
     end
