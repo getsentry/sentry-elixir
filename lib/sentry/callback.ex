@@ -7,14 +7,10 @@ defmodule Sentry.Callback do
   @type spec() :: (... -> term()) | {module(), atom()} | {module(), atom(), [term()]}
 
   @spec run(atom(), (-> result), result, keyword()) :: result when result: var
-  def run(name, fun, fallback, opts \\ []) when is_list(opts) do
-    case guard(describe_failure(name, Keyword.get(opts, :context)), fun) do
-      {:ok, result} ->
-        result
-
-      :failed ->
-        record_discard(Keyword.get(opts, :discard))
-        fallback
+  def run(name, fun, fallback, opts \\ []) when is_atom(name) and is_list(opts) do
+    case guard(describe_failure(name, Keyword.get(opts, :context)), fun, opts) do
+      {:ok, result} -> result
+      :failed -> fallback
     end
   end
 
@@ -23,12 +19,15 @@ defmodule Sentry.Callback do
     guard(describe_failure(name, nil), fun)
   end
 
-  @spec guard(String.t(), (-> result)) :: {:ok, result} | :failed when result: var
-  def guard(description, fun) when is_binary(description) and is_function(fun, 0) do
+  @spec guard(String.t(), (-> result), keyword()) :: {:ok, result} | :failed when result: var
+  def guard(description, fun, opts \\ [])
+      when is_binary(description) and is_function(fun, 0) and is_list(opts) do
     {:ok, fun.()}
   catch
     kind, reason ->
       LoggerUtils.error(description <> ": " <> Exception.format(kind, reason, __STACKTRACE__))
+
+      record_discard(Keyword.get(opts, :discard))
 
       :failed
   end

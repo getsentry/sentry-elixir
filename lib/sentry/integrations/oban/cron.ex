@@ -6,7 +6,6 @@ defmodule Sentry.Integrations.Oban.Cron do
   @moduledoc since: "10.9.0"
 
   alias Sentry.Callback
-  alias Sentry.ClientReport
   alias Sentry.Integrations.CheckInIDMappings
   alias Sentry.LoggerUtils
 
@@ -53,12 +52,12 @@ defmodule Sentry.Integrations.Oban.Cron do
         config
       )
       when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
-    case guard(metadata.job, fn ->
-           handle_oban_job_event(event, measurements, metadata, config)
-         end) do
-      :ok -> :ok
-      :failed -> ClientReport.Sender.record_discarded_events(:internal_sdk_error, "monitor")
-    end
+    _ =
+      Callback.guard(
+        describe_failure(metadata.job),
+        fn -> handle_oban_job_event(event, measurements, metadata, config) end,
+        discard: {:internal_sdk_error, "monitor"}
+      )
 
     :ok
   end
@@ -70,17 +69,9 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   ## Helpers
 
-  defp guard(job, fun) do
-    _ = fun.()
-    :ok
-  catch
-    kind, reason ->
-      LoggerUtils.error(
-        "Sentry failed to report an Oban check-in for job #{inspect(job.id)} " <>
-          "(#{inspect(job.worker)}): " <> Exception.format(kind, reason, __STACKTRACE__)
-      )
-
-      :failed
+  defp describe_failure(job) do
+    "Sentry failed to report an Oban check-in for job #{inspect(job.id)} " <>
+      "(#{inspect(job.worker)})"
   end
 
   defp handle_oban_job_event(:start, _measurements, metadata, config) do

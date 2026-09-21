@@ -5,7 +5,6 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # https://getoban.pro/articles/enhancing-error-reporting
 
   alias Sentry.Callback
-  alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
   @spec attach(keyword()) :: :ok
@@ -23,24 +22,14 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
 
   @spec handle_event([atom(), ...], term(), map(), keyword()) :: :ok
   def handle_event([:oban, :job, :exception], measurements, metadata, config) do
-    case guard(metadata, fn -> capture_job_exception(measurements, metadata, config) end) do
-      :ok -> :ok
-      :failed -> ClientReport.Sender.record_discarded_events(:internal_sdk_error, "error")
-    end
-
-    :ok
-  end
-
-  defp guard(metadata, fun) do
-    _ = fun.()
-    :ok
-  catch
-    kind, reason ->
-      LoggerUtils.error(
-        describe_failure(metadata) <> ": " <> Exception.format(kind, reason, __STACKTRACE__)
+    _ =
+      Callback.guard(
+        describe_failure(metadata),
+        fn -> capture_job_exception(measurements, metadata, config) end,
+        discard: {:internal_sdk_error, "error"}
       )
 
-      :failed
+    :ok
   end
 
   defp describe_failure(%{job: %{id: id, worker: worker}}) do
