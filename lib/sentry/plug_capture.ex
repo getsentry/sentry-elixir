@@ -73,7 +73,9 @@ defmodule Sentry.PlugCapture do
       will be invoked to scrub sensitive data from `Plug.Conn` structs. The
       `Plug.Conn` struct is prepended to `args` before invoking the function,
       so that the final function will be called as `apply(module, function, [conn | args])`.
-      The function must return a `Plug.Conn` struct. By default, the built-in
+      The function must return a `Plug.Conn` struct; if it returns anything else,
+      or if it crashes, scrubbing falls back to the built-in scrubber (see
+      *Crashing Callbacks* below). By default, the built-in
       scrubber delegates to `Sentry.Scrubber.scrub/1`, which honors any
       `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`, or
       `:url_scrubber` opts configured on `Sentry.PlugContext` for the current
@@ -94,6 +96,32 @@ defmodule Sentry.PlugCapture do
       * reduces `private` to an allow-list of framework metadata, dropping
         everything else (notably the decoded session under `:plug_session`);
         configurable via the `scrubber: [conn_private_allow_list: ...]` option
+
+  ## Crashing Callbacks
+
+  This module captures the application's exception from inside `c:Plug.call/2`,
+  where a failure of its own would replace the error the application raised. It
+  cannot: if anything in the capture path raises, throws, or exits - the
+  `:scrubber` callback, the scrubbing of the exception, or the reporting
+  itself - Sentry catches the failure and re-raises **the application's
+  original exception, unchanged**. The failure is logged at the `:error` level
+  with the `:sentry` logger domain, so the SDK never reports its own failure as
+  an event.
+
+  Only the reporting degrades, and only as far as the failure forces:
+
+  | Failure | What Sentry still reports |
+  | --- | --- |
+  | The `:scrubber` crashes, or returns something other than a `Plug.Conn` | The event, with the conn scrubbed by the built-in scrubber, `Sentry.Scrubber.scrub/1` |
+  | Scrubbing a `Phoenix.ActionClauseError` fails for any other reason | The event, with each of the exception's arguments scrubbed on its own, without mirroring the conn's scrubbed params onto the action's params argument |
+  | Capturing the event itself fails | Nothing - the log is the only record of the error |
+
+  > #### A crashed scrubber reports more, not less {: .warning}
+  >
+  > The fallback redacts the keys listed in `Sentry.Scrubber.default_param_keys/0`
+  > and `Sentry.Scrubber.default_header_keys/0`, and nothing more. Data that only
+  > a custom `:scrubber` was dropping is sent to Sentry for as long as that
+  > scrubber keeps failing, and the error-level log is the only signal.
 
   """
   defmacro __using__(opts) do
@@ -142,7 +170,7 @@ defmodule Sentry.PlugCapture do
           kind, reason ->
             message = "Uncaught #{kind} - #{inspect(reason)}"
             stack = __STACKTRACE__
-            _ = Sentry.capture_message(message, stacktrace: stack, event_source: :plug)
+            :ok = Sentry.PlugCapture.__capture_message__(message, stack)
             :erlang.raise(kind, reason, stack)
         end
       end
@@ -151,50 +179,92 @@ defmodule Sentry.PlugCapture do
 
   @doc false
   def __capture_exception__(exception, stacktrace, scrubber) do
-    # `Phoenix.ActionClauseError` is the one error whose args we know the shape of —
-    # a controller action is invoked as `apply(controller, action, [conn, conn.params])`.
-    # We handle it explicitly: `StacktraceScrubber` does the generic per-arg scrubbing,
-    # and we instruct it (via the callback) to scrub the conn through the configured
-    # `:scrubber` and mirror the conn's scrubbed params onto the standalone params arg.
-    exception =
-      if is_struct(exception, Phoenix.ActionClauseError) do
-        Sentry.Scrubber.StacktraceScrubber.scrub(
-          exception,
-          &scrub_action_clause_args(&1, scrubber)
-        )
-      else
-        exception
-      end
-
     _ =
-      Sentry.capture_exception(exception,
-        stacktrace: stacktrace,
-        event_source: :plug,
-        handled: false
-      )
+      guard("Sentry failed to capture an exception from Plug", fn ->
+        Sentry.capture_exception(scrub_exception(exception, scrubber),
+          stacktrace: stacktrace,
+          event_source: :plug,
+          handled: false
+        )
+      end)
 
     :ok
   end
 
-  defp scrub_action_clause_args(args, scrubber) do
-    conn = Enum.find(args, &is_struct(&1, Plug.Conn))
-    scrubbed_conn = apply_scrubber(conn, scrubber)
-    params = conn.params
+  @doc false
+  def __capture_message__(message, stacktrace) do
+    _ =
+      guard("Sentry failed to capture a message from Plug", fn ->
+        Sentry.capture_message(message, stacktrace: stacktrace, event_source: :plug)
+      end)
 
-    Enum.map(args, fn
-      ^conn -> scrubbed_conn
-      ^params -> scrubbed_conn.params
-      other -> Sentry.Scrubber.scrub(other)
-    end)
+    :ok
+  end
+
+  # `Phoenix.ActionClauseError` is the one error whose args we know the shape of -
+  # a controller action is invoked as `apply(controller, action, [conn, conn.params])`.
+  # We handle it explicitly: `StacktraceScrubber` does the generic per-arg scrubbing,
+  # and we instruct it (via the callback) to scrub the conn through the configured
+  # `:scrubber` and mirror the conn's scrubbed params onto the standalone params arg.
+  defp scrub_exception(exception, scrubber) do
+    if is_struct(exception, Phoenix.ActionClauseError) do
+      case guard("Sentry failed to scrub a Phoenix.ActionClauseError", fn ->
+             Sentry.Scrubber.StacktraceScrubber.scrub(
+               exception,
+               &scrub_action_clause_args(&1, scrubber)
+             )
+           end) do
+        {:ok, scrubbed} -> scrubbed
+        :failed -> Sentry.Scrubber.StacktraceScrubber.scrub(exception)
+      end
+    else
+      exception
+    end
+  end
+
+  defp guard(description, fun) do
+    {:ok, fun.()}
+  catch
+    kind, reason ->
+      Sentry.LoggerUtils.error(
+        description <> ": " <> Exception.format(kind, reason, __STACKTRACE__)
+      )
+
+      :failed
+  end
+
+  defp scrub_action_clause_args(args, scrubber) do
+    case Enum.find(args, &is_struct(&1, Plug.Conn)) do
+      nil ->
+        Sentry.Scrubber.StacktraceScrubber.scrub_args(args)
+
+      conn ->
+        scrubbed_conn = apply_scrubber(conn, scrubber)
+        params = conn.params
+
+        Enum.map(args, fn
+          ^conn -> scrubbed_conn
+          ^params -> scrubbed_conn.params
+          other -> Sentry.Scrubber.scrub(other)
+        end)
+    end
   end
 
   @doc false
   def default_scrubber(conn), do: Sentry.Scrubber.scrub(conn)
 
   defp apply_scrubber(conn, {mod, fun, args} = _scrubber) do
-    case apply(mod, fun, [conn | args]) do
-      conn when is_struct(conn, Plug.Conn) -> conn
-      other -> raise ":scrubber function must return a Plug.Conn struct, got: #{inspect(other)}"
+    case Sentry.Callback.run(:scrubber, fn ->
+           case apply(mod, fun, [conn | args]) do
+             scrubbed when is_struct(scrubbed, Plug.Conn) ->
+               scrubbed
+
+             other ->
+               raise ":scrubber function must return a Plug.Conn struct, got: #{inspect(other)}"
+           end
+         end) do
+      {:ok, scrubbed} -> scrubbed
+      :failed -> default_scrubber(conn)
     end
   end
 end
