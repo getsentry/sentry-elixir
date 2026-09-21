@@ -5,6 +5,7 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   @moduledoc since: "10.9.0"
 
+  alias Sentry.Callback
   alias Sentry.ClientReport
   alias Sentry.Integrations.CheckInIDMappings
   alias Sentry.LoggerUtils
@@ -166,14 +167,7 @@ defmodule Sentry.Integrations.Oban.Cron do
         monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
         monitor_config_opts = Keyword.merge(monitor_config_opts, schedule_opts)
 
-        monitor_slug =
-          case config[:monitor_slug_generator] do
-            nil ->
-              slugify(job.worker)
-
-            {mod, fun} when is_atom(mod) and is_atom(fun) ->
-              mod |> apply(fun, [job]) |> slugify()
-          end
+        monitor_slug = monitor_slug(job, config[:monitor_slug_generator])
 
         id = CheckInIDMappings.lookup_or_insert_new(job.id)
 
@@ -202,19 +196,31 @@ defmodule Sentry.Integrations.Oban.Cron do
       end
   end
 
-  defp resolve_custom_opts(opts, _job) do
-    opts
-  end
-
   defp resolve_custom_opts(options, mod, per_integration_term) do
     custom_opts =
       if function_exported?(mod, :sentry_check_in_configuration, 1) do
-        mod.sentry_check_in_configuration(per_integration_term)
+        Callback.run(
+          :sentry_check_in_configuration,
+          fn -> mod.sentry_check_in_configuration(per_integration_term) end,
+          []
+        )
       else
         []
       end
 
     deep_merge_keyword(options, custom_opts)
+  end
+
+  defp monitor_slug(job, nil) do
+    slugify(job.worker)
+  end
+
+  defp monitor_slug(job, {mod, fun}) when is_atom(mod) and is_atom(fun) do
+    Callback.run(
+      :monitor_slug_generator,
+      fn -> mod |> apply(fun, [job]) |> slugify() end,
+      slugify(job.worker)
+    )
   end
 
   defp deep_merge_keyword(left, right) do
