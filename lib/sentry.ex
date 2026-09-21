@@ -184,6 +184,7 @@ defmodule Sentry do
   """
 
   alias Sentry.{
+    Callback,
     CheckIn,
     Client,
     ClientError,
@@ -273,7 +274,14 @@ defmodule Sentry do
     event_source = Keyword.get(options, :event_source)
     {send_opts, create_event_opts} = Options.split_send_event_options(options)
 
-    if filter_module.exclude_exception?(exception, event_source) do
+    exclude? =
+      Callback.run(
+        :filter,
+        fn -> filter_module.exclude_exception?(exception, event_source) end,
+        true
+      )
+
+    if exclude? do
       :excluded
     else
       exception

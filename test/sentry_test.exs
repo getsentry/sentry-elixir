@@ -16,6 +16,12 @@ defmodule SentryTest do
     def exclude_exception?(_, _), do: false
   end
 
+  defmodule RaisingFilter do
+    @behaviour Sentry.EventFilter
+
+    def exclude_exception?(_exception, _source), do: raise("filter is broken")
+  end
+
   setup do
     SentryTest.setup_sentry(dedup_events: false)
   end
@@ -279,6 +285,35 @@ defmodule SentryTest do
       assert log =~ "after_send_is_broken"
 
       assert_sentry_report(:transaction, transaction: "crashing-after-send-transaction")
+    end
+  end
+
+  describe "a :filter callback that crashes" do
+    test "drops the exception and returns :excluded when the filter raises" do
+      put_test_config(filter: RaisingFilter)
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+        end)
+
+      assert log =~ ":filter callback failed"
+      assert log =~ "filter is broken"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "drops the exception and returns :excluded when the filter cannot be called" do
+      put_test_config(filter: __MODULE__.MissingFilter)
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+        end)
+
+      assert log =~ ":filter callback failed"
+      assert SentryTest.pop_sentry_reports() == []
     end
   end
 
