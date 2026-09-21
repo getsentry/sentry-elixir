@@ -73,12 +73,22 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     The scrubber is resolved once at `on_mount` time and applies to every
     breadcrumb recorded for the lifetime of the LiveView process.
 
+    ## Crashing Callbacks
+
+    The `:scrubber` runs in the LiveView process, where a failure of its own
+    would crash the LiveView. It cannot: if it raises, throws, exits, or returns
+    anything other than a map, Sentry catches the failure and logs it at the
+    `:error` level with the `:sentry` logger domain, so the SDK never reports its
+    own callback failure as an event. The breadcrumb is then recorded with
+    redacted data - an empty map - rather than with data that was never scrubbed.
+
     """
 
     @moduledoc since: "10.5.0"
 
     import Phoenix.LiveView, only: [attach_hook: 4, get_connect_info: 2]
 
+    alias Sentry.Callback
     alias Sentry.Context
     alias Sentry.LoggerUtils
 
@@ -132,32 +142,21 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       {mod, fun, args} =
         Process.get(@scrubber_pdict_key, {__MODULE__, :default_scrubber, []})
 
-      try do
-        case apply(mod, fun, [data | args]) do
-          result when is_map(result) ->
-            result
+      # We must NEVER raise an error in a hook, as it will crash the LiveView process
+      # and we don't want Sentry to be responsible for that.
+      Callback.run(
+        :scrubber,
+        fn ->
+          case apply(mod, fun, [data | args]) do
+            result when is_map(result) ->
+              result
 
-          other ->
-            LoggerUtils.error(
-              "Sentry.LiveViewHook scrubber returned non-map value: #{inspect(other)}; " <>
-                "falling back to redacted data",
-              event_source: :logger
-            )
-
-            %{}
-        end
-      catch
-        # We must NEVER raise an error in a hook, as it will crash the LiveView process
-        # and we don't want Sentry to be responsible for that.
-        kind, reason ->
-          LoggerUtils.error(
-            "Sentry.LiveViewHook scrubber raised an error: #{Exception.format(kind, reason)}; " <>
-              "falling back to redacted data",
-            event_source: :logger
-          )
-
-          %{}
-      end
+            other ->
+              raise ":scrubber function must return a map, got: #{inspect(other)}"
+          end
+        end,
+        %{}
+      )
     end
 
     defp scrub_uri(uri) when is_binary(uri), do: Sentry.Scrubber.scrub_url(uri)

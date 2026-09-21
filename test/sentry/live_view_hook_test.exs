@@ -291,7 +291,8 @@ defmodule Sentry.LiveViewHookTest do
         view
       end)
 
-    assert log =~ "Sentry.LiveViewHook scrubber raised an error"
+    assert log =~ ":scrubber callback failed"
+    assert log =~ "scrubber crashed!"
     assert log =~ ~r/domain=(\w+\.)*sentry/
 
     [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
@@ -307,7 +308,8 @@ defmodule Sentry.LiveViewHookTest do
         view
       end)
 
-    assert log =~ "Sentry.LiveViewHook scrubber returned non-map value"
+    assert log =~ ":scrubber callback failed"
+    assert log =~ ":scrubber function must return a map"
     assert log =~ ~r/domain=(\w+\.)*sentry/
 
     [event_breadcrumb | _] = get_sentry_context(view).breadcrumbs
