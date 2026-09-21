@@ -155,10 +155,12 @@ defmodule Sentry do
 
   ## Crashing Callbacks
 
-  If a callback you configure raises, throws, or exits, Sentry catches the failure and
-  logs it at the `:error` level instead of letting it reach the code that was reporting
-  the event. The log carries the `:sentry` logger domain, so the SDK never reports its
-  own callback failure as an event.
+  If a `:before_send`, `:after_send_event`, or `:filter` callback raises, throws, or exits,
+  Sentry catches the failure and logs it at the `:error` level instead of letting it reach
+  the code that was reporting the event. The log carries the `:sentry` logger domain, so the
+  SDK never reports its own callback failure as an event. Other configurable callbacks, such
+  as `:before_send_log` and `:before_send_metric`, handle their own failures and are not
+  covered by this section.
 
   The item being handled is then dropped:
 
