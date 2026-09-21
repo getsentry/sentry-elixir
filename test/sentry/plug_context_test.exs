@@ -1,5 +1,6 @@
 defmodule Sentry.PlugContextTest do
   use Sentry.Case, async: false
+  import ExUnit.CaptureLog
   import Plug.Conn
   import Plug.Test
 
@@ -157,13 +158,81 @@ defmodule Sentry.PlugContextTest do
 
   test "falls back to the default URL scrubber when a custom scrubber raises" do
     conn = conn(:get, "/test?password=hunter2&hello=world")
-    call(conn, url_scrubber: fn _conn -> raise "custom scrubber bug" end)
+
+    log =
+      capture_sentry_log(fn ->
+        call(conn, url_scrubber: fn _conn -> raise "custom scrubber bug" end)
+      end)
 
     assert "http://www.example.com/test?password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.url
 
     assert "password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
              Sentry.Context.get_all().request.query_string
+
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:url_scrubber callback failed/
+  end
+
+  test "falls back to the default URL scrubber when a custom scrubber throws" do
+    conn = conn(:get, "/test?password=hunter2&hello=world")
+
+    log = capture_sentry_log(fn -> call(conn, url_scrubber: fn _conn -> throw(:boom) end) end)
+
+    assert "http://www.example.com/test?password=#{Sentry.Scrubber.scrubbed_value()}&hello=world" ==
+             Sentry.Context.get_all().request.url
+
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:url_scrubber callback failed/
+  end
+
+  test "falls back to the default body scrubber when a custom scrubber fails" do
+    conn = conn(:post, "/error_route", %{"password" => "hunter2", "count" => 334})
+
+    log =
+      capture_sentry_log(fn ->
+        call(conn, body_scrubber: fn _conn -> raise "custom scrubber bug" end)
+      end)
+
+    assert %{"password" => Sentry.Scrubber.scrubbed_value(), "count" => 334} ==
+             Sentry.Context.get_all().request.data
+
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:body_scrubber callback failed/
+  end
+
+  test "falls back to the default header scrubber when a custom scrubber fails", %{conn: conn} do
+    log =
+      capture_sentry_log(fn ->
+        conn
+        |> put_req_header("authorization", "secrets")
+        |> put_req_header("content-type", "application/json")
+        |> call(header_scrubber: fn _conn -> throw(:boom) end)
+      end)
+
+    assert %{"content-type" => "application/json"} == Sentry.Context.get_all().request.headers
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:header_scrubber callback failed/
+  end
+
+  test "falls back to the default cookie scrubber when a custom scrubber fails", %{conn: conn} do
+    log =
+      capture_sentry_log(fn ->
+        conn
+        |> put_req_cookie("not-secret", "value")
+        |> call(cookie_scrubber: fn _conn -> exit(:boom) end)
+      end)
+
+    assert %{} == Sentry.Context.get_all().request.cookies
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:cookie_scrubber callback failed/
+  end
+
+  test "falls back to the default remote address reader when a custom reader fails", %{conn: conn} do
+    log =
+      capture_sentry_log(fn ->
+        conn
+        |> put_req_header("x-forwarded-for", "10.0.0.1")
+        |> call(remote_address_reader: fn _conn -> raise "custom reader bug" end)
+      end)
+
+    assert %{"REMOTE_ADDR" => "10.0.0.1"} = Sentry.Context.get_all().request.env
+    assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:remote_address_reader callback failed/
   end
 
   test "falls back to the default URL scrubber when a custom scrubber returns a non-binary" do
@@ -312,4 +381,6 @@ defmodule Sentry.PlugContextTest do
   defp call(conn, opts) do
     Plug.run(conn, [{Sentry.PlugContext, opts}])
   end
+
+  defp capture_sentry_log(fun), do: capture_log([metadata: [:domain]], fun)
 end

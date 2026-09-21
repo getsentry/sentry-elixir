@@ -164,6 +164,39 @@ defmodule Sentry.PlugContext do
   The `:remote_address_reader` option must be a function that accepts a `Plug.Conn`
   returns a `t:String.t/0` IP, or a `{module, function}` tuple, where `module.function/1`
   takes a `Plug.Conn` and returns a `t:String.t/0` IP.
+
+  ## Crashing Callbacks
+
+  Every callback this plug accepts runs in the request process. If one raises,
+  throws, or exits, Sentry catches the failure rather than letting it reach the
+  rest of your pipeline, so **the request itself is unaffected** and is served
+  exactly as it would have been. The failure is logged at the `:error` level with
+  the `:sentry` logger domain, so the SDK never reports its own callback failure
+  as an event.
+
+  Only the field that callback was responsible for degrades, and it degrades to
+  the SDK's own default for that field:
+
+  | Option | Value reported after a crash |
+  | --- | --- |
+  | `:body_scrubber` | `default_body_scrubber/1` |
+  | `:header_scrubber` | `default_header_scrubber/1` |
+  | `:cookie_scrubber` | `default_cookie_scrubber/1` |
+  | `:url_scrubber` | `default_url_scrubber/1` |
+  | `:remote_address_reader` | the `x-forwarded-for` header, falling back to `conn.remote_ip` |
+
+  The other fields are still produced by their own callbacks, and the event is
+  still sent.
+
+  > #### A crashed scrubber reports more, not less {: .warning}
+  >
+  > The fallback is the SDK default, which redacts the keys listed in
+  > `Sentry.Scrubber.default_param_keys/0` and `Sentry.Scrubber.default_header_keys/0`
+  > and nothing more. A custom scrubber that dropped a field the default keeps -
+  > an internal identifier, a request body the default has no rule for - stops
+  > dropping it for as long as it keeps failing, and that data is sent to Sentry.
+  > The error-level log is the only signal, so alert on it rather than treating a
+  > custom scrubber as a guarantee.
   """
 
   if Code.ensure_loaded?(Plug) do
@@ -196,9 +229,6 @@ defmodule Sentry.PlugContext do
   @doc false
   @spec build_request_interface_data(Plug.Conn.t(), keyword()) :: Sentry.Context.request_context()
   def build_request_interface_data(conn, opts) do
-    remote_address_reader =
-      Keyword.get(opts, :remote_address_reader, {__MODULE__, :default_remote_address_reader})
-
     request_id_header = Keyword.get(opts, :request_id_header, @default_plug_request_id_header)
 
     conn =
@@ -215,7 +245,7 @@ defmodule Sentry.PlugContext do
       cookies: scrubbed.cookies,
       headers: Map.new(scrubbed.req_headers),
       env: %{
-        "REMOTE_ADDR" => apply_fun_with_conn(conn, remote_address_reader, %{}),
+        "REMOTE_ADDR" => remote_address(conn, opts),
         "REMOTE_PORT" => remote_port(conn),
         "SERVER_NAME" => conn.host,
         "SERVER_PORT" => conn.port,
@@ -264,9 +294,26 @@ defmodule Sentry.PlugContext do
     end
   end
 
-  defp apply_fun_with_conn(_conn, _function = nil, default), do: default
-  defp apply_fun_with_conn(conn, {module, fun}, _default), do: apply(module, fun, [conn])
-  defp apply_fun_with_conn(conn, fun, _default) when is_function(fun, 1), do: fun.(conn)
+  defp remote_address(conn, opts) do
+    case Keyword.fetch(opts, :remote_address_reader) do
+      :error ->
+        default_remote_address_reader(conn)
+
+      {:ok, nil} ->
+        %{}
+
+      {:ok, reader} ->
+        case Sentry.Callback.run(:remote_address_reader, fn ->
+               apply_fun_with_conn(conn, reader)
+             end) do
+          {:ok, address} -> address
+          :failed -> default_remote_address_reader(conn)
+        end
+    end
+  end
+
+  defp apply_fun_with_conn(conn, {module, fun}), do: apply(module, fun, [conn])
+  defp apply_fun_with_conn(conn, fun) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
   Scrubs sensitive query parameters from the request URL.
