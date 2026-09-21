@@ -184,19 +184,33 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert_sentry_report(:event, tags: %{"custom_tag" => "custom_value"})
     end
 
-    test "handles oban_tags_to_sentry_tags errors gracefully" do
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-            oban_tags_to_sentry_tags: fn _job -> raise "tag transform error" end
-          )
-        end)
+    for {kind, failure} <- [
+          raise: quote(do: raise("tag transform error")),
+          throw: quote(do: throw(:tag_transform_error)),
+          exit: quote(do: exit(:tag_transform_error))
+        ] do
+      test "falls back to the base Oban tags when oban_tags_to_sentry_tags #{kind}s" do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+              oban_tags_to_sentry_tags: fn _job -> unquote(failure) end
+            )
+          end)
 
-      assert log =~ "oban_tags_to_sentry_tags function failed"
-      assert log =~ "tag transform error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+        assert log =~ ~r/domain=(\w+\.)*sentry \[error\]/
 
-      assert_sentry_report(:event, [])
+        assert log =~
+                 ":oban_tags_to_sentry_tags callback failed " <>
+                   "for worker #{inspect(@worker_as_string)} (job ID nil)"
+
+        assert_sentry_report(:event,
+          tags: %{
+            "oban_queue" => "default",
+            "oban_state" => "available",
+            "oban_worker" => @worker_as_string
+          }
+        )
+      end
     end
 
     test "handles invalid oban_tags_to_sentry_tags return values gracefully" do
@@ -313,23 +327,30 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
       assert exception.value == "oops"
     end
 
-    test "should_report_error_callback handles errors gracefully and defaults to reporting" do
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
-            should_report_error_callback: fn _worker, _job -> raise "callback error" end
-          )
-        end)
+    for {kind, failure} <- [
+          raise: quote(do: raise("callback error")),
+          throw: quote(do: throw(:callback_error)),
+          exit: quote(do: exit(:callback_error))
+        ] do
+      test "should_report_error_callback still reports the error when it #{kind}s" do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            emit_telemetry_for_failed_job(:error, %RuntimeError{message: "oops"}, [],
+              should_report_error_callback: fn _worker, _job -> unquote(failure) end
+            )
+          end)
 
-      assert log =~ "should_report_error_callback failed"
-      assert log =~ "Sentry.Integrations.Oban.ErrorReporterTest.MyWorker"
-      assert log =~ "callback error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+        assert log =~ ~r/domain=(\w+\.)*sentry \[error\]/
 
-      event = assert_sentry_report(:event, [])
-      assert [exception] = event.exception
-      assert exception.type == "RuntimeError"
-      assert exception.value == "oops"
+        assert log =~
+                 ":should_report_error_callback callback failed " <>
+                   "for worker #{@worker_as_string} (job ID nil)"
+
+        event = assert_sentry_report(:event, [])
+        assert [exception] = event.exception
+        assert exception.type == "RuntimeError"
+        assert exception.value == "oops"
+      end
     end
 
     test "should_report_error_callback receives a nil worker when the job worker doesn't resolve" do

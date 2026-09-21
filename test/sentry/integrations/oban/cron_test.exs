@@ -414,20 +414,28 @@ defmodule Sentry.Integrations.Oban.CronTest do
       refute_sentry_check_in(ref)
     end
 
-    test "should report the failed check-in when the callback raises", %{ref: ref} do
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          attach_with_callback(fn _worker, _job -> raise "callback error" end)
+    for {kind, failure} <- [
+          raise: quote(do: raise("callback error")),
+          throw: quote(do: throw(:callback_error)),
+          exit: quote(do: exit(:callback_error))
+        ] do
+      test "should report the failed check-in when the callback #{kind}s", %{ref: ref} do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            attach_with_callback(fn _worker, _job -> unquote(failure) end)
 
-          execute_exception_event()
+            execute_exception_event()
 
-          [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-          assert_sentry_report(check_in_body, status: "error")
-        end)
+            [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+            assert_sentry_report(check_in_body, status: "error")
+          end)
 
-      assert log =~ ":should_report_error_check_in_callback failed"
-      assert log =~ "callback error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+        assert log =~ ~r/domain=(\w+\.)*sentry \[error\]/
+
+        assert log =~
+                 ":should_report_error_check_in_callback callback failed " <>
+                   "for worker #{inspect(MyCronWorker)} (job ID 942)"
+      end
     end
 
     test "should pass a nil worker to the callback when the worker cannot be resolved", %{

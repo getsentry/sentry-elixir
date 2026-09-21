@@ -4,6 +4,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
+  alias Sentry.Callback
   alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
@@ -86,19 +87,16 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
           nil
       end
 
-    try do
-      callback.(worker, job) == true
-    rescue
-      error ->
-        LoggerUtils.warning("""
-        :should_report_error_callback failed for worker #{inspect(worker)} \
-        (job ID #{job.id}):
+    Callback.run(
+      :should_report_error_callback,
+      fn -> callback.(worker, job) == true end,
+      true,
+      context: describe_callback_target(worker, job)
+    )
+  end
 
-        #{Exception.format(:error, error, __STACKTRACE__)}\
-        """)
-
-        true
-    end
+  defp describe_callback_target(worker, job) do
+    "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
   end
 
   defp report(job, kind, reason, stacktrace, config) do
@@ -178,24 +176,24 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   defp merge_oban_tags(base_tags, nil, _job), do: base_tags
 
   defp merge_oban_tags(base_tags, tags_config, job) do
-    try do
-      custom_tags = call_oban_tags_to_sentry_tags(tags_config, job)
+    Callback.run(
+      :oban_tags_to_sentry_tags,
+      fn -> merge_custom_tags(base_tags, call_oban_tags_to_sentry_tags(tags_config, job)) end,
+      base_tags,
+      context: describe_callback_target(job.worker, job)
+    )
+  end
 
-      if is_map(custom_tags) do
-        Map.merge(base_tags, custom_tags)
-      else
-        LoggerUtils.warning(
-          "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
-        )
+  defp merge_custom_tags(base_tags, custom_tags) when is_map(custom_tags) do
+    Map.merge(base_tags, custom_tags)
+  end
 
-        base_tags
-      end
-    rescue
-      error ->
-        LoggerUtils.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
+  defp merge_custom_tags(base_tags, custom_tags) do
+    LoggerUtils.warning(
+      "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
+    )
 
-        base_tags
-    end
+    base_tags
   end
 
   defp call_oban_tags_to_sentry_tags(fun, job) when is_function(fun, 1) do

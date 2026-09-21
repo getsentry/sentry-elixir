@@ -140,19 +140,12 @@ defmodule Sentry.Integrations.Oban.Cron do
           nil
       end
 
-    try do
-      callback.(worker, job) == true
-    rescue
-      error ->
-        LoggerUtils.warning("""
-        :should_report_error_check_in_callback failed for worker #{inspect(worker)} \
-        (job ID #{job.id}):
-
-        #{Exception.format(:error, error, __STACKTRACE__)}\
-        """)
-
-        true
-    end
+    Callback.run(
+      :should_report_error_check_in_callback,
+      fn -> callback.(worker, job) == true end,
+      true,
+      context: "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
+    )
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do

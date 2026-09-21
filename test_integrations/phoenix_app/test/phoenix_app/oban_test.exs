@@ -274,7 +274,7 @@ defmodule Sentry.Integrations.Phoenix.ObanTest do
           Oban.drain_queue(queue: :default)
         end)
 
-      assert log =~ "should_report_error_callback failed"
+      assert log =~ ":should_report_error_callback callback failed"
       assert log =~ "FailingWorker"
       assert log =~ "callback crashed!"
 
