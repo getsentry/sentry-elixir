@@ -248,6 +248,40 @@ defmodule SentryTest do
     end
   end
 
+  describe "an :after_send_event callback that crashes" do
+    test "still returns the successful send result for an event" do
+      put_test_config(after_send_event: fn _event, _result -> raise "after_send is broken" end)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _id} = Sentry.capture_message("raising after_send", result: :sync)
+        end)
+
+      assert log =~ ":after_send_event callback failed"
+      assert log =~ "after_send is broken"
+
+      assert_sentry_report(:event, message: %{formatted: "raising after_send"})
+    end
+
+    test "still returns the successful send result for a transaction" do
+      transaction = create_transaction(%{transaction: "crashing-after-send-transaction"})
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _id} =
+                   Sentry.send_transaction(transaction,
+                     result: :sync,
+                     after_send_event: fn _transaction, _result -> exit(:after_send_is_broken) end
+                   )
+        end)
+
+      assert log =~ ":after_send_event callback failed"
+      assert log =~ "after_send_is_broken"
+
+      assert_sentry_report(:transaction, transaction: "crashing-after-send-transaction")
+    end
+  end
+
   describe "send_check_in/1" do
     test "posts a check-in with all the explicit arguments", %{bypass: bypass} do
       put_test_config(environment_name: "test", release: "1.3.2")

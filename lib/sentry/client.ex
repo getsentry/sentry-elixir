@@ -217,15 +217,30 @@ defmodule Sentry.Client do
     """
   end
 
-  defp maybe_call_after_send(event_or_transaction, result, callback) do
-    message = ":after_send_event must be an anonymous function or a {module, function} tuple"
+  defp maybe_call_after_send(_event_or_transaction, _result, nil) do
+    nil
+  end
 
-    case callback do
-      function when is_function(function, 2) -> function.(event_or_transaction, result)
-      {module, function} -> apply(module, function, [event_or_transaction, result])
-      nil -> nil
-      _ -> raise ArgumentError, message
-    end
+  defp maybe_call_after_send(event_or_transaction, result, callback) do
+    Callback.run(
+      :after_send_event,
+      after_send_invocation(event_or_transaction, result, callback),
+      nil
+    )
+  end
+
+  defp after_send_invocation(event_or_transaction, result, function)
+       when is_function(function, 2) do
+    fn -> function.(event_or_transaction, result) end
+  end
+
+  defp after_send_invocation(event_or_transaction, result, {module, function}) do
+    fn -> apply(module, function, [event_or_transaction, result]) end
+  end
+
+  defp after_send_invocation(_event_or_transaction, _result, _other) do
+    raise ArgumentError,
+          ":after_send_event must be an anonymous function or a {module, function} tuple"
   end
 
   defp encode_and_send(_event, _result_type = :async, _client, _request_retries) do
