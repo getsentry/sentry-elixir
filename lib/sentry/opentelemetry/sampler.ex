@@ -3,6 +3,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @moduledoc false
 
     alias OpenTelemetry.{Span, Tracer}
+    alias Sentry.Callback
     alias Sentry.ClientReport
     alias SamplingContext
 
@@ -51,7 +52,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
                 sampling_context =
                   build_sampling_context(nil, span_name, span_kind, attributes, trace_id)
 
-                make_sampler_decision(traces_sampler, sampling_context)
+                make_sampler_decision(traces_sampler, sampling_context, traces_sample_rate)
               else
                 make_sampling_decision(traces_sample_rate)
               end
@@ -147,25 +148,25 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       sampling_context
     end
 
-    defp make_sampler_decision(traces_sampler, sampling_context) do
-      try do
-        result = call_traces_sampler(traces_sampler, sampling_context)
-        sample_rate = normalize_sampler_result(result)
+    defp make_sampler_decision(traces_sampler, sampling_context, fallback_sample_rate) do
+      invocation = fn -> call_traces_sampler(traces_sampler, sampling_context) end
 
-        if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
-          make_sampling_decision(sample_rate)
-        else
-          LoggerUtils.warning(
-            "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
-          )
+      case Callback.run(:traces_sampler, invocation) do
+        {:ok, result} ->
+          sample_rate = normalize_sampler_result(result)
 
-          make_sampling_decision(0.0)
-        end
-      rescue
-        error ->
-          LoggerUtils.warning("traces_sampler function failed: #{inspect(error)}")
+          if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
+            make_sampling_decision(sample_rate)
+          else
+            LoggerUtils.warning(
+              "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
+            )
 
-          make_sampling_decision(0.0)
+            make_sampling_decision(0.0)
+          end
+
+        :failed ->
+          make_sampling_decision(fallback_sample_rate)
       end
     end
 
