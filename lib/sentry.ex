@@ -304,11 +304,16 @@ defmodule Sentry do
     {send_opts, create_event_opts} = Options.split_send_event_options(options)
 
     exclude? =
-      Callback.run(
-        :filter,
-        fn -> filter_module.exclude_exception?(exception, event_source) end,
-        true
-      )
+      case Callback.run(:filter, fn ->
+             filter_module.exclude_exception?(exception, event_source)
+           end) do
+        {:ok, exclude?} ->
+          exclude?
+
+        :failed ->
+          ClientReport.Sender.record_discarded_events(:callback_error, "error")
+          true
+      end
 
     if exclude? do
       :excluded

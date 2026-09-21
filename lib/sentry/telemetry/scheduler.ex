@@ -382,7 +382,7 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   defp call_before_send_log(log_event, callback) do
-    Callback.run(:before_send_log, invocation(log_event, callback), nil)
+    run_callback(:before_send_log, log_event, callback)
   end
 
   defp apply_before_send_metric_callbacks(metrics) do
@@ -399,7 +399,18 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   defp call_before_send_metric(metric, callback) do
-    Callback.run(:before_send_metric, invocation(metric, callback), nil)
+    run_callback(:before_send_metric, metric, callback)
+  end
+
+  defp run_callback(name, item, callback) do
+    case Callback.run(name, invocation(item, callback)) do
+      {:ok, result} ->
+        result
+
+      :failed ->
+        ClientReport.Sender.record_discarded_events(:callback_error, [item])
+        nil
+    end
   end
 
   defp invocation(item, function) when is_function(function, 1) do

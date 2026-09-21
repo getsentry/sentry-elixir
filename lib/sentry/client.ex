@@ -191,16 +191,22 @@ defmodule Sentry.Client do
   end
 
   defp maybe_call_before_send(event, callback) do
-    if result = call_before_send(event, callback) do
-      {:ok, result}
-    else
-      :excluded
+    case Callback.run(:before_send, before_send_invocation(event, callback)) do
+      {:ok, false} ->
+        :excluded
+
+      {:ok, result} ->
+        {:ok, result}
+
+      :failed ->
+        ClientReport.Sender.record_discarded_events(:callback_error, [event])
+        :excluded
     end
   end
 
-  defp call_before_send(event, callback) do
+  defp before_send_invocation(event, callback) do
     invocation = Callback.to_fun(:before_send, callback, [event])
-    Callback.run(:before_send, fn -> invocation.() || false end, false)
+    fn -> invocation.() || false end
   end
 
   defp maybe_call_after_send(_event_or_transaction, _result, nil) do

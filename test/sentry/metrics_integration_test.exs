@@ -11,13 +11,23 @@ defmodule Sentry.MetricsIntegrationTest do
   alias Sentry.Telemetry.Buffer
 
   setup do
-    %{bypass: bypass, telemetry_processor: processor_name, ref: ref} =
+    %{
+      bypass: bypass,
+      telemetry_processor: processor_name,
+      ref: ref,
+      client_report_sender: client_report_sender
+    } =
       Sentry.Test.setup_sentry(
         collect_envelopes: true,
         telemetry_processor: [buffer_configs: %{metric: %{batch_size: 1}}]
       )
 
-    %{processor: processor_name, ref: ref, bypass: bypass}
+    %{
+      processor: processor_name,
+      ref: ref,
+      bypass: bypass,
+      client_report_sender: client_report_sender
+    }
   end
 
   describe "metric batching" do
@@ -96,6 +106,26 @@ defmodule Sentry.MetricsIntegrationTest do
 
     test "drops the metric when the callback exits", ctx do
       assert_metric_dropped(ctx, fn _metric -> exit(:boom) end)
+    end
+
+    test "records a callback_error outcome for the dropped metric", ctx do
+      assert_metric_dropped(ctx, fn _metric -> raise "boom" end)
+
+      assert %{
+               {:callback_error, "trace_metric"} => 1,
+               {:callback_error, "trace_metric_byte"} => bytes
+             } = :sys.get_state(ctx.client_report_sender)
+
+      assert bytes > 0
+    end
+
+    test "records no outcome for a metric the callback filters out", ctx do
+      put_test_config(before_send_metric: fn _metric -> nil end)
+
+      Metrics.count("drop.me", 1)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+
+      assert :sys.get_state(ctx.client_report_sender) == %{}
     end
   end
 

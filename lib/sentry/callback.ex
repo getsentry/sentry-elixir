@@ -6,8 +6,16 @@ defmodule Sentry.Callback do
   @type spec() :: (... -> term()) | {module(), atom()}
 
   @spec run(atom(), (-> result), result) :: result when result: var
-  def run(name, fun, fallback) when is_atom(name) and is_function(fun, 0) do
-    fun.()
+  def run(name, fun, fallback) do
+    case run(name, fun) do
+      {:ok, result} -> result
+      :failed -> fallback
+    end
+  end
+
+  @spec run(atom(), (-> result)) :: {:ok, result} | :failed when result: var
+  def run(name, fun) when is_atom(name) and is_function(fun, 0) do
+    {:ok, fun.()}
   catch
     kind, reason ->
       LoggerUtils.error(
@@ -15,7 +23,7 @@ defmodule Sentry.Callback do
           Exception.format(kind, reason, __STACKTRACE__)
       )
 
-      fallback
+      :failed
   end
 
   @spec to_fun(atom(), spec(), [term()]) :: (-> term())

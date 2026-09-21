@@ -23,6 +23,7 @@ defmodule Sentry.ClientReport do
     :network_error,
     :sample_rate,
     :before_send,
+    :callback_error,
     :event_processor,
     :insufficient_data,
     :backpressure,

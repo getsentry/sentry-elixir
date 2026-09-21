@@ -322,6 +322,25 @@ defmodule Sentry.Telemetry.SchedulerTest do
     end
   end
 
+  describe "before_send_log client report outcomes" do
+    test "records a callback_error outcome for a log event dropped by a crashing callback",
+         %{client_report_sender: sender} do
+      run_log_event_through(fn _log_event -> raise "boom" end)
+
+      assert %{{:callback_error, "log_item"} => 1, {:callback_error, "log_byte"} => bytes} =
+               :sys.get_state(sender)
+
+      assert bytes > 0
+    end
+
+    test "records no outcome for a log event the callback filters out",
+         %{client_report_sender: sender} do
+      run_log_event_through(fn _log_event -> nil end)
+
+      assert :sys.get_state(sender) == %{}
+    end
+  end
+
   describe "transport queue capacity" do
     test "stops processing when transport queue is full" do
       buffers = start_test_buffers(batch_size: 1)
@@ -633,6 +652,30 @@ defmodule Sentry.Telemetry.SchedulerTest do
     assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:before_send_log callback failed/
 
     assert Process.alive?(pid)
+
+    GenServer.stop(pid)
+    stop_buffers(buffers)
+  end
+
+  defp run_log_event_through(callback) do
+    buffers = start_test_buffers(batch_size: 1)
+    test_pid = self()
+
+    put_test_config(before_send_log: callback)
+
+    {:ok, pid} =
+      Scheduler.start_link(
+        buffers: buffers,
+        on_envelope: fn envelope -> send(test_pid, {:envelope, envelope}) end,
+        name: :"test_scheduler_outcome_#{System.unique_integer([:positive])}"
+      )
+
+    capture_log(fn ->
+      Buffer.add(buffers.log, make_log_event("outcome"))
+      Scheduler.signal(pid)
+
+      refute_receive {:envelope, _envelope}, 500
+    end)
 
     GenServer.stop(pid)
     stop_buffers(buffers)
