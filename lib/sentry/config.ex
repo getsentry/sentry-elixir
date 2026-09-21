@@ -326,6 +326,15 @@ defmodule Sentry.Config do
 
       If both `:traces_sampler` and `:traces_sample_rate` are configured, `:traces_sampler` takes precedence.
 
+      If the callback crashes, the failure is logged at the `:error` level and sampling falls back
+      to `:traces_sample_rate`. When `:traces_sample_rate` is not configured either, the trace is
+      dropped and its child spans inherit that decision. See the
+      [*Crashing Callbacks*](#module-crashing-callbacks) section below for more information.
+
+      If the callback returns successfully but the returned value is not a boolean or a float
+      between `0.0` and `1.0`, the invalid sample rate is logged at the `:warning` level and the
+      trace is dropped.
+
       Example:
       ```elixir
       traces_sampler: fn sampling_context ->
