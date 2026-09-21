@@ -20,6 +20,15 @@ defmodule Sentry.PlugCaptureTest do
     def action_clause_error(conn, %{"required_param" => true}), do: conn
     def assigns(conn, _params), do: _test = conn.assigns2.test
 
+    def unreportable_attachment(_conn, _params) do
+      Sentry.Context.add_attachment(%Sentry.Attachment{
+        filename: "broken.txt",
+        data: :not_a_binary
+      })
+
+      raise "PhoenixError"
+    end
+
     def action_clause_error_without_conn(_conn, _params) do
       raise Phoenix.ActionClauseError,
         module: __MODULE__,
@@ -44,6 +53,7 @@ defmodule Sentry.PlugCaptureTest do
         :action_clause_error_without_conn
 
     get "/assigns_route", PhoenixController, :assigns
+    get "/unreportable_attachment_route", PhoenixController, :unreportable_attachment
     get "/reset_password/:token", PhoenixController, :action_clause_error
     get "/verify/:secret", PhoenixController, :action_clause_error
   end
@@ -222,6 +232,24 @@ defmodule Sentry.PlugCaptureTest do
       assert exception.value == "PhoenixError"
     end
 
+    @tag send_result: :sync
+    test "raises the application's exception unchanged when capturing it fails", %{bypass: bypass} do
+      ref = SentryTest.setup_bypass_envelope_collector(bypass)
+
+      log =
+        capture_sentry_log(fn ->
+          assert_raise RuntimeError, "PhoenixError", fn ->
+            conn(:get, "/unreportable_attachment_route")
+            |> call_phoenix_endpoint()
+          end
+        end)
+
+      refute_receive {:bypass_envelope, ^ref, _body}, 200
+
+      assert log =~
+               ~r/domain=(\w+\.)*sentry \[error\]\s+Sentry failed to capture an exception from Plug/
+    end
+
     test "reports exits" do
       catch_exit(conn(:get, "/exit_route") |> call_phoenix_endpoint())
 
@@ -389,7 +417,7 @@ defmodule Sentry.PlugCaptureTest do
       assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:scrubber callback failed/
     end
 
-    test "raises the application's exception when an action clause error holds no conn" do
+    test "scrubs the args of an action clause error that holds no conn" do
       assert_raise Phoenix.ActionClauseError, fn ->
         conn(:get, "/action_clause_error_without_conn")
         |> call_phoenix_endpoint()
