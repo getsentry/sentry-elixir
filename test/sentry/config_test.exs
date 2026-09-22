@@ -487,6 +487,20 @@ defmodule Sentry.ConfigTest do
     end
   end
 
+  describe ":metrics" do
+    test "leaves runtime metrics disabled by default" do
+      runtime = Config.validate!([])[:metrics][:runtime]
+
+      assert runtime[:enabled] == false
+    end
+
+    test "does not attach runtime version attributes by default" do
+      runtime = Config.validate!([])[:metrics][:runtime]
+
+      assert runtime[:version_attributes] == false
+    end
+  end
+
   describe ":org_id" do
     test "defaults to nil" do
       assert Config.validate!([])[:org_id] == nil

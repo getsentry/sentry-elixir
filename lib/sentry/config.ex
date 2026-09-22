@@ -504,6 +504,45 @@ defmodule Sentry.Config do
       default: [],
       keys: integrations_schema
     ],
+    metrics: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for metrics the SDK collects on its own.
+      *Available since 14.0.0*.
+      """,
+      keys: [
+        runtime: [
+          type: :keyword_list,
+          default: [],
+          doc: """
+          Configuration for BEAM runtime metrics.
+          *Available since 14.0.0*.
+          """,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to report BEAM runtime metrics.
+              *Available since 14.0.0*.
+              """
+            ],
+            version_attributes: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to attach `elixir_version` and `otp_release` attributes to every
+              reported measurement, so metrics can be grouped by runtime version. Off by
+              default: the versions change only on upgrade, and attaching them to every
+              point starts a fresh series for each metric on every rolling deploy.
+              *Available since 14.0.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ],
     logs: [
       type: {:or, [{:in, [nil]}, {:keyword_list, logs_schema}]},
       type_doc: "`t:keyword/0` or `nil`",
@@ -1126,6 +1165,9 @@ defmodule Sentry.Config do
 
   @spec integrations() :: keyword()
   def integrations, do: fetch!(:integrations)
+
+  @spec metrics() :: keyword()
+  def metrics, do: fetch!(:metrics)
 
   @spec tracing?() :: boolean()
   def tracing? do
