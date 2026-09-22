@@ -199,22 +199,8 @@ defmodule Sentry.Client do
   end
 
   defp call_before_send(event, callback) do
-    Callback.run(:before_send, before_send_invocation(event, callback), false)
-  end
-
-  defp before_send_invocation(event, function) when is_function(function, 1) do
-    fn -> function.(event) || false end
-  end
-
-  defp before_send_invocation(event, {mod, fun}) do
-    fn -> apply(mod, fun, [event]) || false end
-  end
-
-  defp before_send_invocation(_event, other) do
-    raise ArgumentError, """
-    :before_send must be an anonymous function or a {module, function} tuple, got: \
-    #{inspect(other)}\
-    """
+    invocation = Callback.to_fun(:before_send, callback, [event])
+    Callback.run(:before_send, fn -> invocation.() || false end, false)
   end
 
   defp maybe_call_after_send(_event_or_transaction, _result, nil) do
@@ -224,23 +210,9 @@ defmodule Sentry.Client do
   defp maybe_call_after_send(event_or_transaction, result, callback) do
     Callback.run(
       :after_send_event,
-      after_send_invocation(event_or_transaction, result, callback),
+      Callback.to_fun(:after_send_event, callback, [event_or_transaction, result]),
       nil
     )
-  end
-
-  defp after_send_invocation(event_or_transaction, result, function)
-       when is_function(function, 2) do
-    fn -> function.(event_or_transaction, result) end
-  end
-
-  defp after_send_invocation(event_or_transaction, result, {module, function}) do
-    fn -> apply(module, function, [event_or_transaction, result]) end
-  end
-
-  defp after_send_invocation(_event_or_transaction, _result, _other) do
-    raise ArgumentError,
-          ":after_send_event must be an anonymous function or a {module, function} tuple"
   end
 
   defp encode_and_send(_event, _result_type = :async, _client, _request_retries) do
