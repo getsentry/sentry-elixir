@@ -39,6 +39,8 @@ defmodule Sentry.Metrics do
 
     * `elixir.runtime.mem.*` — `total`, `processes`, `processes_used`, `system`,
       `atom`, `atom_used`, `binary`, `code` and `ets`, in bytes
+    * `elixir.runtime.run_queue.*` — `total`, `cpu` and `io`, how many processes are
+      waiting to run
 
   ### Collection Frequency
 

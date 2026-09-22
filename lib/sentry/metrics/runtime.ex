@@ -7,8 +7,11 @@ defmodule Sentry.Metrics.Runtime do
   @origin "auto.elixir.runtime_metrics"
 
   @memory_event [:vm, :memory]
+  @run_queue_event [:vm, :total_run_queue_lengths]
 
-  @events [@memory_event]
+  @events [@memory_event, @run_queue_event]
+
+  @run_queue_keys [:total, :cpu, :io]
 
   @memory_keys [
     :total,
@@ -46,6 +49,10 @@ defmodule Sentry.Metrics.Runtime do
         ) :: :ok
   def handle_event(@memory_event, measurements, _metadata, config) do
     report_measured(config, measurements, @memory_keys, "elixir.runtime.mem", "byte")
+  end
+
+  def handle_event(@run_queue_event, measurements, _metadata, config) do
+    report_measured(config, measurements, @run_queue_keys, "elixir.runtime.run_queue", nil)
   end
 
   defp report_measured(config, measurements, keys, prefix, unit) do
