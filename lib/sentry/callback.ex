@@ -19,14 +19,16 @@ defmodule Sentry.Callback do
   end
 
   @spec run(atom(), (-> result)) :: {:ok, result} | :failed when result: var
-  def run(name, fun) when is_atom(name) and is_function(fun, 0) do
+  def run(name, fun) when is_atom(name) do
+    guard("#{inspect(name)} callback failed", fun)
+  end
+
+  @spec guard(String.t(), (-> result)) :: {:ok, result} | :failed when result: var
+  def guard(description, fun) when is_binary(description) and is_function(fun, 0) do
     {:ok, fun.()}
   catch
     kind, reason ->
-      LoggerUtils.error(
-        "#{inspect(name)} callback failed: " <>
-          Exception.format(kind, reason, __STACKTRACE__)
-      )
+      LoggerUtils.error(description <> ": " <> Exception.format(kind, reason, __STACKTRACE__))
 
       :failed
   end

@@ -180,7 +180,7 @@ defmodule Sentry.PlugCapture do
   @doc false
   def __capture_exception__(exception, stacktrace, scrubber) do
     _ =
-      guard("Sentry failed to capture an exception from Plug", fn ->
+      Sentry.Callback.guard("Sentry failed to capture an exception from Plug", fn ->
         Sentry.capture_exception(scrub_exception(exception, scrubber),
           stacktrace: stacktrace,
           event_source: :plug,
@@ -194,7 +194,7 @@ defmodule Sentry.PlugCapture do
   @doc false
   def __capture_message__(message, stacktrace) do
     _ =
-      guard("Sentry failed to capture a message from Plug", fn ->
+      Sentry.Callback.guard("Sentry failed to capture a message from Plug", fn ->
         Sentry.capture_message(message, stacktrace: stacktrace, event_source: :plug)
       end)
 
@@ -208,7 +208,7 @@ defmodule Sentry.PlugCapture do
   # `:scrubber` and mirror the conn's scrubbed params onto the standalone params arg.
   defp scrub_exception(exception, scrubber) do
     if is_struct(exception, Phoenix.ActionClauseError) do
-      case guard("Sentry failed to scrub a Phoenix.ActionClauseError", fn ->
+      case Sentry.Callback.guard("Sentry failed to scrub a Phoenix.ActionClauseError", fn ->
              Sentry.Scrubber.StacktraceScrubber.scrub(
                exception,
                &scrub_action_clause_args(&1, scrubber)
@@ -220,17 +220,6 @@ defmodule Sentry.PlugCapture do
     else
       exception
     end
-  end
-
-  defp guard(description, fun) do
-    {:ok, fun.()}
-  catch
-    kind, reason ->
-      Sentry.LoggerUtils.error(
-        description <> ": " <> Exception.format(kind, reason, __STACKTRACE__)
-      )
-
-      :failed
   end
 
   defp scrub_action_clause_args(args, scrubber) do
