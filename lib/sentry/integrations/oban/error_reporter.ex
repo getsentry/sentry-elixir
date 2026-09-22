@@ -5,7 +5,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # https://getoban.pro/articles/enhancing-error-reporting
 
   alias Sentry.Callback
-  alias Sentry.LoggerUtils
+  alias Sentry.Integrations.Oban.Callbacks
 
   @spec attach(keyword()) :: :ok
   def attach(config \\ []) when is_list(config) do
@@ -53,39 +53,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   end
 
   defp should_report?(job, config) do
-    case Keyword.get(config, :should_report_error_callback) do
-      callback when is_function(callback, 2) ->
-        call_should_report_error_callback(callback, job)
-
-      _ ->
-        true
-    end
-  end
-
-  defp call_should_report_error_callback(callback, job) do
-    worker =
-      case apply(Oban.Worker, :from_string, [job.worker]) do
-        {:ok, mod} ->
-          mod
-
-        {:error, _} ->
-          LoggerUtils.warning(
-            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
-          )
-
-          nil
-      end
-
-    Callback.run(
-      :should_report_error_callback,
-      fn -> callback.(worker, job) == true end,
-      true,
-      context: describe_callback_target(worker, job)
-    )
-  end
-
-  defp describe_callback_target(worker, job) do
-    "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
+    Callbacks.should_report?(config, :should_report_error_callback, job)
   end
 
   defp report(job, kind, reason, stacktrace, config) do
@@ -172,7 +140,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
         merge_custom_tags(base_tags, invocation.())
       end,
       base_tags,
-      context: describe_callback_target(job.worker, job)
+      context: Callbacks.describe_target(job.worker, job)
     )
   end
 

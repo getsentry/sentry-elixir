@@ -7,7 +7,7 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   alias Sentry.Callback
   alias Sentry.Integrations.CheckInIDMappings
-  alias Sentry.LoggerUtils
+  alias Sentry.Integrations.Oban.Callbacks
 
   @doc """
   The Oban integration calls this callback (if present) to customize
@@ -115,39 +115,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp should_report_error_check_in?(job, config) do
-    case Keyword.get(config, :should_report_error_check_in_callback) do
-      callback when is_function(callback, 2) ->
-        call_should_report_error_check_in_callback(callback, job)
-
-      _ ->
-        true
-    end
-  end
-
-  defp call_should_report_error_check_in_callback(callback, job) do
-    worker =
-      case apply(Oban.Worker, :from_string, [job.worker]) do
-        {:ok, mod} ->
-          mod
-
-        {:error, _} ->
-          LoggerUtils.warning(
-            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
-          )
-
-          nil
-      end
-
-    Callback.run(
-      :should_report_error_check_in_callback,
-      fn -> callback.(worker, job) == true end,
-      true,
-      context: describe_callback_target(worker, job)
-    )
-  end
-
-  defp describe_callback_target(worker, job) do
-    "for worker #{inspect(worker)} (job ID #{inspect(job.id)})"
+    Callbacks.should_report?(config, :should_report_error_check_in_callback, job)
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
@@ -198,7 +166,7 @@ defmodule Sentry.Integrations.Oban.Cron do
           :sentry_check_in_configuration,
           fn -> mod.sentry_check_in_configuration(per_integration_term) end,
           [],
-          context: describe_callback_target(mod, per_integration_term)
+          context: Callbacks.describe_target(mod, per_integration_term)
         )
       else
         []
@@ -216,7 +184,7 @@ defmodule Sentry.Integrations.Oban.Cron do
       :monitor_slug_generator,
       fn -> mod |> apply(fun, [job]) |> slugify() end,
       slugify(job.worker),
-      context: describe_callback_target(job.worker, job)
+      context: Callbacks.describe_target(job.worker, job)
     )
   end
 
