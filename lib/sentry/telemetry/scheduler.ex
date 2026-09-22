@@ -403,22 +403,9 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   defp run_callback(name, item, callback) do
-    case Callback.run(name, invocation(item, callback)) do
-      {:ok, result} ->
-        result
-
-      :failed ->
-        ClientReport.Sender.record_discarded_events(:callback_error, [item])
-        nil
-    end
-  end
-
-  defp invocation(item, function) when is_function(function, 1) do
-    fn -> function.(item) end
-  end
-
-  defp invocation(item, {mod, fun}) do
-    fn -> apply(mod, fun, [item]) end
+    Callback.run(name, Callback.to_fun(name, callback, [item]), nil,
+      discard: {:callback_error, [item]}
+    )
   end
 
   defp advance_cycle(%Scheduler{} = state) do
