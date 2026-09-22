@@ -4,7 +4,7 @@ defmodule Sentry.Callback do
   alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
-  @type spec() :: (... -> term()) | {module(), atom()}
+  @type spec() :: (... -> term()) | {module(), atom()} | {module(), atom(), [term()]}
 
   @spec run(atom(), (-> result), result, keyword()) :: result when result: var
   def run(name, fun, fallback, opts \\ []) when is_list(opts) do
@@ -39,6 +39,9 @@ defmodule Sentry.Callback do
 
       {mod, fun} when is_atom(mod) and is_atom(fun) ->
         fn -> apply(mod, fun, args) end
+
+      {mod, fun, extra_args} when is_atom(mod) and is_atom(fun) and is_list(extra_args) ->
+        fn -> apply(mod, fun, args ++ extra_args) end
 
       other ->
         raise ArgumentError,

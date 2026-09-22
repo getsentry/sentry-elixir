@@ -455,23 +455,20 @@ defmodule Sentry.Scrubber do
   defp wrap_custom_scrubber(scrubber, opt_name, field) do
     fn conn ->
       case Callback.run(opt_name, fn -> scrubber.(conn) end) do
-        {:ok, value} -> validate_scrubbed(field, value, conn)
+        {:ok, value} -> validate_scrubbed(field, value, conn, opt_name)
         :failed -> scrub(conn, field)
       end
     end
   end
 
-  defp validate_scrubbed(:url, url, _conn) when is_binary(url), do: url
-
-  defp validate_scrubbed(:url, _other, conn) do
-    Sentry.LoggerUtils.warning(
-      "url_scrubber function returned a non-binary value; falling back to the default URL scrubber"
-    )
-
-    scrub(conn, :url)
+  defp validate_scrubbed(:url, url, conn, opt_name) do
+    case Callback.validate(opt_name, url, &is_binary/1, "a binary") do
+      {:ok, url} -> url
+      :invalid -> scrub(conn, :url)
+    end
   end
 
-  defp validate_scrubbed(_field, value, _conn), do: value
+  defp validate_scrubbed(_field, value, _conn, _opt_name), do: value
 
   defp pass_through(:url), do: fn conn -> Plug.Conn.request_url(conn) end
   defp pass_through(_field), do: fn _conn -> %{} end

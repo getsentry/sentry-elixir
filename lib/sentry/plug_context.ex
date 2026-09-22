@@ -303,17 +303,14 @@ defmodule Sentry.PlugContext do
         %{}
 
       {:ok, reader} ->
-        case Sentry.Callback.run(:remote_address_reader, fn ->
-               apply_fun_with_conn(conn, reader)
-             end) do
+        invocation = Sentry.Callback.to_fun(:remote_address_reader, reader, [conn])
+
+        case Sentry.Callback.run(:remote_address_reader, invocation) do
           {:ok, address} -> address
           :failed -> default_remote_address_reader(conn)
         end
     end
   end
-
-  defp apply_fun_with_conn(conn, {module, fun}), do: apply(module, fun, [conn])
-  defp apply_fun_with_conn(conn, fun) when is_function(fun, 1), do: fun.(conn)
 
   @doc """
   Scrubs sensitive query parameters from the request URL.

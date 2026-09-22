@@ -253,18 +253,20 @@ defmodule Sentry.PlugCapture do
   @doc false
   def default_scrubber(conn), do: Sentry.Scrubber.scrub(conn)
 
-  defp apply_scrubber(conn, {mod, fun, args} = _scrubber) do
-    case Sentry.Callback.run(:scrubber, fn ->
-           case apply(mod, fun, [conn | args]) do
-             scrubbed when is_struct(scrubbed, Plug.Conn) ->
-               scrubbed
+  defp apply_scrubber(conn, scrubber) do
+    invocation = Sentry.Callback.to_fun(:scrubber, scrubber, [conn])
 
-             other ->
-               raise ":scrubber function must return a Plug.Conn struct, got: #{inspect(other)}"
-           end
-         end) do
-      {:ok, scrubbed} -> scrubbed
-      :failed -> default_scrubber(conn)
+    with {:ok, scrubbed} <- Sentry.Callback.run(:scrubber, invocation),
+         {:ok, scrubbed} <-
+           Sentry.Callback.validate(
+             :scrubber,
+             scrubbed,
+             &is_struct(&1, Plug.Conn),
+             "a Plug.Conn struct"
+           ) do
+      scrubbed
+    else
+      _ -> default_scrubber(conn)
     end
   end
 end

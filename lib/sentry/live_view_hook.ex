@@ -139,24 +139,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     end
 
     defp scrub(data) when is_map(data) do
-      {mod, fun, args} =
-        Process.get(@scrubber_pdict_key, {__MODULE__, :default_scrubber, []})
+      scrubber = Process.get(@scrubber_pdict_key, {__MODULE__, :default_scrubber, []})
 
       # We must NEVER raise an error in a hook, as it will crash the LiveView process
       # and we don't want Sentry to be responsible for that.
-      Callback.run(
-        :scrubber,
-        fn ->
-          case apply(mod, fun, [data | args]) do
-            result when is_map(result) ->
-              result
-
-            other ->
-              raise ":scrubber function must return a map, got: #{inspect(other)}"
-          end
-        end,
-        %{}
-      )
+      with {:ok, scrubbed} <-
+             Callback.run(:scrubber, Callback.to_fun(:scrubber, scrubber, [data])),
+           {:ok, scrubbed} <- Callback.validate(:scrubber, scrubbed, &is_map/1, "a map") do
+        scrubbed
+      else
+        _ -> %{}
+      end
     end
 
     defp scrub_uri(uri) when is_binary(uri), do: Sentry.Scrubber.scrub_url(uri)
