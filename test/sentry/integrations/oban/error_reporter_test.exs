@@ -231,8 +231,8 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
           end)
         end)
 
-      assert log =~ "oban_tags_to_sentry_tags function returned a non-map value"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+      assert log =~ ":oban_tags_to_sentry_tags callback returned an invalid value: expected a map"
+      assert log =~ ~r/domain=(\w+\.)*sentry \[warning\]/
 
       events = SentryTest.pop_sentry_reports()
       assert length(events) == length(test_cases)

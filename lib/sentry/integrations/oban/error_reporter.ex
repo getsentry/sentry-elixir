@@ -167,29 +167,19 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   defp merge_oban_tags(base_tags, tags_config, job) do
     Callback.run(
       :oban_tags_to_sentry_tags,
-      fn -> merge_custom_tags(base_tags, call_oban_tags_to_sentry_tags(tags_config, job)) end,
+      fn ->
+        invocation = Callback.to_fun(:oban_tags_to_sentry_tags, tags_config, [job])
+        merge_custom_tags(base_tags, invocation.())
+      end,
       base_tags,
       context: describe_callback_target(job.worker, job)
     )
   end
 
-  defp merge_custom_tags(base_tags, custom_tags) when is_map(custom_tags) do
-    Map.merge(base_tags, custom_tags)
-  end
-
   defp merge_custom_tags(base_tags, custom_tags) do
-    LoggerUtils.warning(
-      "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
-    )
-
-    base_tags
-  end
-
-  defp call_oban_tags_to_sentry_tags(fun, job) when is_function(fun, 1) do
-    fun.(job)
-  end
-
-  defp call_oban_tags_to_sentry_tags({module, function}, job) do
-    apply(module, function, [job])
+    case Callback.validate(:oban_tags_to_sentry_tags, custom_tags, &is_map/1, "a map") do
+      {:ok, custom_tags} -> Map.merge(base_tags, custom_tags)
+      :invalid -> base_tags
+    end
   end
 end
