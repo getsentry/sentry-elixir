@@ -47,6 +47,23 @@ defmodule Sentry.Callback do
     end
   end
 
+  @spec validate(atom(), value, (value -> as_boolean(term())), String.t()) ::
+          {:ok, value} | :invalid
+        when value: var
+  def validate(name, value, validator, expected)
+      when is_atom(name) and is_function(validator, 1) and is_binary(expected) do
+    if validator.(value) do
+      {:ok, value}
+    else
+      LoggerUtils.warning(
+        "#{inspect(name)} callback returned an invalid value: " <>
+          "expected #{expected}, got: #{inspect(value)}"
+      )
+
+      :invalid
+    end
+  end
+
   defp record_discard(nil), do: :ok
 
   defp record_discard({reason, event_or_data_category}) do

@@ -7,8 +7,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias Sentry.ClientReport
     alias SamplingContext
 
-    alias Sentry.LoggerUtils
-
     @behaviour :otel_sampler
 
     @sentry_sample_rate_key "sentry-sample_rate"
@@ -149,25 +147,30 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp make_sampler_decision(traces_sampler, sampling_context, fallback_sample_rate) do
-      invocation = fn -> call_traces_sampler(traces_sampler, sampling_context) end
+      invocation = Callback.to_fun(:traces_sampler, traces_sampler, [sampling_context])
 
       case Callback.run(:traces_sampler, invocation) do
         {:ok, result} ->
-          sample_rate = normalize_sampler_result(result)
+          sample_rate =
+            case Callback.validate(
+                   :traces_sampler,
+                   normalize_sampler_result(result),
+                   &valid_sample_rate?/1,
+                   "a boolean or a float between 0.0 and 1.0"
+                 ) do
+              {:ok, sample_rate} -> sample_rate
+              :invalid -> 0.0
+            end
 
-          if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
-            {make_sampling_decision(sample_rate), :sample_rate}
-          else
-            LoggerUtils.warning(
-              "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
-            )
-
-            {make_sampling_decision(0.0), :sample_rate}
-          end
+          {make_sampling_decision(sample_rate), :sample_rate}
 
         :failed ->
           make_fallback_decision(fallback_sample_rate)
       end
+    end
+
+    defp valid_sample_rate?(sample_rate) do
+      is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0
     end
 
     defp make_fallback_decision(nil) do
@@ -176,14 +179,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp make_fallback_decision(fallback_sample_rate) do
       {make_sampling_decision(fallback_sample_rate), :sample_rate}
-    end
-
-    defp call_traces_sampler(fun, sampling_context) when is_function(fun, 1) do
-      fun.(sampling_context)
-    end
-
-    defp call_traces_sampler({module, function}, sampling_context) do
-      apply(module, function, [sampling_context])
     end
 
     defp normalize_sampler_result(true), do: 1.0

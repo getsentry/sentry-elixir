@@ -605,7 +605,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
           end)
         end)
 
-      assert log =~ "traces_sampler function returned an invalid sample rate"
+      assert log =~ ":traces_sampler callback returned an invalid value"
       assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 
