@@ -4,7 +4,7 @@ defmodule Sentry.Callback do
   alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
-  @type spec() :: (... -> term()) | {module(), atom()}
+  @type spec() :: (... -> term()) | {module(), atom()} | {module(), atom(), [term()]}
 
   @spec run(atom(), (-> result), result, keyword()) :: result when result: var
   def run(name, fun, fallback, opts \\ []) when is_list(opts) do
@@ -19,14 +19,16 @@ defmodule Sentry.Callback do
   end
 
   @spec run(atom(), (-> result)) :: {:ok, result} | :failed when result: var
-  def run(name, fun) when is_atom(name) and is_function(fun, 0) do
+  def run(name, fun) when is_atom(name) do
+    guard("#{inspect(name)} callback failed", fun)
+  end
+
+  @spec guard(String.t(), (-> result)) :: {:ok, result} | :failed when result: var
+  def guard(description, fun) when is_binary(description) and is_function(fun, 0) do
     {:ok, fun.()}
   catch
     kind, reason ->
-      LoggerUtils.error(
-        "#{inspect(name)} callback failed: " <>
-          Exception.format(kind, reason, __STACKTRACE__)
-      )
+      LoggerUtils.error(description <> ": " <> Exception.format(kind, reason, __STACKTRACE__))
 
       :failed
   end
@@ -39,6 +41,9 @@ defmodule Sentry.Callback do
 
       {mod, fun} when is_atom(mod) and is_atom(fun) ->
         fn -> apply(mod, fun, args) end
+
+      {mod, fun, extra_args} when is_atom(mod) and is_atom(fun) and is_list(extra_args) ->
+        fn -> apply(mod, fun, args ++ extra_args) end
 
       other ->
         raise ArgumentError,

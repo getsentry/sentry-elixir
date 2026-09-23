@@ -126,6 +126,8 @@ defmodule Sentry.Scrubber do
 
   @moduledoc since: "13.1.0"
 
+  alias Sentry.Callback
+
   @scrubbed_value "*********"
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
@@ -440,48 +442,33 @@ defmodule Sentry.Scrubber do
         pass_through(field)
 
       {:ok, {m, f, args}} when is_atom(m) and is_atom(f) and is_list(args) ->
-        {m, f, args} |> mfa_to_fun() |> wrap_custom_scrubber(field)
+        {m, f, args} |> mfa_to_fun() |> wrap_custom_scrubber(opt_name, field)
 
       {:ok, {m, f}} when is_atom(m) and is_atom(f) ->
-        {m, f, []} |> mfa_to_fun() |> wrap_custom_scrubber(field)
+        {m, f, []} |> mfa_to_fun() |> wrap_custom_scrubber(opt_name, field)
 
       {:ok, fun} when is_function(fun, 1) ->
-        wrap_custom_scrubber(fun, field)
+        wrap_custom_scrubber(fun, opt_name, field)
     end
   end
 
-  defp wrap_custom_scrubber(scrubber, :url) do
+  defp wrap_custom_scrubber(scrubber, opt_name, field) do
     fn conn ->
-      case call_url_scrubber(scrubber, conn) do
-        {:ok, url} when is_binary(url) ->
-          url
-
-        {:ok, _other} ->
-          Sentry.LoggerUtils.warning(
-            "url_scrubber function returned a non-binary value; falling back to the default URL scrubber"
-          )
-
-          scrub(conn, :url)
-
-        {:error, error} ->
-          Sentry.LoggerUtils.warning(
-            "url_scrubber function failed: #{inspect(error)}; falling back to the default URL scrubber"
-          )
-
-          scrub(conn, :url)
+      case Callback.run(opt_name, fn -> scrubber.(conn) end) do
+        {:ok, value} -> validate_scrubbed(field, value, conn, opt_name)
+        :failed -> scrub(conn, field)
       end
     end
   end
 
-  defp wrap_custom_scrubber(scrubber, _field), do: scrubber
-
-  defp call_url_scrubber(scrubber, conn) do
-    try do
-      {:ok, scrubber.(conn)}
-    rescue
-      error -> {:error, error}
+  defp validate_scrubbed(:url, url, conn, opt_name) do
+    case Callback.validate(opt_name, url, &is_binary/1, "a binary") do
+      {:ok, url} -> url
+      :invalid -> scrub(conn, :url)
     end
   end
+
+  defp validate_scrubbed(_field, value, _conn, _opt_name), do: value
 
   defp pass_through(:url), do: fn conn -> Plug.Conn.request_url(conn) end
   defp pass_through(_field), do: fn _conn -> %{} end

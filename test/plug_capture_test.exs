@@ -3,6 +3,7 @@ defmodule Sentry.PlugCaptureTest do
 
   @moduletag send_result: :none
 
+  import ExUnit.CaptureLog
   import Plug.Test
 
   import Sentry.Test.Assertions
@@ -18,6 +19,25 @@ defmodule Sentry.PlugCaptureTest do
     def throw(_conn, _params), do: throw(:test)
     def action_clause_error(conn, %{"required_param" => true}), do: conn
     def assigns(conn, _params), do: _test = conn.assigns2.test
+
+    def unreportable_attachment(_conn, _params) do
+      Sentry.Context.add_attachment(%Sentry.Attachment{
+        filename: "broken.txt",
+        data: :not_a_binary
+      })
+
+      raise "PhoenixError"
+    end
+
+    def action_clause_error_without_conn(_conn, _params) do
+      raise Phoenix.ActionClauseError,
+        module: __MODULE__,
+        function: :action_clause_error_without_conn,
+        arity: 2,
+        args: [%{"password" => "secret"}],
+        clauses: nil,
+        kind: :def
+    end
   end
 
   defmodule PhoenixRouter do
@@ -27,7 +47,13 @@ defmodule Sentry.PlugCaptureTest do
     get "/exit_route", PhoenixController, :exit
     get "/throw_route", PhoenixController, :throw
     get "/action_clause_error", PhoenixController, :action_clause_error
+
+    get "/action_clause_error_without_conn",
+        PhoenixController,
+        :action_clause_error_without_conn
+
     get "/assigns_route", PhoenixController, :assigns
+    get "/unreportable_attachment_route", PhoenixController, :unreportable_attachment
     get "/reset_password/:token", PhoenixController, :action_clause_error
     get "/verify/:secret", PhoenixController, :action_clause_error
   end
@@ -52,6 +78,22 @@ defmodule Sentry.PlugCaptureTest do
 
   defmodule PhoenixEndpointWithScrubber do
     use Sentry.PlugCapture, scrubber: {Scrubber, :scrub_conn, []}
+    use Phoenix.Endpoint, otp_app: :sentry
+    use Plug.Debugger, otp_app: :sentry
+
+    json_mod = if Code.ensure_loaded?(JSON), do: JSON, else: Jason
+
+    plug Plug.Parsers, parsers: [:json], pass: ["*/*"], json_decoder: json_mod
+    plug Sentry.PlugContext
+    plug PhoenixRouter
+  end
+
+  defmodule FailingScrubber do
+    def scrub_conn(_conn), do: raise("scrubber bug")
+  end
+
+  defmodule PhoenixEndpointWithFailingScrubber do
+    use Sentry.PlugCapture, scrubber: {FailingScrubber, :scrub_conn, []}
     use Phoenix.Endpoint, otp_app: :sentry
     use Plug.Debugger, otp_app: :sentry
 
@@ -188,6 +230,24 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
       assert exception.type == "RuntimeError"
       assert exception.value == "PhoenixError"
+    end
+
+    @tag send_result: :sync
+    test "raises the application's exception unchanged when capturing it fails", %{bypass: bypass} do
+      ref = SentryTest.setup_bypass_envelope_collector(bypass)
+
+      log =
+        capture_sentry_log(fn ->
+          assert_raise RuntimeError, "PhoenixError", fn ->
+            conn(:get, "/unreportable_attachment_route")
+            |> call_phoenix_endpoint()
+          end
+        end)
+
+      refute_receive {:bypass_envelope, ^ref, _body}, 200
+
+      assert log =~
+               ~r/domain=(\w+\.)*sentry \[error\]\s+Sentry failed to capture an exception from Plug/
     end
 
     test "reports exits" do
@@ -328,6 +388,52 @@ defmodule Sentry.PlugCaptureTest do
       refute arg2 =~ "123-45-6789", "ssn leaked through the non-conn params arg: #{arg2}"
     end
 
+    test "raises the application's exception when the :scrubber fails" do
+      Application.put_env(:sentry, PhoenixEndpointWithFailingScrubber,
+        render_errors: [view: Sentry.ErrorView, accepts: ~w(html)]
+      )
+
+      pid = start_supervised!(PhoenixEndpointWithFailingScrubber)
+      Process.link(pid)
+
+      log =
+        capture_sentry_log(fn ->
+          assert_raise Phoenix.ActionClauseError, fn ->
+            conn(:get, "/action_clause_error?password=secret")
+            |> Plug.run([{PhoenixEndpointWithFailingScrubber, []}])
+          end
+        end)
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error/2"
+        )
+
+      assert [exception] = event.exception
+      assert exception.type == "Phoenix.ActionClauseError"
+      assert exception.value =~ ~s(params: %{"password" => "*********"})
+      refute exception.value =~ ~s(query_string: "password=secret")
+
+      assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:scrubber callback failed/
+    end
+
+    test "scrubs the args of an action clause error that holds no conn" do
+      assert_raise Phoenix.ActionClauseError, fn ->
+        conn(:get, "/action_clause_error_without_conn")
+        |> call_phoenix_endpoint()
+      end
+
+      event =
+        assert_sentry_report(:event,
+          culprit: "Sentry.PlugCaptureTest.PhoenixController.action_clause_error_without_conn/2"
+        )
+
+      assert [exception] = event.exception
+      assert exception.type == "Phoenix.ActionClauseError"
+      assert exception.value =~ ~s(%{"password" => "*********"})
+      refute exception.value =~ "secret"
+    end
+
     test "can render feedback form in Phoenix ErrorView" do
       conn = conn(:get, "/error_route")
 
@@ -461,4 +567,6 @@ defmodule Sentry.PlugCaptureTest do
   defp call_plug_app(conn), do: Plug.run(conn, [{Sentry.ExamplePlugApplication, []}])
 
   defp call_phoenix_endpoint(conn), do: Plug.run(conn, [{PhoenixEndpoint, []}])
+
+  defp capture_sentry_log(fun), do: capture_log([metadata: [:domain]], fun)
 end

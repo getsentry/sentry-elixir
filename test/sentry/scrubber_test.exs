@@ -21,11 +21,15 @@ defmodule Sentry.ScrubberTest do
     end
 
     test "uses the given per-field scrubber and defaults the rest" do
-      marker = fn _conn -> %{"marker" => "custom"} end
-      scrubber = Scrubber.new(body_scrubber: marker)
+      conn = %Plug.Conn{
+        params: %{"password" => "hunter2"},
+        req_headers: [{"authorization", "Bearer x"}, {"x-keep", "yes"}]
+      }
 
-      assert scrubber.body_scrubber == marker
-      assert is_function(scrubber.header_scrubber, 1)
+      scrubber = Scrubber.new(body_scrubber: fn _conn -> %{"marker" => "custom"} end)
+
+      assert scrubber.body_scrubber.(conn) == %{"marker" => "custom"}
+      assert scrubber.header_scrubber.(conn) == [{"x-keep", "yes"}]
     end
 
     test "does not register the scrubber for the process" do
