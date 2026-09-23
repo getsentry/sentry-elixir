@@ -6,6 +6,7 @@ defmodule Sentry.Client do
   # See https://develop.sentry.dev/sdk/unified-api/#client.
 
   alias Sentry.{
+    Callback,
     CheckIn,
     ClientError,
     ClientReport,
@@ -197,30 +198,21 @@ defmodule Sentry.Client do
     end
   end
 
-  defp call_before_send(event, function) when is_function(function, 1) do
-    function.(event) || false
+  defp call_before_send(event, callback) do
+    invocation = Callback.to_fun(:before_send, callback, [event])
+    Callback.run(:before_send, fn -> invocation.() || false end, false)
   end
 
-  defp call_before_send(event, {mod, fun}) do
-    apply(mod, fun, [event]) || false
-  end
-
-  defp call_before_send(_event, other) do
-    raise ArgumentError, """
-    :before_send must be an anonymous function or a {module, function} tuple, got: \
-    #{inspect(other)}\
-    """
+  defp maybe_call_after_send(_event_or_transaction, _result, nil) do
+    nil
   end
 
   defp maybe_call_after_send(event_or_transaction, result, callback) do
-    message = ":after_send_event must be an anonymous function or a {module, function} tuple"
-
-    case callback do
-      function when is_function(function, 2) -> function.(event_or_transaction, result)
-      {module, function} -> apply(module, function, [event_or_transaction, result])
-      nil -> nil
-      _ -> raise ArgumentError, message
-    end
+    Callback.run(
+      :after_send_event,
+      Callback.to_fun(:after_send_event, callback, [event_or_transaction, result]),
+      nil
+    )
   end
 
   defp encode_and_send(_event, _result_type = :async, _client, _request_retries) do
