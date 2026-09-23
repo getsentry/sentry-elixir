@@ -5,6 +5,7 @@ defmodule Sentry.Application do
 
   alias Sentry.Config
   alias Sentry.LoggerUtils
+  alias Sentry.Metric
 
   @compile {:no_warn_undefined, [NimbleOwnership]}
 
@@ -85,6 +86,7 @@ defmodule Sentry.Application do
         [Sentry.Transport.SenderPool]
 
     cache_loaded_applications()
+    Metric.init_sequence()
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Sentry.Supervisor) do
