@@ -5,8 +5,9 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   @moduledoc since: "10.9.0"
 
+  alias Sentry.Callback
   alias Sentry.Integrations.CheckInIDMappings
-  alias Sentry.LoggerUtils
+  alias Sentry.Integrations.Oban.Callbacks
 
   @doc """
   The Oban integration calls this callback (if present) to customize
@@ -16,6 +17,13 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   Options returned by this function overwrite any option inferred by the specific
   integration for the check in. We perform *deep merging* of nested keyword options.
+
+  If this callback raises, throws, or exits, the failure is logged at the `:error` level with
+  the `:sentry` logger domain, and the check-in is still sent with the options the integration
+  inferred and nothing merged into them. Since those options include the monitor slug, a
+  check-in that this callback was meant to redirect goes to the monitor named after the worker
+  instead. See the [*Crashing Callbacks*](`m:Sentry#module-crashing-callbacks`) section of the
+  `Sentry` documentation for more information.
   """
   @doc since: "10.9.0"
   @callback sentry_check_in_configuration(oban_job :: struct()) :: options_to_merge :: keyword()
@@ -44,7 +52,13 @@ defmodule Sentry.Integrations.Oban.Cron do
         config
       )
       when event in [:start, :stop, :exception] and mod == Oban.Job and is_binary(cron_expr) do
-    _ = handle_oban_job_event(event, measurements, metadata, config)
+    _ =
+      Callback.guard(
+        describe_failure(metadata.job),
+        fn -> handle_oban_job_event(event, measurements, metadata, config) end,
+        discard: {:internal_sdk_error, "monitor"}
+      )
+
     :ok
   end
 
@@ -54,6 +68,11 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   ## Helpers
+
+  defp describe_failure(job) do
+    "Sentry failed to report an Oban check-in for job #{inspect(job.id)} " <>
+      "(#{inspect(job.worker)})"
+  end
 
   defp handle_oban_job_event(:start, _measurements, metadata, config) do
     if opts = job_to_check_in_opts(metadata.job, config) do
@@ -96,42 +115,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp should_report_error_check_in?(job, config) do
-    case Keyword.get(config, :should_report_error_check_in_callback) do
-      callback when is_function(callback, 2) ->
-        call_should_report_error_check_in_callback(callback, job)
-
-      _ ->
-        true
-    end
-  end
-
-  defp call_should_report_error_check_in_callback(callback, job) do
-    worker =
-      case apply(Oban.Worker, :from_string, [job.worker]) do
-        {:ok, mod} ->
-          mod
-
-        {:error, _} ->
-          LoggerUtils.warning(
-            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
-          )
-
-          nil
-      end
-
-    try do
-      callback.(worker, job) == true
-    rescue
-      error ->
-        LoggerUtils.warning("""
-        :should_report_error_check_in_callback failed for worker #{inspect(worker)} \
-        (job ID #{job.id}):
-
-        #{Exception.format(:error, error, __STACKTRACE__)}\
-        """)
-
-        true
-    end
+    Callbacks.should_report?(config, :should_report_error_check_in_callback, job)
   end
 
   defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
@@ -146,14 +130,7 @@ defmodule Sentry.Integrations.Oban.Cron do
         monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
         monitor_config_opts = Keyword.merge(monitor_config_opts, schedule_opts)
 
-        monitor_slug =
-          case config[:monitor_slug_generator] do
-            nil ->
-              slugify(job.worker)
-
-            {mod, fun} when is_atom(mod) and is_atom(fun) ->
-              mod |> apply(fun, [job]) |> slugify()
-          end
+        monitor_slug = monitor_slug(job, config[:monitor_slug_generator])
 
         id = CheckInIDMappings.lookup_or_insert_new(job.id)
 
@@ -182,19 +159,33 @@ defmodule Sentry.Integrations.Oban.Cron do
       end
   end
 
-  defp resolve_custom_opts(opts, _job) do
-    opts
-  end
-
   defp resolve_custom_opts(options, mod, per_integration_term) do
     custom_opts =
       if function_exported?(mod, :sentry_check_in_configuration, 1) do
-        mod.sentry_check_in_configuration(per_integration_term)
+        Callback.run(
+          :sentry_check_in_configuration,
+          fn -> mod.sentry_check_in_configuration(per_integration_term) end,
+          [],
+          context: Callbacks.describe_target(mod, per_integration_term)
+        )
       else
         []
       end
 
     deep_merge_keyword(options, custom_opts)
+  end
+
+  defp monitor_slug(job, nil) do
+    slugify(job.worker)
+  end
+
+  defp monitor_slug(job, {mod, fun}) when is_atom(mod) and is_atom(fun) do
+    Callback.run(
+      :monitor_slug_generator,
+      fn -> mod |> apply(fun, [job]) |> slugify() end,
+      slugify(job.worker),
+      context: Callbacks.describe_target(job.worker, job)
+    )
   end
 
   defp deep_merge_keyword(left, right) do
