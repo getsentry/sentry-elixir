@@ -452,8 +452,8 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       Agent.stop(sampler_call_count)
     end
 
-    test "handles traces_sampler errors gracefully" do
-      put_test_config(traces_sampler: fn _ -> raise "sampler error" end)
+    test "drops the trace when traces_sampler raises and no sample rate is configured" do
+      put_test_config(traces_sample_rate: nil, traces_sampler: fn _ -> raise "sampler error" end)
 
       test_ctx = create_test_span_context()
 
@@ -463,9 +463,119 @@ defmodule Sentry.Opentelemetry.SamplerTest do
                    Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
         end)
 
-      assert log =~ "traces_sampler function failed"
+      assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:traces_sampler callback failed/
       assert log =~ "sampler error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+    end
+
+    test "child spans inherit the drop when traces_sampler fails and no sample rate is configured" do
+      {:ok, sampler_call_count} = Agent.start_link(fn -> 0 end)
+
+      sampler_fun = fn _sampling_context ->
+        Agent.update(sampler_call_count, &(&1 + 1))
+        raise "sampler error"
+      end
+
+      put_test_config(traces_sample_rate: nil, traces_sampler: sampler_fun)
+
+      capture_log(fn ->
+        assert {:drop, [], tracestate} =
+                 Sampler.should_sample(
+                   create_test_span_context(),
+                   123,
+                   nil,
+                   "root span",
+                   nil,
+                   %{},
+                   drop: []
+                 )
+
+        assert {"sentry-sampled", "false"} in tracestate
+
+        existing_span_ctx = create_span_context_with_tracestate(123, tracestate)
+        ctx_with_span = :otel_tracer.set_current_span(:otel_ctx.new(), existing_span_ctx)
+        token = :otel_ctx.attach(ctx_with_span)
+
+        try do
+          assert {:drop, [], ^tracestate} =
+                   Sampler.should_sample(ctx_with_span, 123, nil, "child span", nil, %{},
+                     drop: []
+                   )
+        after
+          :otel_ctx.detach(token)
+        end
+      end)
+
+      assert Agent.get(sampler_call_count, & &1) == 1
+
+      Agent.stop(sampler_call_count)
+    end
+
+    test "counts a drop caused by a failing traces_sampler as a callback error",
+         %{client_report_sender: sender} do
+      put_test_config(traces_sample_rate: nil, traces_sampler: fn _ -> raise "sampler error" end)
+
+      capture_log(fn ->
+        assert {:drop, [], _tracestate} =
+                 Sampler.should_sample(
+                   create_test_span_context(),
+                   123,
+                   nil,
+                   "test span",
+                   nil,
+                   %{},
+                   drop: []
+                 )
+      end)
+
+      assert :sys.get_state(sender) ==
+               %{{:callback_error, "transaction"} => 1, {:callback_error, "span"} => 1}
+    end
+
+    test "counts a drop produced by the fallback sample rate as a sampling drop",
+         %{client_report_sender: sender} do
+      put_test_config(traces_sample_rate: 0.0, traces_sampler: fn _ -> raise "sampler error" end)
+
+      capture_log(fn ->
+        assert {:drop, [], _tracestate} =
+                 Sampler.should_sample(
+                   create_test_span_context(),
+                   123,
+                   nil,
+                   "test span",
+                   nil,
+                   %{},
+                   drop: []
+                 )
+      end)
+
+      assert :sys.get_state(sender) ==
+               %{{:sample_rate, "transaction"} => 1, {:sample_rate, "span"} => 1}
+    end
+
+    test "falls back to the configured sample rate when traces_sampler throws" do
+      put_test_config(traces_sample_rate: 1.0, traces_sampler: fn _ -> throw(:boom) end)
+
+      test_ctx = create_test_span_context()
+
+      capture_log(fn ->
+        assert {:record_and_sample, [], tracestate} =
+                 Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+
+        assert {"sentry-sampled", "true"} in tracestate
+      end)
+    end
+
+    test "falls back to the configured sample rate when traces_sampler exits" do
+      put_test_config(traces_sample_rate: 1.0, traces_sampler: fn _ -> exit(:boom) end)
+
+      test_ctx = create_test_span_context()
+
+      capture_log(fn ->
+        assert {:record_and_sample, [], tracestate} =
+                 Sampler.should_sample(test_ctx, 123, nil, "test span", nil, %{}, drop: [])
+
+        assert {"sentry-sampled", "true"} in tracestate
+      end)
     end
 
     test "handles invalid traces_sampler return values gracefully" do
@@ -495,7 +605,7 @@ defmodule Sentry.Opentelemetry.SamplerTest do
           end)
         end)
 
-      assert log =~ "traces_sampler function returned an invalid sample rate"
+      assert log =~ ":traces_sampler callback returned an invalid value"
       assert log =~ ~r/domain=(\w+\.)*sentry/
     end
 

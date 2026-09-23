@@ -155,11 +155,11 @@ defmodule Sentry do
 
   ## Crashing Callbacks
 
-  If a `:before_send`, `:after_send_event`, `:filter`, `:before_send_log`, or
-  `:before_send_metric` callback raises, throws, or exits, Sentry catches the failure and logs
-  it at the `:error` level instead of letting it reach the code that was reporting the event.
-  The log carries the `:sentry` logger domain, so the SDK never reports its own callback
-  failure as an event.
+  If a `:before_send`, `:after_send_event`, `:filter`, `:before_send_log`,
+  `:before_send_metric`, or `:traces_sampler` callback raises, throws, or exits, Sentry catches
+  the failure and logs it at the `:error` level instead of letting it reach the code that was
+  reporting the event. The log carries the `:sentry` logger domain, so the SDK never reports
+  its own callback failure as an event.
 
   The item being handled is then dropped:
 
@@ -177,6 +177,12 @@ defmodule Sentry do
   An `:after_send_event` callback runs once the event has already been sent and its
   return value is ignored, so a crash there changes nothing the caller sees: the send
   result is still the one the transport produced.
+
+  A `:traces_sampler` callback that crashes does not drop the trace outright. Sampling
+  falls back to the configured `:traces_sample_rate`, so the trace is kept or dropped at
+  the rate you configured. If `:traces_sample_rate` is not configured either, the trace is
+  dropped and the child spans of that trace inherit that decision instead of calling the
+  failing sampler again.
 
   ## Reporting Source Code
 
