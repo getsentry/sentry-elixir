@@ -83,6 +83,16 @@ defmodule Sentry.ConfigTest do
       end
     end
 
+    test ":traces_ignore_http_status_codes rejects anything that is not a status code or a range" do
+      assert_raise ArgumentError,
+                   ~r/expected :traces_ignore_http_status_codes to be a list of status codes and ranges, got: "404"/,
+                   fn -> Config.validate!(traces_ignore_http_status_codes: [404, "404"]) end
+
+      assert_raise ArgumentError,
+                   ~r/expected :traces_ignore_http_status_codes to be a list of status codes and ranges, got: 404/,
+                   fn -> Config.validate!(traces_ignore_http_status_codes: 404) end
+    end
+
     test ":logs is nil by default" do
       assert Config.validate!([])[:logs] == nil
       assert Config.validate!(logs: nil)[:logs] == nil

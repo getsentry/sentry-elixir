@@ -63,10 +63,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @spec mark_spans_sent([String.t()], keyword()) :: :ok
     def mark_spans_sent(span_ids, opts \\ []) do
+      mark_spans(span_ids, :sent, opts)
+    end
+
+    @spec mark_spans_excluded([String.t()], keyword()) :: :ok
+    def mark_spans_excluded(span_ids, opts \\ []) do
+      mark_spans(span_ids, :excluded, opts)
+    end
+
+    defp mark_spans(span_ids, outcome, opts) do
       table_name = Keyword.get(opts, :table_name, default_table_name())
       stored_at = System.system_time(:second)
 
-      :ets.insert(table_name, Enum.map(span_ids, &{{:sent_span, &1}, stored_at}))
+      :ets.insert(table_name, Enum.map(span_ids, &{{:sent_span, &1}, stored_at, outcome}))
 
       :ok
     end
@@ -76,6 +85,16 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       table_name = Keyword.get(opts, :table_name, default_table_name())
 
       :ets.member(table_name, {:sent_span, span_id})
+    end
+
+    @spec span_excluded?(String.t(), keyword()) :: boolean()
+    def span_excluded?(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      case :ets.lookup(table_name, {:sent_span, span_id}) do
+        [{{:sent_span, ^span_id}, _stored_at, :excluded}] -> true
+        _other -> false
+      end
     end
 
     @doc """
@@ -243,7 +262,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       sent_cutoff_time = now - @sent_span_ttl
 
       sent_match_spec = [
-        {{{:sent_span, :_}, :"$1"}, [{:<, :"$1", sent_cutoff_time}], [true]}
+        {{{:sent_span, :_}, :"$1", :_}, [{:<, :"$1", sent_cutoff_time}], [true]}
       ]
 
       :ets.select_delete(table_name, sent_match_spec)
