@@ -155,12 +155,11 @@ defmodule Sentry do
 
   ## Crashing Callbacks
 
-  If a `:before_send`, `:after_send_event`, or `:filter` callback raises, throws, or exits,
-  Sentry catches the failure and logs it at the `:error` level instead of letting it reach
-  the code that was reporting the event. The log carries the `:sentry` logger domain, so the
-  SDK never reports its own callback failure as an event. Other configurable callbacks, such
-  as `:before_send_log` and `:before_send_metric`, handle their own failures and are not
-  covered by this section.
+  If a `:before_send`, `:after_send_event`, `:filter`, `:before_send_log`, or
+  `:before_send_metric` callback raises, throws, or exits, Sentry catches the failure and logs
+  it at the `:error` level instead of letting it reach the code that was reporting the event.
+  The log carries the `:sentry` logger domain, so the SDK never reports its own callback
+  failure as an event.
 
   The item being handled is then dropped:
 
@@ -170,6 +169,10 @@ defmodule Sentry do
     * A `:filter` module that cannot be called, or whose
       `c:Sentry.EventFilter.exclude_exception?/2` crashes, is treated like one that
       excluded the exception. `capture_exception/2` returns `:excluded`.
+
+    * A `:before_send_log` or `:before_send_metric` callback that crashes is treated like one
+      that returned `nil`. The log event or metric is not sent, and the rest of the batch it
+      belongs to is unaffected.
 
   An `:after_send_event` callback runs once the event has already been sent and its
   return value is ignored, so a crash there changes nothing the caller sees: the send
@@ -304,7 +307,8 @@ defmodule Sentry do
       Callback.run(
         :filter,
         fn -> filter_module.exclude_exception?(exception, event_source) end,
-        true
+        true,
+        discard: {:callback_error, "error"}
       )
 
     if exclude? do

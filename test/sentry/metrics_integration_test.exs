@@ -3,6 +3,7 @@ defmodule Sentry.MetricsIntegrationTest do
 
   require OpenTelemetry.Tracer, as: Tracer
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
   import Sentry.Test.Assertions
 
@@ -10,13 +11,23 @@ defmodule Sentry.MetricsIntegrationTest do
   alias Sentry.Telemetry.Buffer
 
   setup do
-    %{bypass: bypass, telemetry_processor: processor_name, ref: ref} =
+    %{
+      bypass: bypass,
+      telemetry_processor: processor_name,
+      ref: ref,
+      client_report_sender: client_report_sender
+    } =
       Sentry.Test.setup_sentry(
         collect_envelopes: true,
         telemetry_processor: [buffer_configs: %{metric: %{batch_size: 1}}]
       )
 
-    %{processor: processor_name, ref: ref, bypass: bypass}
+    %{
+      processor: processor_name,
+      ref: ref,
+      bypass: bypass,
+      client_report_sender: client_report_sender
+    }
   end
 
   describe "metric batching" do
@@ -84,6 +95,40 @@ defmodule Sentry.MetricsIntegrationTest do
     end
   end
 
+  describe "before_send_metric callback that crashes" do
+    test "drops the metric when the callback raises", ctx do
+      assert_metric_dropped(ctx, fn _metric -> raise "boom" end)
+    end
+
+    test "drops the metric when the callback throws", ctx do
+      assert_metric_dropped(ctx, fn _metric -> throw(:boom) end)
+    end
+
+    test "drops the metric when the callback exits", ctx do
+      assert_metric_dropped(ctx, fn _metric -> exit(:boom) end)
+    end
+
+    test "records a callback_error outcome for the dropped metric", ctx do
+      assert_metric_dropped(ctx, fn _metric -> raise "boom" end)
+
+      assert %{
+               {:callback_error, "trace_metric"} => 1,
+               {:callback_error, "trace_metric_byte"} => bytes
+             } = :sys.get_state(ctx.client_report_sender)
+
+      assert bytes > 0
+    end
+
+    test "records no outcome for a metric the callback filters out", ctx do
+      put_test_config(before_send_metric: fn _metric -> nil end)
+
+      Metrics.count("drop.me", 1)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+
+      assert :sys.get_state(ctx.client_report_sender) == %{}
+    end
+  end
+
   describe "metric envelope format" do
     test "metrics include all required fields", ctx do
       Metrics.count("test.counter", 42, unit: "request", attributes: %{method: "GET"})
@@ -146,5 +191,17 @@ defmodule Sentry.MetricsIntegrationTest do
       assert metric["trace_id"] == transaction["contexts"]["trace"]["trace_id"]
       assert metric["span_id"] == transaction["contexts"]["trace"]["span_id"]
     end
+  end
+
+  defp assert_metric_dropped(ctx, crashing_callback) do
+    put_test_config(before_send_metric: crashing_callback)
+
+    capture_log(fn ->
+      Metrics.count("crash.me", 1)
+      :ok = TelemetryProcessor.flush(ctx.processor)
+    end)
+
+    assert [] == collect_sentry_metric_items(ctx.ref, 1, timeout: 200)
+    assert [] == Sentry.Test.pop_sentry_metrics()
   end
 end
