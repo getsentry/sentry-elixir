@@ -155,13 +155,18 @@ defmodule Sentry do
 
   ## Crashing Callbacks
 
-  If a `:before_send`, `:after_send_event`, `:filter`, `:before_send_log`,
-  `:before_send_metric`, or `:traces_sampler` callback raises, throws, or exits, Sentry catches
-  the failure and logs it at the `:error` level instead of letting it reach the code that was
-  reporting the event. The log carries the `:sentry` logger domain, so the SDK never reports
-  its own callback failure as an event.
+  When a callback you configure raises, throws, or exits, Sentry catches the failure and logs
+  it at the `:error` level instead of letting it reach the code that was reporting the event
+  or serving the request. The log carries the `:sentry` logger domain, so the SDK never
+  reports its own callback failure as an event.
 
-  The item being handled is then dropped:
+  What happens next depends on where the callback runs.
+
+  ### Event Callbacks
+
+  If a `:before_send`, `:after_send_event`, `:filter`, `:before_send_log`,
+  `:before_send_metric`, or `:traces_sampler` callback fails, the item being handled is
+  dropped:
 
     * A `:before_send` callback that crashes is treated like one that returned `false`.
       The event or transaction is not sent, and the capture function returns `:excluded`.
@@ -183,6 +188,31 @@ defmodule Sentry do
   the rate you configured. If `:traces_sample_rate` is not configured either, the trace is
   dropped and the child spans of that trace inherit that decision instead of calling the
   failing sampler again.
+
+  ### Request Callbacks
+
+  The callbacks that `Sentry.PlugContext`, `Sentry.PlugCapture`, and `Sentry.LiveViewHook`
+  accept run inside your request or LiveView process, where a failure of theirs would break
+  your application rather than just the report. It cannot: the request is served, and the
+  LiveView keeps running, exactly as they would have without Sentry. `Sentry.PlugCapture`
+  additionally re-raises your application's original exception unchanged, whatever fails
+  while it is capturing it.
+
+  Nothing is dropped either. The event is still reported, and only the field the failing
+  callback was responsible for degrades:
+
+  | Callback | Value reported after a crash |
+  | --- | --- |
+  | `Sentry.PlugContext`'s `:body_scrubber`, `:header_scrubber`, `:cookie_scrubber`, or `:url_scrubber` | the SDK's own default scrubber for that field |
+  | `Sentry.PlugContext`'s `:remote_address_reader` | the address the SDK's default reader produces |
+  | `Sentry.PlugCapture`'s `:scrubber` | the connection scrubbed by `Sentry.Scrubber.scrub/1` |
+  | `Sentry.LiveViewHook`'s `:scrubber` | redacted breadcrumb data, that is, an empty map |
+
+  > #### A crashed scrubber reports more, not less {: .warning}
+  >
+  > Apart from `Sentry.LiveViewHook`, which redacts the data outright, falling back to the
+  > SDK's default scrubber means that data only your custom scrubber was dropping is sent to
+  > Sentry for as long as that scrubber keeps failing. The error-level log is the only signal.
 
   ## Reporting Source Code
 
