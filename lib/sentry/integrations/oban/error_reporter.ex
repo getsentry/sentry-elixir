@@ -4,7 +4,8 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   # See this blog post:
   # https://getoban.pro/articles/enhancing-error-reporting
 
-  alias Sentry.LoggerUtils
+  alias Sentry.Callback
+  alias Sentry.Integrations.Oban.Callbacks
 
   @spec attach(keyword()) :: :ok
   def attach(config \\ []) when is_list(config) do
@@ -19,18 +20,31 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
     :ok
   end
 
-  @spec handle_event(
-          [atom(), ...],
-          term(),
-          %{required(:job) => struct(), optional(term()) => term()},
-          keyword()
-        ) :: :ok
-  def handle_event(
-        [:oban, :job, :exception],
-        _measurements,
-        %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
-        config
-      ) do
+  @spec handle_event([atom(), ...], term(), map(), keyword()) :: :ok
+  def handle_event([:oban, :job, :exception], measurements, metadata, config) do
+    _ =
+      Callback.guard(
+        describe_failure(metadata),
+        fn -> capture_job_exception(measurements, metadata, config) end,
+        discard: {:internal_sdk_error, "error"}
+      )
+
+    :ok
+  end
+
+  defp describe_failure(%{job: %{id: id, worker: worker}}) do
+    "Sentry failed to report an Oban job exception for job #{inspect(id)} (#{inspect(worker)})"
+  end
+
+  defp describe_failure(_metadata) do
+    "Sentry failed to report an Oban job exception"
+  end
+
+  defp capture_job_exception(
+         _measurements,
+         %{job: job, kind: kind, reason: reason, stacktrace: stacktrace} = _metadata,
+         config
+       ) do
     if report?(reason) and should_report?(job, config) do
       report(job, kind, reason, stacktrace, config)
     else
@@ -39,42 +53,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   end
 
   defp should_report?(job, config) do
-    case Keyword.get(config, :should_report_error_callback) do
-      callback when is_function(callback, 2) ->
-        call_should_report_error_callback(callback, job)
-
-      _ ->
-        true
-    end
-  end
-
-  defp call_should_report_error_callback(callback, job) do
-    worker =
-      case apply(Oban.Worker, :from_string, [job.worker]) do
-        {:ok, mod} ->
-          mod
-
-        {:error, _} ->
-          LoggerUtils.warning(
-            "Could not resolve Oban worker module from string: #{inspect(job.worker)}"
-          )
-
-          nil
-      end
-
-    try do
-      callback.(worker, job) == true
-    rescue
-      error ->
-        LoggerUtils.warning("""
-        :should_report_error_callback failed for worker #{inspect(worker)} \
-        (job ID #{job.id}):
-
-        #{Exception.format(:error, error, __STACKTRACE__)}\
-        """)
-
-        true
-    end
+    Callbacks.should_report?(config, :should_report_error_callback, job)
   end
 
   defp report(job, kind, reason, stacktrace, config) do
@@ -154,31 +133,21 @@ defmodule Sentry.Integrations.Oban.ErrorReporter do
   defp merge_oban_tags(base_tags, nil, _job), do: base_tags
 
   defp merge_oban_tags(base_tags, tags_config, job) do
-    try do
-      custom_tags = call_oban_tags_to_sentry_tags(tags_config, job)
+    Callback.run(
+      :oban_tags_to_sentry_tags,
+      fn ->
+        invocation = Callback.to_fun(:oban_tags_to_sentry_tags, tags_config, [job])
+        merge_custom_tags(base_tags, invocation.())
+      end,
+      base_tags,
+      context: Callbacks.describe_target(job.worker, job)
+    )
+  end
 
-      if is_map(custom_tags) do
-        Map.merge(base_tags, custom_tags)
-      else
-        LoggerUtils.warning(
-          "oban_tags_to_sentry_tags function returned a non-map value: #{inspect(custom_tags)}"
-        )
-
-        base_tags
-      end
-    rescue
-      error ->
-        LoggerUtils.warning("oban_tags_to_sentry_tags function failed: #{inspect(error)}")
-
-        base_tags
+  defp merge_custom_tags(base_tags, custom_tags) do
+    case Callback.validate(:oban_tags_to_sentry_tags, custom_tags, &is_map/1, "a map") do
+      {:ok, custom_tags} -> Map.merge(base_tags, custom_tags)
+      :invalid -> base_tags
     end
-  end
-
-  defp call_oban_tags_to_sentry_tags(fun, job) when is_function(fun, 1) do
-    fun.(job)
-  end
-
-  defp call_oban_tags_to_sentry_tags({module, function}, job) do
-    apply(module, function, [job])
   end
 end

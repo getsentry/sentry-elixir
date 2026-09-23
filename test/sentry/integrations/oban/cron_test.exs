@@ -1,3 +1,21 @@
+for {worker, failure} <- [
+      {Sentry.RaisingConfigWorker, quote(do: raise("the check-in configuration is broken"))},
+      {Sentry.ThrowingConfigWorker, quote(do: throw(:the_check_in_configuration_is_broken))},
+      {Sentry.ExitingConfigWorker, quote(do: exit(:the_check_in_configuration_is_broken))}
+    ] do
+  defmodule worker do
+    use Oban.Worker
+
+    @behaviour Sentry.Integrations.Oban.Cron
+
+    @impl Oban.Worker
+    def perform(_job), do: :ok
+
+    @impl Sentry.Integrations.Oban.Cron
+    def sentry_check_in_configuration(_job), do: unquote(failure)
+  end
+end
+
 defmodule Sentry.Integrations.Oban.CronTest do
   alias Sentry.Integrations.CheckInIDMappings
   use Sentry.Case, async: false
@@ -304,6 +322,72 @@ defmodule Sentry.Integrations.Oban.CronTest do
     )
   end
 
+  describe "when the monitor_slug_generator fails" do
+    for {kind, generator} <- [
+          raise: :raising_name_generator,
+          throw: :throwing_name_generator,
+          exit: :exiting_name_generator
+        ] do
+      @tag attach_opts: [monitor_slug_generator: {__MODULE__, generator}]
+      test "still reports the check-in under the default slug when the generator #{kind}s", %{
+        ref: ref
+      } do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            :telemetry.execute([:oban, :job, :start], %{}, %{
+              job: cron_job(worker: "Sentry.MyWorker")
+            })
+
+            [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+            assert_sentry_report(check_in_body,
+              status: "in_progress",
+              monitor_slug: "sentry-my-worker"
+            )
+          end)
+
+        assert log =~
+                 ~s(:monitor_slug_generator callback failed for worker "Sentry.MyWorker" ) <>
+                   "(job ID 942)"
+
+        assert log =~ ~r/domain=(\w+\.)*sentry/
+      end
+    end
+  end
+
+  describe "when sentry_check_in_configuration/1 fails" do
+    for {kind, worker, slug} <- [
+          {:raise, Sentry.RaisingConfigWorker, "sentry-raising-config-worker"},
+          {:throw, Sentry.ThrowingConfigWorker, "sentry-throwing-config-worker"},
+          {:exit, Sentry.ExitingConfigWorker, "sentry-exiting-config-worker"}
+        ] do
+      test "still reports the check-in with the SDK-derived options when it #{kind}s", %{ref: ref} do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            :telemetry.execute([:oban, :job, :start], %{}, %{
+              job: cron_job(worker: inspect(unquote(worker)))
+            })
+
+            [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+            assert_sentry_report(check_in_body,
+              status: "in_progress",
+              monitor_slug: unquote(slug),
+              monitor_config: %{
+                "schedule" => %{"type" => "interval", "value" => 1, "unit" => "day"}
+              }
+            )
+          end)
+
+        assert log =~
+                 ":sentry_check_in_configuration callback failed " <>
+                   "for worker #{inspect(unquote(worker))} (job ID 942)"
+
+        assert log =~ ~r/domain=(\w+\.)*sentry/
+      end
+    end
+  end
+
   describe "should_report_error_check_in_callback" do
     test "should not report a failed check-in when the callback returns false", %{ref: ref} do
       attach_with_callback(fn _worker, _job -> false end)
@@ -336,20 +420,28 @@ defmodule Sentry.Integrations.Oban.CronTest do
       refute_sentry_check_in(ref)
     end
 
-    test "should report the failed check-in when the callback raises", %{ref: ref} do
-      log =
-        capture_log([metadata: [:domain]], fn ->
-          attach_with_callback(fn _worker, _job -> raise "callback error" end)
+    for {kind, failure} <- [
+          raise: quote(do: raise("callback error")),
+          throw: quote(do: throw(:callback_error)),
+          exit: quote(do: exit(:callback_error))
+        ] do
+      test "should report the failed check-in when the callback #{kind}s", %{ref: ref} do
+        log =
+          capture_log([metadata: [:domain]], fn ->
+            attach_with_callback(fn _worker, _job -> unquote(failure) end)
 
-          execute_exception_event()
+            execute_exception_event()
 
-          [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-          assert_sentry_report(check_in_body, status: "error")
-        end)
+            [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+            assert_sentry_report(check_in_body, status: "error")
+          end)
 
-      assert log =~ ":should_report_error_check_in_callback failed"
-      assert log =~ "callback error"
-      assert log =~ ~r/domain=(\w+\.)*sentry/
+        assert log =~ ~r/domain=(\w+\.)*sentry \[error\]/
+
+        assert log =~
+                 ":should_report_error_check_in_callback callback failed " <>
+                   "for worker #{inspect(MyCronWorker)} (job ID 942)"
+      end
     end
 
     test "should pass a nil worker to the callback when the worker cannot be resolved", %{
@@ -386,6 +478,61 @@ defmodule Sentry.Integrations.Oban.CronTest do
     end
   end
 
+  describe "when handling a job event fails" do
+    for {kind, failure} <- [
+          raise: quote(do: raise("the callback is broken")),
+          throw: quote(do: throw(:the_callback_is_broken)),
+          exit: quote(do: exit(:the_callback_is_broken))
+        ] do
+      test "keeps reporting check-ins after a callback #{kind}s", %{ref: ref} do
+        attach_with_callback(fn _worker, _job -> unquote(failure) end)
+
+        capture_log(fn ->
+          execute_exception_event()
+
+          :telemetry.execute([:oban, :job, :start], %{}, %{
+            job: cron_job(worker: "Sentry.LaterWorker", id: 7)
+          })
+        end)
+
+        assert handler_attached?()
+
+        slugs =
+          ref
+          |> SentryTest.collect_sentry_check_ins(2)
+          |> Enum.map(& &1["monitor_slug"])
+
+        assert "sentry-later-worker" in slugs
+      end
+    end
+
+    test "records a discarded check-in when the job carries an unknown state", %{
+      ref: ref,
+      client_report_sender: sender
+    } do
+      log =
+        capture_log([metadata: [:domain]], fn ->
+          :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{
+            state: :unrecognized,
+            job: cron_job()
+          })
+        end)
+
+      assert log =~
+               ~r/domain=(\w+\.)*sentry \[error\]\s+Sentry failed to report an Oban check-in for job 942/
+
+      assert handler_attached?()
+      refute_sentry_check_in(ref)
+      assert %{{:internal_sdk_error, "monitor"} => 1} = :sys.get_state(sender)
+    end
+  end
+
+  defp handler_attached? do
+    [:oban, :job, :exception]
+    |> :telemetry.list_handlers()
+    |> Enum.any?(&(&1.id == Sentry.Integrations.Oban.Cron))
+  end
+
   defp attach_with_callback(callback) do
     :telemetry.detach(Sentry.Integrations.Oban.Cron)
 
@@ -417,4 +564,10 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   def custom_name_generator(%Oban.Job{worker: worker}), do: worker
+
+  def raising_name_generator(_job), do: raise("the slug generator is broken")
+
+  def throwing_name_generator(_job), do: throw(:the_slug_generator_is_broken)
+
+  def exiting_name_generator(_job), do: exit(:the_slug_generator_is_broken)
 end
