@@ -16,6 +16,12 @@ defmodule SentryTest do
     def exclude_exception?(_, _), do: false
   end
 
+  defmodule RaisingFilter do
+    @behaviour Sentry.EventFilter
+
+    def exclude_exception?(_exception, _source), do: raise("filter is broken")
+  end
+
   setup do
     SentryTest.setup_sentry(dedup_events: false)
   end
@@ -161,6 +167,154 @@ defmodule SentryTest do
              Sentry.capture_message("accepted", result: :sync, request_retries: [])
 
     assert :counters.get(request_count, 1) == 2
+  end
+
+  describe "a :before_send callback that crashes" do
+    test "drops the event and returns :excluded when the callback raises" do
+      put_test_config(before_send: fn _event -> raise "before_send is broken" end)
+
+      log =
+        capture_log(fn ->
+          assert :excluded = Sentry.capture_message("raising before_send", result: :sync)
+        end)
+
+      assert log =~ ":before_send callback failed"
+      assert log =~ "before_send is broken"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "drops the event and returns :excluded when the callback throws" do
+      put_test_config(before_send: fn _event -> throw(:before_send_is_broken) end)
+
+      log =
+        capture_log(fn ->
+          assert :excluded = Sentry.capture_message("throwing before_send", result: :sync)
+        end)
+
+      assert log =~ ":before_send callback failed"
+      assert log =~ "before_send_is_broken"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "drops the exception and returns :excluded when the callback exits" do
+      put_test_config(before_send: fn _event -> exit(:before_send_is_broken) end)
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+        end)
+
+      assert log =~ ":before_send callback failed"
+      assert log =~ "before_send_is_broken"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "drops the transaction and returns :excluded" do
+      transaction = create_transaction(%{transaction: "crashing-before-send-transaction"})
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.send_transaction(transaction,
+                     result: :sync,
+                     before_send: fn _transaction -> exit(:before_send_is_broken) end
+                   )
+        end)
+
+      assert log =~ ":before_send callback failed"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "does not report its own failure back to Sentry" do
+      test_pid = self()
+      ref = make_ref()
+      handler_name = :"sentry_handler_#{System.unique_integer([:positive])}"
+
+      :ok =
+        :logger.add_handler(handler_name, Sentry.LoggerHandler, %{
+          config: %{capture_log_messages: true, level: :debug}
+        })
+
+      on_exit(fn -> _ = :logger.remove_handler(handler_name) end)
+
+      put_test_config(
+        before_send: fn _event ->
+          send(test_pid, {ref, :called})
+          raise "before_send is broken"
+        end
+      )
+
+      capture_log(fn ->
+        assert :excluded = Sentry.capture_message("self-reporting before_send", result: :sync)
+      end)
+
+      assert_received {^ref, :called}
+      refute_received {^ref, :called}
+    end
+  end
+
+  describe "an :after_send_event callback that crashes" do
+    test "still returns the successful send result for an event" do
+      put_test_config(after_send_event: fn _event, _result -> raise "after_send is broken" end)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _id} = Sentry.capture_message("raising after_send", result: :sync)
+        end)
+
+      assert log =~ ":after_send_event callback failed"
+      assert log =~ "after_send is broken"
+
+      assert_sentry_report(:event, message: %{formatted: "raising after_send"})
+    end
+
+    test "still returns the successful send result for a transaction" do
+      transaction = create_transaction(%{transaction: "crashing-after-send-transaction"})
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _id} =
+                   Sentry.send_transaction(transaction,
+                     result: :sync,
+                     after_send_event: fn _transaction, _result -> exit(:after_send_is_broken) end
+                   )
+        end)
+
+      assert log =~ ":after_send_event callback failed"
+      assert log =~ "after_send_is_broken"
+
+      assert_sentry_report(:transaction, transaction: "crashing-after-send-transaction")
+    end
+  end
+
+  describe "a :filter callback that crashes" do
+    test "drops the exception and returns :excluded when the filter raises" do
+      put_test_config(filter: RaisingFilter)
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+        end)
+
+      assert log =~ ":filter callback failed"
+      assert log =~ "filter is broken"
+      assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "drops the exception and returns :excluded when the filter cannot be called" do
+      put_test_config(filter: __MODULE__.MissingFilter)
+
+      log =
+        capture_log(fn ->
+          assert :excluded =
+                   Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+        end)
+
+      assert log =~ ":filter callback failed"
+      assert SentryTest.pop_sentry_reports() == []
+    end
   end
 
   describe "send_check_in/1" do
