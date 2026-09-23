@@ -3,10 +3,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @moduledoc false
 
     alias OpenTelemetry.{Span, Tracer}
+    alias Sentry.Callback
     alias Sentry.ClientReport
     alias SamplingContext
-
-    alias Sentry.LoggerUtils
 
     @behaviour :otel_sampler
 
@@ -34,9 +33,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           attributes,
           config
         ) do
-      result =
+      {result, discard_reason} =
         if config[:drop] && span_name in config[:drop] do
-          {:drop, [], []}
+          {{:drop, [], []}, :sample_rate}
         else
           traces_sampler = Sentry.Config.traces_sampler()
           traces_sample_rate = Sentry.Config.traces_sample_rate()
@@ -44,23 +43,23 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           case get_trace_sampling_decision(ctx) do
             {:inherit, trace_sampled, tracestate} ->
               decision = if trace_sampled, do: :record_and_sample, else: :drop
-              {decision, [], tracestate}
+              {{decision, [], tracestate}, :sample_rate}
 
             :no_trace ->
               if traces_sampler do
                 sampling_context =
                   build_sampling_context(nil, span_name, span_kind, attributes, trace_id)
 
-                make_sampler_decision(traces_sampler, sampling_context)
+                make_sampler_decision(traces_sampler, sampling_context, traces_sample_rate)
               else
-                make_sampling_decision(traces_sample_rate)
+                {make_sampling_decision(traces_sample_rate), :sample_rate}
               end
           end
         end
 
       case result do
         {:drop, _, _} ->
-          record_discarded_transaction()
+          record_discarded_transaction(discard_reason)
           result
 
         _ ->
@@ -147,48 +146,53 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       sampling_context
     end
 
-    defp make_sampler_decision(traces_sampler, sampling_context) do
-      try do
-        result = call_traces_sampler(traces_sampler, sampling_context)
-        sample_rate = normalize_sampler_result(result)
+    defp make_sampler_decision(traces_sampler, sampling_context, fallback_sample_rate) do
+      invocation = Callback.to_fun(:traces_sampler, traces_sampler, [sampling_context])
 
-        if is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0 do
-          make_sampling_decision(sample_rate)
-        else
-          LoggerUtils.warning(
-            "traces_sampler function returned an invalid sample rate: #{inspect(sample_rate)}"
-          )
+      case Callback.run(:traces_sampler, invocation) do
+        {:ok, result} ->
+          sample_rate =
+            case Callback.validate(
+                   :traces_sampler,
+                   normalize_sampler_result(result),
+                   &valid_sample_rate?/1,
+                   "a boolean or a float between 0.0 and 1.0"
+                 ) do
+              {:ok, sample_rate} -> sample_rate
+              :invalid -> 0.0
+            end
 
-          make_sampling_decision(0.0)
-        end
-      rescue
-        error ->
-          LoggerUtils.warning("traces_sampler function failed: #{inspect(error)}")
+          {make_sampling_decision(sample_rate), :sample_rate}
 
-          make_sampling_decision(0.0)
+        :failed ->
+          make_fallback_decision(fallback_sample_rate)
       end
     end
 
-    defp call_traces_sampler(fun, sampling_context) when is_function(fun, 1) do
-      fun.(sampling_context)
+    defp valid_sample_rate?(sample_rate) do
+      is_float(sample_rate) and sample_rate >= 0.0 and sample_rate <= 1.0
     end
 
-    defp call_traces_sampler({module, function}, sampling_context) do
-      apply(module, function, [sampling_context])
+    defp make_fallback_decision(nil) do
+      {{:drop, [], [{@sentry_sampled_key, "false"}]}, :callback_error}
+    end
+
+    defp make_fallback_decision(fallback_sample_rate) do
+      {make_sampling_decision(fallback_sample_rate), :sample_rate}
     end
 
     defp normalize_sampler_result(true), do: 1.0
     defp normalize_sampler_result(false), do: 0.0
     defp normalize_sampler_result(rate), do: rate
 
-    defp record_discarded_transaction() do
-      ClientReport.Sender.record_discarded_events(:sample_rate, "transaction")
+    defp record_discarded_transaction(reason) do
+      ClientReport.Sender.record_discarded_events(reason, "transaction")
 
       # A dropped transaction also drops its spans. The sampling decision happens
       # before any child spans are recorded, so only the transaction itself is
       # extracted as a span (0 spans + 1).
       # https://develop.sentry.dev/sdk/telemetry/client-reports/#span-outcomes
-      ClientReport.Sender.record_discarded_events(:sample_rate, "span")
+      ClientReport.Sender.record_discarded_events(reason, "span")
     end
   end
 end
