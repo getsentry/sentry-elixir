@@ -10,7 +10,6 @@ defmodule Sentry.Metric do
   @moduledoc since: "13.0.0"
 
   alias Sentry.Config
-  alias Sentry.LoggerUtils
 
   @type metric_type :: :counter | :gauge | :distribution
 
@@ -106,24 +105,6 @@ defmodule Sentry.Metric do
     |> maybe_put(:unit, metric.unit)
     |> maybe_put(:trace_id, metric.trace_id)
     |> maybe_put(:span_id, metric.span_id)
-  end
-
-  @doc false
-  @spec call_before_send_callback(t(), function() | {module(), atom()}) :: t() | nil
-  def call_before_send_callback(metric, function) when is_function(function, 1) do
-    function.(metric)
-  rescue
-    error ->
-      LoggerUtils.warning("before_send_metric callback failed: #{inspect(error)}")
-      metric
-  end
-
-  def call_before_send_callback(metric, {mod, fun}) do
-    apply(mod, fun, [metric])
-  rescue
-    error ->
-      LoggerUtils.warning("before_send_metric callback failed: #{inspect(error)}")
-      metric
   end
 
   defp maybe_put(map, _key, nil), do: map

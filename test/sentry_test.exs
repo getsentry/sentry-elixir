@@ -226,6 +226,17 @@ defmodule SentryTest do
       assert SentryTest.pop_sentry_reports() == []
     end
 
+    test "records a callback_error outcome for the dropped event",
+         %{client_report_sender: sender} do
+      put_test_config(before_send: fn _event -> raise "before_send is broken" end)
+
+      capture_log(fn ->
+        assert :excluded = Sentry.capture_message("outcome before_send", result: :sync)
+      end)
+
+      assert :sys.get_state(sender) == %{{:callback_error, "error"} => 1}
+    end
+
     test "does not report its own failure back to Sentry" do
       test_pid = self()
       ref = make_ref()
@@ -314,6 +325,18 @@ defmodule SentryTest do
 
       assert log =~ ":filter callback failed"
       assert SentryTest.pop_sentry_reports() == []
+    end
+
+    test "records a callback_error outcome for the dropped exception",
+         %{client_report_sender: sender} do
+      put_test_config(filter: RaisingFilter)
+
+      capture_log(fn ->
+        assert :excluded =
+                 Sentry.capture_exception(%RuntimeError{message: "oops"}, result: :sync)
+      end)
+
+      assert :sys.get_state(sender) == %{{:callback_error, "error"} => 1}
     end
   end
 

@@ -1,13 +1,26 @@
 defmodule Sentry.Callback do
   @moduledoc false
 
+  alias Sentry.ClientReport
   alias Sentry.LoggerUtils
 
   @type spec() :: (... -> term()) | {module(), atom()}
 
-  @spec run(atom(), (-> result), result) :: result when result: var
-  def run(name, fun, fallback) when is_atom(name) and is_function(fun, 0) do
-    fun.()
+  @spec run(atom(), (-> result), result, keyword()) :: result when result: var
+  def run(name, fun, fallback, opts \\ []) when is_list(opts) do
+    case run(name, fun) do
+      {:ok, result} ->
+        result
+
+      :failed ->
+        record_discard(Keyword.get(opts, :discard))
+        fallback
+    end
+  end
+
+  @spec run(atom(), (-> result)) :: {:ok, result} | :failed when result: var
+  def run(name, fun) when is_atom(name) and is_function(fun, 0) do
+    {:ok, fun.()}
   catch
     kind, reason ->
       LoggerUtils.error(
@@ -15,7 +28,7 @@ defmodule Sentry.Callback do
           Exception.format(kind, reason, __STACKTRACE__)
       )
 
-      fallback
+      :failed
   end
 
   @spec to_fun(atom(), spec(), [term()]) :: (-> term())
@@ -32,5 +45,12 @@ defmodule Sentry.Callback do
               "#{inspect(name)} must be an anonymous function or a {module, function} tuple, " <>
                 "got: #{inspect(other)}"
     end
+  end
+
+  defp record_discard(nil), do: :ok
+
+  defp record_discard({reason, event_or_data_category}) do
+    _ = ClientReport.Sender.record_discarded_events(reason, event_or_data_category)
+    :ok
   end
 end
