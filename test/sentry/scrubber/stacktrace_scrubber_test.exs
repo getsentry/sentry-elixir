@@ -21,11 +21,11 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
       assert [scrubbed_conn, scrubbed_map, "plain", 42] = StacktraceScrubber.scrub_args(args)
 
       # the conn is scrubbed as a conn
-      assert scrubbed_conn.params == %{"password" => "*********", "name" => "Alice"}
+      assert scrubbed_conn.params == %{"password" => "[Filtered]", "name" => "Alice"}
       assert scrubbed_conn.req_headers == [{"x-keep", "yes"}]
 
       # a plain map is key-scrubbed
-      assert scrubbed_map == %{"password" => "*********", "ok" => "fine"}
+      assert scrubbed_map == %{"password" => "[Filtered]", "ok" => "fine"}
     end
 
     test "scrubs a non-Plug.Conn struct's fields but keeps its type" do
@@ -38,8 +38,8 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
       assert is_struct(scrubbed, Card)
       # ...while its fields are scrubbed by value (credit-card heuristic) and by
       # name (the atom key :secret matches the sensitive-key list).
-      assert scrubbed.card_number == "*********"
-      assert scrubbed.secret == "*********"
+      assert scrubbed.card_number == "[Filtered]"
+      assert scrubbed.secret == "[Filtered]"
       assert scrubbed.name == "Alice"
     end
 
@@ -59,7 +59,7 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
       # the standalone params arg is scrubbed independently (default keys only): the
       # "password" value is redacted, but "ssn" (not a default key) is left intact —
       # proving the conn's scrubbed params are NOT mirrored onto it.
-      assert scrubbed_params == %{"password" => "*********", "ssn" => "123-45-6789"}
+      assert scrubbed_params == %{"password" => "[Filtered]", "ssn" => "123-45-6789"}
     end
   end
 
@@ -71,7 +71,7 @@ defmodule Sentry.Scrubber.StacktraceScrubberTest do
       assert %FunctionClauseError{args: [scrubbed_conn, "x"]} =
                StacktraceScrubber.scrub(exception)
 
-      assert scrubbed_conn.params == %{"password" => "*********", "name" => "Alice"}
+      assert scrubbed_conn.params == %{"password" => "[Filtered]", "name" => "Alice"}
     end
 
     test "applies a custom args_scrubber callback to the exception's args" do

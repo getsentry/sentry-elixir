@@ -399,7 +399,7 @@ defmodule Sentry.Integrations.Oban.ErrorReporterTest do
 
       event = assert_sentry_report(:event, fingerprint: [@worker_as_string, "{{ default }}"])
 
-      assert event.extra[:args]["password"] == "*********"
+      assert event.extra[:args]["password"] == "[Filtered]"
       assert event.extra[:args]["id"] == "123"
       assert event.extra[:args]["entity"] == "user"
     end

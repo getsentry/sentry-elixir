@@ -128,7 +128,7 @@ defmodule Sentry.Scrubber do
 
   alias Sentry.Callback
 
-  @scrubbed_value "*********"
+  @scrubbed_value "[Filtered]"
   @scrubber_pdict_key {__MODULE__, :scrubber}
   @scrubber_names [:body_scrubber, :header_scrubber, :cookie_scrubber, :url_scrubber]
 
@@ -245,7 +245,9 @@ defmodule Sentry.Scrubber do
         ]
 
   @doc """
-  The placeholder string used to replace scrubbed values.
+  Returns the placeholder that replaces redacted values: `"[Filtered]"`.
+
+  *Changed in 14.0.0:* returns `"[Filtered]"` instead of `"*********"`.
   """
   @doc since: "13.1.0"
   @spec scrubbed_value() :: String.t()

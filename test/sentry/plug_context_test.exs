@@ -27,7 +27,7 @@ defmodule Sentry.PlugContextTest do
   def query_url_scrubber(conn) do
     conn
     |> Plug.Conn.request_url()
-    |> String.replace(~r/api_key=[^&]+/, "api_key=*********")
+    |> String.replace(~r/api_key=[^&]+/, "api_key=[Filtered]")
   end
 
   def remote_address_reader(conn) do
@@ -250,10 +250,10 @@ defmodule Sentry.PlugContextTest do
     conn = conn(:get, "/test?api_key=sk_live_secret123&hello=world")
     call(conn, url_scrubber: {__MODULE__, :query_url_scrubber})
 
-    assert "http://www.example.com/test?api_key=*********&hello=world" ==
+    assert "http://www.example.com/test?api_key=[Filtered]&hello=world" ==
              Sentry.Context.get_all().request.url
 
-    assert "api_key=*********&hello=world" == Sentry.Context.get_all().request.query_string
+    assert "api_key=[Filtered]&hello=world" == Sentry.Context.get_all().request.query_string
   end
 
   test "url_scrubber: nil falls back to the request URL unchanged" do
@@ -301,16 +301,16 @@ defmodule Sentry.PlugContextTest do
     assert request_context.cookies == %{}
 
     assert request_context.data == %{
-             "another_cc" => "*********",
-             "cc" => "*********",
+             "another_cc" => "[Filtered]",
+             "cc" => "[Filtered]",
              "count" => 334,
-             "credit_card" => "*********",
-             "passwd" => "*********",
-             "password" => "*********",
-             "secret" => "*********",
-             "user" => %{"password" => "*********"},
+             "credit_card" => "[Filtered]",
+             "passwd" => "[Filtered]",
+             "password" => "[Filtered]",
+             "secret" => "[Filtered]",
+             "user" => %{"password" => "[Filtered]"},
              "payments" => [
-               %{"yet_another_cc" => "*********"}
+               %{"yet_another_cc" => "[Filtered]"}
              ]
            }
   end
@@ -322,7 +322,7 @@ defmodule Sentry.PlugContextTest do
     call(conn, [])
 
     assert Sentry.Context.get_all().request.data == %{
-             "password" => "*********",
+             "password" => "[Filtered]",
              "image" => %{
                content_type: nil,
                filename: "my_image.png",
@@ -344,7 +344,7 @@ defmodule Sentry.PlugContextTest do
 
       assert scrubbed.cookies == %{}
       assert scrubbed.req_headers == [{"x-keep", "yes"}]
-      assert scrubbed.params == %{"password" => "*********", "ok" => "fine"}
+      assert scrubbed.params == %{"password" => "[Filtered]", "ok" => "fine"}
     end
 
     test "honors a custom body_scrubber when scrub/1 is called downstream",
