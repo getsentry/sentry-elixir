@@ -155,6 +155,8 @@ defmodule Sentry do
 
   ## Crashing Callbacks
 
+  *Available since 14.0.0.*
+
   When a callback you configure raises, throws, or exits, Sentry catches the failure and logs
   it at the `:error` level instead of letting it reach the code that was reporting the event
   or serving the request. The log carries the `:sentry` logger domain, so the SDK never
@@ -212,7 +214,8 @@ defmodule Sentry do
   >
   > Apart from `Sentry.LiveViewHook`, which redacts the data outright, falling back to the
   > SDK's default scrubber means that data only your custom scrubber was dropping is sent to
-  > Sentry for as long as that scrubber keeps failing. The error-level log is the only signal.
+  > Sentry for as long as that scrubber keeps failing. The error-level log is the only signal,
+  > so alert on it rather than treating a custom scrubber as a guarantee.
 
   ### Oban Callbacks
 

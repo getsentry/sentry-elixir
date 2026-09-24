@@ -64,3 +64,13 @@ config :sentry,
 ```
 
 The transaction is dropped only once the response status is known, so the trace has already been propagated as sampled. Services called while handling the request still report their spans, which appear in Sentry without their root transaction.
+
+## Check How You Handle `Sentry.capture_check_in/1` Results
+
+Check-ins are now handled by the Telemetry Processor by default, and as a result, `Sentry.capture_check_in/1` returns `{:ok, check_in_id}` right away instead of waiting for the HTTP request, and a failure to send the check-in is no longer returned as `{:error, reason}`. Call `Sentry.flush/1` if you need to wait until buffered check-ins are sent.
+
+## Review the Default Scrubbed Parameter Keys
+
+`Sentry.Scrubber.default_param_keys/0` now returns a longer denylist instead of `["password", "passwd", "secret"]`, and its terms match as case-insensitive substrings of the key name instead of exact key names. For example, `"auth"` now scrubs both `"Authorization"` and `"X-Auth-Token"`.
+
+Parameters that used to reach Sentry may now be scrubbed. See `Sentry.Scrubber` for the full list. Terms you add with `scrubber: [param_keys: ...]` extend this list; it can't be shortened.

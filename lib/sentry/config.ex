@@ -714,11 +714,8 @@ defmodule Sentry.Config do
           `Sentry.LiveViewHook` breadcrumb data, Oban job args, and maps captured
           into stacktrace frame variables.
 
-          These *extend* the SDK default (see `Sentry.Scrubber.default_param_keys/0`),
-          which is the denylist required by the
-          [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/).
-          The spec defines custom deny-mode terms as additive, so there is no way
-          to shrink the default list — that is deliberate.
+          These terms extend `Sentry.Scrubber.default_param_keys/0`; the default
+          list cannot be shortened.
 
           Terms are matched as case-insensitive substrings of the key name, so
           `"ref"` redacts `"internal_ref"` and `"REF_ID"` alike.
