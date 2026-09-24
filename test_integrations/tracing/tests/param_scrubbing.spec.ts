@@ -28,6 +28,7 @@ if (REAL_DSN && !process.env.SENTRY_DSN) {
 const RUN_ID = process.env.SENTRY_E2E_RUN_ID ?? `run-${Date.now()}`;
 const VALUES = probeValues(RUN_ID);
 const EXPECTED_QUERY = scrubbedQuery(VALUES, RUN_ID);
+const ENCODED_PLACEHOLDER = encodeURIComponent(PLACEHOLDER);
 
 async function openDemoPage(page: Page): Promise<void> {
   await page.goto(`${PHOENIX_URL}${demoPagePath(VALUES, RUN_ID)}`);
@@ -181,10 +182,10 @@ test.describe("parameter scrubbing", () => {
 
     expect(conn.queryString).toBe(EXPECTED_QUERY);
     expect(conn.queryString, "the placeholder was form-encoded").not.toContain(
-      "%2A"
+      ENCODED_PLACEHOLDER
     );
-    expect(event.request.query_string).not.toContain("%2A");
-    expect(event.request.url).not.toContain("%2A");
+    expect(event.request.query_string).not.toContain(ENCODED_PLACEHOLDER);
+    expect(event.request.url).not.toContain(ENCODED_PLACEHOLDER);
 
     expect(conn.queryString).toContain("note=a%20b~c");
     expect(conn.queryString).toContain("&flag&");

@@ -36,14 +36,14 @@ defmodule Sentry.ScrubberTest do
       _ = Scrubber.new(body_scrubber: fn _conn -> %{"marker" => "unregistered"} end)
 
       conn = %Plug.Conn{params: %{"password" => "hunter2"}}
-      assert Scrubber.scrub(conn).params == %{"password" => "*********"}
+      assert Scrubber.scrub(conn).params == %{"password" => "[Filtered]"}
     end
   end
 
   describe "scrub/2" do
     test "redacts sensitive top-level keys" do
       assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
-               %{"password" => "*********", "ok" => 1}
+               %{"password" => "[Filtered]", "ok" => 1}
     end
 
     test "leaves a key that is not valid UTF-8 alone rather than failing on it" do
@@ -52,7 +52,7 @@ defmodule Sentry.ScrubberTest do
     end
 
     test "redacts a key that contains a sensitive term in any casing" do
-      assert Scrubber.scrub(%{"X-Auth-Token" => "x"}) == %{"X-Auth-Token" => "*********"}
+      assert Scrubber.scrub(%{"X-Auth-Token" => "x"}) == %{"X-Auth-Token" => "[Filtered]"}
     end
 
     test "leaves a key containing no sensitive term untouched" do
@@ -61,22 +61,22 @@ defmodule Sentry.ScrubberTest do
 
     test "redacts sensitive keys given as atoms (e.g. struct fields)" do
       assert Scrubber.scrub(%{password: "x", ok: 1}) ==
-               %{password: "*********", ok: 1}
+               %{password: "[Filtered]", ok: 1}
     end
 
     test "recurses into nested maps" do
       assert Scrubber.scrub(%{"outer" => %{"secret" => "shh"}}) ==
-               %{"outer" => %{"secret" => "*********"}}
+               %{"outer" => %{"secret" => "[Filtered]"}}
     end
 
     test "recurses into lists of maps" do
       assert Scrubber.scrub(%{"items" => [%{"passwd" => "1"}, %{"ok" => 2}]}) ==
-               %{"items" => [%{"passwd" => "*********"}, %{"ok" => 2}]}
+               %{"items" => [%{"passwd" => "[Filtered]"}, %{"ok" => 2}]}
     end
 
     test "redacts credit-card-shaped values" do
       assert Scrubber.scrub(%{"cc" => "4111111111111111"}) ==
-               %{"cc" => "*********"}
+               %{"cc" => "[Filtered]"}
     end
 
     test "scrubs structs by converting them to maps" do
@@ -88,7 +88,7 @@ defmodule Sentry.ScrubberTest do
 
     test "respects custom :keys option" do
       assert Scrubber.scrub(%{"api_key" => "x", "password" => "y"}, keys: ["api_key"]) ==
-               %{"api_key" => "*********", "password" => "y"}
+               %{"api_key" => "[Filtered]", "password" => "y"}
     end
 
     test "leaves non-sensitive values untouched" do
@@ -222,8 +222,8 @@ defmodule Sentry.ScrubberTest do
     test "leaves the placeholder readable rather than percent-encoding it" do
       scrubbed = Scrubber.scrub_query_string("password=hunter2")
 
-      assert scrubbed == "password=#{Scrubber.scrubbed_value()}"
-      refute scrubbed =~ "%2A"
+      assert scrubbed == "password=[Filtered]"
+      refute scrubbed =~ "%5B"
     end
 
     test "passes through params it keeps byte for byte" do
@@ -323,8 +323,8 @@ defmodule Sentry.ScrubberTest do
 
     test "scrubs params with default sensitive keys", %{scrubbed: scrubbed} do
       assert scrubbed.params == %{
-               "user" => %{"email" => "alice@example.com", "password" => "*********"},
-               "_csrf_token" => "*********"
+               "user" => %{"email" => "alice@example.com", "password" => "[Filtered]"},
+               "_csrf_token" => "[Filtered]"
              }
     end
 
@@ -338,7 +338,7 @@ defmodule Sentry.ScrubberTest do
     test "scrubs query_params with default sensitive keys", %{scrubbed: scrubbed} do
       assert scrubbed.query_params == %{
                "redirect_to" => "/dashboard",
-               "secret" => "*********"
+               "secret" => "[Filtered]"
              }
     end
 
@@ -367,7 +367,7 @@ defmodule Sentry.ScrubberTest do
     end
 
     test "scrubs path_params with default sensitive keys", %{scrubbed: scrubbed} do
-      assert scrubbed.path_params == %{"id" => "42", "secret" => "*********"}
+      assert scrubbed.path_params == %{"id" => "42", "secret" => "[Filtered]"}
     end
 
     test "scrubs sensitive params out of query_string", %{scrubbed: scrubbed} do
@@ -447,7 +447,7 @@ defmodule Sentry.ScrubberTest do
       scrubbed = Scrubber.scrub(conn, assigns: :clear, private: :clear)
 
       # default fields still scrubbed
-      assert scrubbed.params == %{"password" => "*********"}
+      assert scrubbed.params == %{"password" => "[Filtered]"}
       # overridden fields cleared wholesale
       assert scrubbed.assigns == %{}
       assert scrubbed.private == %{}
@@ -462,10 +462,10 @@ defmodule Sentry.ScrubberTest do
       scrubbed = Scrubber.scrub(conn, body_params: :params, query_params: :params)
 
       assert scrubbed.body_params == %{
-               "user" => %{"password" => "*********", "email" => "a@b.c"}
+               "user" => %{"password" => "[Filtered]", "email" => "a@b.c"}
              }
 
-      assert scrubbed.query_params == %{"secret" => "*********", "page" => "1"}
+      assert scrubbed.query_params == %{"secret" => "[Filtered]", "page" => "1"}
     end
 
     test ":params override leaves %Plug.Conn.Unfetched{} untouched" do
@@ -635,7 +635,7 @@ defmodule Sentry.ScrubberTest do
 
       scrubbed = Scrubber.scrub(conn)
       assert scrubbed.cookies == %{}
-      assert scrubbed.params == %{"password" => "*********", "name" => "Alice"}
+      assert scrubbed.params == %{"password" => "[Filtered]", "name" => "Alice"}
       assert is_list(scrubbed.req_headers)
       assert {"x-keep", "yes"} in scrubbed.req_headers
       refute Enum.any?(scrubbed.req_headers, fn {k, _v} -> k == "authorization" end)
@@ -656,7 +656,7 @@ defmodule Sentry.ScrubberTest do
       # The current process never registered a scrubber, so scrub/1 lazily
       # initializes defaults instead of inheriting the task's marker scrubber.
       scrubbed = Scrubber.scrub(conn)
-      assert scrubbed.params == %{"password" => "*********"}
+      assert scrubbed.params == %{"password" => "[Filtered]"}
     end
 
     test "validates the opts shape on put" do
@@ -679,7 +679,7 @@ defmodule Sentry.ScrubberTest do
       assert is_struct(scrubbed, Plug.Conn)
       assert scrubbed.cookies == %{}
       assert scrubbed.req_headers == [{"x-keep", "yes"}]
-      assert scrubbed.params == %{"password" => "*********"}
+      assert scrubbed.params == %{"password" => "[Filtered]"}
     end
 
     test "honors a registered conn scrubber for the Plug.Conn dispatch path" do
@@ -696,7 +696,7 @@ defmodule Sentry.ScrubberTest do
 
     test "scrubs a plain map with default sensitive keys" do
       assert Scrubber.scrub(%{"password" => "x", "ok" => 1}) ==
-               %{"password" => "*********", "ok" => 1}
+               %{"password" => "[Filtered]", "ok" => 1}
     end
 
     test "returns integers, atoms, binaries, and lists unchanged" do
@@ -723,7 +723,7 @@ defmodule Sentry.ScrubberTest do
       refute is_struct(scrubbed)
       # Once the struct is a map, value-based heuristics reach its fields: the
       # credit-card-shaped value is redacted, non-sensitive data is preserved.
-      assert scrubbed.card_number == "*********"
+      assert scrubbed.card_number == "[Filtered]"
       assert scrubbed.name == "Alice"
     end
   end

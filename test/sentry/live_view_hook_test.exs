@@ -238,8 +238,8 @@ defmodule Sentry.LiveViewHookTest do
              event: "login",
              params: %{
                "email" => "user@example.com",
-               "password" => "*********",
-               "card" => "*********"
+               "password" => "[Filtered]",
+               "card" => "[Filtered]"
              }
            }
   end
@@ -250,7 +250,7 @@ defmodule Sentry.LiveViewHookTest do
     breadcrumbs = get_sentry_context(view).breadcrumbs
     mount_breadcrumb = Enum.find(breadcrumbs, &(&1.category == "web.live_view.mount"))
 
-    assert mount_breadcrumb.data == %{"password" => "*********", "visible" => "ok"}
+    assert mount_breadcrumb.data == %{"password" => "[Filtered]", "visible" => "ok"}
   end
 
   test "scrubs sensitive query params from URI in handle_params breadcrumb", %{conn: conn} do
@@ -329,7 +329,7 @@ defmodule Sentry.LiveViewHookTest do
     assert event_breadcrumb.data == %{
              event: "submit",
              params: %{
-               "api_key" => "*********",
+               "api_key" => "[Filtered]",
                "other" => "not-redacted"
              }
            }
