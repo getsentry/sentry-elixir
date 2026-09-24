@@ -287,7 +287,7 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
-      assert exception.value =~ ~s(params: %{"password" => "*********"})
+      assert exception.value =~ ~s(params: %{"password" => "[Filtered]"})
 
       refute exception.value =~ ~s(query_string: "password=secret"),
              "query_string leaked into exception value: #{exception.value}"
@@ -313,7 +313,7 @@ defmodule Sentry.PlugCaptureTest do
       assert [exception] = event.exception
 
       # Sensitive data is still scrubbed (proves the scrubber ran)...
-      assert exception.value =~ ~s(params: %{"password" => "*********"})
+      assert exception.value =~ ~s(params: %{"password" => "[Filtered]"})
 
       # ...routing metadata in the allow-list survives...
       assert exception.value =~ "phoenix_controller"
@@ -411,7 +411,7 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
-      assert exception.value =~ ~s(params: %{"password" => "*********"})
+      assert exception.value =~ ~s(params: %{"password" => "[Filtered]"})
       refute exception.value =~ ~s(query_string: "password=secret")
 
       assert log =~ ~r/domain=(\w+\.)*sentry \[error\]\s+:scrubber callback failed/
@@ -430,7 +430,7 @@ defmodule Sentry.PlugCaptureTest do
 
       assert [exception] = event.exception
       assert exception.type == "Phoenix.ActionClauseError"
-      assert exception.value =~ ~s(%{"password" => "*********"})
+      assert exception.value =~ ~s(%{"password" => "[Filtered]"})
       refute exception.value =~ "secret"
     end
 

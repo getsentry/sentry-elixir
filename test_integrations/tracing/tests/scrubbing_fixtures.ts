@@ -1,6 +1,6 @@
 import type { SentryEvent } from "./helpers";
 
-export const PLACEHOLDER = "*********";
+export const PLACEHOLDER = "[Filtered]";
 
 export interface ProbeValues {
   pathSecret: string;
@@ -66,10 +66,10 @@ function probeQuery(values: ProbeValues, runId: string): string {
 
 const CONN_FIELD_PATTERNS = {
   request_path: /request_path: "([^"]*)"/,
-  path_info: /path_info: (\[[^\]]*\])/,
+  path_info: /path_info: (\[\s*(?:"[^"]*"(?:,\s*)?)*\])/,
   path_params: /path_params: (%\{[^}]*\})/,
   query_string: /query_string: "([^"]*)"/,
-  script_name: /script_name: (\[[^\]]*\])/,
+  script_name: /script_name: (\[\s*(?:"[^"]*"(?:,\s*)?)*\])/,
 } as const;
 
 export interface ConnFields {
