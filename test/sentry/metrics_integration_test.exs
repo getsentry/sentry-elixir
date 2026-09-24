@@ -175,6 +175,38 @@ defmodule Sentry.MetricsIntegrationTest do
     end
   end
 
+  describe "sentry.is_localhost attribute" do
+    test "is true for a metric recorded while serving a localhost request", ctx do
+      serve_request("http://localhost:4000/checkout")
+
+      Metrics.count("orders.placed", 1)
+
+      assert is_localhost_attribute(ctx.ref) == %{"type" => "boolean", "value" => true}
+    end
+
+    test "is true for a metric recorded while serving a request to a loopback address", ctx do
+      serve_request("http://[::1]:4000/checkout")
+
+      Metrics.count("orders.placed", 1)
+
+      assert is_localhost_attribute(ctx.ref) == %{"type" => "boolean", "value" => true}
+    end
+
+    test "is false for a metric recorded while serving a request to a public host", ctx do
+      serve_request("https://shop.example.com/checkout")
+
+      Metrics.count("orders.placed", 1)
+
+      assert is_localhost_attribute(ctx.ref) == %{"type" => "boolean", "value" => false}
+    end
+
+    test "is false for a metric recorded outside of a request", ctx do
+      Metrics.count("orders.placed", 1)
+
+      assert is_localhost_attribute(ctx.ref) == %{"type" => "boolean", "value" => false}
+    end
+  end
+
   describe "trace context on recorded metrics" do
     test "records the metric with the trace of the surrounding span", ctx do
       put_test_config(traces_sample_rate: 1.0)
@@ -191,6 +223,17 @@ defmodule Sentry.MetricsIntegrationTest do
       assert metric["trace_id"] == transaction["contexts"]["trace"]["trace_id"]
       assert metric["span_id"] == transaction["contexts"]["trace"]["span_id"]
     end
+  end
+
+  defp serve_request(url) do
+    :get
+    |> Plug.Test.conn(url)
+    |> Sentry.PlugContext.call(Sentry.PlugContext.init([]))
+  end
+
+  defp is_localhost_attribute(ref) do
+    [[{_header, %{"items" => [metric]}}]] = collect_envelopes(ref, 1)
+    metric["attributes"]["sentry.is_localhost"]
   end
 
   defp assert_metric_dropped(ctx, crashing_callback) do
