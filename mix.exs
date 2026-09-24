@@ -36,7 +36,8 @@ defmodule Sentry.Mixfile do
           "pages/telemetry-integration.md",
           "pages/upgrade-8.x.md",
           "pages/upgrade-9.x.md",
-          "pages/upgrade-10.x.md"
+          "pages/upgrade-10.x.md",
+          "pages/upgrade-14.x.md"
         ],
         groups_for_extras: [
           Integrations: [
@@ -61,7 +62,8 @@ defmodule Sentry.Mixfile do
         logo: "assets/logo.png",
         skip_undefined_reference_warnings_on: [
           "CHANGELOG.md",
-          "pages/upgrade-9.x.md"
+          "pages/upgrade-9.x.md",
+          "pages/upgrade-14.x.md"
         ],
         authors: ["Mitchell Henke", "Jason Stiebs", "Andrea Leopardi"]
       ],
