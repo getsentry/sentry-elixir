@@ -1248,9 +1248,6 @@ defmodule Sentry.Config do
   @spec client_report_sender() :: atom()
   def client_report_sender, do: fetch!(:client_report_sender)
 
-  @spec enable_logs?() :: boolean()
-  def enable_logs?, do: fetch!(:enable_logs)
-
   @spec logs() :: keyword() | nil
   def logs, do: fetch!(:logs)
 
