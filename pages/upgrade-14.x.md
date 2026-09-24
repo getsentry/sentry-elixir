@@ -4,7 +4,7 @@ This guide contains information on how to upgrade from Sentry `13.x` to Sentry `
 
 ## Replace `:enable_logs` with `:logs`
 
-The `:enable_logs` option was removed. Sentry validates its configuration when it starts, so an application that still sets `:enable_logs` fails to boot.
+The `:enable_logs` option was removed.
 
 Setting the `:logs` option now attaches the Sentry logger handler, and setting `:level` inside it turns on structured logs. `:level` now defaults to `nil` instead of `:info`.
 
@@ -31,7 +31,7 @@ If you attach `Sentry.LoggerHandler` yourself, it sends structured logs when `:l
 
 ## Remove `:enable_metrics`
 
-The `:enable_metrics` option was removed and metrics are always on. An application that still sets it fails to boot.
+The `:enable_metrics` option was removed and metrics are always on.
 
 If you had `enable_metrics: false`, delete it. To stop metrics from being sent, drop them in a `:before_send_metric` callback:
 
@@ -64,3 +64,25 @@ config :sentry,
 ```
 
 The transaction is dropped only once the response status is known, so the trace has already been propagated as sampled. Services called while handling the request still report their spans, which appear in Sentry without their root transaction.
+
+## Check How You Handle `Sentry.capture_check_in/1` Results
+
+Check-ins are now handled by the Telemetry Processor by default, and as a result, `Sentry.capture_check_in/1` returns `{:ok, check_in_id}` right away instead of waiting for the HTTP request, and a failure to send the check-in is no longer returned as `{:error, reason}`. Call `Sentry.flush/1` if you need to wait until buffered check-ins are sent.
+
+## Check Your `Sentry.LoggerHandler` Overload Protection
+
+Errors are now handled by the Telemetry Processor by default, so the `:sync_threshold` and `:discard_threshold` options of `Sentry.LoggerHandler` no longer take effect when set above `0`. Overload protection comes from the Telemetry Processor instead: it keeps a bounded buffer per category and a bounded transport queue, and drops the oldest items when they are full. You can tune their sizes with `:telemetry_buffer_capacities` and `:transport_capacity`.
+
+If you rely on these thresholds, remove `:error` from `:telemetry_processor_categories` to keep the previous behavior:
+
+```elixir
+# In config/config.exs
+config :sentry,
+  telemetry_processor_categories: [:check_in, :transaction]
+```
+
+## Review the Default Scrubbed Parameter Keys
+
+`Sentry.Scrubber.default_param_keys/0` now returns a longer denylist instead of `["password", "passwd", "secret"]`, and its terms match as case-insensitive substrings of the key name instead of exact key names. For example, `"auth"` now scrubs both `"Authorization"` and `"X-Auth-Token"`.
+
+Parameters that used to reach Sentry may now be scrubbed. See `Sentry.Scrubber` for the full list. Terms you add with `scrubber: [param_keys: ...]` extend this list; it can't be shortened.

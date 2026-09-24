@@ -167,15 +167,11 @@ defmodule Sentry.PlugContext do
 
   ## Crashing Callbacks
 
-  Every callback this plug accepts runs in the request process. If one raises,
-  throws, or exits, Sentry catches the failure rather than letting it reach the
-  rest of your pipeline, so **the request itself is unaffected** and is served
-  exactly as it would have been. The failure is logged at the `:error` level with
-  the `:sentry` logger domain, so the SDK never reports its own callback failure
-  as an event.
+  *Available since 14.0.0.*
 
-  Only the field that callback was responsible for degrades, and it degrades to
-  the SDK's own default for that field:
+  If a callback this plug accepts raises, throws, or exits, the request is still
+  served and the event is still sent. Only the field that callback was
+  responsible for falls back to the SDK's own default for that field:
 
   | Option | Value reported after a crash |
   | --- | --- |
@@ -185,18 +181,10 @@ defmodule Sentry.PlugContext do
   | `:url_scrubber` | `default_url_scrubber/1` |
   | `:remote_address_reader` | the `x-forwarded-for` header, falling back to `conn.remote_ip` |
 
-  The other fields are still produced by their own callbacks, and the event is
-  still sent.
-
-  > #### A crashed scrubber reports more, not less {: .warning}
-  >
-  > The fallback is the SDK default, which redacts the keys listed in
-  > `Sentry.Scrubber.default_param_keys/0` and `Sentry.Scrubber.default_header_keys/0`
-  > and nothing more. A custom scrubber that dropped a field the default keeps -
-  > an internal identifier, a request body the default has no rule for - stops
-  > dropping it for as long as it keeps failing, and that data is sent to Sentry.
-  > The error-level log is the only signal, so alert on it rather than treating a
-  > custom scrubber as a guarantee.
+  The other fields are still produced by their own callbacks. See the
+  [*Crashing Callbacks*](`m:Sentry#module-crashing-callbacks`) section of the
+  `Sentry` documentation for how the failure is logged and why a crashed
+  scrubber sends data that only it was dropping.
   """
 
   if Code.ensure_loaded?(Plug) do
