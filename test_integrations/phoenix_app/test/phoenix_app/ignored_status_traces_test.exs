@@ -1,6 +1,7 @@
 defmodule PhoenixApp.IgnoredStatusTracesTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   @port 4102
@@ -71,16 +72,31 @@ defmodule PhoenixApp.IgnoredStatusTracesTest do
     assert upstream_tx["transaction"] == "GET /upstream"
   end
 
-  test "a request answered with an ignored status is reported as discarded telemetry", %{
+  test "a request answered with an ignored status is discarded by an event processor", %{
     ref: ref,
     client_report_sender: sender
   } do
     put_test_config(traces_ignore_http_status_codes: [410])
+    log_at_debug_level()
 
-    assert request("/responses/410") == 410
-    assert reported_transactions(ref) == []
+    log =
+      capture_log([level: :debug], fn ->
+        assert request("/responses/410") == 410
+        assert reported_transactions(ref) == []
+      end)
 
-    assert discarded_outcomes(sender, ref, "ignored") == %{"transaction" => 1, "span" => 1}
+    assert log =~ ~r/\[debug\]\s+Discarding transaction .*response status 410/
+
+    assert discarded_outcomes(sender, ref, "event_processor") == %{
+             "transaction" => 1,
+             "span" => 1
+           }
+  end
+
+  defp log_at_debug_level do
+    previous_level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: previous_level) end)
   end
 
   defp request(path) do
