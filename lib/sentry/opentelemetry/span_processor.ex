@@ -187,13 +187,20 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       result
     end
 
-    # Only incoming requests are matched. An outgoing call can become a
-    # transaction root of its own when it outlives the request that made it,
-    # and the option is not meant to drop those.
-    defp ignored_response_status?(%{kind: :server, attributes: attributes}) do
+    defp ignored_response_status?(%{kind: :server, attributes: attributes} = span_record) do
       case Map.get(attributes, to_string(HTTPAttributes.http_response_status_code())) do
         status when is_integer(status) ->
-          Enum.any?(Config.traces_ignore_http_status_codes(), &status_matches?(&1, status))
+          ignored? =
+            Enum.any?(Config.traces_ignore_http_status_codes(), &status_matches?(&1, status))
+
+          if ignored? do
+            LoggerUtils.debug(fn ->
+              "Discarding transaction #{span_record.name} (#{span_record.span_id}): " <>
+                "its response status #{status} is listed in :traces_ignore_http_status_codes"
+            end)
+          end
+
+          ignored?
 
         _other ->
           false
@@ -206,7 +213,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp status_matches?(code, status), do: code == status
 
     defp discard_transaction(transaction) do
-      ClientReport.Sender.record_discarded_events(:ignored, [transaction])
+      ClientReport.Sender.record_discarded_events(:event_processor, [transaction])
       true
     end
 

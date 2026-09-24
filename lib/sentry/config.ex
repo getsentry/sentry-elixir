@@ -382,8 +382,10 @@ defmodule Sentry.Config do
       Defaults to `[404]`, so *404 Not Found* requests are not traced. Set it to `[]` to
       trace them again.
 
-      Outgoing requests are not affected, and the trace is still propagated to the services
-      this one calls.
+      The transaction is dropped only once the response status is known, after the request
+      has been handled. The trace is still propagated as sampled, so services called while
+      handling the request still report their part of it. Dropped transactions are counted
+      in client reports with the `event_processor` reason. Outgoing requests are not affected.
 
       *Available since 14.0.0*.
       """
