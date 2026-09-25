@@ -377,6 +377,14 @@ defmodule Sentry.ConfigTest do
       assert_raise ArgumentError, ~r/telemetry_buffer_capacities/, fn ->
         Config.validate!(telemetry_buffer_capacities: %{log: 0})
       end
+
+      assert_raise ArgumentError, ~r/telemetry_buffer_capacities/, fn ->
+        Config.validate!(telemetry_buffer_capacities: %{log: 50})
+      end
+
+      assert Config.validate!(telemetry_buffer_capacities: %{log: 100})[
+               :telemetry_buffer_capacities
+             ] == %{log: 100}
     end
 
     test ":namespace with valid resolver" do
