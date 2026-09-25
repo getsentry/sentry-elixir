@@ -75,12 +75,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ## Crashing Callbacks
 
-    The `:scrubber` runs in the LiveView process, where a failure of its own
-    would crash the LiveView. It cannot: if it raises, throws, exits, or returns
-    anything other than a map, Sentry catches the failure and logs it at the
-    `:error` level with the `:sentry` logger domain, so the SDK never reports its
-    own callback failure as an event. The breadcrumb is then recorded with
-    redacted data - an empty map - rather than with data that was never scrubbed.
+    *Available since 14.0.0.*
+
+    If the `:scrubber` raises, throws, exits, or returns anything other than a
+    map, the LiveView keeps running and the breadcrumb is recorded with redacted
+    data - an empty map - rather than with data that was never scrubbed. See the
+    [*Crashing Callbacks*](`m:Sentry#module-crashing-callbacks`) section of the
+    `Sentry` documentation for how the failure is logged.
 
     """
 

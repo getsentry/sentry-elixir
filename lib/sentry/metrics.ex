@@ -27,6 +27,8 @@ defmodule Sentry.Metrics do
 
   ## Automatically Collected Metrics
 
+  *Available since 14.0.0.*
+
   The SDK can also report BEAM runtime health on its own, without any calls to the
   functions above. This is opt-in:
 
@@ -43,8 +45,8 @@ defmodule Sentry.Metrics do
       waiting to run
     * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` —
       a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
-      `limit` and `utilization` gauges need telemetry_poller 1.3.0 or later, which is
-      when it started measuring the limits; on older versions only `count` is reported.
+      `limit` and `utilization` gauges require telemetry_poller 1.3.0 or later; older
+      versions report only `count`.
     * `elixir.runtime.scheduler.utilization` — the busy fraction of scheduler time, as a
       ratio between `0.0` and `1.0`. Unlike the others this is a delta between two
       samples, so the first collection only takes a baseline and the first value arrives
@@ -54,7 +56,7 @@ defmodule Sentry.Metrics do
   ### Collection Frequency
 
   The SDK does not collect these itself. It listens to the events that
-  [telemetry_poller](https://hexdocs.pm/telemetry_poller) already emits, so how often
+  `telemetry_poller` already emits, so how often
   they are reported is how often that library polls. Its default poller runs every
   5 seconds, which is more often than most applications need for runtime health and
   costs metric volume, so consider slowing it down:

@@ -99,30 +99,22 @@ defmodule Sentry.PlugCapture do
 
   ## Crashing Callbacks
 
-  This module captures the application's exception from inside `c:Plug.call/2`,
-  where a failure of its own would replace the error the application raised. It
-  cannot: if anything in the capture path raises, throws, or exits - the
-  `:scrubber` callback, the scrubbing of the exception, or the reporting
-  itself - Sentry catches the failure and re-raises **the application's
-  original exception, unchanged**. The failure is logged at the `:error` level
-  with the `:sentry` logger domain, so the SDK never reports its own failure as
-  an event.
+  *Available since 14.0.0.*
 
+  If anything in the capture path raises, throws, or exits - the `:scrubber`
+  callback, the scrubbing of the exception, or the reporting itself - this
+  module still re-raises **the application's original exception, unchanged**.
   Only the reporting degrades, and only as far as the failure forces:
 
   | Failure | What Sentry still reports |
   | --- | --- |
   | The `:scrubber` crashes, or returns something other than a `Plug.Conn` | The event, with the conn scrubbed by the built-in scrubber, `Sentry.Scrubber.scrub/1` |
   | Scrubbing a `Phoenix.ActionClauseError` fails for any other reason | The event, with each of the exception's arguments scrubbed on its own, without mirroring the conn's scrubbed params onto the action's params argument |
-  | Capturing the event itself fails | Nothing - the log is the only record of the error |
+  | Capturing the event itself fails | Nothing - the error-level log is the only record of the error |
 
-  > #### A crashed scrubber reports more, not less {: .warning}
-  >
-  > The fallback redacts the keys listed in `Sentry.Scrubber.default_param_keys/0`
-  > and `Sentry.Scrubber.default_header_keys/0`, and nothing more. Data that only
-  > a custom `:scrubber` was dropping is sent to Sentry for as long as that
-  > scrubber keeps failing, and the error-level log is the only signal.
-
+  See the [*Crashing Callbacks*](`m:Sentry#module-crashing-callbacks`) section of
+  the `Sentry` documentation for how the failure is logged and why a crashed
+  scrubber sends data that only it was dropping.
   """
   defmacro __using__(opts) do
     quote do
