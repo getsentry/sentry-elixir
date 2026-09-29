@@ -24,34 +24,60 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "memory metrics" do
-    test "reports every key of the measurement map as a gauge in bytes" do
+    test "reports one elixir.runtime.memory.used gauge in bytes per memory type" do
       metrics = emit_memory()
 
-      for {key, value} <- @memory_measurements do
-        metric = find_metric!(metrics, "elixir.runtime.mem.#{key}")
+      assert Enum.all?(metrics, &(&1.name == "elixir.runtime.memory.used" and &1.unit == "byte"))
 
-        assert metric.value == value
-        assert metric.unit == "byte"
-      end
+      assert memory_by_type(metrics) == %{
+               "processes" => 40_000,
+               "atom" => 1_000,
+               "binary" => 5_000,
+               "code" => 20_000,
+               "ets" => 3_000,
+               "other" => 31_000
+             }
     end
 
-    test "skips keys the measurement map does not carry" do
-      metrics = emit([:vm, :memory], %{total: 1})
+    test "breaks the total down into types that sum back to it" do
+      metrics = emit_memory()
 
-      assert [%{name: "elixir.runtime.mem.total"}] = metrics
+      assert metrics |> memory_by_type() |> Map.values() |> Enum.sum() ==
+               @memory_measurements.total
+    end
+
+    test "never reports a negative remainder when the named types exceed the total" do
+      metrics =
+        emit([:vm, :memory], %{
+          total: 1_000,
+          processes: 600,
+          atom: 100,
+          binary: 200,
+          code: 100,
+          ets: 100
+        })
+
+      assert memory_by_type(metrics)["other"] == 0
+    end
+
+    test "reports only the types the measurement lets it compute" do
+      metrics = emit([:vm, :memory], %{total: 1_000, processes: 400, binary: 100})
+
+      assert memory_by_type(metrics) == %{"processes" => 400, "binary" => 100}
     end
   end
 
   describe "run queue metrics" do
-    test "reports the run queue lengths as unitless gauges" do
+    test "reports one unitless elixir.runtime.run_queue.length gauge per run queue type" do
       metrics = emit([:vm, :total_run_queue_lengths], %{total: 7, cpu: 5, io: 2})
 
-      for {key, value} <- [total: 7, cpu: 5, io: 2] do
-        metric = find_metric!(metrics, "elixir.runtime.run_queue.#{key}")
+      assert Enum.all?(
+               metrics,
+               &(&1.name == "elixir.runtime.run_queue.length" and &1.unit == nil)
+             )
 
-        assert metric.value == value
-        assert metric.unit == nil
-      end
+      assert Map.new(metrics, &{&1.attributes["elixir.run_queue.type"], &1.value}) ==
+               %{"cpu" => 5, "io" => 2}
     end
   end
 
@@ -187,10 +213,10 @@ defmodule Sentry.Metrics.RuntimeTest do
       :ok = SentryTest.allow_sentry_reports(self(), poller)
       collect_once(poller)
 
-      metric = assert_sentry_metric(:gauge, name: "elixir.runtime.mem.total")
+      metric = assert_sentry_metric(:gauge, name: "elixir.runtime.memory.used")
       assert metric.value > 0
 
-      assert_sentry_metric(:gauge, name: "elixir.runtime.run_queue.total")
+      assert_sentry_metric(:gauge, name: "elixir.runtime.run_queue.length")
       assert_sentry_metric(:gauge, name: "elixir.runtime.process.count")
       assert_sentry_metric(:gauge, name: "elixir.runtime.process.limit")
     end
@@ -235,6 +261,12 @@ defmodule Sentry.Metrics.RuntimeTest do
     original = Application.get_env(:telemetry_poller, :default)
     Application.put_env(:telemetry_poller, :default, value)
     on_exit(fn -> Application.put_env(:telemetry_poller, :default, original) end)
+  end
+
+  defp memory_by_type(metrics) do
+    metrics
+    |> Enum.filter(&(&1.name == "elixir.runtime.memory.used"))
+    |> Map.new(&{&1.attributes["elixir.memory.type"], &1.value})
   end
 
   defp find_metric!(metrics, name) do
