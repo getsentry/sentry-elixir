@@ -62,7 +62,7 @@ defmodule Sentry.Metrics.Runtime do
     report_by_type(
       config,
       "elixir.runtime.run_queue.length",
-      nil,
+      "none",
       "elixir.run_queue.type",
       Map.take(measurements, @run_queue_types)
     )
@@ -141,14 +141,14 @@ defmodule Sentry.Metrics.Runtime do
   defp report_count(_config, _name, nil, _limit), do: :ok
 
   defp report_count(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.count", count, nil)
+    gauge(config, "elixir.runtime.#{name}.count", count, "none")
     report_limit(config, name, count, limit)
   end
 
   defp report_limit(_config, _name, _count, nil), do: :ok
 
   defp report_limit(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.limit", limit, nil)
+    gauge(config, "elixir.runtime.#{name}.limit", limit, "none")
     gauge(config, "elixir.runtime.#{name}.utilization", ratio(count, limit), "ratio")
   end
 
@@ -187,8 +187,10 @@ defmodule Sentry.Metrics.Runtime do
 
   defp version_attributes(true) do
     %{
-      "elixir_version" => System.version(),
-      "otp_release" => List.to_string(:erlang.system_info(:otp_release))
+      "process.runtime.name" => "elixir",
+      "process.runtime.version" => System.version(),
+      "process.runtime.engine.name" => "BEAM",
+      "process.runtime.engine.version" => List.to_string(:erlang.system_info(:otp_release))
     }
   end
 

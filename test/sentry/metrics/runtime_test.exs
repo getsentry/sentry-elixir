@@ -73,7 +73,7 @@ defmodule Sentry.Metrics.RuntimeTest do
 
       assert Enum.all?(
                metrics,
-               &(&1.name == "elixir.runtime.run_queue.length" and &1.unit == nil)
+               &(&1.name == "elixir.runtime.run_queue.length" and &1.unit == "none")
              )
 
       assert Map.new(metrics, &{&1.attributes["elixir.run_queue.type"], &1.value}) ==
@@ -91,12 +91,15 @@ defmodule Sentry.Metrics.RuntimeTest do
       port_limit: 200
     }
 
-    test "reports the count, the limit and the ratio between them" do
+    test "reports the unitless count and limit and the ratio between them" do
       metrics = emit([:vm, :system_counts], @system_counts)
 
       for {name, count, limit} <- [{"process", 100, 1_000}, {"atom", 50, 500}, {"port", 4, 200}] do
-        assert find_metric!(metrics, "elixir.runtime.#{name}.count").value == count
-        assert find_metric!(metrics, "elixir.runtime.#{name}.limit").value == limit
+        assert %{value: ^count, unit: "none"} =
+                 find_metric!(metrics, "elixir.runtime.#{name}.count")
+
+        assert %{value: ^limit, unit: "none"} =
+                 find_metric!(metrics, "elixir.runtime.#{name}.limit")
 
         utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
         assert utilization.value == count / limit
@@ -175,6 +178,13 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "metric attributes" do
+    @runtime_attributes [
+      "process.runtime.name",
+      "process.runtime.version",
+      "process.runtime.engine.name",
+      "process.runtime.engine.version"
+    ]
+
     test "tags every metric with the runtime metrics origin" do
       for metric <- emit_memory() do
         assert metric.attributes["sentry.origin"] == "auto.elixir.runtime_metrics"
@@ -187,19 +197,24 @@ defmodule Sentry.Metrics.RuntimeTest do
       end
     end
 
-    test "attaches the Elixir and OTP versions when version_attributes is enabled" do
+    test "attaches the process.runtime attributes when version_attributes is enabled" do
       for metric <- emit_memory(version_attributes: true) do
-        assert metric.attributes["elixir_version"] == System.version()
+        assert Map.take(metric.attributes, @runtime_attributes) == %{
+                 "process.runtime.name" => "elixir",
+                 "process.runtime.version" => System.version(),
+                 "process.runtime.engine.name" => "BEAM",
+                 "process.runtime.engine.version" =>
+                   List.to_string(:erlang.system_info(:otp_release))
+               }
 
-        assert metric.attributes["otp_release"] ==
-                 List.to_string(:erlang.system_info(:otp_release))
+        refute Map.has_key?(metric.attributes, "elixir_version")
+        refute Map.has_key?(metric.attributes, "otp_release")
       end
     end
 
-    test "omits the version attributes by default" do
+    test "omits the process.runtime attributes by default" do
       for metric <- emit_memory() do
-        refute Map.has_key?(metric.attributes, "elixir_version")
-        refute Map.has_key?(metric.attributes, "otp_release")
+        assert Map.take(metric.attributes, @runtime_attributes) == %{}
       end
     end
   end

@@ -71,9 +71,15 @@ defmodule Sentry.Metrics do
 
   ### Runtime Version Attributes
 
-  Setting `version_attributes: true` adds `elixir_version` and `otp_release`
-  attributes to every reported measurement, so metrics can be grouped by runtime
-  version. It is off by default, because those values change only on upgrade and
+  Setting `version_attributes: true` adds these attributes to every reported
+  measurement, so metrics can be grouped by runtime version:
+
+    * `process.runtime.name` - always `"elixir"`.
+    * `process.runtime.version` - the Elixir version, as returned by `System.version/0`.
+    * `process.runtime.engine.name` - always `"BEAM"`.
+    * `process.runtime.engine.version` - the OTP release, such as `"27"`.
+
+  It is off by default, because those values change only on upgrade and
   attaching them to every point starts a fresh series for each metric on every
   rolling deploy.
 
