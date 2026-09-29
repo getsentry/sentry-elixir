@@ -6,32 +6,34 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
   alias Sentry.Metrics.Runtime
   alias Sentry.Test, as: SentryTest
 
-  @memory_keys [
-    :total,
-    :processes,
-    :processes_used,
-    :system,
-    :atom,
-    :atom_used,
-    :binary,
-    :code,
-    :ets
-  ]
+  @memory_types ["processes", "atom", "binary", "code", "ets", "other"]
 
   describe "memory metrics from a real telemetry_poller" do
     setup do
       SentryTest.setup_sentry(collect_envelopes: [type: "trace_metric"])
     end
 
-    test "reports every key erlang:memory/0 measures as a gauge in bytes" do
+    test "reports one elixir.runtime.memory.used gauge in bytes per memory type" do
       metrics = collect_runtime_metrics([:memory])
 
-      for key <- @memory_keys do
-        metric = find_metric!(metrics, "elixir.runtime.mem.#{key}")
+      memory_by_type = values_by_type(metrics, "elixir.runtime.memory.used", "elixir.memory.type")
 
-        assert metric.value > 0
-        assert metric.unit == "byte"
-      end
+      assert Enum.sort(Map.keys(memory_by_type)) == Enum.sort(@memory_types)
+      assert Enum.all?(Map.values(memory_by_type), &(&1 > 0))
+
+      assert metrics
+             |> Enum.filter(&(&1.name == "elixir.runtime.memory.used"))
+             |> Enum.all?(&(&1.unit == "byte"))
+    end
+
+    test "breaks down the erlang:memory/0 total the poller samples so the types sum back to it" do
+      poller = start_vm_poller([:memory])
+      forward_measured_total([:vm, :memory])
+
+      metrics = collect_metrics_from(poller)
+      assert_received {:measured_total, ^poller, total}
+
+      assert sum_by_type(metrics, "elixir.runtime.memory.used", "elixir.memory.type") == total
     end
 
     test "delivers the gauges to Sentry as trace_metric envelope items", %{ref: ref} do
@@ -39,11 +41,12 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       Sentry.TelemetryProcessor.flush()
 
       [batch] = collect_sentry_metric_items(ref, 1, timeout: 2000)
-      item = Enum.find(batch["items"], &(&1["name"] == "elixir.runtime.mem.total"))
+      item = Enum.find(batch["items"], &(&1["name"] == "elixir.runtime.memory.used"))
 
       assert item["type"] == "gauge"
       assert item["unit"] == "byte"
       assert item["value"] > 0
+      assert item["attributes"]["elixir.memory.type"]["value"] in @memory_types
       assert item["attributes"]["sentry.origin"]["value"] == "auto.elixir.runtime_metrics"
     end
   end
@@ -54,33 +57,38 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       :ok
     end
 
-    test "reports the real run queue lengths as unitless gauges" do
+    test "reports the cpu and io run queue lengths as unitless gauges" do
       metrics = collect_runtime_metrics([:total_run_queue_lengths])
 
-      for key <- [:total, :cpu, :io] do
-        metric = find_metric!(metrics, "elixir.runtime.run_queue.#{key}")
+      run_queues =
+        values_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type")
 
-        assert is_integer(metric.value)
-        assert metric.unit == nil
-      end
+      assert Enum.sort(Map.keys(run_queues)) == ["cpu", "io"]
+      assert Enum.all?(Map.values(run_queues), &is_integer/1)
+
+      assert metrics
+             |> Enum.filter(&(&1.name == "elixir.runtime.run_queue.length"))
+             |> Enum.all?(&(&1.unit == nil))
     end
 
-    test "reports the scheduler queue lengths the VM counts as non-negative" do
+    test "reports the cpu run queue length the VM counts as non-negative" do
       metrics = collect_runtime_metrics([:total_run_queue_lengths])
 
-      for key <- [:total, :cpu] do
-        assert find_metric!(metrics, "elixir.runtime.run_queue.#{key}").value >= 0
-      end
+      run_queues =
+        values_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type")
+
+      assert run_queues["cpu"] >= 0
     end
 
-    test "forwards the split the poller computes rather than recomputing it" do
-      metrics = collect_runtime_metrics([:total_run_queue_lengths])
+    test "breaks down the poller's total so the run queue types sum back to it" do
+      poller = start_vm_poller([:total_run_queue_lengths])
+      forward_measured_total([:vm, :total_run_queue_lengths])
 
-      total = find_metric!(metrics, "elixir.runtime.run_queue.total").value
-      cpu = find_metric!(metrics, "elixir.runtime.run_queue.cpu").value
-      io = find_metric!(metrics, "elixir.runtime.run_queue.io").value
+      metrics = collect_metrics_from(poller)
+      assert_received {:measured_total, ^poller, total}
 
-      assert total == cpu + io
+      assert sum_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type") ==
+               total
     end
   end
 
@@ -162,7 +170,11 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
   end
 
   defp collect_runtime_metrics(measurements) do
-    measurements |> start_vm_poller() |> allow_and_collect()
+    measurements |> start_vm_poller() |> collect_metrics_from()
+  end
+
+  defp collect_metrics_from(poller) do
+    allow_and_collect(poller)
     Sentry.TelemetryProcessor.flush()
 
     metrics = SentryTest.pop_sentry_metrics()
@@ -191,6 +203,33 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
     send(poller, :collect)
     _ = :telemetry_poller.list_measurements(poller)
     :ok
+  end
+
+  defp forward_measured_total(event) do
+    handler_id = "measured-total-#{System.unique_integer([:positive])}"
+    test_pid = self()
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        event,
+        fn _event, measurements, _metadata, _config ->
+          send(test_pid, {:measured_total, self(), measurements.total})
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+  end
+
+  defp sum_by_type(metrics, name, type_attribute) do
+    metrics |> values_by_type(name, type_attribute) |> Map.values() |> Enum.sum()
+  end
+
+  defp values_by_type(metrics, name, type_attribute) do
+    metrics
+    |> Enum.filter(&(&1.name == name))
+    |> Map.new(&{&1.attributes[type_attribute], &1.value})
   end
 
   defp find_metric!(metrics, name) do

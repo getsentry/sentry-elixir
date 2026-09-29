@@ -37,10 +37,14 @@ defmodule Sentry.Metrics do
 
   Once enabled, these gauges are reported:
 
-    * `elixir.runtime.mem.*` — `total`, `processes`, `processes_used`, `system`,
-      `atom`, `atom_used`, `binary`, `code` and `ets`, in bytes
-    * `elixir.runtime.run_queue.*` — `total`, `cpu` and `io`, how many processes are
-      waiting to run
+    * `elixir.runtime.memory.used` - memory allocated by the VM, in bytes, reported
+      once per `elixir.memory.type` attribute value: `processes`, `atom`, `binary`,
+      `code`, `ets` and `other`. `other` is everything else the VM has allocated.
+      Summing across the types gives the VM total.
+    * `elixir.runtime.run_queue.length` - how many processes are waiting to run,
+      reported once per `elixir.run_queue.type` attribute value: `cpu` for the normal
+      and dirty CPU scheduler run queues and `io` for the dirty IO run queue. Summing
+      across the types gives the total run queue length.
     * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` —
       a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
       `limit` and `utilization` gauges need telemetry_poller 1.3.0 or later, which is
