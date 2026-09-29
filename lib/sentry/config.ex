@@ -584,8 +584,11 @@ defmodule Sentry.Config do
               type: :boolean,
               default: false,
               doc: """
-              Whether to attach `elixir_version` and `otp_release` attributes to every
-              reported measurement, so metrics can be grouped by runtime version. Off by
+              Whether to attach runtime version attributes to every reported
+              measurement, so metrics can be grouped by runtime version:
+              `process.runtime.name` (`"elixir"`), `process.runtime.version` (the
+              Elixir version), `process.runtime.engine.name` (`"BEAM"`) and
+              `process.runtime.engine.version` (the OTP release, such as `"27"`). Off by
               default: the versions change only on upgrade, and attaching them to every
               point starts a fresh series for each metric on every rolling deploy.
               *Available since 14.0.0*.

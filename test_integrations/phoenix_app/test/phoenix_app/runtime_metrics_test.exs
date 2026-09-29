@@ -68,7 +68,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
 
       assert metrics
              |> Enum.filter(&(&1.name == "elixir.runtime.run_queue.length"))
-             |> Enum.all?(&(&1.unit == nil))
+             |> Enum.all?(&(&1.unit == "none"))
     end
 
     test "reports the cpu run queue length the VM counts as non-negative" do
@@ -98,12 +98,12 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       :ok
     end
 
-    test "reports the real counts against the limits the VM enforces" do
+    test "reports the real unitless counts against the limits the VM enforces" do
       metrics = collect_runtime_metrics([:system_counts])
 
       for name <- ["process", "atom", "port"] do
-        count = find_metric!(metrics, "elixir.runtime.#{name}.count").value
-        limit = find_metric!(metrics, "elixir.runtime.#{name}.limit").value
+        %{value: count, unit: "none"} = find_metric!(metrics, "elixir.runtime.#{name}.count")
+        %{value: limit, unit: "none"} = find_metric!(metrics, "elixir.runtime.#{name}.limit")
         utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
 
         assert count > 0
