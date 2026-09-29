@@ -17,13 +17,30 @@ defmodule Sentry.Metrics do
 
       # Record a counter
       Sentry.Metrics.count("button.clicks", 1)
-      Sentry.Metrics.count("button.clicks", 5, unit: "click", attributes: %{button_id: "submit"})
+      Sentry.Metrics.count("button.clicks", 5, attributes: %{button_id: "submit"})
 
       # Record a gauge
       Sentry.Metrics.gauge("memory.usage", 1024, unit: "megabyte")
 
       # Record a distribution
       Sentry.Metrics.distribution("response.time", 42.5, unit: "millisecond")
+
+  ## Units
+
+  The `:unit` option takes one of the units Sentry recognizes, so it can format and
+  convert values:
+
+    * Duration - `"nanosecond"`, `"microsecond"`, `"millisecond"`, `"second"`,
+      `"minute"`, `"hour"`, `"day"`, `"week"`
+    * Information - `"bit"`, `"byte"`, and the decimal and binary multiples of
+      `"byte"`: `"kilobyte"`, `"kibibyte"`, `"megabyte"`, `"mebibyte"`, `"gigabyte"`,
+      `"gibibyte"`, `"terabyte"`, `"tebibyte"`, `"petabyte"`, `"pebibyte"`,
+      `"exabyte"`, `"exbibyte"`
+    * Fraction - `"ratio"`, `"percent"`
+    * `"none"` - for plain counts and other values without a unit
+
+  Leave out `:unit` or pass `"none"` when you count things such as requests or
+  clicks. Describe what is counted in the metric name instead.
 
   ## Automatically Collected Metrics
 
@@ -45,11 +62,11 @@ defmodule Sentry.Metrics do
       reported once per `elixir.run_queue.type` attribute value: `cpu` for the normal
       and dirty CPU scheduler run queues and `io` for the dirty IO run queue. Summing
       across the types gives the total run queue length.
-    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` —
+    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` -
       a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
       `limit` and `utilization` gauges need telemetry_poller 1.3.0 or later, which is
       when it started measuring the limits; on older versions only `count` is reported.
-    * `elixir.runtime.scheduler.utilization` — the busy fraction of scheduler time, as a
+    * `elixir.runtime.scheduler.utilization` - the busy fraction of scheduler time, as a
       ratio between `0.0` and `1.0`. Unlike the others this is a delta between two
       samples, so the first collection only takes a baseline and the first value arrives
       one collection later. The SDK polls for it itself, at the period configured for
@@ -106,13 +123,15 @@ defmodule Sentry.Metrics do
 
   ## Options
 
-    * `:unit` - The unit of measurement (e.g., "click", "request"). Optional.
+    * `:unit` - The unit of measurement, one of those listed under
+      [Units](#module-units). Counters usually have none. Optional.
     * `:attributes` - A map of key-value pairs to attach to the metric. Optional.
 
   ## Examples
 
       Sentry.Metrics.count("button.clicks", 1)
-      Sentry.Metrics.count("http.requests", 5, unit: "request", attributes: %{method: "GET"})
+      Sentry.Metrics.count("http.requests", 5, attributes: %{method: "GET"})
+      Sentry.Metrics.count("http.response.body.size", 2048, unit: "byte")
 
   """
   @spec count(String.t(), number(), keyword()) :: :ok
@@ -128,7 +147,8 @@ defmodule Sentry.Metrics do
 
   ## Options
 
-    * `:unit` - The unit of measurement (e.g., "byte", "connection"). Optional.
+    * `:unit` - The unit of measurement, one of those listed under
+      [Units](#module-units), such as `"byte"` or `"ratio"`. Optional.
     * `:attributes` - A map of key-value pairs to attach to the metric. Optional.
 
   ## Examples
@@ -150,7 +170,8 @@ defmodule Sentry.Metrics do
 
   ## Options
 
-    * `:unit` - The unit of measurement (e.g., "millisecond", "byte"). Optional.
+    * `:unit` - The unit of measurement, one of those listed under
+      [Units](#module-units), such as `"millisecond"` or `"byte"`. Optional.
     * `:attributes` - A map of key-value pairs to attach to the metric. Optional.
 
   ## Examples
