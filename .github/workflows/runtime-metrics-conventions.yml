@@ -1,0 +1,61 @@
+name: Runtime Metrics Conventions
+
+on:
+  push:
+    branches:
+      - master
+      - release/**
+  pull_request:
+    paths:
+      - lib/sentry/metrics/**
+      - lib/sentry/metric.ex
+      - test/sentry/metrics/runtime_conventions_test.exs
+      - test/fixtures/sentry_conventions/**
+      - scripts/check_metrics_conventions.sh
+      - .github/workflows/runtime-metrics-conventions.yml
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      conventions_ref:
+        description: sentry-conventions branch, tag or commit to check against
+        required: false
+
+env:
+  MIX_ENV: test
+  CONVENTIONS_REF: ${{ inputs.conventions_ref || 'feat/metric-model' }}
+
+jobs:
+  conventions:
+    name: Runtime metrics match sentry-conventions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Setup Elixir and Erlang
+        uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
+        with:
+          elixir-version: "1.18"
+          otp-version: "27.2"
+
+      - name: Cache Elixir dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-elixir-1.18-otp-27.2-mix-${{ hashFiles('**/mix*.lock') }}
+
+      - name: Download Mix dependencies
+        run: mix deps.get --check-locked
+
+      - name: Check runtime metrics against sentry-conventions
+        run: mix test.conventions

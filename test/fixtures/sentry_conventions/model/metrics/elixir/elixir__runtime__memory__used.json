@@ -1,0 +1,9 @@
+{
+  "key": "elixir.runtime.memory.used",
+  "brief": "Memory allocated by the BEAM, broken down by memory type. Summing across types gives the total VM memory.",
+  "instrument": "gauge",
+  "unit": "byte",
+  "is_in_otel": false,
+  "requirement_level": "opt_in",
+  "attributes": ["elixir.memory.type"]
+}

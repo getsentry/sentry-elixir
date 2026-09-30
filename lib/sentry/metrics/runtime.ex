@@ -16,7 +16,7 @@ defmodule Sentry.Metrics.Runtime do
 
   @events [@memory_event, @run_queue_event, @system_counts_event, @scheduler_event]
 
-  @run_queue_keys [:total, :cpu, :io]
+  @run_queue_types [:cpu, :io]
 
   @system_counts [
     {"process", :process_count, :process_limit},
@@ -24,17 +24,7 @@ defmodule Sentry.Metrics.Runtime do
     {"port", :port_count, :port_limit}
   ]
 
-  @memory_keys [
-    :total,
-    :processes,
-    :processes_used,
-    :system,
-    :atom,
-    :atom_used,
-    :binary,
-    :code,
-    :ets
-  ]
+  @memory_types [:processes, :atom, :binary, :code, :ets]
 
   @spec attach(keyword()) :: :ok
   def attach(opts) when is_list(opts) do
@@ -59,11 +49,23 @@ defmodule Sentry.Metrics.Runtime do
           :telemetry.handler_config()
         ) :: :ok
   def handle_event(@memory_event, measurements, _metadata, config) do
-    report_measured(config, measurements, @memory_keys, "elixir.runtime.mem", "byte")
+    report_by_type(
+      config,
+      "elixir.runtime.memory.used",
+      "byte",
+      "elixir.memory.type",
+      memory_by_type(measurements)
+    )
   end
 
   def handle_event(@run_queue_event, measurements, _metadata, config) do
-    report_measured(config, measurements, @run_queue_keys, "elixir.runtime.run_queue", nil)
+    report_by_type(
+      config,
+      "elixir.runtime.run_queue.length",
+      "none",
+      "elixir.run_queue.type",
+      Map.take(measurements, @run_queue_types)
+    )
   end
 
   def handle_event(@system_counts_event, measurements, _metadata, config) do
@@ -139,23 +141,35 @@ defmodule Sentry.Metrics.Runtime do
   defp report_count(_config, _name, nil, _limit), do: :ok
 
   defp report_count(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.count", count, nil)
+    gauge(config, "elixir.runtime.#{name}.count", count, "none")
     report_limit(config, name, count, limit)
   end
 
   defp report_limit(_config, _name, _count, nil), do: :ok
 
   defp report_limit(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.limit", limit, nil)
+    gauge(config, "elixir.runtime.#{name}.limit", limit, "none")
     gauge(config, "elixir.runtime.#{name}.utilization", ratio(count, limit), "ratio")
   end
 
   defp ratio(_count, 0), do: 0.0
   defp ratio(count, limit), do: count / limit
 
-  defp report_measured(config, measurements, keys, prefix, unit) do
-    Enum.each(Map.take(measurements, keys), fn {key, value} ->
-      gauge(config, "#{prefix}.#{key}", value, unit)
+  defp memory_by_type(measurements) do
+    named = Map.take(measurements, @memory_types)
+
+    case measurements do
+      %{total: total} when map_size(named) == length(@memory_types) ->
+        Map.put(named, :other, max(total - Enum.sum(Map.values(named)), 0))
+
+      _incomplete ->
+        named
+    end
+  end
+
+  defp report_by_type(config, name, unit, type_attribute, values_by_type) do
+    Enum.each(values_by_type, fn {type, value} ->
+      gauge(config, name, value, unit, %{type_attribute => Atom.to_string(type)})
     end)
   end
 
@@ -173,12 +187,14 @@ defmodule Sentry.Metrics.Runtime do
 
   defp version_attributes(true) do
     %{
-      "elixir_version" => System.version(),
-      "otp_release" => List.to_string(:erlang.system_info(:otp_release))
+      "process.runtime.name" => "elixir",
+      "process.runtime.version" => System.version(),
+      "process.runtime.engine.name" => "BEAM",
+      "process.runtime.engine.version" => List.to_string(:erlang.system_info(:otp_release))
     }
   end
 
-  defp gauge(%{attributes: attributes}, name, value, unit) do
-    Metrics.gauge(name, value, unit: unit, attributes: attributes)
+  defp gauge(%{attributes: attributes}, name, value, unit, extra_attributes \\ %{}) do
+    Metrics.gauge(name, value, unit: unit, attributes: Map.merge(attributes, extra_attributes))
   end
 end
