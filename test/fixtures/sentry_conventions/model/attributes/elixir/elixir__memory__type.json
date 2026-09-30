@@ -1,0 +1,17 @@
+{
+  "key": "elixir.memory.type",
+  "brief": "The kind of BEAM memory a measurement covers: processes, atom, binary, code, ets, or other for the rest of the VM total.",
+  "type": "string",
+  "apply_scrubbing": {
+    "key": "never"
+  },
+  "is_in_otel": false,
+  "visibility": "public",
+  "examples": ["processes", "binary", "other"],
+  "changelog": [
+    {
+      "version": "next",
+      "description": "Added elixir.memory.type attribute"
+    }
+  ]
+}
