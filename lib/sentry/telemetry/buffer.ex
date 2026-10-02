@@ -124,6 +124,7 @@ defmodule Sentry.Telemetry.Buffer do
   Returns milliseconds until a pending batch is ready, or `:infinity` when
   the buffer is empty or a partial batch has no timeout.
   """
+  @doc since: "14.0.0"
   @spec next_timeout(GenServer.server()) :: timeout()
   def next_timeout(server) do
     GenServer.call(server, :next_timeout)
