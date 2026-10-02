@@ -43,8 +43,7 @@ defmodule Sentry.Scrubber do
   ## Defaults
 
   The default sensitive *parameter* keys (used for body params, query strings,
-  and arbitrary maps) are the denylist required by the
-  [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/):
+  and arbitrary maps) are:
 
   #{Enum.map_join(@default_scrubbed_param_keys, "\n", &"  * `\"#{&1}\"`")}
 
@@ -246,8 +245,6 @@ defmodule Sentry.Scrubber do
 
   @doc """
   Returns the placeholder that replaces redacted values: `"[Filtered]"`.
-
-  *Changed in 14.0.0:* returns `"[Filtered]"` instead of `"*********"`.
   """
   @doc since: "13.1.0"
   @spec scrubbed_value() :: String.t()
@@ -256,10 +253,9 @@ defmodule Sentry.Scrubber do
   @doc """
   Returns the SDK default list of sensitive parameter keys.
 
-  This is the denylist required by the
-  [Sentry Data Collection spec](https://develop.sentry.dev/sdk/foundations/client/data-collection/),
-  matched as a case-insensitive substring of the key name. The
-  `scrubber: [param_keys: ...]` configuration option extends it.
+  A key is sensitive when any of these terms appears anywhere in its name,
+  compared case-insensitively. The `scrubber: [param_keys: ...]` configuration
+  option extends this list; it cannot shorten it.
   """
   @doc since: "13.1.0"
   @spec default_param_keys() :: [String.t()]
