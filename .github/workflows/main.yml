@@ -48,13 +48,13 @@ jobs:
           - elixir: '1.17'
             otp: '26.2'
             release_test: true
-            os: ubuntu-22.04
+            os: ubuntu-24.04
 
           # Oldest supported Elixir/Erlang pair that's tested;
           # However, official support goes back to OTP 22.x
           - elixir: '1.13'
             otp: '25.3'
-            os: ubuntu-22.04
+            os: ubuntu-24.04
 
     steps:
     - name: Check out this repository
