@@ -1,6 +1,15 @@
 ## 14.0.0
 
+The `:enable_logs` and `:enable_metrics` options have been removed. Structured logs are now enabled by setting `:level` inside the `:logs` option (for example, `logs: [level: :info]`). The `:level` key defaults to `nil`, so if you only delete `enable_logs: true` and keep a `:logs` block without `:level`, the SDK still reports crashes but stops sending structured logs. Metrics are always on and are sent unconditionally. To stop metrics from being sent, drop them in a `:before_send_metric` callback. See the [13.x to 14.x upgrade guide](https://hexdocs.pm/sentry/upgrade-14.x.html) for details.
+
 ### Breaking Changes 🛠
+
+#### Config
+
+- Remove `enable_metrics` toggle by @solnic in [#1187](https://github.com/getsentry/sentry-elixir/pull/1187)
+- Remove `enable_logs` toggle by @solnic in [#1186](https://github.com/getsentry/sentry-elixir/pull/1186)
+
+#### Data Collection
 
 - (scrubber) Replace redacted values with [Filtered] by @solnic in [#1227](https://github.com/getsentry/sentry-elixir/pull/1227)
 
@@ -20,7 +29,7 @@
 - Wrap log and metric callbacks by @solnic in [#1221](https://github.com/getsentry/sentry-elixir/pull/1221)
 - Wrap event pipeline callbacks by @solnic in [#1220](https://github.com/getsentry/sentry-elixir/pull/1220)
 
-#### Scrubbing
+#### Data Collection
 
 - Scrub referer URLs too by @solnic in [#1201](https://github.com/getsentry/sentry-elixir/pull/1201)
 - Leave query params the SDK does not redact untouched by @solnic in [#1200](https://github.com/getsentry/sentry-elixir/pull/1200)
@@ -32,34 +41,14 @@
 - Flush buffered telemetry on shutdown by @solnic in [#1204](https://github.com/getsentry/sentry-elixir/pull/1204)
 - Wake scheduler for pending buffer deadlines by @solnic in [#1203](https://github.com/getsentry/sentry-elixir/pull/1203)
 
-#### Other
+#### Sentry SDK Specification Alignments
 
-- (config) Remove broken enable_logs?/0 by @solnic in [#1229](https://github.com/getsentry/sentry-elixir/pull/1229)
 - (metrics) Attach sentry.timestamp.sequence by @solnic in [#1215](https://github.com/getsentry/sentry-elixir/pull/1215)
 - (tracing) Discard ignored-status transactions as event_processor by @solnic in [#1226](https://github.com/getsentry/sentry-elixir/pull/1226)
 
-### Documentation 📚
-
-- Updates for 14.0.0 by @solnic in [#1230](https://github.com/getsentry/sentry-elixir/pull/1230)
-- Add 13.x to 14.x upgrade guide by @solnic in [#1231](https://github.com/getsentry/sentry-elixir/pull/1231)
-
-### Internal Changes 🔧
-
-#### Config
-
-- Remove `enable_metrics` toggle by @solnic in [#1187](https://github.com/getsentry/sentry-elixir/pull/1187)
-- Remove `enable_logs` toggle by @solnic in [#1186](https://github.com/getsentry/sentry-elixir/pull/1186)
-
-#### Deps
-
-- Refresh mix.lock files by @sentry-release-bot[bot] in [#1237](https://github.com/getsentry/sentry-elixir/pull/1237)
-- Refresh mix.lock files by @sentry-release-bot[bot] in [#1234](https://github.com/getsentry/sentry-elixir/pull/1234)
-- Bump devalue from 5.8.1 to 5.9.2 in /test_integrations/tracing/svelte_mini by @dependabot in [#1216](https://github.com/getsentry/sentry-elixir/pull/1216)
-
-#### Other
+#### Test API
 
 - (client-reports) Disable the periodic flush in test mode by @solnic in [#1193](https://github.com/getsentry/sentry-elixir/pull/1193)
-- Upgrade ubuntu 20.04/22.04 runners to 24.04 by @joshuarli in [#1236](https://github.com/getsentry/sentry-elixir/pull/1236)
 
 ## 13.5.1
 
