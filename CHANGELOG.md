@@ -1,3 +1,55 @@
+## 14.0.0
+
+The `:enable_logs` and `:enable_metrics` options have been removed. Structured logs are now enabled by setting `:level` inside the `:logs` option (for example, `logs: [level: :info]`). The `:level` key defaults to `nil`, so if you only delete `enable_logs: true` and keep a `:logs` block without `:level`, the SDK still reports crashes but stops sending structured logs. Metrics are always on and are sent unconditionally. To stop metrics from being sent, drop them in a `:before_send_metric` callback. See the [13.x to 14.x upgrade guide](https://hexdocs.pm/sentry/upgrade-14.x.html) for details.
+
+### Breaking Changes 🛠
+
+#### Config
+
+- Remove `enable_metrics` toggle by @solnic in [#1187](https://github.com/getsentry/sentry-elixir/pull/1187)
+- Remove `enable_logs` toggle by @solnic in [#1186](https://github.com/getsentry/sentry-elixir/pull/1186)
+
+#### Data Collection
+
+- (scrubber) Replace redacted values with [Filtered] by @solnic in [#1227](https://github.com/getsentry/sentry-elixir/pull/1227)
+
+### New Features ✨
+
+- (scrubbing) Adopt denylist defined by Data Collection spec by @solnic in [#1198](https://github.com/getsentry/sentry-elixir/pull/1198)
+- (telemetry_processor) Enable all categories by default by @solnic in [#1208](https://github.com/getsentry/sentry-elixir/pull/1208)
+- (tracing) Add option to exclude certain http statuses from tracing by @solnic in [#1217](https://github.com/getsentry/sentry-elixir/pull/1217)
+
+### Bug Fixes 🐛
+
+#### Callbacks
+
+- Wrap Oban callbacks by @solnic in [#1224](https://github.com/getsentry/sentry-elixir/pull/1224)
+- Wrap plug and phoenix callbacks by @solnic in [#1223](https://github.com/getsentry/sentry-elixir/pull/1223)
+- Wrap traces sampler callback by @solnic in [#1222](https://github.com/getsentry/sentry-elixir/pull/1222)
+- Wrap log and metric callbacks by @solnic in [#1221](https://github.com/getsentry/sentry-elixir/pull/1221)
+- Wrap event pipeline callbacks by @solnic in [#1220](https://github.com/getsentry/sentry-elixir/pull/1220)
+
+#### Data Collection
+
+- Scrub referer URLs too by @solnic in [#1201](https://github.com/getsentry/sentry-elixir/pull/1201)
+- Leave query params the SDK does not redact untouched by @solnic in [#1200](https://github.com/getsentry/sentry-elixir/pull/1200)
+- Scrub conn path params (#1195) by @solnic in [#1197](https://github.com/getsentry/sentry-elixir/pull/1197)
+- Apply the url scrubber to conn path and query fields … by @solnic in [#1196](https://github.com/getsentry/sentry-elixir/pull/1196)
+
+#### Telemetry Processor
+
+- Flush buffered telemetry on shutdown by @solnic in [#1204](https://github.com/getsentry/sentry-elixir/pull/1204)
+- Wake scheduler for pending buffer deadlines by @solnic in [#1203](https://github.com/getsentry/sentry-elixir/pull/1203)
+
+#### Sentry SDK Specification Alignments
+
+- (metrics) Attach sentry.timestamp.sequence by @solnic in [#1215](https://github.com/getsentry/sentry-elixir/pull/1215)
+- (tracing) Discard ignored-status transactions as event_processor by @solnic in [#1226](https://github.com/getsentry/sentry-elixir/pull/1226)
+
+#### Test API
+
+- (client-reports) Disable the periodic flush in test mode by @solnic in [#1193](https://github.com/getsentry/sentry-elixir/pull/1193)
+
 ## 13.5.1
 
 ### Bug Fixes 🐛
