@@ -1,6 +1,6 @@
 ## 14.0.0
 
-The `:enable_logs` and `:enable_metrics` options have been removed. Structured logs are now enabled by setting `:level` inside the `:logs` option (for example, `logs: [level: :info]`). The `:level` key defaults to `nil`, so if you only delete `enable_logs: true` and keep a `:logs` block without `:level`, the SDK still reports crashes but stops sending structured logs. Metrics are always on and are sent unconditionally. To stop metrics from being sent, drop them in a `:before_send_metric` callback. See the [13.x to 14.x upgrade guide](https://hexdocs.pm/sentry/upgrade-14.x.html) for details.
+The `:enable_logs` and `:enable_metrics` options have been removed. Structured logs are now enabled by setting `:level` inside the `:logs` option (for example, `logs: [level: :info]`). The `:level` key defaults to `nil`, so if you only delete `enable_logs: true` and keep a `:logs` block without `:level`, the SDK still reports crashes but stops sending structured logs. Metrics are always on and are sent unconditionally. To stop metrics from being sent, drop them in a `:before_send_metric` callback. See the [13.x to 14.x upgrade guide](https://hexdocs.pm/sentry/upgrade-14-x.html) for details.
 
 ### Breaking Changes 🛠
 
