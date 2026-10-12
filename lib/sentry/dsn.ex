@@ -38,7 +38,7 @@ defmodule Sentry.DSN do
       Please remove the query parameters from your DSN and pass them in as regular
       configuration. Check out the guide to upgrade to 9.0.0 at:
 
-        https://hexdocs.pm/sentry/upgrade-9.x.html
+        https://hexdocs.pm/sentry/upgrade-9-x.html
 
       See the documentation for the Sentry module for more information on configuration
       in general.
