@@ -289,6 +289,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         data: data
       }
 
+      # The root span is the transaction, so it is not copied into `spans`.
+      # Its HTTP status still has to land on contexts.trace; child spans keep
+      # their own status from build_span/1. Skip the key when there is none.
+      context = put_trace_status(context, span_status(span_record))
+
       # Add links if present (for root spans, links go in trace context)
       if span_record.links != [] do
         Map.put(context, :links, format_links(span_record.links))
@@ -296,6 +301,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         context
       end
     end
+
+    defp put_trace_status(context, nil), do: context
+    defp put_trace_status(context, status), do: Map.put(context, :status, status)
 
     defp get_op_description(
            %{
