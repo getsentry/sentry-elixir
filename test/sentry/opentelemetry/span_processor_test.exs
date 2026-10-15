@@ -1113,4 +1113,77 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       assert [] == collect_sentry_transactions(ref, 1, timeout: 300)
     end
   end
+
+  describe "HTTP response status on child spans" do
+    @tag span_storage: true
+    test "maps redirects and other non-error codes to ok", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      # Child spans carry status. The transaction root does not; that is a
+      # separate bug and is left alone here.
+      cases = [
+        {100, "ok"},
+        {200, "ok"},
+        {204, "ok"},
+        {301, "ok"},
+        {302, "ok"},
+        {304, "ok"},
+        {307, "ok"},
+        {308, "ok"},
+        {399, "ok"},
+        {400, "invalid_argument"},
+        {401, "unauthenticated"},
+        {403, "permission_denied"},
+        {404, "not_found"},
+        {409, "already_exists"},
+        {413, "failed_precondition"},
+        {418, "invalid_argument"},
+        {422, "invalid_argument"},
+        {429, "resource_exhausted"},
+        {499, "cancelled"},
+        {500, "internal_error"},
+        {501, "unimplemented"},
+        {502, "internal_error"},
+        {503, "unavailable"},
+        {504, "deadline_exceeded"},
+        {599, "internal_error"},
+        {99, "unknown_error"},
+        {600, "unknown_error"}
+      ]
+
+      Tracer.with_span "parent" do
+        for {code, _expected} <- cases do
+          Tracer.with_span "GET /status/#{code}", %{
+            kind: :client,
+            attributes: %{
+              HTTPAttributes.http_request_method() => :GET,
+              URLAttributes.url_path() => "/status/#{code}",
+              HTTPAttributes.http_response_status_code() => code
+            }
+          } do
+            :ok
+          end
+        end
+
+        Tracer.with_span "no-status", %{kind: :internal} do
+          :ok
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      statuses =
+        Map.new(tx["spans"], fn span ->
+          {span["data"]["url.path"] || span["op"], span["status"]}
+        end)
+
+      expected =
+        Map.new(cases, fn {code, status} -> {"/status/#{code}", status} end)
+        |> Map.put("no-status", nil)
+
+      assert statuses == expected
+    end
+  end
 end
