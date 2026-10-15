@@ -391,14 +391,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     # WebSocket upgrade spans doesn't have a HTTP status
     defp to_status(nil), do: nil
 
-    defp to_status(status) when status in 200..299, do: "ok"
+    # 1xx, 2xx, and 3xx are not failures. Redirects (301, 302, 304, 307, 308)
+    # must not be reported as unknown_error.
+    defp to_status(status) when status in 100..399, do: "ok"
 
+    # Same table as Sentry's getSpanStatusFromHttpCode, plus 499 => cancelled
+    # (nginx "client closed request"), which this SDK already reported.
     for {status, string} <- %{
           400 => "invalid_argument",
           401 => "unauthenticated",
           403 => "permission_denied",
           404 => "not_found",
           409 => "already_exists",
+          413 => "failed_precondition",
           429 => "resource_exhausted",
           499 => "cancelled",
           500 => "internal_error",
@@ -408,6 +413,9 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         } do
       defp to_status(unquote(status)), do: unquote(string)
     end
+
+    defp to_status(status) when status in 400..499, do: "invalid_argument"
+    defp to_status(status) when status in 500..599, do: "internal_error"
 
     defp to_status(_any), do: "unknown_error"
 
