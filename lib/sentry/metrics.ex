@@ -162,7 +162,7 @@ defmodule Sentry.Metrics do
     unit = Keyword.get(opts, :unit)
     attributes = Keyword.get(opts, :attributes, %{})
 
-    {trace_id, span_id} = current_trace_context() || {generate_trace_id(), nil}
+    {trace_id, span_id} = trace_context()
 
     metric = %Metric{
       type: type,
@@ -188,10 +188,14 @@ defmodule Sentry.Metrics do
     :ok
   end
 
+  # Branch at the call site. `nil || fallback` lets Elixir 1.20 prove the
+  # fallback always runs and warn on every compile without tracing.
   if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
-    defp current_trace_context, do: Sentry.OpenTelemetry.TraceContext.current()
+    defp trace_context do
+      Sentry.OpenTelemetry.TraceContext.current() || {generate_trace_id(), nil}
+    end
   else
-    defp current_trace_context, do: nil
+    defp trace_context, do: {generate_trace_id(), nil}
   end
 
   # Generate a random trace_id as fallback when no active span exists
