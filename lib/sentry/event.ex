@@ -500,16 +500,18 @@ defmodule Sentry.Event do
       runtime: %{name: "elixir", version: System.build_info().build}
     }
 
-    case current_trace_context() do
-      nil -> contexts
-      {trace_id, span_id} -> Map.put(contexts, :trace, %{trace_id: trace_id, span_id: span_id})
-    end
+    put_trace_context(contexts)
   end
 
   if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
-    defp current_trace_context, do: Sentry.OpenTelemetry.TraceContext.current()
+    defp put_trace_context(contexts) do
+      case Sentry.OpenTelemetry.TraceContext.current() do
+        nil -> contexts
+        {trace_id, span_id} -> Map.put(contexts, :trace, %{trace_id: trace_id, span_id: span_id})
+      end
+    end
   else
-    defp current_trace_context, do: nil
+    defp put_trace_context(contexts), do: contexts
   end
 
   # Used to compare events for deduplication. See "Sentry.Dedupe".
