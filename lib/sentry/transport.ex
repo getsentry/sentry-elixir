@@ -51,7 +51,7 @@ defmodule Sentry.Transport do
   defp post_envelope_with_retries(client, envelope, retries_left) do
     case filter_rate_limited(envelope) do
       {:send, filtered_envelope, discarded_items} ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
+        record_discarded_envelope_items(:ratelimit_backoff, discarded_items)
 
         case Envelope.to_binary(filtered_envelope) do
           {:ok, body} ->
@@ -62,7 +62,7 @@ defmodule Sentry.Transport do
         end
 
       {:drop, discarded_items} ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, discarded_items)
+        record_discarded_envelope_items(:ratelimit_backoff, discarded_items)
         {:error, ClientError.new(:rate_limited)}
     end
   end
@@ -80,7 +80,7 @@ defmodule Sentry.Transport do
         {:error, ClientError.new(:rate_limited)}
 
       {:error, {:envelope_too_large, {status, headers, body}}} ->
-        ClientReport.Sender.record_discarded_events(:send_error, items)
+        record_discarded_envelope_items(:send_error, items)
         {:error, ClientError.envelope_too_large(status, headers, body)}
 
       {:error, _reason} when retries_left != [] ->
@@ -89,12 +89,23 @@ defmodule Sentry.Transport do
         post_envelope_with_retries(client, envelope, retries_left)
 
       {:error, {:http, {status, headers, body}}} ->
-        ClientReport.Sender.record_discarded_events(:send_error, items)
+        record_discarded_envelope_items(:send_error, items)
         {:error, ClientError.server_error(status, headers, body)}
 
       {:error, reason} ->
-        ClientReport.Sender.record_discarded_events(:send_error, items)
+        record_discarded_envelope_items(:send_error, items)
         {:error, ClientError.new(reason)}
+    end
+  end
+
+  # A client report is not an outcome of itself. `ClientReport.Sender` keeps
+  # the counts when this post can be retried, and records one `internal`
+  # `send_error` only when it actually drops them. Recording that here would
+  # merge a discard into the report that is about to be sent again.
+  defp record_discarded_envelope_items(reason, items) do
+    case Enum.reject(items, &match?(%ClientReport{}, &1)) do
+      [] -> :ok
+      items -> ClientReport.Sender.record_discarded_events(reason, items)
     end
   end
 

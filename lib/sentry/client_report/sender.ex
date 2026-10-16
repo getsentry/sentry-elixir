@@ -196,7 +196,14 @@ defmodule Sentry.ClientReport.Sender do
           %{}
 
         {:error, %ClientError{} = error} ->
-          if retriable_report_failure?(error), do: state, else: %{}
+          if retriable_report_failure?(error) do
+            state
+          else
+            # These counts are abandoned. Record the client report itself as
+            # discarded. Transport does not, so a retried report is not also
+            # counted as an internal send_error.
+            %{{:send_error, "internal"} => 1}
+          end
       end
     else
       %{}

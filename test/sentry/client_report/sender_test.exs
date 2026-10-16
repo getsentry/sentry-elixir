@@ -348,8 +348,10 @@ defmodule Sentry.ClientReportTest do
       assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
     end
 
-    test "drops discard counts when the client report post times out", %{bypass: bypass} do
-      sender = start_sender(:test_client_report_timeout)
+    test "drops discard counts when the client report post times out", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
       event = make_error_event()
 
       assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
@@ -364,10 +366,41 @@ defmodule Sentry.ClientReportTest do
 
       try do
         assert :ok = Sender.flush(sender)
-        assert :sys.get_state(sender) == %{}
+        assert :sys.get_state(sender) == %{{:send_error, "internal"} => 1}
       after
         Bypass.pass(bypass)
       end
+    end
+
+    test "a retried client report is not recorded as an internal discard", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 503, ~s<{"detail":"unavailable"}>)
+      end)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+    end
+
+    test "a refused client report connection is not recorded as an internal discard", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      Bypass.down(bypass)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
     end
   end
 
