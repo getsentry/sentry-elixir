@@ -243,6 +243,180 @@ defmodule Sentry.ClientReportTest do
       assert_received {:encoded, encoding_pid}
       assert encoding_pid == sender
     end
+
+    test "keeps discard counts when the client report post fails", %{bypass: bypass} do
+      sender = start_sender(:test_client_report_post_failure)
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 503, ~s<{"detail":"unavailable"}>)
+      end)
+
+      send(Process.whereis(sender), :send_report)
+
+      # Sentry never accepted this window, so the count must still be accumulated.
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        assert [{%{"type" => "client_report", "length" => _}, client_report}] =
+                 decode_envelope!(body)
+
+        assert client_report["discarded_events"] == [
+                 %{"category" => "error", "quantity" => 1, "reason" => "before_send"}
+               ]
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      send(Process.whereis(sender), :send_report)
+
+      assert :sys.get_state(sender) == %{}
+    end
+
+    test "merges discards recorded while a failed client report post is in flight", %{
+      bypass: bypass
+    } do
+      sender = start_sender(:test_client_report_inflight_failure)
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      self_pid = self()
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Sender.record_discarded_events(:network_error, [event], sender)
+        send(self_pid, :recorded_during_post)
+        Plug.Conn.resp(conn, 503, ~s<{"detail":"unavailable"}>)
+      end)
+
+      send(Process.whereis(sender), :send_report)
+      assert_receive :recorded_during_post
+
+      assert :sys.get_state(sender) == %{
+               {:before_send, "error"} => 1,
+               {:network_error, "error"} => 1
+             }
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        assert [{%{"type" => "client_report", "length" => _}, client_report}] =
+                 decode_envelope!(body)
+
+        assert Enum.sort(client_report["discarded_events"]) ==
+                 Enum.sort([
+                   %{"category" => "error", "quantity" => 1, "reason" => "before_send"},
+                   %{"category" => "error", "quantity" => 1, "reason" => "network_error"}
+                 ])
+
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      send(Process.whereis(sender), :send_report)
+
+      assert :sys.get_state(sender) == %{}
+    end
+
+    test "flush keeps discard counts when the client report post fails", %{bypass: bypass} do
+      sender = start_sender(:test_client_report_flush_failure)
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 503, ~s<{"detail":"unavailable"}>)
+      end)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+    end
+
+    test "keeps discard counts when the connection is refused", %{bypass: bypass} do
+      sender = start_sender(:test_client_report_connrefused)
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      Bypass.down(bypass)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+    end
+
+    test "drops discard counts when the client report post times out", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      # The handler never responds. A receive timeout is an unknown outcome:
+      # the bytes may already have been stored, so the counts must not be retried.
+      put_test_config(finch_request_opts: [receive_timeout: 50])
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn _conn ->
+        Process.sleep(:infinity)
+      end)
+
+      try do
+        assert :ok = Sender.flush(sender)
+        assert :sys.get_state(sender) == %{{:send_error, "internal"} => 1}
+      after
+        Bypass.pass(bypass)
+      end
+    end
+
+    test "a retried client report is not recorded as an internal discard", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+
+      Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 503, ~s<{"detail":"unavailable"}>)
+      end)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+    end
+
+    test "a refused client report connection is not recorded as an internal discard", %{
+      bypass: bypass,
+      client_report_sender: sender
+    } do
+      event = make_error_event()
+
+      assert :ok = Sender.record_discarded_events(:before_send, [event], sender)
+
+      Bypass.down(bypass)
+
+      assert :ok = Sender.flush(sender)
+      assert :sys.get_state(sender) == %{{:before_send, "error"} => 1}
+    end
+  end
+
+  defp start_sender(name) do
+    start_supervised!(
+      {Sender, name: name, rate_limiter_table_name: Process.get(:rate_limiter_table_name)}
+    )
+
+    name
+  end
+
+  defp make_error_event do
+    %Event{
+      event_id: Sentry.UUID.uuid4_hex(),
+      timestamp: "2024-10-12T13:21:13"
+    }
   end
 
   defp make_log_event(body) do
