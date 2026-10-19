@@ -12,7 +12,7 @@ defmodule Sentry.LoggerHandler.RateLimiter do
 
   ## Public API
 
-  @spec start_under_sentry_supervisor(id(), keyword()) :: Supervisor.on_start_child()
+  @spec start_under_sentry_supervisor(id(), keyword()) :: :ok | {:error, term()}
   def start_under_sentry_supervisor(id, options) when is_atom(id) and is_list(options) do
     max_events = Keyword.fetch!(options, :max_events)
     interval = Keyword.fetch!(options, :interval)
