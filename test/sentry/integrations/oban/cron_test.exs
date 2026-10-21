@@ -140,6 +140,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
     test "captures stop events with monitor config and state of #{inspect(oban_state)} and frequency of #{frequency}",
          %{ref: ref} do
       duration = System.convert_time_unit(12_099, :millisecond, :native)
+      id = CheckInIDMappings.lookup_or_insert_new(942)
 
       :telemetry.execute([:oban, :job, :stop], %{duration: duration}, %{
         state: unquote(oban_state),
@@ -151,7 +152,6 @@ defmodule Sentry.Integrations.Oban.CronTest do
       })
 
       [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-      id = CheckInIDMappings.lookup_or_insert_new(942)
 
       assert_sentry_report(check_in_body,
         check_in_id: id,
@@ -184,8 +184,85 @@ defmodule Sentry.Integrations.Oban.CronTest do
     refute_sentry_check_in(ref)
   end
 
+  test "reports the same check-in id when an Oban cron job finishes before the mapping expires",
+       %{ref: ref} do
+    job_id = System.unique_integer([:positive])
+
+    job = %Oban.Job{
+      worker: "Sentry.MyWorker",
+      id: job_id,
+      meta: %{"cron" => true, "cron_expr" => "@daily"}
+    }
+
+    :telemetry.execute([:oban, :job, :start], %{}, %{job: job})
+
+    :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{state: :success, job: job})
+
+    [start_body, stop_body] = SentryTest.collect_sentry_check_ins(ref, 2)
+
+    assert start_body["check_in_id"] == stop_body["check_in_id"]
+    assert_sentry_report(start_body, status: "in_progress")
+    assert_sentry_report(stop_body, status: "ok")
+    assert :ets.lookup(:sentry_cron_mappings, job_id) == []
+  end
+
+  test "keeps the check-in id when an Oban cron job is snoozed", %{ref: ref} do
+    job_id = System.unique_integer([:positive])
+
+    job = %Oban.Job{
+      worker: "Sentry.MyWorker",
+      id: job_id,
+      meta: %{"cron" => true, "cron_expr" => "@daily"}
+    }
+
+    :telemetry.execute([:oban, :job, :start], %{}, %{job: job})
+    [start_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+    :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{state: :snoozed, job: job})
+    refute_sentry_check_in(ref)
+    assert :ets.lookup(:sentry_cron_mappings, job_id) != []
+
+    :telemetry.execute([:oban, :job, :stop], %{duration: 0}, %{state: :success, job: job})
+    [stop_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+    assert stop_body["check_in_id"] == start_body["check_in_id"]
+    assert_sentry_report(stop_body, status: "ok")
+    assert :ets.lookup(:sentry_cron_mappings, job_id) == []
+  end
+
+  for event <- [:stop, :exception] do
+    test "does not report an Oban #{event} check-in after its id mapping expires", %{ref: ref} do
+      job_id = System.unique_integer([:positive])
+
+      job = %Oban.Job{
+        worker: "Sentry.MyWorker",
+        id: job_id,
+        meta: %{"cron" => true, "cron_expr" => "@daily"}
+      }
+
+      :telemetry.execute([:oban, :job, :start], %{}, %{job: job})
+
+      [start_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      assert_sentry_report(start_body, status: "in_progress")
+
+      expire_check_in_mapping!(job_id)
+
+      metadata =
+        case unquote(event) do
+          :stop -> %{state: :success, job: job}
+          :exception -> %{state: :failure, job: job}
+        end
+
+      :telemetry.execute([:oban, :job, unquote(event)], %{duration: 0}, metadata)
+
+      refute_sentry_check_in(ref)
+      assert :ets.lookup(:sentry_cron_mappings, job_id) == []
+    end
+  end
+
   test "captures exception events with monitor config", %{ref: ref} do
     duration = System.convert_time_unit(12_099, :millisecond, :native)
+    id = CheckInIDMappings.lookup_or_insert_new(942)
 
     :telemetry.execute([:oban, :job, :exception], %{duration: duration}, %{
       state: :success,
@@ -197,7 +274,6 @@ defmodule Sentry.Integrations.Oban.CronTest do
     })
 
     [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-    id = CheckInIDMappings.lookup_or_insert_new(942)
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -225,6 +301,8 @@ defmodule Sentry.Integrations.Oban.CronTest do
         ]
       ]
     )
+
+    _ = CheckInIDMappings.lookup_or_insert_new(942)
 
     :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
       state: :success,
@@ -542,10 +620,32 @@ defmodule Sentry.Integrations.Oban.CronTest do
   end
 
   defp execute_exception_event(job_overrides \\ []) do
+    job = cron_job(job_overrides)
+    # A terminal check-in closes the id recorded when the job started.
+    _ = CheckInIDMappings.lookup_or_insert_new(job.id)
+
     :telemetry.execute([:oban, :job, :exception], %{duration: 0}, %{
       state: :failure,
-      job: cron_job(job_overrides)
+      job: job
     })
+  end
+
+  defp expire_check_in_mapping!(cron_key) do
+    pid = Process.whereis(CheckInIDMappings)
+    ttl = :sys.get_state(pid)
+
+    case :ets.lookup(:sentry_cron_mappings, cron_key) do
+      [{^cron_key, uuid, _inserted_at}] ->
+        expired_at = System.system_time(:millisecond) - ttl - 1
+        true = :ets.insert(:sentry_cron_mappings, {cron_key, uuid, expired_at})
+
+      [] ->
+        flunk("expected a check-in id mapping for #{inspect(cron_key)}")
+    end
+
+    send(pid, :sweep)
+    _ = :sys.get_state(pid)
+    assert :ets.lookup(:sentry_cron_mappings, cron_key) == []
   end
 
   defp cron_job(overrides \\ []) do

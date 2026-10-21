@@ -38,7 +38,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
   ## Helpers
 
   defp handle_event(:start, _measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = check_in_opts(metadata, :start) do
       opts
       |> Keyword.merge(status: :in_progress)
       |> Sentry.capture_check_in()
@@ -46,7 +46,7 @@ defmodule Sentry.Integrations.Quantum.Cron do
   end
 
   defp handle_event(:stop, measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = check_in_opts(metadata, :finish) do
       opts
       |> Keyword.merge(status: :ok, duration: duration_in_seconds(measurements))
       |> Sentry.capture_check_in()
@@ -54,28 +54,36 @@ defmodule Sentry.Integrations.Quantum.Cron do
   end
 
   defp handle_event(:exception, measurements, metadata) do
-    if opts = check_in_opts(metadata) do
+    if opts = check_in_opts(metadata, :finish) do
       opts
       |> Keyword.merge(status: :error, duration: duration_in_seconds(measurements))
       |> Sentry.capture_check_in()
     end
   end
 
-  defp check_in_opts(%{job: job} = metadata) when is_struct(job, Quantum.Job) do
+  defp check_in_opts(%{job: job} = metadata, phase) when is_struct(job, Quantum.Job) do
     if schedule_opts = schedule_opts(job) do
       quantum_id = metadata.telemetry_span_context |> :erlang.phash2() |> Integer.to_string()
-      id = CheckInIDMappings.lookup_or_insert_new("quantum-#{quantum_id}")
 
-      [
-        check_in_id: id,
-        # This is already a binary.
-        monitor_slug: "quantum-#{slugify(job.name)}",
-        monitor_config: [schedule: schedule_opts, timezone: timezone_to_string(job)]
-      ]
+      case check_in_id("quantum-#{quantum_id}", phase) do
+        nil ->
+          nil
+
+        id ->
+          [
+            check_in_id: id,
+            # This is already a binary.
+            monitor_slug: "quantum-#{slugify(job.name)}",
+            monitor_config: [schedule: schedule_opts, timezone: timezone_to_string(job)]
+          ]
+      end
     else
       nil
     end
   end
+
+  defp check_in_id(cron_key, :start), do: CheckInIDMappings.lookup_or_insert_new(cron_key)
+  defp check_in_id(cron_key, :finish), do: CheckInIDMappings.pop(cron_key)
 
   defp schedule_opts(job) when is_struct(job, Quantum.Job) do
     case apply(Crontab.CronExpression.Composer, :compose, [job.schedule]) do
