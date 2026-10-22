@@ -730,6 +730,61 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
   end
 
+  describe "HTTP transaction status" do
+    @tag span_storage: true
+    test "copies the root span HTTP status onto contexts.trace", %{bypass: bypass} do
+      put_test_config(
+        environment_name: "test",
+        traces_sample_rate: 1.0,
+        traces_ignore_http_status_codes: []
+      )
+
+      # 302 stays "unknown_error": to_status/1 is unchanged. This only checks
+      # that the status already computed for the root span reaches the transaction.
+      for {status_code, expected_status} <- [
+            {200, "ok"},
+            {302, "unknown_error"},
+            {404, "not_found"},
+            {500, "internal_error"}
+          ] do
+        ref = setup_bypass_envelope_collector(bypass)
+
+        Tracer.with_span "GET /api/items", %{
+          kind: :server,
+          attributes: %{
+            HTTPAttributes.http_request_method() => :GET,
+            URLAttributes.url_path() => "/api/items",
+            HTTPAttributes.http_response_status_code() => status_code
+          }
+        } do
+          Tracer.with_span "GET /downstream", %{
+            kind: :client,
+            attributes: %{
+              HTTPAttributes.http_request_method() => :GET,
+              URLAttributes.url_path() => "/downstream",
+              HTTPAttributes.http_response_status_code() => 201
+            }
+          } do
+            Process.sleep(1)
+          end
+        end
+
+        [tx] = collect_sentry_transactions(ref, 1)
+
+        assert tx["contexts"]["trace"]["op"] == "http.server"
+        assert tx["contexts"]["trace"]["span_id"]
+        assert tx["contexts"]["trace"]["trace_id"]
+
+        assert tx["contexts"]["trace"]["status"] == expected_status,
+               "HTTP #{status_code}: expected transaction status #{inspect(expected_status)}, got #{inspect(tx["contexts"]["trace"]["status"])}"
+
+        assert [child] = tx["spans"]
+        assert child["status"] == "ok"
+        assert child["data"]["http.response.status_code"] == 201
+      end
+    end
+  end
+
   describe "race condition: parent finishes before child" do
     @tag span_storage: true
     test "in-progress child span is preserved and becomes transaction root when parent finishes first",
