@@ -8,6 +8,7 @@ defmodule Sentry.ClientReport.Sender do
 
   alias Sentry.{
     Client,
+    ClientError,
     ClientReport,
     Config,
     Envelope,
@@ -30,7 +31,12 @@ defmodule Sentry.ClientReport.Sender do
   end
 
   @doc """
-  Synchronously sends any pending client reports and clears the accumulated state.
+  Synchronously sends any pending client reports.
+
+  Counts are cleared when Sentry accepts the report, and when the attempt's
+  outcome is unknown (a timeout, or a connection that died after the request
+  was written). They stay queued only for a failure that is known to be safe
+  to retry.
   """
   @spec flush(GenServer.server()) :: :ok
   def flush(server \\ Config.client_report_sender()) do
@@ -156,41 +162,88 @@ defmodule Sentry.ClientReport.Sender do
 
   @impl true
   def handle_call(:flush, _from, state) do
-    send_pending_reports(state)
-    {:reply, :ok, %{}}
+    {:reply, :ok, send_pending_reports(state)}
   end
 
   @impl true
   def handle_info(:send_report, state) do
-    send_pending_reports(state)
+    state = send_pending_reports(state)
     schedule_report()
-    {:noreply, %{}}
+    {:noreply, state}
   end
 
   defp send_pending_reports(state) do
-    _result =
-      if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
-        client_report =
-          %ClientReport{
-            timestamp:
-              DateTime.utc_now()
-              |> DateTime.truncate(:second)
-              |> DateTime.to_iso8601()
-              |> String.trim_trailing("Z"),
-            discarded_events:
-              Enum.map(state, fn {{reason, category}, quantity} ->
-                %{
-                  reason: reason,
-                  category: category,
-                  quantity: quantity
-                }
-              end)
-          }
+    if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
+      client_report =
+        %ClientReport{
+          timestamp:
+            DateTime.utc_now()
+            |> DateTime.truncate(:second)
+            |> DateTime.to_iso8601()
+            |> String.trim_trailing("Z"),
+          discarded_events:
+            Enum.map(state, fn {{reason, category}, quantity} ->
+              %{
+                reason: reason,
+                category: category,
+                quantity: quantity
+              }
+            end)
+        }
 
-        Client.send_client_report(client_report)
+      case Client.send_client_report(client_report) do
+        {:ok, _id} ->
+          %{}
+
+        {:error, %ClientError{} = error} ->
+          if retriable_report_failure?(error) do
+            state
+          else
+            # These counts are abandoned. Record the client report itself as
+            # discarded. Transport does not, so a retried report is not also
+            # counted as an internal send_error.
+            %{{:send_error, "internal"} => 1}
+          end
       end
+    else
+      %{}
+    end
+  end
 
-    :ok
+  # Retry only when a later attempt can succeed and this one cannot have been
+  # stored. Most errors cannot be considered retriable: the peer may already
+  # have accepted the body. A connection error counts only when the socket never
+  # opened.
+  defp retriable_report_failure?(client_error)
+
+  defp retriable_report_failure?(%ClientError{reason: :rate_limited}), do: true
+
+  # 503 Service Unavailable.
+  defp retriable_report_failure?(%ClientError{
+         reason: :server_error,
+         http_response: {503, _headers, _body}
+       }),
+       do: true
+
+  defp retriable_report_failure?(%ClientError{reason: {:request_failure, %{reason: reason}}}),
+    do: never_connected?(reason)
+
+  defp retriable_report_failure?(%ClientError{reason: {:request_failure, reason}}),
+    do: never_connected?(reason)
+
+  defp retriable_report_failure?(%ClientError{}), do: false
+
+  defp never_connected?(reason) do
+    reason in [
+      :econnrefused,
+      :nxdomain,
+      :ehostunreach,
+      :enetunreach,
+      :ehostdown,
+      :connect_timeout,
+      :checkout_timeout,
+      :could_not_connect
+    ]
   end
 
   defp schedule_report do

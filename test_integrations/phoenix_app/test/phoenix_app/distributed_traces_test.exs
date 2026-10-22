@@ -9,7 +9,13 @@ defmodule PhoenixApp.DistributedTracesTest do
   @remote_span_id String.duplicate("b", 16)
 
   setup do
-    Sentry.Test.setup_sentry(collect_envelopes: true, traces_sample_rate: 1.0)
+    # Runtime metrics, logs, and client reports share this Bypass. Collecting
+    # the first envelope of any type drops the transaction when one of those
+    # arrives first.
+    Sentry.Test.setup_sentry(
+      collect_envelopes: [type: "transaction"],
+      traces_sample_rate: 1.0
+    )
   end
 
   test "work continuing an upstream trace is reported with its instrumented spans", %{ref: ref} do
@@ -22,7 +28,7 @@ defmodule PhoenixApp.DistributedTracesTest do
     end
 
     assert [tx] = collect_sentry_transactions(ref, 1, timeout: 500),
-             "nothing was reported for work continuing an upstream trace"
+           "nothing was reported for work continuing an upstream trace"
 
     assert tx["transaction"] == "etl.sync"
 
