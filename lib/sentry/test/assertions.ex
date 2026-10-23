@@ -290,13 +290,13 @@ defmodule Sentry.Test.Assertions do
   Collects up to `:count` transaction envelopes via `ref` and returns the
   first one matching `criteria`. Raises if no transaction matches.
 
-  This is shorthand for:
+  Envelopes that do not contain a transaction are skipped. This is shorthand for:
 
       find_sentry_report!(collect_sentry_transactions(ref, count, timeout: timeout), criteria)
 
   Reserved options in `criteria`:
 
-    * `:count`   — max number of envelopes to collect (default: `1`)
+    * `:count`   — max number of transaction envelopes to collect (default: `1`)
     * `:timeout` — ms to wait for each envelope (default: `#{1000}`)
 
   ## Examples

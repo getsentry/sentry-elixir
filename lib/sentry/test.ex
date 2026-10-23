@@ -692,6 +692,39 @@ defmodule Sentry.Test do
     end
   end
 
+  # Keeps reading until `expected_count` envelopes contain a payload of the
+  # requested type, or the next envelope does not arrive within `timeout`.
+  # Other envelopes are discarded: a log or metric posted by a background
+  # process must not consume a slot the caller reserved for a transaction.
+  defp collect_typed_envelopes(ref, expected_count, opts, extract_fun) do
+    timeout = Keyword.get(opts, :timeout, 1000)
+    do_collect_typed_envelopes(ref, expected_count, timeout, extract_fun, [])
+  end
+
+  defp do_collect_typed_envelopes(_ref, 0, _timeout, _extract_fun, acc), do: Enum.reverse(acc)
+
+  defp do_collect_typed_envelopes(ref, remaining, timeout, extract_fun, acc) do
+    receive do
+      {:bypass_envelope, ^ref, body} ->
+        case extract_fun.([decode_envelope!(body)]) do
+          [] ->
+            do_collect_typed_envelopes(ref, remaining, timeout, extract_fun, acc)
+
+          payloads ->
+            do_collect_typed_envelopes(
+              ref,
+              remaining - 1,
+              timeout,
+              extract_fun,
+              Enum.reverse(payloads, acc)
+            )
+        end
+    after
+      timeout ->
+        Enum.reverse(acc)
+    end
+  end
+
   @doc """
   Extracts event payloads from decoded envelope item lists.
   """
@@ -753,8 +786,8 @@ defmodule Sentry.Test do
   @doc """
   Collects events sent through a Bypass envelope collector.
 
-  This is a high-level helper combining `collect_envelopes/3` and `extract_events/1`.
-  Use this instead of `collect_envelopes(ref, count) |> extract_events()`.
+  Envelopes that do not contain an event are skipped and do not count toward
+  `expected_count`. `:timeout` is how long to wait for the next envelope.
 
   ## Options
 
@@ -770,14 +803,14 @@ defmodule Sentry.Test do
   @doc since: "13.0.0"
   @spec collect_sentry_events(reference(), pos_integer(), keyword()) :: [map()]
   def collect_sentry_events(ref, expected_count, opts \\ []) do
-    collect_envelopes(ref, expected_count, opts) |> extract_events()
+    collect_typed_envelopes(ref, expected_count, opts, &extract_events/1)
   end
 
   @doc """
   Collects transactions sent through a Bypass envelope collector.
 
-  This is a high-level helper combining `collect_envelopes/3` and `extract_transactions/1`.
-  Use this instead of `collect_envelopes(ref, count) |> extract_transactions()`.
+  Envelopes that do not contain a transaction are skipped and do not count
+  toward `expected_count`. `:timeout` is how long to wait for the next envelope.
 
   ## Options
 
@@ -793,14 +826,14 @@ defmodule Sentry.Test do
   @doc since: "13.0.0"
   @spec collect_sentry_transactions(reference(), pos_integer(), keyword()) :: [map()]
   def collect_sentry_transactions(ref, expected_count, opts \\ []) do
-    collect_envelopes(ref, expected_count, opts) |> extract_transactions()
+    collect_typed_envelopes(ref, expected_count, opts, &extract_transactions/1)
   end
 
   @doc """
   Collects log items sent through a Bypass envelope collector.
 
-  This is a high-level helper combining `collect_envelopes/3` and `extract_log_items/1`.
-  Use this instead of `collect_envelopes(ref, count) |> extract_log_items()`.
+  Envelopes that do not contain a log item are skipped and do not count toward
+  `expected_count`. `:timeout` is how long to wait for the next envelope.
 
   ## Options
 
@@ -816,14 +849,14 @@ defmodule Sentry.Test do
   @doc since: "13.0.0"
   @spec collect_sentry_logs(reference(), pos_integer(), keyword()) :: [map()]
   def collect_sentry_logs(ref, expected_count, opts \\ []) do
-    collect_envelopes(ref, expected_count, opts) |> extract_log_items()
+    collect_typed_envelopes(ref, expected_count, opts, &extract_log_items/1)
   end
 
   @doc """
   Collects check-in payloads sent through a Bypass envelope collector.
 
-  This is a high-level helper combining `collect_envelopes/3` and `extract_check_ins/1`.
-  Use this instead of manually destructuring `[[{header, body}]]` from `collect_envelopes/3`.
+  Envelopes that do not contain a check-in are skipped and do not count toward
+  `expected_count`. `:timeout` is how long to wait for the next envelope.
 
   ## Options
 
@@ -840,14 +873,14 @@ defmodule Sentry.Test do
   @doc since: "13.0.0"
   @spec collect_sentry_check_ins(reference(), pos_integer(), keyword()) :: [map()]
   def collect_sentry_check_ins(ref, expected_count, opts \\ []) do
-    collect_envelopes(ref, expected_count, opts) |> extract_check_ins()
+    collect_typed_envelopes(ref, expected_count, opts, &extract_check_ins/1)
   end
 
   @doc """
   Collects metric batch payloads sent through a Bypass envelope collector.
 
-  This is a high-level helper combining `collect_envelopes/3` and `extract_metric_items/1`.
-  Use this instead of `collect_envelopes(ref, count) |> extract_metric_items()`.
+  Envelopes that do not contain a metric batch are skipped and do not count
+  toward `expected_count`. `:timeout` is how long to wait for the next envelope.
 
   Each returned map has an `"items"` key containing the individual metric maps.
 
@@ -867,7 +900,7 @@ defmodule Sentry.Test do
   @doc since: "13.0.0"
   @spec collect_sentry_metric_items(reference(), pos_integer(), keyword()) :: [map()]
   def collect_sentry_metric_items(ref, expected_count, opts \\ []) do
-    collect_envelopes(ref, expected_count, opts) |> extract_metric_items()
+    collect_typed_envelopes(ref, expected_count, opts, &extract_metric_items/1)
   end
 
   @doc """
