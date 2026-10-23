@@ -21,7 +21,7 @@ defmodule Sentry.Config do
       type: :integer,
       default: 600_000,
       doc: """
-      The time in milliseconds that a check-in ID will live after it has been created.
+      How long, in milliseconds, to remember the ID of a check-in that has not finished.
 
       The SDK reports the start and end of each check-in. A check-in is used to track the
       progress of a specific check-in event associated with cron job telemetry events that are a part

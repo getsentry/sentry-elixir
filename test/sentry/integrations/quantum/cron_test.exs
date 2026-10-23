@@ -5,6 +5,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   import ExUnit.CaptureLog
   import Sentry.Test.Assertions
+  import Sentry.TestHelpers
 
   alias Sentry.Test, as: SentryTest
 
@@ -79,6 +80,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   test "captures exception events with monitor config", %{ref: ref} do
     span_ref = make_ref()
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -93,7 +95,6 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     })
 
     [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -113,6 +114,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   test "captures stop events with monitor config", %{ref: ref} do
     span_ref = make_ref()
+    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -126,7 +128,6 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     })
 
     [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
-    id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     assert_sentry_report(check_in_body,
       check_in_id: id,
@@ -150,6 +151,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       ] do
     test "works for a job named #{inspect(job_name)}", %{ref: ref} do
       span_ref = make_ref()
+      _ = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
       duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -169,6 +171,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   test "works for a job without the name", %{ref: ref} do
     span_ref = make_ref()
+    _ = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
 
     duration = System.convert_time_unit(12_099, :millisecond, :native)
 
@@ -207,5 +210,37 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
     assert_sentry_report(start_body, check_in_id: id)
     assert_sentry_report(stop_body, check_in_id: id)
+    assert :ets.lookup(:sentry_cron_mappings, "quantum-#{:erlang.phash2(span_ref)}") == []
+  end
+
+  for event <- [:stop, :exception] do
+    test "does not report a Quantum #{event} check-in after its id mapping expires", %{ref: ref} do
+      span_ref = make_ref()
+      cron_key = "quantum-#{:erlang.phash2(span_ref)}"
+
+      job =
+        Scheduler.new_job(
+          name: :test_job,
+          schedule: Crontab.CronExpression.Parser.parse!("@daily")
+        )
+
+      :telemetry.execute([:quantum, :job, :start], %{}, %{
+        job: job,
+        telemetry_span_context: span_ref
+      })
+
+      [start_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+      assert_sentry_report(start_body, status: "in_progress")
+
+      expire_check_in_mapping!(cron_key)
+
+      :telemetry.execute([:quantum, :job, unquote(event)], %{duration: 0}, %{
+        job: job,
+        telemetry_span_context: span_ref
+      })
+
+      refute_sentry_check_in(ref)
+      assert :ets.lookup(:sentry_cron_mappings, cron_key) == []
+    end
   end
 end

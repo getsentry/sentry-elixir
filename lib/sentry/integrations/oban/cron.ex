@@ -75,7 +75,7 @@ defmodule Sentry.Integrations.Oban.Cron do
   end
 
   defp handle_oban_job_event(:start, _measurements, metadata, config) do
-    if opts = job_to_check_in_opts(metadata.job, config) do
+    if opts = job_to_check_in_opts(metadata.job, config, :start) do
       opts
       |> Keyword.merge(status: :in_progress)
       |> Sentry.capture_check_in()
@@ -106,7 +106,7 @@ defmodule Sentry.Integrations.Oban.Cron do
 
   defp maybe_capture_check_in(status, measurements, metadata, config) do
     if status != :error or should_report_error_check_in?(metadata.job, config) do
-      if opts = job_to_check_in_opts(metadata.job, config) do
+      if opts = job_to_check_in_opts(metadata.job, config, :finish) do
         opts
         |> Keyword.merge(status: status, duration: duration_in_seconds(measurements))
         |> Sentry.capture_check_in()
@@ -118,7 +118,7 @@ defmodule Sentry.Integrations.Oban.Cron do
     Callbacks.should_report?(config, :should_report_error_check_in_callback, job)
   end
 
-  defp job_to_check_in_opts(job, config) when is_struct(job, Oban.Job) do
+  defp job_to_check_in_opts(job, config, phase) when is_struct(job, Oban.Job) do
     # Check schedule first - if empty (e.g., @reboot), skip check-in entirely
     # since @reboot can't be expressed as a cron/interval schedule
     case schedule_opts(job) do
@@ -126,24 +126,31 @@ defmodule Sentry.Integrations.Oban.Cron do
         nil
 
       schedule_opts ->
-        monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
-        monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
-        monitor_config_opts = Keyword.merge(monitor_config_opts, schedule_opts)
+        case check_in_id(job.id, phase) do
+          nil ->
+            nil
 
-        monitor_slug = monitor_slug(job, config[:monitor_slug_generator])
+          id ->
+            monitor_config_opts = Sentry.Config.integrations()[:monitor_config_defaults]
+            monitor_config_opts = maybe_put_timezone_option(monitor_config_opts, job)
+            monitor_config_opts = Keyword.merge(monitor_config_opts, schedule_opts)
 
-        id = CheckInIDMappings.lookup_or_insert_new(job.id)
+            monitor_slug = monitor_slug(job, config[:monitor_slug_generator])
 
-        opts = [
-          check_in_id: id,
-          # This is already a binary.
-          monitor_slug: monitor_slug,
-          monitor_config: monitor_config_opts
-        ]
+            opts = [
+              check_in_id: id,
+              # This is already a binary.
+              monitor_slug: monitor_slug,
+              monitor_config: monitor_config_opts
+            ]
 
-        resolve_custom_opts(opts, job)
+            resolve_custom_opts(opts, job)
+        end
     end
   end
+
+  defp check_in_id(cron_key, :start), do: CheckInIDMappings.lookup_or_insert_new(cron_key)
+  defp check_in_id(cron_key, :finish), do: CheckInIDMappings.pop(cron_key)
 
   defp resolve_custom_opts(opts, %{worker: worker} = job)
        when is_struct(job, Oban.Job) and is_binary(worker) do
