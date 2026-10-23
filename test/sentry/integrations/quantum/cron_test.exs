@@ -5,6 +5,7 @@ defmodule Sentry.Integrations.Quantum.CronTest do
 
   import ExUnit.CaptureLog
   import Sentry.Test.Assertions
+  import Sentry.TestHelpers
 
   alias Sentry.Test, as: SentryTest
 
@@ -241,23 +242,5 @@ defmodule Sentry.Integrations.Quantum.CronTest do
       refute_sentry_check_in(ref)
       assert :ets.lookup(:sentry_cron_mappings, cron_key) == []
     end
-  end
-
-  defp expire_check_in_mapping!(cron_key) do
-    pid = Process.whereis(CheckInIDMappings)
-    ttl = :sys.get_state(pid)
-
-    case :ets.lookup(:sentry_cron_mappings, cron_key) do
-      [{^cron_key, uuid, _inserted_at}] ->
-        expired_at = System.system_time(:millisecond) - ttl - 1
-        true = :ets.insert(:sentry_cron_mappings, {cron_key, uuid, expired_at})
-
-      [] ->
-        flunk("expected a check-in id mapping for #{inspect(cron_key)}")
-    end
-
-    send(pid, :sweep)
-    _ = :sys.get_state(pid)
-    assert :ets.lookup(:sentry_cron_mappings, cron_key) == []
   end
 end

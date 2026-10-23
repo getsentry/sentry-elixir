@@ -1,6 +1,7 @@
 defmodule Sentry.TestHelpers do
   import ExUnit.Assertions
 
+  alias Sentry.Integrations.CheckInIDMappings
   alias Sentry.Interfaces.Span
   alias Sentry.Transaction
 
@@ -177,6 +178,31 @@ defmodule Sentry.TestHelpers do
     :ok
   catch
     :exit, _ -> :ok
+  end
+
+  @doc """
+  Expires the check-in id stored for `cron_key` and waits until the sweep drops it.
+
+  Backdates the row past the mapping process TTL, sends `:sweep`, and asserts
+  the row is gone. A finish event then sees no start id and skips the check-in.
+  """
+  @spec expire_check_in_mapping!(term()) :: true
+  def expire_check_in_mapping!(cron_key) do
+    pid = Process.whereis(CheckInIDMappings)
+    ttl = :sys.get_state(pid)
+
+    case :ets.lookup(:sentry_cron_mappings, cron_key) do
+      [{^cron_key, uuid, _inserted_at}] ->
+        expired_at = System.system_time(:millisecond) - ttl - 1
+        true = :ets.insert(:sentry_cron_mappings, {cron_key, uuid, expired_at})
+
+      [] ->
+        flunk("expected a check-in id mapping for #{inspect(cron_key)}")
+    end
+
+    send(pid, :sweep)
+    _ = :sys.get_state(pid)
+    assert :ets.lookup(:sentry_cron_mappings, cron_key) == []
   end
 
   @doc """
