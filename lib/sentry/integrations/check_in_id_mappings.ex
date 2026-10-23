@@ -14,7 +14,7 @@ defmodule Sentry.Integrations.CheckInIDMappings do
     GenServer.start_link(__MODULE__, ttl_millisec, name: name)
   end
 
-  @spec lookup_or_insert_new(String.t()) :: UUID.t()
+  @spec lookup_or_insert_new(term()) :: UUID.t()
   def lookup_or_insert_new(cron_key) do
     inserted_at = System.system_time(:millisecond)
 
@@ -26,6 +26,17 @@ defmodule Sentry.Integrations.CheckInIDMappings do
         uuid = UUID.uuid4_hex()
         :ets.insert(@table, {cron_key, uuid, inserted_at})
         uuid
+    end
+  end
+
+  # Take the id recorded at start and drop the row. A missing row means the job never
+  # started, or the mapping was swept after `max_expected_check_in_time`. Callers skip
+  # the end event instead of inserting a new id.
+  @spec pop(term()) :: UUID.t() | nil
+  def pop(cron_key) do
+    case :ets.take(@table, cron_key) do
+      [{^cron_key, uuid, _inserted_at}] -> uuid
+      [] -> nil
     end
   end
 
