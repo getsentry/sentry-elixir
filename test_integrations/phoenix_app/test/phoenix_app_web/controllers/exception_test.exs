@@ -32,7 +32,7 @@ defmodule Sentry.Integrations.Phoenix.ExceptionTest do
         original_exception: %RuntimeError{message: "Traced exception"}
       )
 
-    transaction = find_sentry_transaction!(ref, count: 2, transaction: "process_order")
+    transaction = find_sentry_transaction!(ref, transaction: "process_order")
 
     assert event.contexts.trace.trace_id == transaction["contexts"]["trace"]["trace_id"]
     assert event.contexts.trace.span_id == transaction["contexts"]["trace"]["span_id"]

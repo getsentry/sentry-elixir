@@ -119,6 +119,26 @@ defmodule Sentry.TestTest do
       )
     end
 
+    test "typed collectors skip envelopes that do not contain the requested item" do
+      %{ref: ref} = SentryTest.setup_sentry(collect_envelopes: true)
+
+      send(self(), {:bypass_envelope, ref, envelope("log", %{"items" => []})})
+      send(self(), {:bypass_envelope, ref, envelope("transaction", %{"transaction" => "first"})})
+      send(self(), {:bypass_envelope, ref, envelope("trace_metric", %{"items" => []})})
+      send(self(), {:bypass_envelope, ref, envelope("transaction", %{"transaction" => "second"})})
+
+      assert [%{"transaction" => "first"}, %{"transaction" => "second"}] =
+               SentryTest.collect_sentry_transactions(ref, 2, timeout: 50)
+    end
+
+    test "typed collectors return what arrived when the next envelope times out" do
+      %{ref: ref} = SentryTest.setup_sentry(collect_envelopes: true)
+
+      send(self(), {:bypass_envelope, ref, envelope("event", %{"message" => "ignored"})})
+
+      assert [] = SentryTest.collect_sentry_transactions(ref, 1, timeout: 50)
+    end
+
     test "collect_envelopes coexists with :telemetry_processor and config options" do
       %{ref: ref, telemetry_processor: name} =
         SentryTest.setup_sentry(
@@ -616,5 +636,13 @@ defmodule Sentry.TestTest do
 
       assert dropped_count == 9
     end
+  end
+
+  defp envelope(type, payload) do
+    json_library = Sentry.Config.json_library()
+    {:ok, id_line} = Sentry.JSON.encode(%{"event_id" => Sentry.UUID.uuid4_hex()}, json_library)
+    {:ok, header} = Sentry.JSON.encode(%{"type" => type}, json_library)
+    {:ok, item} = Sentry.JSON.encode(payload, json_library)
+    Enum.join([id_line, header, item], "\n")
   end
 end
