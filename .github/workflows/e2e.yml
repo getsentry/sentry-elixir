@@ -47,9 +47,9 @@ jobs:
           path: |
             test_integrations/tracing/node_modules
             test_integrations/tracing/svelte_mini/node_modules
-          key: ${{ runner.os }}-node-20-${{ hashFiles('test_integrations/tracing/package-lock.json', 'test_integrations/tracing/svelte_mini/package-lock.json') }}
+          key: ${{ runner.os }}-node-22-${{ hashFiles('test_integrations/tracing/package-lock.json', 'test_integrations/tracing/svelte_mini/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-20-
+            ${{ runner.os }}-node-22-
 
       - name: Install main project dependencies
         run: mix deps.get
