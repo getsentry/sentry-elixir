@@ -12,27 +12,33 @@ permissions:
 jobs:
   update-lockfiles:
     name: Refresh mix.lock files (${{ matrix.bucket }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         # Each project's mix.exs picks its lockfile based on the running Elixir
         # version (see `lockfile/1` in mix.exs), so one Elixir version per
-        # supported range is needed to refresh every lockfile bucket.
+        # supported range is needed to refresh every lockfile bucket. Older OTP
+        # versions have no prebuilt binaries for newer Ubuntu images, so `os`
+        # mirrors the runner pinning in main.yml.
         include:
           - bucket: "1.13-1.14"
             elixir: "1.13"
             otp: "25.3"
+            os: ubuntu-24.04
           - bucket: "1.15-1.17"
             elixir: "1.17"
             otp: "26.2"
+            os: ubuntu-24.04
           - bucket: "1.18"
             elixir: "1.18"
             otp: "27.2"
+            os: ubuntu-latest
           - bucket: "default"
             elixir: "1.20.2-otp-29"
             otp: "29.0.1"
+            os: ubuntu-latest
 
     steps:
       - name: Check out this repository
