@@ -1,3 +1,19 @@
+## 14.0.1
+
+### Bug Fixes 🐛
+
+- Correctly classify HTTP statuses in spans by @whatyouhide in [#1245](https://github.com/getsentry/sentry-elixir/pull/1245)
+- Only create new check in IDs on "start" by @whatyouhide in [#1252](https://github.com/getsentry/sentry-elixir/pull/1252)
+- Stop dropping transaction root status by @whatyouhide in [#1244](https://github.com/getsentry/sentry-elixir/pull/1244)
+- Don't discard client reports on every single request error by @whatyouhide in [#1246](https://github.com/getsentry/sentry-elixir/pull/1246)
+- Correct RateLimiter.start_under_sentry_supervisor/2 spec by @lukaszsamson in [#1248](https://github.com/getsentry/sentry-elixir/pull/1248)
+- (docs) Point to the correct migration guide URLs by @solnic in [#1241](https://github.com/getsentry/sentry-elixir/pull/1241)
+- (test) Skip unrelated envelopes in typed collectors by @whatyouhide in [#1253](https://github.com/getsentry/sentry-elixir/pull/1253)
+
+### Other
+
+- Fix compilation warning on Elixir 1.20+ by @whatyouhide in [#1243](https://github.com/getsentry/sentry-elixir/pull/1243)
+
 ## 14.0.0
 
 The `:enable_logs` and `:enable_metrics` options have been removed. Structured logs are now enabled by setting `:level` inside the `:logs` option (for example, `logs: [level: :info]`). The `:level` key defaults to `nil`, so if you only delete `enable_logs: true` and keep a `:logs` block without `:level`, the SDK still reports crashes but stops sending structured logs. Metrics are always on and are sent unconditionally. To stop metrics from being sent, drop them in a `:before_send_metric` callback. See the [13.x to 14.x upgrade guide](https://hexdocs.pm/sentry/upgrade-14-x.html) for details.
