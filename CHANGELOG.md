@@ -2,14 +2,13 @@
 
 ### Bug Fixes 🐛
 
-- (docs) Point to the correct migration guide URLs by @solnic in [#1241](https://github.com/getsentry/sentry-elixir/pull/1241)
-- (test) Skip unrelated envelopes in typed collectors by @whatyouhide in [#1253](https://github.com/getsentry/sentry-elixir/pull/1253)
-- (tests) 302 is now ok by @solnic in [#1258](https://github.com/getsentry/sentry-elixir/pull/1258)
 - Correctly classify HTTP statuses in spans by @whatyouhide in [#1245](https://github.com/getsentry/sentry-elixir/pull/1245)
 - Only create new check in IDs on "start" by @whatyouhide in [#1252](https://github.com/getsentry/sentry-elixir/pull/1252)
 - Stop dropping transaction root status by @whatyouhide in [#1244](https://github.com/getsentry/sentry-elixir/pull/1244)
 - Don't discard client reports on every single request error by @whatyouhide in [#1246](https://github.com/getsentry/sentry-elixir/pull/1246)
 - Correct RateLimiter.start_under_sentry_supervisor/2 spec by @lukaszsamson in [#1248](https://github.com/getsentry/sentry-elixir/pull/1248)
+- (docs) Point to the correct migration guide URLs by @solnic in [#1241](https://github.com/getsentry/sentry-elixir/pull/1241)
+- (test) Skip unrelated envelopes in typed collectors by @whatyouhide in [#1253](https://github.com/getsentry/sentry-elixir/pull/1253)
 
 ### Other
 
