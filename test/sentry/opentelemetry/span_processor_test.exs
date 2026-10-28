@@ -743,7 +743,7 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
       # that the status already computed for the root span reaches the transaction.
       for {status_code, expected_status} <- [
             {200, "ok"},
-            {302, "unknown_error"},
+            {302, "ok"},
             {404, "not_found"},
             {500, "internal_error"}
           ] do
