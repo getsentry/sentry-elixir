@@ -1,0 +1,9 @@
+{
+  "key": "elixir.runtime.run_queue.length",
+  "brief": "Number of processes and ports ready to run but waiting in a run queue, broken down by run queue type.",
+  "instrument": "gauge",
+  "unit": "none",
+  "is_in_otel": false,
+  "requirement_level": "opt_in",
+  "attributes": ["elixir.run_queue.type"]
+}

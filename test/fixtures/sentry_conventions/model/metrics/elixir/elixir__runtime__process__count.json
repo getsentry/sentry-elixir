@@ -1,0 +1,8 @@
+{
+  "key": "elixir.runtime.process.count",
+  "brief": "Number of processes currently existing in the BEAM.",
+  "instrument": "gauge",
+  "unit": "none",
+  "is_in_otel": false,
+  "requirement_level": "opt_in"
+}

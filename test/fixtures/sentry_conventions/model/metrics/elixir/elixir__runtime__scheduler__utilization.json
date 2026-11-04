@@ -1,0 +1,8 @@
+{
+  "key": "elixir.runtime.scheduler.utilization",
+  "brief": "Fraction of wall time the normal BEAM schedulers spent busy since the previous sample, between 0.0 and 1.0.",
+  "instrument": "gauge",
+  "unit": "ratio",
+  "is_in_otel": false,
+  "requirement_level": "opt_in"
+}
