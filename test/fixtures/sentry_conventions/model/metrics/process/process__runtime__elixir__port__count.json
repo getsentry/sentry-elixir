@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.port.count",
+  "key": "process.runtime.elixir.port.count",
   "brief": "Number of ports currently existing in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

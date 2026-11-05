@@ -1,5 +1,5 @@
 {
-  "key": "elixir.run_queue.type",
+  "key": "process.runtime.elixir.run_queue.type",
   "brief": "The kind of BEAM run queue a measurement covers: cpu for the normal and dirty CPU scheduler run queues, io for the dirty IO run queue.",
   "type": "string",
   "apply_scrubbing": {
@@ -11,7 +11,7 @@
   "changelog": [
     {
       "version": "next",
-      "description": "Added elixir.run_queue.type attribute"
+      "description": "Added process.runtime.elixir.run_queue.type attribute"
     }
   ]
 }

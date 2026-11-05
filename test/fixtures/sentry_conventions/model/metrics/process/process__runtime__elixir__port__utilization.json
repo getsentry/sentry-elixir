@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.port.utilization",
+  "key": "process.runtime.elixir.port.utilization",
   "brief": "Ratio of existing ports to the maximum the BEAM allows, between 0.0 and 1.0.",
   "instrument": "gauge",
   "unit": "ratio",

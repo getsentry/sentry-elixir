@@ -24,10 +24,13 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "memory metrics" do
-    test "reports one elixir.runtime.memory.used gauge in bytes per memory type" do
+    test "reports one process.runtime.elixir.memory.used gauge in bytes per memory type" do
       metrics = emit_memory()
 
-      assert Enum.all?(metrics, &(&1.name == "elixir.runtime.memory.used" and &1.unit == "byte"))
+      assert Enum.all?(
+               metrics,
+               &(&1.name == "process.runtime.elixir.memory.used" and &1.unit == "byte")
+             )
 
       assert memory_by_type(metrics) == %{
                "processes" => 40_000,
@@ -68,15 +71,15 @@ defmodule Sentry.Metrics.RuntimeTest do
   end
 
   describe "run queue metrics" do
-    test "reports one unitless elixir.runtime.run_queue.length gauge per run queue type" do
+    test "reports one unitless process.runtime.elixir.run_queue.length gauge per run queue type" do
       metrics = emit([:vm, :total_run_queue_lengths], %{total: 7, cpu: 5, io: 2})
 
       assert Enum.all?(
                metrics,
-               &(&1.name == "elixir.runtime.run_queue.length" and &1.unit == "none")
+               &(&1.name == "process.runtime.elixir.run_queue.length" and &1.unit == "none")
              )
 
-      assert Map.new(metrics, &{&1.attributes["elixir.run_queue.type"], &1.value}) ==
+      assert Map.new(metrics, &{&1.attributes["process.runtime.elixir.run_queue.type"], &1.value}) ==
                %{"cpu" => 5, "io" => 2}
     end
   end
@@ -96,12 +99,12 @@ defmodule Sentry.Metrics.RuntimeTest do
 
       for {name, count, limit} <- [{"process", 100, 1_000}, {"atom", 50, 500}, {"port", 4, 200}] do
         assert %{value: ^count, unit: "none"} =
-                 find_metric!(metrics, "elixir.runtime.#{name}.count")
+                 find_metric!(metrics, "process.runtime.elixir.#{name}.count")
 
         assert %{value: ^limit, unit: "none"} =
-                 find_metric!(metrics, "elixir.runtime.#{name}.limit")
+                 find_metric!(metrics, "process.runtime.elixir.#{name}.limit")
 
-        utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
+        utilization = find_metric!(metrics, "process.runtime.elixir.#{name}.utilization")
         assert utilization.value == count / limit
         assert utilization.unit == "ratio"
       end
@@ -110,7 +113,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "omits the limit and the ratio when the poller does not report limits" do
       metrics = emit([:vm, :system_counts], %{process_count: 100})
 
-      assert [%{name: "elixir.runtime.process.count", value: 100}] = metrics
+      assert [%{name: "process.runtime.elixir.process.count", value: 100}] = metrics
     end
   end
 
@@ -118,7 +121,7 @@ defmodule Sentry.Metrics.RuntimeTest do
     test "is not reported by the memory event" do
       metrics = emit_memory()
 
-      refute "elixir.runtime.scheduler.utilization" in Enum.map(metrics, & &1.name)
+      refute "process.runtime.elixir.scheduler.utilization" in Enum.map(metrics, & &1.name)
     end
 
     test "reports nothing on the first measurement, which only takes a baseline" do
@@ -136,7 +139,7 @@ defmodule Sentry.Metrics.RuntimeTest do
       assert :ok = Runtime.dispatch_scheduler_utilization()
       assert :ok = Runtime.dispatch_scheduler_utilization()
 
-      metric = assert_sentry_metric(:gauge, name: "elixir.runtime.scheduler.utilization")
+      metric = assert_sentry_metric(:gauge, name: "process.runtime.elixir.scheduler.utilization")
 
       assert metric.unit == "ratio"
       assert metric.value >= 0.0 and metric.value <= 1.0
@@ -173,7 +176,7 @@ defmodule Sentry.Metrics.RuntimeTest do
       collect_once(poller)
       collect_once(poller)
 
-      assert_sentry_metric(:gauge, name: "elixir.runtime.scheduler.utilization")
+      assert_sentry_metric(:gauge, name: "process.runtime.elixir.scheduler.utilization")
     end
   end
 
@@ -191,9 +194,9 @@ defmodule Sentry.Metrics.RuntimeTest do
       end
     end
 
-    test "names every metric under the elixir.runtime namespace" do
+    test "names every metric under the process.runtime.elixir namespace" do
       for metric <- emit_memory() do
-        assert String.starts_with?(metric.name, "elixir.runtime.")
+        assert String.starts_with?(metric.name, "process.runtime.elixir.")
       end
     end
 
@@ -228,12 +231,12 @@ defmodule Sentry.Metrics.RuntimeTest do
       :ok = SentryTest.allow_sentry_reports(self(), poller)
       collect_once(poller)
 
-      metric = assert_sentry_metric(:gauge, name: "elixir.runtime.memory.used")
+      metric = assert_sentry_metric(:gauge, name: "process.runtime.elixir.memory.used")
       assert metric.value > 0
 
-      assert_sentry_metric(:gauge, name: "elixir.runtime.run_queue.length")
-      assert_sentry_metric(:gauge, name: "elixir.runtime.process.count")
-      assert_sentry_metric(:gauge, name: "elixir.runtime.process.limit")
+      assert_sentry_metric(:gauge, name: "process.runtime.elixir.run_queue.length")
+      assert_sentry_metric(:gauge, name: "process.runtime.elixir.process.count")
+      assert_sentry_metric(:gauge, name: "process.runtime.elixir.process.limit")
     end
   end
 
@@ -280,8 +283,8 @@ defmodule Sentry.Metrics.RuntimeTest do
 
   defp memory_by_type(metrics) do
     metrics
-    |> Enum.filter(&(&1.name == "elixir.runtime.memory.used"))
-    |> Map.new(&{&1.attributes["elixir.memory.type"], &1.value})
+    |> Enum.filter(&(&1.name == "process.runtime.elixir.memory.used"))
+    |> Map.new(&{&1.attributes["process.runtime.elixir.memory.type"], &1.value})
   end
 
   defp find_metric!(metrics, name) do

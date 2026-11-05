@@ -56,19 +56,19 @@ defmodule Sentry.Metrics do
 
   Once enabled, these gauges are reported:
 
-    * `elixir.runtime.memory.used` - memory allocated by the VM, in bytes, reported
-      once per `elixir.memory.type` attribute value: `processes`, `atom`, `binary`,
+    * `process.runtime.elixir.memory.used` - memory allocated by the VM, in bytes, reported
+      once per `process.runtime.elixir.memory.type` attribute value: `processes`, `atom`, `binary`,
       `code`, `ets` and `other`. `other` is everything else the VM has allocated.
       Summing across the types gives the VM total.
-    * `elixir.runtime.run_queue.length` - how many processes are waiting to run,
-      reported once per `elixir.run_queue.type` attribute value: `cpu` for the normal
+    * `process.runtime.elixir.run_queue.length` - how many processes are waiting to run,
+      reported once per `process.runtime.elixir.run_queue.type` attribute value: `cpu` for the normal
       and dirty CPU scheduler run queues and `io` for the dirty IO run queue. Summing
       across the types gives the total run queue length.
-    * `elixir.runtime.process.*`, `elixir.runtime.atom.*` and `elixir.runtime.port.*` -
+    * `process.runtime.elixir.process.*`, `process.runtime.elixir.atom.*` and `process.runtime.elixir.port.*` -
       a `count`, the hard VM `limit`, and the `utilization` ratio between them. The
       `limit` and `utilization` gauges require telemetry_poller 1.3.0 or later; older
       versions report only `count`.
-    * `elixir.runtime.scheduler.utilization` - the busy fraction of scheduler time, as a
+    * `process.runtime.elixir.scheduler.utilization` - the busy fraction of scheduler time, as a
       ratio between `0.0` and `1.0`. Unlike the others this is a delta between two
       samples, so the first collection only takes a baseline and the first value arrives
       one collection later. The SDK polls for it itself, at the period configured for

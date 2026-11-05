@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.port.limit",
+  "key": "process.runtime.elixir.port.limit",
   "brief": "Maximum number of ports that can exist at the same time in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

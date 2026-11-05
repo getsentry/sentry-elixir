@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.process.count",
+  "key": "process.runtime.elixir.process.count",
   "brief": "Number of processes currently existing in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

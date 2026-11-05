@@ -51,9 +51,9 @@ defmodule Sentry.Metrics.Runtime do
   def handle_event(@memory_event, measurements, _metadata, config) do
     report_by_type(
       config,
-      "elixir.runtime.memory.used",
+      "process.runtime.elixir.memory.used",
       "byte",
-      "elixir.memory.type",
+      "process.runtime.elixir.memory.type",
       memory_by_type(measurements)
     )
   end
@@ -61,9 +61,9 @@ defmodule Sentry.Metrics.Runtime do
   def handle_event(@run_queue_event, measurements, _metadata, config) do
     report_by_type(
       config,
-      "elixir.runtime.run_queue.length",
+      "process.runtime.elixir.run_queue.length",
       "none",
-      "elixir.run_queue.type",
+      "process.runtime.elixir.run_queue.type",
       Map.take(measurements, @run_queue_types)
     )
   end
@@ -75,7 +75,7 @@ defmodule Sentry.Metrics.Runtime do
   end
 
   def handle_event(@scheduler_event, %{utilization: utilization}, _metadata, config) do
-    gauge(config, "elixir.runtime.scheduler.utilization", utilization, "ratio")
+    gauge(config, "process.runtime.elixir.scheduler.utilization", utilization, "ratio")
   end
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
@@ -141,15 +141,15 @@ defmodule Sentry.Metrics.Runtime do
   defp report_count(_config, _name, nil, _limit), do: :ok
 
   defp report_count(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.count", count, "none")
+    gauge(config, "process.runtime.elixir.#{name}.count", count, "none")
     report_limit(config, name, count, limit)
   end
 
   defp report_limit(_config, _name, _count, nil), do: :ok
 
   defp report_limit(config, name, count, limit) do
-    gauge(config, "elixir.runtime.#{name}.limit", limit, "none")
-    gauge(config, "elixir.runtime.#{name}.utilization", ratio(count, limit), "ratio")
+    gauge(config, "process.runtime.elixir.#{name}.limit", limit, "none")
+    gauge(config, "process.runtime.elixir.#{name}.utilization", ratio(count, limit), "ratio")
   end
 
   defp ratio(_count, 0), do: 0.0

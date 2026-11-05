@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.process.limit",
+  "key": "process.runtime.elixir.process.limit",
   "brief": "Maximum number of processes that can exist at the same time in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

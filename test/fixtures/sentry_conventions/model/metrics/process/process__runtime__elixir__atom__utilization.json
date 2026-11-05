@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.atom.utilization",
+  "key": "process.runtime.elixir.atom.utilization",
   "brief": "Ratio of existing atoms to the maximum the BEAM allows, between 0.0 and 1.0.",
   "instrument": "gauge",
   "unit": "ratio",

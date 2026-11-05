@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.atom.limit",
+  "key": "process.runtime.elixir.atom.limit",
   "brief": "Maximum number of atoms that can exist at the same time in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

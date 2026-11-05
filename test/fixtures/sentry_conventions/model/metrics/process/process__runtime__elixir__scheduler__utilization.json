@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.scheduler.utilization",
+  "key": "process.runtime.elixir.scheduler.utilization",
   "brief": "Fraction of wall time the normal BEAM schedulers spent busy since the previous sample, between 0.0 and 1.0.",
   "instrument": "gauge",
   "unit": "ratio",

@@ -1,5 +1,5 @@
 {
-  "key": "elixir.runtime.atom.count",
+  "key": "process.runtime.elixir.atom.count",
   "brief": "Number of atoms currently existing in the BEAM.",
   "instrument": "gauge",
   "unit": "none",

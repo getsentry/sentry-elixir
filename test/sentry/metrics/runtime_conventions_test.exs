@@ -6,7 +6,7 @@ defmodule Sentry.Metrics.RuntimeConventionsTest do
   alias Sentry.Metrics.Runtime
   alias Sentry.Test, as: SentryTest
 
-  @namespace "elixir"
+  @namespace "process.runtime.elixir"
   @definitions Path.expand("../../fixtures/sentry_conventions", __DIR__)
 
   setup do
@@ -25,7 +25,7 @@ defmodule Sentry.Metrics.RuntimeConventionsTest do
     assert missing == []
   end
 
-  test "every definition in the elixir namespace is emitted", %{metrics: metrics} do
+  test "every definition in the process.runtime.elixir namespace is emitted", %{metrics: metrics} do
     defined = namespace_definitions() |> Enum.map(& &1["key"]) |> Enum.sort()
 
     assert defined -- metric_names(metrics) == []
@@ -130,7 +130,7 @@ defmodule Sentry.Metrics.RuntimeConventionsTest do
 
   defp namespace_definitions do
     @definitions
-    |> Path.join("model/metrics/#{@namespace}/*.json")
+    |> Path.join("model/metrics/process/process__runtime__elixir__*.json")
     |> Path.wildcard()
     |> Enum.map(&(&1 |> File.read!() |> Jason.decode!()))
   end

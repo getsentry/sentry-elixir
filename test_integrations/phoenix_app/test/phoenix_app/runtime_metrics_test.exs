@@ -13,16 +13,16 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       SentryTest.setup_sentry(collect_envelopes: [type: "trace_metric"])
     end
 
-    test "reports one elixir.runtime.memory.used gauge in bytes per memory type" do
+    test "reports one process.runtime.elixir.memory.used gauge in bytes per memory type" do
       metrics = collect_runtime_metrics([:memory])
 
-      memory_by_type = values_by_type(metrics, "elixir.runtime.memory.used", "elixir.memory.type")
+      memory_by_type = values_by_type(metrics, "process.runtime.elixir.memory.used", "process.runtime.elixir.memory.type")
 
       assert Enum.sort(Map.keys(memory_by_type)) == Enum.sort(@memory_types)
       assert Enum.all?(Map.values(memory_by_type), &(&1 > 0))
 
       assert metrics
-             |> Enum.filter(&(&1.name == "elixir.runtime.memory.used"))
+             |> Enum.filter(&(&1.name == "process.runtime.elixir.memory.used"))
              |> Enum.all?(&(&1.unit == "byte"))
     end
 
@@ -33,7 +33,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       metrics = collect_metrics_from(poller)
       assert_received {:measured_total, ^poller, total}
 
-      assert sum_by_type(metrics, "elixir.runtime.memory.used", "elixir.memory.type") == total
+      assert sum_by_type(metrics, "process.runtime.elixir.memory.used", "process.runtime.elixir.memory.type") == total
     end
 
     test "delivers the gauges to Sentry as trace_metric envelope items", %{ref: ref} do
@@ -41,12 +41,12 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       Sentry.TelemetryProcessor.flush()
 
       [batch] = collect_sentry_metric_items(ref, 1, timeout: 2000)
-      item = Enum.find(batch["items"], &(&1["name"] == "elixir.runtime.memory.used"))
+      item = Enum.find(batch["items"], &(&1["name"] == "process.runtime.elixir.memory.used"))
 
       assert item["type"] == "gauge"
       assert item["unit"] == "byte"
       assert item["value"] > 0
-      assert item["attributes"]["elixir.memory.type"]["value"] in @memory_types
+      assert item["attributes"]["process.runtime.elixir.memory.type"]["value"] in @memory_types
       assert item["attributes"]["sentry.origin"]["value"] == "auto.elixir.runtime_metrics"
     end
   end
@@ -61,13 +61,13 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       metrics = collect_runtime_metrics([:total_run_queue_lengths])
 
       run_queues =
-        values_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type")
+        values_by_type(metrics, "process.runtime.elixir.run_queue.length", "process.runtime.elixir.run_queue.type")
 
       assert Enum.sort(Map.keys(run_queues)) == ["cpu", "io"]
       assert Enum.all?(Map.values(run_queues), &is_integer/1)
 
       assert metrics
-             |> Enum.filter(&(&1.name == "elixir.runtime.run_queue.length"))
+             |> Enum.filter(&(&1.name == "process.runtime.elixir.run_queue.length"))
              |> Enum.all?(&(&1.unit == "none"))
     end
 
@@ -75,7 +75,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       metrics = collect_runtime_metrics([:total_run_queue_lengths])
 
       run_queues =
-        values_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type")
+        values_by_type(metrics, "process.runtime.elixir.run_queue.length", "process.runtime.elixir.run_queue.type")
 
       assert run_queues["cpu"] >= 0
     end
@@ -87,7 +87,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       metrics = collect_metrics_from(poller)
       assert_received {:measured_total, ^poller, total}
 
-      assert sum_by_type(metrics, "elixir.runtime.run_queue.length", "elixir.run_queue.type") ==
+      assert sum_by_type(metrics, "process.runtime.elixir.run_queue.length", "process.runtime.elixir.run_queue.type") ==
                total
     end
   end
@@ -102,9 +102,9 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
       metrics = collect_runtime_metrics([:system_counts])
 
       for name <- ["process", "atom", "port"] do
-        %{value: count, unit: "none"} = find_metric!(metrics, "elixir.runtime.#{name}.count")
-        %{value: limit, unit: "none"} = find_metric!(metrics, "elixir.runtime.#{name}.limit")
-        utilization = find_metric!(metrics, "elixir.runtime.#{name}.utilization")
+        %{value: count, unit: "none"} = find_metric!(metrics, "process.runtime.elixir.#{name}.count")
+        %{value: limit, unit: "none"} = find_metric!(metrics, "process.runtime.elixir.#{name}.limit")
+        utilization = find_metric!(metrics, "process.runtime.elixir.#{name}.utilization")
 
         assert count > 0
         assert count < limit
@@ -121,7 +121,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
             {"atom", :atom_limit},
             {"port", :port_limit}
           ] do
-        assert find_metric!(metrics, "elixir.runtime.#{name}.limit").value ==
+        assert find_metric!(metrics, "process.runtime.elixir.#{name}.limit").value ==
                  :erlang.system_info(key)
       end
     end
@@ -145,7 +145,7 @@ defmodule Sentry.Integrations.Phoenix.RuntimeMetricsTest do
 
       metric =
         SentryTest.pop_sentry_metrics()
-        |> find_metric!("elixir.runtime.scheduler.utilization")
+        |> find_metric!("process.runtime.elixir.scheduler.utilization")
 
       assert metric.unit == "ratio"
       assert metric.value >= 0.0
