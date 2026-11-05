@@ -236,8 +236,18 @@ defmodule Sentry.Mixfile do
   defp aliases do
     [
       test: ["sentry.package_source_code", "test"],
-      "test.integrations": &run_integration_tests_if_supported/1
+      "test.integrations": &run_integration_tests_if_supported/1,
+      "test.conventions": &run_conventions_check/1
     ]
+  end
+
+  defp run_conventions_check(args) do
+    {_, status} =
+      System.cmd(Path.expand("scripts/check_metrics_conventions.sh"), args,
+        into: IO.binstream(:stdio, :line)
+      )
+
+    if status > 0, do: System.at_exit(fn _ -> exit({:shutdown, status}) end)
   end
 
   defp run_integration_tests_if_supported(args) do
