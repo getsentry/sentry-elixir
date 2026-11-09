@@ -27,6 +27,21 @@ defmodule Sentry.Telemetry.BufferTest do
       GenServer.stop(pid)
     end
 
+    test "refuses a capacity smaller than the batch size" do
+      Process.flag(:trap_exit, true)
+
+      assert {:error, {%ArgumentError{message: message}, _stacktrace}} =
+               Buffer.start_link(
+                 category: :log,
+                 name: :test_buffer_capacity_below_batch,
+                 capacity: 2,
+                 batch_size: 5
+               )
+
+      assert message =~ ":batch_size"
+      assert message =~ ":capacity"
+    end
+
     test "allows overriding capacity, batch_size, and timeout" do
       assert {:ok, pid} =
                Buffer.start_link(
@@ -135,7 +150,14 @@ defmodule Sentry.Telemetry.BufferTest do
 
   describe "overflow behavior" do
     test "drops oldest item when buffer is full" do
-      {:ok, pid} = Buffer.start_link(category: :log, name: :test_buffer_overflow, capacity: 2)
+      {:ok, pid} =
+        Buffer.start_link(
+          category: :log,
+          name: :test_buffer_overflow,
+          capacity: 2,
+          batch_size: 1
+        )
+
       Buffer.add(pid, make_item("e1"))
       Buffer.add(pid, make_item("e2"))
       Buffer.add(pid, make_item("e3"))
@@ -172,7 +194,12 @@ defmodule Sentry.Telemetry.BufferTest do
 
     test "FIFO ordering is preserved after overflow" do
       {:ok, pid} =
-        Buffer.start_link(category: :log, name: :test_buffer_fifo_overflow, capacity: 3)
+        Buffer.start_link(
+          category: :log,
+          name: :test_buffer_fifo_overflow,
+          capacity: 3,
+          batch_size: 1
+        )
 
       for i <- 1..5, do: Buffer.add(pid, make_item("e#{i}"))
 
