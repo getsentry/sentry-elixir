@@ -6,6 +6,21 @@ defmodule Sentry.SourcesTest do
 
   alias Sentry.Sources
 
+  @tag :tmp_dir
+  test "hibernates after loading source code into ETS", %{tmp_dir: tmp_dir} do
+    file = Path.join(tmp_dir, "example.ex")
+    lines = %{1 => "defmodule Example do", 2 => "end"}
+    path = Path.join(tmp_dir, "sources.map")
+    File.write!(path, Sources.encode_source_code_map(%{file => lines}))
+    Sentry.TestHelpers.put_test_config(source_code_map_path: path)
+    on_exit(fn -> :ets.delete(Sources, file) end)
+
+    assert {:noreply, :no_state, :hibernate} =
+             Sources.handle_continue(:load_source_code_map, :no_state)
+
+    assert Sources.get_lines_for_file(file) == lines
+  end
+
   describe "load_files/1" do
     test "loads files" do
       paths = [
