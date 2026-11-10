@@ -15,6 +15,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
     alias Sentry.Interfaces.Span
 
+    require Record
+
+    Record.defrecordp(
+      :otel_status,
+      :status,
+      Record.extract(:status, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
+    )
+
     @impl :otel_span_processor
     def on_start(ctx, otel_span, _config) do
       otel_span = mark_parent_is_remote(ctx, otel_span)
@@ -32,8 +40,6 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       # off the wire. Recording it as an attribute here is the only point where
       # that context is still reachable; SpanRecord strips it again so it never
       # reaches a reported payload.
-      require Record
-
       Record.defrecordp(
         :span_ctx,
         Record.extract(:span_ctx, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
@@ -270,7 +276,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp build_trace_context(span_record, opts) do
       {op, description} = get_op_description(span_record)
 
-      data = filter_attributes(span_record.attributes)
+      data = span_data(span_record)
 
       data =
         if Keyword.get(opts, :parent_already_sent?, false) do
@@ -290,7 +296,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       }
 
       # The root span is the transaction, so it is not copied into `spans`.
-      # Its HTTP status still has to land on contexts.trace; child spans keep
+      # Its status still has to land on contexts.trace; child spans keep
       # their own status from build_span/1. Skip the key when there is none.
       context = put_trace_status(context, span_status(span_record))
 
@@ -359,7 +365,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     defp build_span(span_record) do
       {op, description} = get_op_description(span_record)
 
-      filtered_attributes = filter_attributes(span_record.attributes)
+      data = span_data(span_record)
 
       span = %Span{
         op: op,
@@ -370,7 +376,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
         span_id: span_record.span_id,
         parent_span_id: span_record.parent_span_id,
         origin: span_record.origin,
-        data: Map.put(filtered_attributes, "otel.kind", span_record.kind),
+        data: Map.put(data, "otel.kind", span_record.kind),
         status: span_status(span_record)
       }
 
@@ -385,16 +391,48 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
-    defp span_status(%{
-           attributes: %{
-             unquote(to_string(HTTPAttributes.http_response_status_code())) =>
-               http_response_status_code
-           }
+    defp span_data(span_record) do
+      data = filter_attributes(span_record.attributes)
+
+      case span_record.status do
+        otel_status(code: :error, message: message) ->
+          data = Map.put(data, "otel.status_code", "ERROR")
+
+          if is_binary(message) and message != "" do
+            Map.put(data, "otel.status_description", message)
+          else
+            data
+          end
+
+        otel_status(code: :ok) ->
+          Map.put(data, "otel.status_code", "OK")
+
+        _ ->
+          data
+      end
+    end
+
+    # Explicit success takes precedence over inferred HTTP errors. An explicit
+    # error may use a more specific HTTP error status, but cannot become "ok".
+    defp span_status(%{status: otel_status(code: :ok)}), do: "ok"
+
+    defp span_status(span_record) do
+      http_status = http_span_status(span_record.attributes)
+
+      case span_record.status do
+        otel_status(code: :error) when http_status in [nil, "ok"] -> "unknown_error"
+        _ -> http_status
+      end
+    end
+
+    defp http_span_status(%{
+           unquote(to_string(HTTPAttributes.http_response_status_code())) =>
+             http_response_status_code
          }) do
       to_status(http_response_status_code)
     end
 
-    defp span_status(_span_record), do: nil
+    defp http_span_status(_attributes), do: nil
 
     # WebSocket upgrade spans doesn't have a HTTP status
     defp to_status(nil), do: nil

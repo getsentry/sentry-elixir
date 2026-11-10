@@ -730,6 +730,126 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
     end
   end
 
+  describe "OpenTelemetry span status" do
+    @tag span_storage: true
+    test "preserves errors and descriptions on non-HTTP child spans", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      for {system, statement, message} <- [
+            {:redis, "GET cached_key", "Redis command timed out"},
+            {:postgresql, "SELECT 1", "connection not available"}
+          ] do
+        ref = setup_bypass_envelope_collector(bypass)
+
+        Tracer.with_span "parent" do
+          Tracer.with_span "database operation", %{
+            kind: :client,
+            attributes: %{
+              DBAttributes.db_system() => system,
+              "db.statement" => statement
+            }
+          } do
+            Tracer.set_status(:error, message)
+          end
+        end
+
+        [tx] = collect_sentry_transactions(ref, 1)
+        assert [child] = tx["spans"]
+        assert child["op"] == "db"
+        assert child["description"] == statement
+        assert child["status"] == "unknown_error"
+        assert child["data"]["otel.status_code"] == "ERROR"
+        assert child["data"]["otel.status_description"] == message
+        assert child["data"]["db.statement"] == statement
+      end
+    end
+
+    @tag span_storage: true
+    test "preserves error status and description on a non-HTTP transaction root", %{
+      bypass: bypass
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "background operation", %{attributes: %{"component" => "worker"}} do
+        Tracer.set_status(:error, "operation failed")
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+      assert tx["contexts"]["trace"]["status"] == "unknown_error"
+      assert tx["contexts"]["trace"]["data"]["otel.status_code"] == "ERROR"
+      assert tx["contexts"]["trace"]["data"]["otel.status_description"] == "operation failed"
+      assert tx["contexts"]["trace"]["data"]["component"] == "worker"
+    end
+
+    @tag span_storage: true
+    test "distinguishes explicit success, unset status, and errors without a description", %{
+      bypass: bypass
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "parent" do
+        for code <- [:ok, :unset, :error] do
+          Tracer.with_span Atom.to_string(code) do
+            if code != :unset, do: Tracer.set_status(OpenTelemetry.status(code))
+          end
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+      children = Map.new(tx["spans"], &{&1["op"], &1})
+
+      assert children["ok"]["status"] == "ok"
+      assert children["ok"]["data"]["otel.status_code"] == "OK"
+      assert children["unset"]["status"] == nil
+      assert children["error"]["status"] == "unknown_error"
+      assert children["error"]["data"]["otel.status_code"] == "ERROR"
+
+      for child <- Map.values(children) do
+        refute Map.has_key?(child["data"], "otel.status_description")
+      end
+    end
+
+    @tag span_storage: true
+    test "honors explicit OpenTelemetry status while retaining HTTP error classifications", %{
+      bypass: bypass
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      cases = [
+        {:ok, 500, "ok"},
+        {:error, 200, "unknown_error"},
+        {:error, 302, "unknown_error"},
+        {:error, 404, "not_found"},
+        {:error, 503, "unavailable"},
+        {:unset, 200, "ok"},
+        {:unset, 503, "unavailable"}
+      ]
+
+      Tracer.with_span "parent" do
+        for {code, http_code, _expected} <- cases do
+          Tracer.with_span "#{code}-#{http_code}", %{
+            attributes: %{HTTPAttributes.http_response_status_code() => http_code}
+          } do
+            if code != :unset, do: Tracer.set_status(OpenTelemetry.status(code))
+          end
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+      statuses = Map.new(tx["spans"], &{&1["op"], &1["status"]})
+
+      for {code, http_code, expected} <- cases do
+        assert statuses["#{code}-#{http_code}"] == expected
+      end
+    end
+  end
+
   describe "HTTP transaction status" do
     @tag span_storage: true
     test "copies the root span HTTP status onto contexts.trace", %{bypass: bypass} do
