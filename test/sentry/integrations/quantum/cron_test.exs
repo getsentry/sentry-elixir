@@ -78,6 +78,45 @@ defmodule Sentry.Integrations.Quantum.CronTest do
     )
   end
 
+  test "uses default monitor configuration in Sentry's config if present", %{ref: ref} do
+    put_test_config(
+      integrations: [
+        monitor_config_defaults: [
+          checkin_margin: 10,
+          max_runtime: 42,
+          failure_issue_threshold: 84
+        ]
+      ]
+    )
+
+    span_ref = make_ref()
+
+    :telemetry.execute([:quantum, :job, :start], %{}, %{
+      job:
+        Scheduler.new_job(
+          name: :test_job,
+          schedule: Crontab.CronExpression.Parser.parse!("@daily"),
+          timezone: "Europe/Rome"
+        ),
+      telemetry_span_context: span_ref
+    })
+
+    [check_in_body] = SentryTest.collect_sentry_check_ins(ref, 1)
+
+    assert_sentry_report(check_in_body,
+      monitor_config: %{
+        "checkin_margin" => 10,
+        "failure_issue_threshold" => 84,
+        "max_runtime" => 42,
+        "schedule" => %{
+          "type" => "crontab",
+          "value" => "0 0 * * * *"
+        },
+        "timezone" => "Europe/Rome"
+      }
+    )
+  end
+
   test "captures exception events with monitor config", %{ref: ref} do
     span_ref = make_ref()
     id = CheckInIDMappings.lookup_or_insert_new("quantum-#{:erlang.phash2(span_ref)}")
