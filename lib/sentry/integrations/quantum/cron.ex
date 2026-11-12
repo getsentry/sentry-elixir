@@ -74,7 +74,12 @@ defmodule Sentry.Integrations.Quantum.Cron do
             check_in_id: id,
             # This is already a binary.
             monitor_slug: "quantum-#{slugify(job.name)}",
-            monitor_config: [schedule: schedule_opts, timezone: timezone_to_string(job)]
+            monitor_config:
+              Keyword.merge(
+                Sentry.Config.integrations()[:monitor_config_defaults],
+                schedule: schedule_opts,
+                timezone: timezone_to_string(job)
+              )
           ]
       end
     else
