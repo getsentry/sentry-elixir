@@ -7,6 +7,13 @@ exclude =
     [otp_25_plus: true]
   end
 
+exclude =
+  if System.get_env("SENTRY_CONVENTIONS_PATH") do
+    exclude
+  else
+    [{:conventions, true} | exclude]
+  end
+
 ExUnit.start(assert_receive_timeout: 1000, exclude: exclude)
 
 # Start the default-named RateLimiter globally for the entire test suite.
