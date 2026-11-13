@@ -164,7 +164,7 @@ defmodule Sentry.LogEvent do
     # Convert to list of values in template order for storage
     processed_params =
       Enum.map(keys, fn key ->
-        value = Map.get(parameters, key) || Map.get(parameters, to_string(key))
+        value = Map.get(parameters, key, Map.get(parameters, to_string(key)))
         sanitize_attribute_value(value)
       end)
 
@@ -197,7 +197,7 @@ defmodule Sentry.LogEvent do
   defp interpolate_named_placeholders(template, parameters) do
     Regex.replace(~r/%\{(\w+)\}/, template, fn _, key ->
       atom_key = String.to_atom(key)
-      value = Map.get(parameters, atom_key) || Map.get(parameters, key)
+      value = Map.get(parameters, atom_key, Map.get(parameters, key))
       to_string_for_interpolation(value)
     end)
   end
