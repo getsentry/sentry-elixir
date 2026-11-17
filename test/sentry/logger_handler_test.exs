@@ -83,6 +83,8 @@ defmodule Sentry.LoggerHandlerTest do
     assert exception.value == "oops"
   end
 
+  if System.otp_release() < "26", do: @tag(:skip)
+
   test "retrieves context from :callers without copying the caller's whole process dictionary",
        %{sender_ref: ref} do
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
