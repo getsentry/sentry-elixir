@@ -83,6 +83,25 @@ defmodule Sentry.LoggerHandlerTest do
     assert exception.value == "oops"
   end
 
+  test "retrieves context from :callers without copying the caller's whole process dictionary",
+       %{sender_ref: ref} do
+    Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
+
+    # Each level shares its two children, so the term is ~22 words on the heap
+    # and ~100 MB once copied flat.
+    shared_term = Enum.reduce(1..22, :leaf, fn _level, acc -> {acc, acc} end)
+    Process.put(:large_shared_term, shared_term)
+
+    {:ok, _task_pid} =
+      Task.start(fn ->
+        Process.flag(:max_heap_size, %{size: 2_000_000, kill: true, error_logger: false})
+        raise "oops"
+      end)
+
+    assert_receive {^ref, event}, 5000
+    assert event.extra.day_of_week == "Friday"
+  end
+
   describe "with Plug" do
     if System.otp_release() < "26", do: @describetag(:skip)
 
