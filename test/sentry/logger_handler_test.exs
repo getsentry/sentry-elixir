@@ -89,7 +89,7 @@ defmodule Sentry.LoggerHandlerTest do
        %{sender_ref: ref} do
     Sentry.Context.set_extra_context(%{day_of_week: "Friday"})
 
-    # Each level shares its two children, so the term is ~22 words on the heap
+    # Each level shares its two children, so the term is 66 words on the heap
     # and ~100 MB once copied flat.
     shared_term = Enum.reduce(1..22, :leaf, fn _level, acc -> {acc, acc} end)
     Process.put(:large_shared_term, shared_term)
