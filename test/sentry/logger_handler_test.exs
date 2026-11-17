@@ -83,7 +83,15 @@ defmodule Sentry.LoggerHandlerTest do
     assert exception.value == "oops"
   end
 
-  if System.otp_release() < "26", do: @tag(:skip)
+  dictionary_key_supported? =
+    try do
+      :erlang.process_info(self(), {:dictionary, :some_key})
+      true
+    rescue
+      ArgumentError -> false
+    end
+
+  if not dictionary_key_supported?, do: @tag(:skip)
 
   test "retrieves context from :callers without copying the caller's whole process dictionary",
        %{sender_ref: ref} do
