@@ -62,8 +62,7 @@ defmodule Sentry.LoggerUtils do
     logger_metadata_key = Sentry.Context.__logger_metadata_key__()
 
     with {:current_node, true} <- {:current_node, node(caller) == Node.self()},
-         {:dictionary, [_ | _] = dictionary} <- :erlang.process_info(caller, :dictionary),
-         %{^logger_metadata_key => sentry} <- dictionary[:"$logger_metadata$"] do
+         %{^logger_metadata_key => sentry} <- caller_logger_metadata(caller) do
       sentry
     else
       _ -> get_sentry_options_from_callers(rest)
@@ -72,6 +71,22 @@ defmodule Sentry.LoggerUtils do
 
   defp get_sentry_options_from_callers(_other) do
     nil
+  end
+
+  # Copying the whole dictionary of the caller can allocate far more than its heap size when
+  # it holds terms with shared subterms, so read the single key. OTP < 26.2 raises on
+  # {:dictionary, key} and keeps the full copy.
+  defp caller_logger_metadata(caller) do
+    case :erlang.process_info(caller, {:dictionary, :"$logger_metadata$"}) do
+      {{:dictionary, :"$logger_metadata$"}, metadata} -> metadata
+      _ -> nil
+    end
+  rescue
+    ArgumentError ->
+      case :erlang.process_info(caller, :dictionary) do
+        {:dictionary, dictionary} -> dictionary[:"$logger_metadata$"]
+        _ -> nil
+      end
   end
 
   defp logger_metadata(meta, allowed_meta) do
