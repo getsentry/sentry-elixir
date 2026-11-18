@@ -43,6 +43,26 @@ defmodule Sentry.LogEventTest do
       assert result.parameters == ["Jane", "NYC"]
     end
 
+    test "preserves false in named parameters and prefers atom keys" do
+      log_event = %{
+        level: :info,
+        msg: {:string, "active=%{active}"},
+        meta: %{time: 1_000_000_000}
+      }
+
+      for parameters <- [
+            %{active: false},
+            %{"active" => false},
+            %{"active" => true, :active => false}
+          ] do
+        result = LogEvent.from_logger_event(log_event, %{}, parameters)
+
+        assert result.body == "active=false"
+        assert result.template == "active=%{active}"
+        assert result.parameters == [false]
+      end
+    end
+
     test "preserves parameter types with %s placeholders" do
       log_event = %{
         level: :info,
