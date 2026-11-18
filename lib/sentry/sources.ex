@@ -39,7 +39,7 @@ defmodule Sentry.Sources do
         _error -> :ok
       end
 
-    {:noreply, state}
+    {:noreply, state, :hibernate}
   end
 
   ## Other functions
