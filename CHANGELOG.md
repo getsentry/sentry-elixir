@@ -1,3 +1,81 @@
+## 14.1.0
+
+### Breaking Changes 🛠
+
+- (scrubber) Replace redacted values with [Filtered] by @solnic in [#1227](https://github.com/getsentry/sentry-elixir/pull/1227)
+
+### New Features ✨
+
+#### Metrics
+
+- Report scheduler utilization in runtime metrics by @solnic in [#1189](https://github.com/getsentry/sentry-elixir/pull/1189)
+- Report process, atom and port counts in runtime metrics by @solnic in [#1213](https://github.com/getsentry/sentry-elixir/pull/1213)
+- Report run queue depth in runtime metrics by @solnic in [#1212](https://github.com/getsentry/sentry-elixir/pull/1212)
+- Add opt-in BEAM runtime metrics collector by @solnic in [#1188](https://github.com/getsentry/sentry-elixir/pull/1188)
+
+#### Other
+
+- (tracing) Add option to exclude certain http statuses from tracing by @solnic in [#1217](https://github.com/getsentry/sentry-elixir/pull/1217)
+
+### Bug Fixes 🐛
+
+#### Callbacks
+
+- Wrap Oban callbacks by @solnic in [#1224](https://github.com/getsentry/sentry-elixir/pull/1224)
+- Wrap plug and phoenix callbacks by @solnic in [#1223](https://github.com/getsentry/sentry-elixir/pull/1223)
+- Wrap traces sampler callback by @solnic in [#1222](https://github.com/getsentry/sentry-elixir/pull/1222)
+- Wrap log and metric callbacks by @solnic in [#1221](https://github.com/getsentry/sentry-elixir/pull/1221)
+- Wrap event pipeline callbacks by @solnic in [#1220](https://github.com/getsentry/sentry-elixir/pull/1220)
+
+#### Tracing
+
+- Preserve OpenTelemetry span statuses by @dnsbty and @claude in [#1261](https://github.com/getsentry/sentry-elixir/pull/1261)
+- Discard ignored-status transactions as event_processor by @solnic in [#1226](https://github.com/getsentry/sentry-elixir/pull/1226)
+
+#### Other
+
+- (config) Remove broken enable_logs?/0 by @solnic in [#1229](https://github.com/getsentry/sentry-elixir/pull/1229)
+- (deps) Allow telemetry_poller 0.5 alongside 1.x by @solnic in [#1269](https://github.com/getsentry/sentry-elixir/pull/1269)
+- (docs) Point to the correct migration guide URLs by @solnic in [#1241](https://github.com/getsentry/sentry-elixir/pull/1241)
+- (logger) Read only the logger metadata key from callers by @saveman71 in [#1267](https://github.com/getsentry/sentry-elixir/pull/1267)
+- (logs) Preserve false in named parameters by @pcbeingused333 and @claude in [#1264](https://github.com/getsentry/sentry-elixir/pull/1264)
+- (metrics) Attach sentry.timestamp.sequence by @solnic in [#1215](https://github.com/getsentry/sentry-elixir/pull/1215)
+- (quantum) Apply monitor_config_defaults to cron check-ins by @pcbeingused333 and @claude in [#1265](https://github.com/getsentry/sentry-elixir/pull/1265)
+- (test) Skip unrelated envelopes in typed collectors by @whatyouhide and @claude in [#1253](https://github.com/getsentry/sentry-elixir/pull/1253)
+- (tests) 302 is now ok by @solnic in [#1258](https://github.com/getsentry/sentry-elixir/pull/1258)
+- Hibernate sources after loading the source map by @pcbeingused333 and @codex in [#1262](https://github.com/getsentry/sentry-elixir/pull/1262)
+- Correctly classify HTTP statuses in spans by @whatyouhide in [#1245](https://github.com/getsentry/sentry-elixir/pull/1245)
+- Only create new check in IDs on "start" by @whatyouhide and @claude in [#1252](https://github.com/getsentry/sentry-elixir/pull/1252)
+- Stop dropping transaction root status by @whatyouhide and @claude in [#1244](https://github.com/getsentry/sentry-elixir/pull/1244)
+- Don't discard client reports on every single request error by @whatyouhide and @claude in [#1246](https://github.com/getsentry/sentry-elixir/pull/1246)
+- Correct RateLimiter.start_under_sentry_supervisor/2 spec by @lukaszsamson in [#1248](https://github.com/getsentry/sentry-elixir/pull/1248)
+
+### Documentation 📚
+
+- Use dark-mode-aware Sentry logo in READMEs by @szokeasaurusrex with @sentry-junior in [#1255](https://github.com/getsentry/sentry-elixir/pull/1255)
+- Updates for 14.0.0 by @solnic in [#1230](https://github.com/getsentry/sentry-elixir/pull/1230)
+- Add 13.x to 14.x upgrade guide by @solnic in [#1231](https://github.com/getsentry/sentry-elixir/pull/1231)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump castore from 1.0.19 to 1.0.22 by @geoffg-sentry with @sentry-junior in [#1249](https://github.com/getsentry/sentry-elixir/pull/1249)
+- Bump devalue from 5.9.2 to 5.9.4 in /test_integrations/tracing/svelte_mini by @dependabot in [#1238](https://github.com/getsentry/sentry-elixir/pull/1238)
+
+#### Other
+
+- (ci) Bump setup-beam by @solnic in [#1250](https://github.com/getsentry/sentry-elixir/pull/1250)
+- (deps-dev) Bump vite from 8.1.0 to 8.3.4 in /test_integrations/tracing/svelte_mini by @dependabot in [#1251](https://github.com/getsentry/sentry-elixir/pull/1251)
+- (node) Bump Node to 22 by @geoffg-sentry with @sentry-junior in [#1254](https://github.com/getsentry/sentry-elixir/pull/1254)
+- Add CODEOWNERS by @dingsdax with @sentry-junior in [#1263](https://github.com/getsentry/sentry-elixir/pull/1263)
+- Upgrade ubuntu 20.04/22.04 runners to 24.04 by @joshuarli in [#1236](https://github.com/getsentry/sentry-elixir/pull/1236)
+
+### Other
+
+- Align runtime metrics conventions by @solnic in [#1235](https://github.com/getsentry/sentry-elixir/pull/1235)
+- Fix compilation warning on Elixir 1.20+ by @whatyouhide in [#1243](https://github.com/getsentry/sentry-elixir/pull/1243)
+
 ## 14.0.1
 
 ### Bug Fixes 🐛
