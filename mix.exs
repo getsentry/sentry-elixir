@@ -142,7 +142,7 @@ defmodule Sentry.Mixfile do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0", optional: true},
       {:plug, dep_version(:plug, current_elixir_version()), optional: true},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true},
-      {:telemetry_poller, "~> 1.0", optional: true},
+      {:telemetry_poller, "~> 0.5 or ~> 1.0", optional: true},
 
       # Dev and test dependencies
       {:igniter, dep_version(:igniter, current_elixir_version()), only: :test},
@@ -257,6 +257,7 @@ defmodule Sentry.Mixfile do
       run_integration_tests("umbrella", args)
       run_integration_tests("phoenix_app", args)
       run_integration_tests("legacy_otel", args)
+      run_integration_tests("legacy_telemetry_poller", args)
     else
       Mix.shell().info("Skipping integration tests for Elixir versions < 1.16")
     end

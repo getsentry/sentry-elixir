@@ -24,7 +24,7 @@ This is the official Sentry SDK for Elixir. It captures errors, monitors cron jo
 | `lib/mix/tasks/` | Mix tasks (install, test event, source packaging) |
 | `test/` | Unit and integration tests |
 | `test/support/` | Test helpers and shared utilities |
-| `test_integrations/` | Multi-project integration tests (umbrella, phoenix_app, legacy_otel, tracing) |
+| `test_integrations/` | Multi-project integration tests (umbrella, phoenix_app, legacy_otel, legacy_telemetry_poller, tracing) |
 | `config/` | Application configuration |
 | `pages/` | Documentation pages |
 
@@ -111,6 +111,7 @@ The `test_integrations/` directory contains standalone Mix projects:
 - **`umbrella/`** — Multi-app umbrella project
 - **`phoenix_app/`** — Full Phoenix application with HTTP integration tests
 - **`legacy_otel/`** — Legacy OpenTelemetry backward compatibility
+- **`legacy_telemetry_poller/`** — telemetry_poller 0.5 and telemetry 0.4 compatibility
 - **`tracing/`** — End-to-end distributed tracing with Playwright
 
 Run with: `mix test.integrations`

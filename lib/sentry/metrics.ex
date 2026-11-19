@@ -84,9 +84,10 @@ defmodule Sentry.Metrics do
 
       config :telemetry_poller, default: [period: 30_000]
 
-  Add the dependency if you do not have it already:
+  Add the dependency if you do not have it already. Both 0.5 and 1.x work; 1.3.0 or
+  later is needed for the `limit` and `utilization` gauges:
 
-      {:telemetry_poller, "~> 1.0"}
+      {:telemetry_poller, "~> 1.3"}
 
   ### Runtime Version Attributes
 
