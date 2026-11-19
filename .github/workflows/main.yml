@@ -75,6 +75,7 @@ jobs:
           test_integrations/umbrella/deps
           test_integrations/phoenix_app/deps
           test_integrations/legacy_otel/deps
+          test_integrations/legacy_telemetry_poller/deps
         key: |
           ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-deps-${{ hashFiles('**/mix*.lock') }}
 
