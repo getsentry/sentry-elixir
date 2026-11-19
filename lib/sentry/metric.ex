@@ -49,12 +49,22 @@ defmodule Sentry.Metric do
   This adds Sentry-specific attributes like environment, release, SDK info, and server name.
   Per the Sentry Metrics spec, default attributes should be attached before the
   `before_send_metric` callback is applied (step 5 before step 6).
+
+  It also adds `"sentry.is_localhost"`: `true` when the calling process is serving a
+  request whose host is `localhost`, a `*.localhost` name, or a loopback IP address
+  (`127.0.0.0/8` or `::1`), and `false` otherwise, including when the process is not
+  serving a request. The request is the one recorded in the process's
+  `Sentry.Context` request context, as set by `Sentry.PlugContext`. A value of the
+  same name in the metric's attributes takes precedence.
+
+  *Changed in 14.0.0:* adds `"sentry.is_localhost"`.
   """
   @spec attach_default_attributes(t()) :: t()
   def attach_default_attributes(%__MODULE__{} = metric) do
     default_attrs = %{
       "sentry.sdk.name" => "sentry.elixir",
-      "sentry.sdk.version" => @sdk_version
+      "sentry.sdk.version" => @sdk_version,
+      "sentry.is_localhost" => serving_localhost_request?()
     }
 
     # Add optional attributes if configured
@@ -81,6 +91,33 @@ defmodule Sentry.Metric do
 
   defp next_sequence do
     :atomics.add_get(:persistent_term.get(@sequence_key), 1, 1) - 1
+  end
+
+  defp serving_localhost_request? do
+    case request_host(Sentry.Context.get_all().request) do
+      host when is_binary(host) -> localhost?(String.downcase(host))
+      nil -> false
+    end
+  end
+
+  defp request_host(%{env: %{"SERVER_NAME" => host}}) when is_binary(host), do: host
+  defp request_host(%{url: url}) when is_binary(url), do: URI.parse(url).host
+  defp request_host(_request), do: nil
+
+  defp localhost?("localhost"), do: true
+
+  defp localhost?(host) do
+    String.ends_with?(host, ".localhost") or loopback_address?(host)
+  end
+
+  defp loopback_address?(host) do
+    unbracketed_host = host |> String.trim_leading("[") |> String.trim_trailing("]")
+
+    case :inet.parse_address(to_charlist(unbracketed_host)) do
+      {:ok, {127, _, _, _}} -> true
+      {:ok, {0, 0, 0, 0, 0, 0, 0, 1}} -> true
+      _ -> false
+    end
   end
 
   defp maybe_put_attr(attrs, _key, nil), do: attrs
