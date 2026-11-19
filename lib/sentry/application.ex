@@ -125,7 +125,7 @@ defmodule Sentry.Application do
         LoggerUtils.warning(
           "[Sentry] runtime metrics are enabled but the :telemetry_poller application is " <>
             "not available, so process.runtime.elixir.scheduler.utilization will not be reported. " <>
-            ~s[Add {:telemetry_poller, "~> 1.0"} to your dependencies.]
+            ~s[Add {:telemetry_poller, "~> 1.3"} (0.5 and 1.x work) to your dependencies.]
         )
 
         []

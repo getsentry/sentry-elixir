@@ -8,8 +8,8 @@ defmodule LegacyTelemetryPollerTest do
   end
 
   test "runs against telemetry_poller 0.5 and telemetry 0.4" do
-    assert Application.spec(:telemetry_poller, :vsn) == ~c"0.5.1"
-    assert Application.spec(:telemetry, :vsn) == ~c"0.4.3"
+    assert [?0, ?., ?5, ?. | _] = Application.spec(:telemetry_poller, :vsn)
+    assert [?0, ?., ?4, ?. | _] = Application.spec(:telemetry, :vsn)
   end
 
   test "reports runtime gauges from the builtin vm measurements" do
