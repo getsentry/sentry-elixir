@@ -1,0 +1,49 @@
+# getsentry/sentry-elixir 4a2a7c8fd0890e1142b3902b99471ed8a65170ec
+
+rubric = "sdk"
+
+# The Hex package ships lib/, mix.exs and a few top-level docs (see package/0 in mix.exs).
+[[area]]
+paths = ["lib/sentry.ex", "lib/sentry/**"]
+families = ["server"]
+
+# mix.exs declares the dependencies every customer inherits; the lockfiles pin what CI builds with.
+[[area]]
+paths = ["mix.exs", "mix.lock", "mix-*.lock"]
+families = ["server"]
+shared_core = true
+
+[[area]]
+paths = [
+  "lib/sentry.ex", "lib/sentry/*.ex", "lib/sentry/client_report/**", "lib/sentry/transport/**",
+  "lib/sentry/scrubber/**", "lib/sentry/telemetry/**", "lib/sentry/metrics/**",
+]
+families = ["server"]
+shared_core = true
+
+# Mix tasks shipped in the package and run by customers on developer machines and in CI:
+# sentry.install edits customer projects (Igniter), sentry.package_source_code runs in release builds.
+[[area]]
+paths = ["lib/mix/**"]
+families = ["tooling"]
+
+[[kind]]
+paths = ["mix.exs", "mix.lock", "mix-*.lock"]
+kind = "dependencies"
+
+[[kind]]
+paths = ["test/**", "test_integrations/**", "coveralls.json"]
+kind = "tests"
+
+# Repo-only Mix config (not in the Hex package); its non-test section still sets the dev client.
+[[kind]]
+paths = ["config/**", "scripts/**"]
+kind = "build-release"
+
+[[kind]]
+paths = ["pages/**", "assets/**", "ISSUE_TEMPLATE.md"]
+kind = "docs"
+
+[[kind]]
+paths = [".formatter.exs", ".dialyzer_ignore.exs", "agents.toml"]
+kind = "dev-tooling"
