@@ -1,3 +1,40 @@
+## 14.1.0
+
+This release adds support for **Runtime Metrics**: the SDK can now report BEAM runtime health to Sentry on its own, without any calls to `Sentry.Metrics`. It is opt-in:
+
+```elixir
+config :sentry,
+  metrics: [runtime: [enabled: true]]
+```
+
+Once enabled, the SDK reports gauges for VM memory by type, run queue lengths, process, atom and port counts, and scheduler utilization, using the `process.runtime.elixir.*` names from Sentry conventions. It reads them from the events `telemetry_poller` emits, so add `{:telemetry_poller, "~> 1.3"}` to your dependencies if you do not have it already. Both 0.5 and 1.x work; 1.3.0 or later is needed for the `limit` and `utilization` gauges. See [Automatically Collected Metrics](https://hexdocs.pm/sentry/Sentry.Metrics.html#module-automatically-collected-metrics) for details.
+
+### New Features ✨
+
+#### Runtime Metrics
+
+- Add opt-in BEAM runtime metrics collector by @solnic in [#1188](https://github.com/getsentry/sentry-elixir/pull/1188)
+- Report scheduler utilization in runtime metrics by @solnic in [#1189](https://github.com/getsentry/sentry-elixir/pull/1189)
+- Report run queue depth in runtime metrics by @solnic in [#1212](https://github.com/getsentry/sentry-elixir/pull/1212)
+- Report process, atom and port counts in runtime metrics by @solnic in [#1213](https://github.com/getsentry/sentry-elixir/pull/1213)
+- Align runtime metrics with sentry-conventions by @solnic in [#1235](https://github.com/getsentry/sentry-elixir/pull/1235)
+
+### Bug Fixes 🐛
+
+- (logger) Read only the logger metadata key from callers by @saveman71 in [#1267](https://github.com/getsentry/sentry-elixir/pull/1267)
+- (logs) Preserve false in named parameters by @pcbeingused333 in [#1264](https://github.com/getsentry/sentry-elixir/pull/1264)
+- (quantum) Apply monitor_config_defaults to cron check-ins by @pcbeingused333 in [#1265](https://github.com/getsentry/sentry-elixir/pull/1265)
+- (tracing) Preserve OpenTelemetry span statuses by @dnsbty in [#1261](https://github.com/getsentry/sentry-elixir/pull/1261)
+- Hibernate sources after loading the source map by @pcbeingused333 in [#1262](https://github.com/getsentry/sentry-elixir/pull/1262)
+
+### Documentation 📚
+
+- Use dark-mode-aware Sentry logo in READMEs by @szokeasaurusrex with @sentry-junior in [#1255](https://github.com/getsentry/sentry-elixir/pull/1255)
+
+#### Other
+
+- Add CODEOWNERS by @dingsdax with @sentry-junior in [#1263](https://github.com/getsentry/sentry-elixir/pull/1263)
+
 ## 14.0.1
 
 ### Bug Fixes 🐛
