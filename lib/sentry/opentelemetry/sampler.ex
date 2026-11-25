@@ -111,6 +111,22 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
+    @doc false
+    # The sampling decision a tracestate carries, as the strings the dynamic
+    # sampling context sends; a value the tracestate lacks is nil.
+    @spec decision(term()) :: %{
+            sample_rate: String.t() | nil,
+            sample_rand: String.t() | nil,
+            sampled: String.t() | nil
+          }
+    def decision(tracestate) do
+      %{
+        sample_rate: get_tracestate_value(tracestate, @sentry_sample_rate_key),
+        sample_rand: get_tracestate_value(tracestate, @sentry_sample_rand_key),
+        sampled: get_tracestate_value(tracestate, @sentry_sampled_key)
+      }
+    end
+
     defp build_tracestate(sample_rate, random_value, sampled) do
       [
         {@sentry_sample_rate_key, Float.to_string(sample_rate)},

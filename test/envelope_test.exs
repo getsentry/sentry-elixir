@@ -37,7 +37,7 @@ defmodule Sentry.EnvelopeTest do
 
       assert [id_line, _header_line, _event_line] = String.split(encoded, "\n", trim: true)
 
-      assert id_line == "{{}}"
+      assert id_line == "{}"
     end
 
     test "works with attachments" do
@@ -169,6 +169,63 @@ defmodule Sentry.EnvelopeTest do
 
       assert span["start_timestamp"] == List.first(child_spans).start_timestamp
       assert span["timestamp"] == List.first(child_spans).timestamp
+    end
+
+    test "sends a transaction's dynamic sampling context as the envelope's trace header" do
+      put_test_config(environment_name: "test")
+
+      dynamic_sampling_context = %{
+        "trace_id" => "1e57b752bc6e4544bbaa246cd1d05dee",
+        "public_key" => "public",
+        "sample_rate" => "0.01",
+        "sample_rand" => "0.004",
+        "sampled" => "true",
+        "environment" => "test",
+        "transaction" => "GET /sockjs-node/info"
+      }
+
+      transaction =
+        create_transaction(%{
+          start_timestamp: 1_588_601_261.481_961,
+          timestamp: 1_588_601_261.488_901,
+          contexts: %{
+            trace: %{trace_id: "1e57b752bc6e4544bbaa246cd1d05dee", span_id: "b01b9f6349558cd1"}
+          },
+          transaction: "GET /sockjs-node/info",
+          dynamic_sampling_context: dynamic_sampling_context
+        })
+
+      assert {:ok, encoded} = transaction |> Envelope.from_transaction() |> Envelope.to_binary()
+
+      assert [headers_line, _item_header_line, transaction_line] =
+               String.split(encoded, "\n", trim: true)
+
+      assert {:ok, %{"event_id" => event_id, "trace" => ^dynamic_sampling_context}} =
+               Jason.decode(headers_line)
+
+      assert event_id == transaction.event_id
+
+      assert {:ok, decoded_transaction} = Jason.decode(transaction_line)
+      refute Map.has_key?(decoded_transaction, "dynamic_sampling_context")
+    end
+
+    test "sends no trace header for a transaction without a dynamic sampling context" do
+      put_test_config(environment_name: "test")
+
+      transaction =
+        create_transaction(%{
+          start_timestamp: 1_588_601_261.481_961,
+          timestamp: 1_588_601_261.488_901,
+          contexts: %{
+            trace: %{trace_id: "1e57b752bc6e4544bbaa246cd1d05dee", span_id: "b01b9f6349558cd1"}
+          }
+        })
+
+      assert {:ok, encoded} = transaction |> Envelope.from_transaction() |> Envelope.to_binary()
+      [headers_line | _] = String.split(encoded, "\n", trim: true)
+
+      assert {:ok, headers} = Jason.decode(headers_line)
+      assert Map.keys(headers) == ["event_id"]
     end
   end
 

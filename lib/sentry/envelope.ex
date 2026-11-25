@@ -19,6 +19,7 @@ defmodule Sentry.Envelope do
 
   @type t() :: %__MODULE__{
           event_id: UUID.t(),
+          trace: map() | nil,
           items: [
             Attachment.t()
             | CheckIn.t()
@@ -32,7 +33,7 @@ defmodule Sentry.Envelope do
         }
 
   @enforce_keys [:event_id, :items]
-  defstruct [:event_id, :items]
+  defstruct [:event_id, :items, :trace]
 
   @doc """
   Creates a new envelope containing the given event and all of its attachments.
@@ -75,6 +76,7 @@ defmodule Sentry.Envelope do
   def from_transaction(%Transaction{} = transaction) do
     %__MODULE__{
       event_id: transaction.event_id,
+      trace: transaction.dynamic_sampling_context,
       items: [transaction]
     }
   end
@@ -200,17 +202,29 @@ defmodule Sentry.Envelope do
   def to_binary(%__MODULE__{} = envelope) do
     json_library = Config.json_library()
 
-    headers_iodata =
-      case envelope.event_id do
-        nil -> "{{}}\n"
-        event_id -> ~s({"event_id":"#{event_id}"}\n)
-      end
+    headers_iodata = [encode_headers(envelope, json_library), ?\n]
 
     items_iodata = Enum.map(envelope.items, &item_to_binary(json_library, &1))
 
     {:ok, IO.iodata_to_binary([headers_iodata, items_iodata])}
   catch
     {:error, _reason} = error -> error
+  end
+
+  # The envelope headers: the event ID and, for a transaction, the dynamic
+  # sampling context as the `trace` header.
+  # https://develop.sentry.dev/sdk/telemetry/traces/dynamic-sampling-context/#envelope-header
+  defp encode_headers(%__MODULE__{} = envelope, json_library) do
+    headers =
+      for {key, value} <- [event_id: envelope.event_id, trace: envelope.trace],
+          not is_nil(value),
+          into: %{},
+          do: {Atom.to_string(key), value}
+
+    case Sentry.JSON.encode(headers, json_library) do
+      {:ok, encoded_headers} -> encoded_headers
+      {:error, _reason} = error -> throw(error)
+    end
   end
 
   defp item_to_binary(json_library, %Event{} = event) do

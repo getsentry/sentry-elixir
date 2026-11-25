@@ -28,6 +28,12 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       [@sentry_trace_key, @sentry_baggage_key]
     end
 
+    @doc false
+    # The baggage header the trace arrived with, as `extract/5` kept it in the
+    # context; nil when there was none.
+    @spec incoming_baggage(:otel_ctx.t()) :: String.t() | nil
+    def incoming_baggage(ctx), do: :otel_ctx.get_value(ctx, @sentry_baggage_ctx_key, nil)
+
     @impl true
     def inject(ctx, carrier, setter, _opts) do
       case Tracer.current_span_ctx(ctx) do

@@ -61,9 +61,29 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end
     end
 
-    @spec mark_spans_sent([String.t()], keyword()) :: :ok
-    def mark_spans_sent(span_ids, opts \\ []) do
-      mark_spans(span_ids, :sent, opts)
+    @doc """
+    Marks the spans of a sent transaction, keeping the transaction's dynamic
+    sampling context with them: a span that ends after its transaction was
+    sent is reported as a follow-up transaction of the same trace, which has
+    to carry the same context (the context is frozen once sent).
+    """
+    @spec mark_spans_sent([String.t()], map() | nil, keyword()) :: :ok
+    def mark_spans_sent(span_ids, dynamic_sampling_context, opts \\ []) do
+      mark_spans(span_ids, {:sent, dynamic_sampling_context}, opts)
+    end
+
+    @doc """
+    The dynamic sampling context of the sent transaction the span belongs to,
+    or `nil` when the span was not sent.
+    """
+    @spec sent_span_context(String.t(), keyword()) :: map() | nil
+    def sent_span_context(span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      case :ets.lookup(table_name, {:sent_span, span_id}) do
+        [{{:sent_span, ^span_id}, _stored_at, {:sent, context}}] -> context
+        _other -> nil
+      end
     end
 
     @spec mark_spans_excluded([String.t()], keyword()) :: :ok
@@ -137,6 +157,26 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
       case :ets.lookup(table_name, {:root_span, span_id}) do
         [{{:root_span, ^span_id}, span, _stored_at}] -> span
+        [] -> nil
+      end
+    end
+
+    @doc """
+    The stored record of a span whose parent is known, by a direct lookup of
+    its key; `nil` when it is not stored. `get_span/2` finds a span by its ID
+    alone, at the price of a table scan for child spans.
+    """
+    @spec lookup_span(String.t(), String.t() | nil, keyword()) :: SpanRecord.t() | nil
+    def lookup_span(span_id, parent_span_id, opts \\ []) do
+      table_name = Keyword.get(opts, :table_name, default_table_name())
+
+      key =
+        if parent_span_id == nil,
+          do: {:root_span, span_id},
+          else: {:child_span, parent_span_id, span_id}
+
+      case :ets.lookup(table_name, key) do
+        [{^key, span, _stored_at}] -> span
         [] -> nil
       end
     end

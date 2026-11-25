@@ -5,6 +5,26 @@ defmodule Sentry.TestHelpers do
   alias Sentry.Interfaces.Span
   alias Sentry.Transaction
 
+  @doc """
+  The `trace` header and the decoded transaction item of each transaction
+  envelope a Bypass collector (set up with `type: "transaction"`) received,
+  in order of arrival. `collect_sentry_transactions/3` drops the header line.
+  """
+  @spec collect_transaction_envelopes(reference(), pos_integer(), keyword()) :: [{map() | nil, map()}]
+  def collect_transaction_envelopes(ref, expected_count, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 1000)
+
+    for _ <- 1..expected_count do
+      receive do
+        {:bypass_envelope, ^ref, body} ->
+          [headers_line, _item_header, item | _] = String.split(body, "\n", trim: true)
+          {decode!(headers_line)["trace"], decode!(item)}
+      after
+        timeout -> flunk("no transaction envelope arrived within #{timeout}ms")
+      end
+    end
+  end
+
   @spec decode!(String.t()) :: term()
   def decode!(binary) do
     assert {:ok, data} = Sentry.JSON.decode(binary, Sentry.Config.json_library())

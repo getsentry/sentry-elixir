@@ -199,6 +199,48 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
       assert child_trace["trace_id"] == root_trace["trace_id"]
       assert child_trace["parent_span_id"] == root_trace["span_id"]
     end
+
+    test "keeps the dynamic sampling context its root was sent with", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass, type: "transaction")
+      test_pid = self()
+
+      task =
+        Tracer.with_span "sync_root" do
+          ctx = :otel_ctx.get_current()
+
+          task =
+            Task.async(fn ->
+              token = :otel_ctx.attach(ctx)
+
+              try do
+                Tracer.with_span "in_flight_child" do
+                  send(test_pid, :child_started)
+
+                  receive do
+                    :finish_child -> :ok
+                  end
+                end
+              after
+                :otel_ctx.detach(token)
+              end
+            end)
+
+          assert_receive :child_started, 1000
+          task
+        end
+
+      assert [{%{"transaction" => "sync_root"} = root_context, _root_tx}] =
+               collect_transaction_envelopes(ref, 1)
+
+      send(task.pid, :finish_child)
+      Task.await(task)
+
+      assert [{child_context, %{"transaction" => "in_flight_child"}}] =
+               collect_transaction_envelopes(ref, 1)
+
+      assert child_context == root_context
+    end
   end
 
   describe "a grandchild span still running when both its parent and the root have ended" do
@@ -291,7 +333,7 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         send(test_pid, {:envelope, body})
 
-        if body =~ "sync_root" do
+        if root_envelope?(body, "sync_root") do
           send(test_pid, {:root_send_started, self()})
 
           receive do
@@ -418,7 +460,7 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         send(test_pid, {:envelope, body})
 
-        if body =~ "sync_root" do
+        if root_envelope?(body, "sync_root") do
           Plug.Conn.resp(conn, 500, ~s<{"error": "internal"}>)
         else
           Plug.Conn.resp(conn, 200, ~s<{"id": "#{Sentry.UUID.uuid4_hex()}"}>)
@@ -481,5 +523,12 @@ defmodule Sentry.Opentelemetry.AsyncTracesTest do
         |> Enum.map(&decode_envelope!/1)
         |> extract_transactions()
     end
+  end
+
+  # The envelope of the named transaction. A follow-up transaction's envelope
+  # names its root too, in the trace header, so the body is not searched.
+  defp root_envelope?(body, transaction_name) do
+    [_headers, _item_header, item | _] = String.split(body, "\n", trim: true)
+    Jason.decode!(item)["transaction"] == transaction_name
   end
 end

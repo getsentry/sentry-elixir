@@ -16,9 +16,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     @parent_is_remote_on_record Keyword.has_key?(@fields, :parent_span_is_remote)
     @parent_is_remote_attribute "sentry.parent_is_remote"
 
+    # `baggage` is the incoming baggage header of a continued trace, set by the
+    # span processor at span start; nil otherwise.
     @extra_fields if @parent_is_remote_on_record,
-                    do: [:origin],
-                    else: [:origin, parent_span_is_remote: false]
+                    do: [:origin, :baggage],
+                    else: [:origin, :baggage, parent_span_is_remote: false]
 
     defstruct @fields ++ @extra_fields
 
