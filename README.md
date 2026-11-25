@@ -45,7 +45,7 @@ end
 > defp deps do
 >   [
 >     # ...
->     {:sentry, "~> 10.8.1"},
+>     {:sentry, "~> 14.1"},
 >     {:jason, "~> 1.4"}
 >   ]
 > end
