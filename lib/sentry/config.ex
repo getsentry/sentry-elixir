@@ -833,7 +833,7 @@ defmodule Sentry.Config do
       """
     ],
     telemetry_buffer_capacities: [
-      type: {:map, {:in, [:error, :check_in, :transaction, :log, :metric]}, :pos_integer},
+      type: {:custom, __MODULE__, :__validate_telemetry_buffer_capacities__, []},
       default: %{},
       type_doc: "`%{category => pos_integer()}`",
       doc: """
@@ -1616,6 +1616,45 @@ defmodule Sentry.Config do
 
   def __validate_source_code_exclude_pattern__(term) do
     {:error, "expected a Regex or a string pattern, got: #{inspect(term)}"}
+  end
+
+  def __validate_telemetry_buffer_capacities__(capacities) when is_map(capacities) do
+    Enum.reduce_while(capacities, {:ok, capacities}, fn {category, capacity}, acc ->
+      case validate_buffer_capacity(category, capacity) do
+        :ok -> {:cont, acc}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  def __validate_telemetry_buffer_capacities__(other) do
+    {:error, "expected a map of category to capacity, got: #{inspect(other)}"}
+  end
+
+  defp validate_buffer_capacity(category, _capacity)
+       when category not in [:error, :check_in, :transaction, :log, :metric] do
+    {:error,
+     "expected category to be one of [:error, :check_in, :transaction, :log, :metric], " <>
+       "got: #{inspect(category)}"}
+  end
+
+  defp validate_buffer_capacity(category, capacity)
+       when not is_integer(capacity) or capacity < 1 do
+    {:error,
+     "expected capacity for #{inspect(category)} to be a positive integer, " <>
+       "got: #{inspect(capacity)}"}
+  end
+
+  defp validate_buffer_capacity(category, capacity) do
+    batch_size = Sentry.Telemetry.Category.default_config(category).batch_size
+
+    if capacity < batch_size do
+      {:error,
+       "capacity for #{inspect(category)} must be at least its batch size of #{batch_size}, " <>
+         "got: #{inspect(capacity)}"}
+    else
+      :ok
+    end
   end
 
   def __validate_oban_tags_to_sentry_tags__(nil), do: {:ok, nil}
