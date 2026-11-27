@@ -209,6 +209,7 @@ defmodule Sentry.Integrations.Oban.Cron do
     case meta["cron_expr"] do
       "@hourly" -> [schedule: [type: :interval, value: 1, unit: :hour]]
       "@daily" -> [schedule: [type: :interval, value: 1, unit: :day]]
+      "@midnight" -> [schedule: [type: :interval, value: 1, unit: :day]]
       "@weekly" -> [schedule: [type: :interval, value: 1, unit: :week]]
       "@monthly" -> [schedule: [type: :interval, value: 1, unit: :month]]
       "@yearly" -> [schedule: [type: :interval, value: 1, unit: :year]]

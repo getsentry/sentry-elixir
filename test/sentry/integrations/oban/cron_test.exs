@@ -132,6 +132,7 @@ defmodule Sentry.Integrations.Oban.CronTest do
       {frequency, expected_unit} <- [
         {"@hourly", "hour"},
         {"@daily", "day"},
+        {"@midnight", "day"},
         {"@weekly", "week"},
         {"@monthly", "month"},
         {"@yearly", "year"},
