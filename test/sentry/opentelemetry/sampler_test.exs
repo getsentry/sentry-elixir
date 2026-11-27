@@ -226,6 +226,20 @@ defmodule Sentry.Opentelemetry.SamplerTest do
       end
     end
 
+    test "drops a trace the parent sampled when tracing is disabled" do
+      put_test_config(traces_sample_rate: nil, traces_sampler: nil)
+
+      trace_id = 12_345_678_901_234_567_890_123_456_789_012
+
+      parent_span_ctx =
+        create_span_context_with_tracestate(trace_id, [{"sentry-sampled", "true"}])
+
+      ctx = :otel_tracer.set_current_span(:otel_ctx.new(), parent_span_ctx)
+
+      assert {:drop, [], _tracestate} =
+               Sampler.should_sample(ctx, trace_id, nil, "span", nil, nil, drop: [])
+    end
+
     test "makes new sampling decision when no existing trace context" do
       put_test_config(traces_sample_rate: 1.0)
 
