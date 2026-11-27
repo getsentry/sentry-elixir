@@ -110,6 +110,33 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
         assert span_ctx(span_ctx, :is_remote) == true
       end
 
+      test "keeps the incoming sampling decision, sample rate and random value on the remote parent" do
+        tracestate =
+          extracted_tracestate(
+            "1234567890abcdef1234567890abcdef-1234567890abcdef-1",
+            "sentry-trace_id=1234567890abcdef1234567890abcdef,sentry-sample_rate=0.25,sentry-sample_rand=0.123456"
+          )
+
+        assert :otel_tracestate.get("sentry-sampled", tracestate) == "true"
+        assert :otel_tracestate.get("sentry-sample_rate", tracestate) == "0.25"
+        assert :otel_tracestate.get("sentry-sample_rand", tracestate) == "0.123456"
+      end
+
+      for {flag, sampled?} <- [{"1", true}, {"0", false}] do
+        test "generates a random value consistent with an incoming sampled flag of #{flag} when the baggage has none" do
+          tracestate =
+            extracted_tracestate(
+              "1234567890abcdef1234567890abcdef-1234567890abcdef-#{unquote(flag)}",
+              "sentry-sample_rate=0.25"
+            )
+
+          {sample_rand, ""} = Float.parse(:otel_tracestate.get("sentry-sample_rand", tracestate))
+
+          assert sample_rand >= 0.0 and sample_rand < 1.0
+          assert sample_rand < 0.25 == unquote(sampled?)
+        end
+      end
+
       test "handles missing sentry-trace header" do
         getter = fn _key, _carrier -> :undefined end
 
@@ -432,6 +459,19 @@ defmodule Sentry.OpenTelemetry.PropagatorTest do
           assert length(String.split(injected_baggage, "sentry-org_id=")) == 2
         end
       end
+    end
+
+    defp extracted_tracestate(sentry_trace, baggage) do
+      getter = fn
+        "sentry-trace", _carrier -> sentry_trace
+        "baggage", _carrier -> baggage
+        _key, _carrier -> :undefined
+      end
+
+      :otel_ctx.new()
+      |> Propagator.extract(%{}, nil, getter, [])
+      |> Tracer.current_span_ctx()
+      |> span_ctx(:tracestate)
     end
   end
 end

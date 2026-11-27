@@ -69,9 +69,10 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
                 trace_id = hex_to_int(trace_hex)
                 span_id = hex_to_int(span_hex)
 
-                # Create a remote, sampled parent span in the OTEL context.
-                # We will set to "always sample" because Sentry will decide real sampling
-                remote_span_ctx = :otel_tracer.from_remote_span(trace_id, span_id, 1)
+                remote_span_ctx =
+                  trace_id
+                  |> :otel_tracer.from_remote_span(span_id, 1)
+                  |> span_ctx(tracestate: incoming_tracestate(sampled, raw_baggage))
 
                 Tracer.set_current_span(ctx, remote_span_ctx)
               else
@@ -123,7 +124,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     defp decode_sentry_trace(<<trace_hex::binary-size(32), "-", span_hex::binary-size(16)>>) do
       if valid_hex?(trace_hex) and valid_hex?(span_hex) do
-        {:ok, {trace_hex, span_hex, false}}
+        {:ok, {trace_hex, span_hex, nil}}
       else
         {:error, :invalid_format}
       end
@@ -134,6 +135,51 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     defp valid_hex?(value), do: match?({:ok, _}, Base.decode16(value, case: :mixed))
+
+    defp incoming_tracestate(nil = _deferred, _raw_baggage), do: :otel_tracestate.new()
+
+    defp incoming_tracestate(sampled, raw_baggage) when is_boolean(sampled) do
+      sample_rate = baggage_float(raw_baggage, "sentry-sample_rate", &(&1 >= 0.0 and &1 <= 1.0))
+      sample_rand = baggage_float(raw_baggage, "sentry-sample_rand", &(&1 >= 0.0 and &1 < 1.0))
+
+      sample_rand_value =
+        case sample_rand do
+          {value, _float} -> value
+          nil -> Float.to_string(generate_sample_rand(sampled, sample_rate))
+        end
+
+      sample_rate_member =
+        case sample_rate do
+          {value, _float} -> [{"sentry-sample_rate", value}]
+          nil -> []
+        end
+
+      :otel_tracestate.new(
+        sample_rate_member ++
+          [
+            {"sentry-sample_rand", sample_rand_value},
+            {"sentry-sampled", to_string(sampled)}
+          ]
+      )
+    end
+
+    defp generate_sample_rand(true, {_value, rate}) when rate > 0.0,
+      do: :rand.uniform() * rate
+
+    defp generate_sample_rand(false, {_value, rate}) when rate < 1.0,
+      do: rate + :rand.uniform() * (1.0 - rate)
+
+    defp generate_sample_rand(_sampled, _sample_rate), do: :rand.uniform()
+
+    defp baggage_float(raw_baggage, key, valid?) do
+      with value when is_binary(value) <- baggage_value(raw_baggage, key),
+           {float, ""} <- Float.parse(value),
+           true <- valid?.(float) do
+        {value, float}
+      else
+        _invalid_or_missing -> nil
+      end
+    end
 
     defp maybe_set_baggage(ctx, :undefined), do: ctx
     defp maybe_set_baggage(ctx, ""), do: ctx
@@ -200,12 +246,14 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     end
 
     # Extract sentry-org_id from a baggage header string
-    defp extract_baggage_org_id(baggage) when is_binary(baggage) do
+    defp extract_baggage_org_id(baggage), do: baggage_value(baggage, "sentry-org_id")
+
+    defp baggage_value(baggage, key) when is_binary(baggage) do
       baggage
       |> String.split(",")
       |> Enum.find_value(fn entry ->
         case String.split(String.trim(entry), "=", parts: 2) do
-          ["sentry-org_id", value] ->
+          [^key, value] ->
             trimmed = String.trim(value)
             if trimmed == "", do: nil, else: trimmed
 
@@ -215,7 +263,7 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       end)
     end
 
-    defp extract_baggage_org_id(_), do: nil
+    defp baggage_value(_baggage, _key), do: nil
 
     # Determine whether to continue an incoming trace based on org_id validation
     @doc false

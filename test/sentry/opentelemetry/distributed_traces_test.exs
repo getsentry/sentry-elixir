@@ -76,11 +76,69 @@ defmodule Sentry.Opentelemetry.DistributedTracesTest do
     end
   end
 
+  describe "a trace continued through the sentry-trace header" do
+    test "is not reported when the upstream did not sample it", %{bypass: bypass} do
+      put_test_config(traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      token = continue_sentry_trace("#{@trace_id}-#{@remote_span_id}-0")
+      run_job()
+      :otel_ctx.detach(token)
+
+      Tracer.with_span "unrelated.job" do
+        Process.sleep(1)
+      end
+
+      transactions = collect_sentry_transactions(ref, 2, timeout: 1000)
+      assert Enum.map(transactions, & &1["transaction"]) == ["unrelated.job"]
+    end
+
+    test "is reported when the upstream sampled it, whatever the local sample rate",
+         %{bypass: bypass} do
+      put_test_config(traces_sample_rate: 0.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      token = continue_sentry_trace("#{@trace_id}-#{@remote_span_id}-1")
+      run_job()
+      :otel_ctx.detach(token)
+
+      assert [tx] = collect_sentry_transactions(ref, 1, timeout: 1000)
+      assert tx["contexts"]["trace"]["trace_id"] == @trace_id
+    end
+
+    test "is sampled by this service when the upstream deferred the decision",
+         %{bypass: bypass} do
+      put_test_config(traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      token = continue_sentry_trace("#{@trace_id}-#{@remote_span_id}")
+      run_job()
+      :otel_ctx.detach(token)
+
+      assert [tx] = collect_sentry_transactions(ref, 1, timeout: 1000)
+      assert tx["contexts"]["trace"]["trace_id"] == @trace_id
+    end
+  end
+
   defp continue_remote_trace do
     :otel_propagator_text_map.extract([
       {"traceparent", "00-#{@trace_id}-#{@remote_span_id}-01"}
     ])
 
     :ok
+  end
+
+  defp continue_sentry_trace(sentry_trace) do
+    :otel_propagator_text_map.extract(Sentry.OpenTelemetry.Propagator, [
+      {"sentry-trace", sentry_trace}
+    ])
+  end
+
+  defp run_job do
+    Tracer.with_span "job.run" do
+      Tracer.with_span "job.step" do
+        Process.sleep(1)
+      end
+    end
   end
 end

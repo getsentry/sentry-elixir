@@ -42,7 +42,11 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
           case get_trace_sampling_decision(ctx) do
             {:inherit, trace_sampled, tracestate} ->
-              decision = if trace_sampled, do: :record_and_sample, else: :drop
+              tracing_enabled? = not is_nil(traces_sample_rate) or not is_nil(traces_sampler)
+
+              decision =
+                if trace_sampled and tracing_enabled?, do: :record_and_sample, else: :drop
+
               {{decision, [], tracestate}, :sample_rate}
 
             :no_trace ->
