@@ -5,6 +5,7 @@ import {
   waitForEvents,
   validateSpanHierarchy,
   getDirectChildSpans,
+  type SentryEvent,
   type TransactionWithSpans,
   type Span,
 } from "./helpers";
@@ -963,6 +964,55 @@ test.describe("Tracing", () => {
       expect(transactions[transactions.length - 1].contexts?.trace?.trace_id).not.toBe(
         incomingTraceId
       );
+    });
+  });
+
+  test.describe("Incoming sampling decision", () => {
+    test.beforeEach(() => {
+      clearLoggedEvents();
+    });
+
+    test("does not report a trace the upstream did not sample", async ({ page }) => {
+      const unsampledTraceId = "e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4";
+      const unsampledSpanId = "0123456789abcdef";
+
+      await page.goto(`${PHOENIX_URL}/health`);
+
+      await page.evaluate(
+        async ({ traceId, spanId, phoenixUrl }) => {
+          await fetch(`${phoenixUrl}/api/data`, {
+            headers: {
+              "sentry-trace": `${traceId}-${spanId}-0`,
+              baggage: `sentry-trace_id=${traceId},sentry-public_key=public,sentry-sample_rate=0.1,sentry-sampled=false`,
+            },
+          });
+
+          await fetch(`${phoenixUrl}/api/data`);
+        },
+        {
+          traceId: unsampledTraceId,
+          spanId: unsampledSpanId,
+          phoenixUrl: PHOENIX_URL,
+        }
+      );
+
+      const isApiDataTransaction = (e: SentryEvent) =>
+        e.type === "transaction" &&
+        (e.transaction?.includes("/api/data") ||
+          e.transaction?.includes("fetch_data") ||
+          e.contexts?.trace?.data?.["http.route"] === "/api/data");
+
+      const isUnsampledTrace = (e: SentryEvent) =>
+        e.contexts?.trace?.trace_id === unsampledTraceId;
+
+      const logged = await waitForEvents(
+        (events) => events.events.some((e) => isApiDataTransaction(e) && !isUnsampledTrace(e)),
+        { timeout: 10000 }
+      );
+
+      const apiDataTransactions = logged.events.filter(isApiDataTransaction);
+      expect(apiDataTransactions.filter((e) => !isUnsampledTrace(e)).length).toBeGreaterThan(0);
+      expect(apiDataTransactions.filter(isUnsampledTrace)).toEqual([]);
     });
   });
 });
