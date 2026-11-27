@@ -60,6 +60,60 @@ defmodule Sentry.Opentelemetry.SpanProcessorTest do
   end
 
   @tag span_storage: true
+  test "sends the sampler's rate and decision as the envelope's dynamic sampling context",
+       %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0, release: "1.2.3")
+    ref = setup_bypass_envelope_collector(bypass, type: "transaction")
+
+    TestEndpoint.child_instrumented_function("one")
+
+    assert [{trace, _tx}] = collect_transaction_envelopes(ref, 1)
+
+    assert %{
+             "trace_id" => trace_id,
+             "public_key" => "public",
+             "sample_rate" => "1.0",
+             "sample_rand" => sample_rand,
+             "sampled" => "true",
+             "release" => "1.2.3",
+             "environment" => "test",
+             "transaction" => "child_instrumented_function_one"
+           } = trace
+
+    assert_valid_trace_id(trace_id)
+    assert {rand, ""} = Float.parse(sample_rand)
+    assert rand >= 0.0 and rand < 1.0
+    refute Map.has_key?(trace, "org_id")
+  end
+
+  @tag span_storage: true
+  test "sends the sampler callback's rate, not the configured fallback rate", %{bypass: bypass} do
+    put_test_config(
+      environment_name: "test",
+      traces_sampler: fn _sampling_context -> 1.0 end,
+      traces_sample_rate: 0.5
+    )
+
+    ref = setup_bypass_envelope_collector(bypass, type: "transaction")
+
+    TestEndpoint.child_instrumented_function("one")
+
+    assert [{%{"sample_rate" => "1.0", "sampled" => "true"}, _tx}] =
+             collect_transaction_envelopes(ref, 1)
+  end
+
+  @tag span_storage: true
+  test "sends the organization ID in the dynamic sampling context when it is known",
+       %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0, org_id: "42")
+    ref = setup_bypass_envelope_collector(bypass, type: "transaction")
+
+    TestEndpoint.child_instrumented_function("one")
+
+    assert [{%{"org_id" => "42"}, _tx}] = collect_transaction_envelopes(ref, 1)
+  end
+
+  @tag span_storage: true
   test "sends captured spans as transactions with child spans", %{bypass: bypass} do
     put_test_config(environment_name: "test", traces_sample_rate: 1.0)
 

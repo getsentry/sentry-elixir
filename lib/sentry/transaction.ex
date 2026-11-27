@@ -67,6 +67,7 @@ defmodule Sentry.Transaction do
             measurements: measurements(),
             tags: map(),
             data: map(),
+            dynamic_sampling_context: %{optional(String.t()) => String.t()} | nil,
 
             # Interfaces
             spans: [Span.t()],
@@ -87,7 +88,8 @@ defmodule Sentry.Transaction do
                 :release,
                 :environment,
                 :tags,
-                :data
+                :data,
+                :dynamic_sampling_context
               ]
 
   @doc false
@@ -107,6 +109,9 @@ defmodule Sentry.Transaction do
   def to_payload(%__MODULE__{} = transaction) do
     transaction
     |> Map.from_struct()
+    # The dynamic sampling context travels in the envelope header, not in
+    # the transaction item.
+    |> Map.delete(:dynamic_sampling_context)
     |> Map.put(:type, "transaction")
     |> update_in([Access.key(:spans, []), Access.all()], &Map.from_struct/1)
   end

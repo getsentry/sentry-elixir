@@ -352,17 +352,47 @@ defmodule Sentry.OpenTelemetry.SpanStorageTest do
     test "span_sent? reflects mark_spans_sent", %{table_name: table_name} do
       refute SpanStorage.span_sent?("span1", table_name: table_name)
 
-      SpanStorage.mark_spans_sent(["span1"], table_name: table_name)
+      SpanStorage.mark_spans_sent(["span1"], nil, table_name: table_name)
 
       assert SpanStorage.span_sent?("span1", table_name: table_name)
     end
 
     @tag span_storage: true
+    test "sent_span_context returns the context the spans were sent with",
+         %{table_name: table_name} do
+      context = %{"trace_id" => "abc", "sample_rate" => "0.5"}
+
+      SpanStorage.mark_spans_sent(["sent_root", "sent_child"], context, table_name: table_name)
+      SpanStorage.mark_spans_sent(["sent_without"], nil, table_name: table_name)
+      SpanStorage.mark_spans_excluded(["excluded"], table_name: table_name)
+
+      assert SpanStorage.sent_span_context("sent_root", table_name: table_name) == context
+      assert SpanStorage.sent_span_context("sent_child", table_name: table_name) == context
+      assert SpanStorage.sent_span_context("sent_without", table_name: table_name) == nil
+      assert SpanStorage.sent_span_context("excluded", table_name: table_name) == nil
+      assert SpanStorage.sent_span_context("unknown", table_name: table_name) == nil
+    end
+
+    @tag span_storage: true
+    test "lookup_span finds a stored span by its key", %{table_name: table_name} do
+      root = %SpanRecord{span_id: "root", parent_span_id: nil, baggage: "sentry-trace_id=t"}
+      child = %SpanRecord{span_id: "child", parent_span_id: "root"}
+
+      SpanStorage.store_span(root, table_name: table_name)
+      SpanStorage.store_span(child, table_name: table_name)
+
+      assert SpanStorage.lookup_span("root", nil, table_name: table_name) == root
+      assert SpanStorage.lookup_span("child", "root", table_name: table_name) == child
+      assert SpanStorage.lookup_span("child", "other_parent", table_name: table_name) == nil
+      assert SpanStorage.lookup_span("missing", nil, table_name: table_name) == nil
+    end
+
+    @tag span_storage: true
     test "markers expire after their TTL", %{table_name: table_name, server_name: server_name} do
       old_time = System.system_time(:second) - 6 * 60
-      :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time, :sent})
+      :ets.insert(table_name, {{:sent_span, "old_marker"}, old_time, {:sent, nil}})
 
-      SpanStorage.mark_spans_sent(["fresh_marker"], table_name: table_name)
+      SpanStorage.mark_spans_sent(["fresh_marker"], nil, table_name: table_name)
 
       run_cleanup(server_name)
 

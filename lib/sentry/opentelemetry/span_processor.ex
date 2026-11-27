@@ -13,6 +13,8 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     alias Sentry.{ClientError, ClientReport, Config, LoggerUtils}
 
     alias Sentry.{Transaction, OpenTelemetry.SpanStorage, OpenTelemetry.SpanRecord}
+    alias Sentry.OpenTelemetry.DynamicSamplingContext
+    alias Sentry.OpenTelemetry.Propagator
     alias Sentry.Interfaces.Span
 
     require Record
@@ -27,7 +29,12 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
     def on_start(ctx, otel_span, _config) do
       otel_span = mark_parent_is_remote(ctx, otel_span)
 
-      span_record = SpanRecord.new(otel_span)
+      # A trace continued from an upstream service carries that service's
+      # dynamic sampling context in its baggage header, which the propagator
+      # keeps in the context. The span start is the only point where that
+      # context is reachable, so the header is kept on the stored span record
+      # from here on (see keep_baggage/1).
+      span_record = %{SpanRecord.new(otel_span) | baggage: Propagator.incoming_baggage(ctx)}
       SpanStorage.store_span(span_record)
       otel_span
     end
@@ -69,10 +76,19 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
 
     @impl :otel_span_processor
     def on_end(otel_span, _config) do
-      span_record = SpanRecord.new(otel_span)
+      span_record = otel_span |> SpanRecord.new() |> keep_baggage()
       SpanStorage.update_span(span_record)
 
       process_span(span_record)
+    end
+
+    # The ended span is rebuilt from OpenTelemetry's record, which knows
+    # nothing of the baggage recorded at its start.
+    defp keep_baggage(span_record) do
+      case SpanStorage.lookup_span(span_record.span_id, span_record.parent_span_id) do
+        %SpanRecord{baggage: baggage} -> %{span_record | baggage: baggage}
+        nil -> span_record
+      end
     end
 
     @impl :otel_span_processor
@@ -180,8 +196,12 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
           :ok = SpanStorage.mark_spans_excluded(finalized_span_ids)
           discard_transaction(build_transaction(span_record, child_span_records, opts))
         else
-          :ok = SpanStorage.mark_spans_sent(finalized_span_ids)
-          send_transaction(build_transaction(span_record, child_span_records, opts))
+          transaction = build_transaction(span_record, child_span_records, opts)
+
+          :ok =
+            SpanStorage.mark_spans_sent(finalized_span_ids, transaction.dynamic_sampling_context)
+
+          send_transaction(transaction)
         end
 
       :ok =
@@ -251,17 +271,37 @@ if Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
       root_span = build_span(root_span_record)
       child_spans = Enum.map(child_span_records, &build_span(&1))
 
+      transaction_name = transaction_name(root_span_record)
+
       Transaction.new(%{
         span_id: root_span.span_id,
-        transaction: transaction_name(root_span_record),
+        transaction: transaction_name,
         transaction_info: %{source: :custom},
         start_timestamp: root_span_record.start_time,
         timestamp: root_span_record.end_time,
         contexts: %{
           trace: build_trace_context(root_span_record, opts)
         },
-        spans: child_spans
+        spans: child_spans,
+        dynamic_sampling_context:
+          dynamic_sampling_context(root_span_record, transaction_name, opts)
       })
+    end
+
+    # The context is frozen once known: a follow-up transaction (a span that
+    # ended after its parent's transaction was sent) keeps the context that
+    # transaction went out with, a continued trace keeps the one it arrived
+    # with, and only the head of a trace builds its own.
+    defp dynamic_sampling_context(root_span_record, transaction_name, opts) do
+      sent_context(root_span_record, opts) ||
+        DynamicSamplingContext.from_baggage(root_span_record.baggage) ||
+        DynamicSamplingContext.build(root_span_record, transaction_name)
+    end
+
+    defp sent_context(span_record, opts) do
+      if Keyword.get(opts, :parent_already_sent?, false) do
+        SpanStorage.sent_span_context(span_record.parent_span_id)
+      end
     end
 
     defp transaction_name(
